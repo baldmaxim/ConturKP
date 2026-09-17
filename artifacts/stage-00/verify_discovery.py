@@ -74,6 +74,9 @@ DOCS = [
 ]
 TRACE_DOC = "docs/requirements-traceability.md"
 DISCOVERY_DOC = "docs/discovery.md"
+# Реестры, где ID вопросов, неизвестных и доработок считаются определёнными.
+# Этап 01 ведёт свой реестр, поэтому он добавляется к discovery, если существует.
+EXTRA_ID_SOURCES = ["docs/architecture/unknowns.md"]
 RDWEB_EXPECTED = {
     "schema_version": 1,
     "pages": 77,
@@ -115,6 +118,7 @@ class Config:
     rdweb: Material
     rdweb_expected: dict
     docs_only: bool = False
+    extra_id_sources: list = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -223,6 +227,10 @@ def check_ids(config):
     results.append(Result(FAIL if missing else PASS, "A01–A46 в трассировке", ", ".join(missing)))
 
     defined = set(re.findall(r"^\| ([XQUR]-\d{2}) \|", discovery, re.M))
+    for extra in config.extra_id_sources:
+        path = config.docs_root / extra
+        if path.is_file():
+            defined |= set(re.findall(r"^\| ([XQUR]-\d{2}) \|", path.read_text(encoding="utf-8"), re.M))
     used = set()
     for doc in config.docs:
         try:
@@ -346,6 +354,7 @@ def build_config(argv=None):
         rdweb=rdweb,
         rdweb_expected=RDWEB_EXPECTED,
         docs_only=args.docs_only,
+        extra_id_sources=EXTRA_ID_SOURCES,
     )
 
 

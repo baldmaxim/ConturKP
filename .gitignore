@@ -1,0 +1,20 @@
+# Original local copy of the delivered package; maintained version is docs/spec/.
+/KP_Portal_Prompt_Pack/
+/Kontur_KP_Development_Prompts_v1.zip
+
+# Credentials and local runtime data
+.env
+.env.*
+!.env.example
+!.env.template
+/data/
+/backups/
+/runtime/
+
+# Dependencies and generated builds
+node_modules/
+dist/
+coverage/
+.venv/
+__pycache__/
+*.log

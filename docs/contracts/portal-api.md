@@ -53,7 +53,8 @@
 | Метод и путь | Право | Ключи | Назначение |
 |---|---|---|---|
 | `POST /stages/{id}/imports` | `source.write` | IK | загрузка файлов или архива; создаёт `import_batch` и задания |
-| `GET /imports/{id}` | `tender.read` | — | состав партии, отклонённые элементы с причинами |
+| `GET /imports/{id}` | `tender.read` | — | состав партии, отклонённые элементы с причинами и их исход |
+| `POST /import-items/{id}/resolve` | `source.write` (повторный импорт) / `hold.resolve` (неприменимость) | IM, IK | исход отклонённого элемента: связь с элементом повторного импорта или решение руководителя о неприменимости с причиной (R01-09) |
 | `GET /stages/{id}/documents`, `GET /documents/{id}` | `tender.read` | — | документы и редакции |
 | `PATCH /documents/{id}` | `source.write` | IM | тип, код, область применения, группировка редакций |
 | `GET /document-revisions/{id}/content` | `tender.read` | — | оригинал по правам (ADR-003) |

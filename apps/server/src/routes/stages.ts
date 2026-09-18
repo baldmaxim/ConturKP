@@ -8,13 +8,13 @@ import { forbidden, notFound } from '../http/errors.ts';
 import { toStage } from '../mappers.ts';
 import { loadTender, requireTenderCap } from './tenders.ts';
 
-const loadStage = async (db: Queryable, ctx: IAccessContext, id: string, lock = false): Promise<IStageRow> => {
+export const loadStage = async (db: Queryable, ctx: IAccessContext, id: string, lock = false): Promise<IStageRow> => {
   const s = await getStage(db, ctx, id, lock);
   if (!s) throw notFound({ entityType: 'tender_stage', entityId: id });
   return s;
 };
 
-const requireStageWrite = (ctx: IAccessContext, s: IStageRow): void => {
+export const requireStageWrite = (ctx: IAccessContext, s: IStageRow): void => {
   if (!tenderCapabilities(ctx.roles, memberRoleOf(ctx, s.tender_id)).includes('stage.write')) {
     throw forbidden('stage.write', { entityType: 'tender_stage', entityId: s.id, tenderId: s.tender_id });
   }

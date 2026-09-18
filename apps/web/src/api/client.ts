@@ -75,7 +75,15 @@ export const newUuid = (): string => {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 };
 
-const isProblem = (value: unknown): value is IProblem =>
+/** Токен CSRF для небезопасных запросов в обход request() (загрузка файла через XMLHttpRequest). */
+export const csrfToken = (): string | null => readCookie(CSRF_COOKIE);
+
+/** Сообщает о 401 из запроса в обход request(): сброс сессии и переход на экран входа. */
+export const notifyUnauthenticated = (): void => {
+  unauthenticatedHandler?.();
+};
+
+export const isProblem = (value: unknown): value is IProblem =>
   typeof value === 'object' && value !== null && 'status' in value && 'code' in value;
 
 const parseProblem = async (response: Response): Promise<IProblem> => {

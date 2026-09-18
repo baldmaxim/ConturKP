@@ -10,16 +10,20 @@ import { Tabs, tabId, tabPanelId, type ITab } from '../components/Tabs';
 import { useApiResource } from '../hooks/useApiResource';
 import { useAuth } from '../hooks/useAuth';
 import { AuditLog } from './AuditLog';
+import { IntakeChannelsPanel } from './intake/IntakeChannelsPanel';
 import { MembersPanel } from './MembersPanel';
 import { StagesPanel } from './StagesPanel';
 import { TenderCard } from './TenderCard';
 import styles from './TenderPage.module.css';
 
-const tabsFor = (tender: ITender): ITab[] => {
+const tabsFor = (tender: ITender, canAdminIntake: boolean): ITab[] => {
   const caps = tender.capabilities;
   const tabs: ITab[] = [];
   if (caps.includes('tender.read')) {
     tabs.push({ id: 'stages', label: 'Этапы', icon: 'layers' });
+  }
+  if (caps.includes('tender.read') || canAdminIntake) {
+    tabs.push({ id: 'intake', label: 'Каналы поступления', icon: 'inbox' });
   }
   tabs.push({ id: 'card', label: 'Карточка', icon: 'briefcase' });
   tabs.push({ id: 'members', label: 'Участники', icon: 'users' });
@@ -35,7 +39,8 @@ export const TenderPage: FC = () => {
   const { can } = useAuth();
   const { data: tender, error, loading, reload, setData } = useApiResource((signal) => getTender(tenderId, signal), tenderId);
 
-  const tabs = useMemo(() => (tender ? tabsFor(tender) : []), [tender]);
+  const canAdminIntake = can('admin.intake');
+  const tabs = useMemo(() => (tender ? tabsFor(tender, canAdminIntake) : []), [tender, canAdminIntake]);
   const requested = searchParams.get('tab');
   const active = tabs.find((tab) => tab.id === requested)?.id ?? tabs[0]?.id ?? 'card';
 
@@ -75,6 +80,14 @@ export const TenderPage: FC = () => {
       <Tabs tabs={tabs} active={active} onChange={selectTab} label="Разделы тендера" />
       <div className={styles.panel} role="tabpanel" id={tabPanelId(active)} aria-labelledby={tabId(active)}>
         {active === 'stages' ? <StagesPanel tenderId={tender.id} canManage={caps.includes('stage.manage')} /> : null}
+        {active === 'intake' ? (
+          <IntakeChannelsPanel
+            tenderId={tender.id}
+            canAdmin={canAdminIntake}
+            canScan={caps.includes('source.write')}
+            canDisable={caps.includes('hold.resolve')}
+          />
+        ) : null}
         {active === 'card' ? <TenderCard tender={tender} onChanged={(next) => setData(next)} /> : null}
         {active === 'members' ? (
           <MembersPanel

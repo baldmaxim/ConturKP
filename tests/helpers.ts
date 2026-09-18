@@ -9,6 +9,9 @@ import type { IAppConfig } from '../packages/config/src/index.ts';
 import { hashPassword, type Role } from '../packages/core/src/index.ts';
 import { createPool, dropDatabase, insertUser, migrate, setupDatabase, type Pool } from '../packages/db/src/index.ts';
 import { createApp } from '../apps/server/src/app.ts';
+import { HANDLERS } from '../apps/worker/src/handlers/index.ts';
+import { WorkerRuntime } from '../apps/worker/src/runtime.ts';
+import { BlobStore } from '../packages/storage/src/index.ts';
 
 export const ADMIN_URL = process.env.KONTUR_TEST_ADMIN_URL ?? 'postgresql://postgres@127.0.0.1:55432/postgres';
 export const ORIGIN = 'http://127.0.0.1:5173';
@@ -68,6 +71,17 @@ export const testConfig = (overrides: Partial<IAppConfig> = {}): IAppConfig => (
   workerHeartbeatSeconds: 10,
   workerStaleSeconds: 60,
   webDistDir: join(tmpdir(), 'kontur-no-web'),
+  limits: {
+    maxUploadBytes: 64 * 1024 * 1024,
+    maxEntryBytes: 32 * 1024 * 1024,
+    maxArchiveTotalBytes: 128 * 1024 * 1024,
+    maxArchiveEntries: 3000,
+    maxCompressionRatio: 200,
+  },
+  intakeRoots: [],
+  intakeStabilitySeconds: 1,
+  jobLeaseSeconds: 60,
+  gpuTakeoverGraceSeconds: 120,
   ...overrides,
 });
 
@@ -81,6 +95,17 @@ export class Clock {
 
 export const makeApp = (db: ITestDb, clock = new Clock(), config = testConfig()) =>
   createApp({ config, pool: db.pool, clock: clock.read, logError: () => undefined });
+
+// Worker в том же процессе теста: те же обработчики и хранилище, что у процесса worker.
+export const makeWorker = (db: ITestDb, config: IAppConfig, workerId = 'test-worker'): WorkerRuntime =>
+  new WorkerRuntime({ pool: db.pool, store: new BlobStore(config.storageRoot), config, handlers: HANDLERS, workerId });
+
+// Выполняет задания, пока очередь не опустеет (ограничение — защита от бесконечного цикла).
+export const drain = async (worker: WorkerRuntime, max = 20_000): Promise<number> => {
+  let n = 0;
+  while (n < max && (await worker.runOnce())) n += 1;
+  return n;
+};
 
 let cachedHash: Promise<string> | null = null;
 export const createUser = async (pool: Pool, login: string, roles: Role[], displayName = login): Promise<string> => {

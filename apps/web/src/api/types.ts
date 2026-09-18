@@ -1,4 +1,4 @@
-// Типы контракта портального API /api/v1 (этап 02).
+// Типы контракта портального API /api/v1 (этапы 02–03).
 
 export type TGlobalRole = 'admin' | 'manager' | 'engineer';
 export type TMemberRole = 'engineer' | 'manager';
@@ -9,10 +9,17 @@ export type TPrincipalKind = 'human' | 'model_via_mcp' | 'integration' | 'system
 export type TAuditOutcome = 'allowed' | 'denied' | 'failed';
 
 /** Глобальные возможности пользователя. */
-export type TGlobalCapability = 'admin.users' | 'admin.tender' | 'admin.audit';
+export type TGlobalCapability = 'admin.users' | 'admin.tender' | 'admin.audit' | 'admin.intake';
 
 /** Возможности пользователя в конкретном тендере. */
-export type TTenderCapability = 'tender.read' | 'stage.write' | 'stage.manage' | 'audit.read' | 'admin.tender';
+export type TTenderCapability =
+  | 'tender.read'
+  | 'stage.write'
+  | 'stage.manage'
+  | 'audit.read'
+  | 'admin.tender'
+  | 'source.write'
+  | 'hold.resolve';
 
 export interface IMembership {
   tenderId: string;
@@ -177,4 +184,208 @@ export interface IProblem {
   requestId: string;
   current?: unknown;
   errors?: IProblemFieldError[];
+}
+
+// ---- Источники (этап 03)
+
+export type TBatchStatus = 'running' | 'completed' | 'completed_with_errors' | 'failed';
+export type TBatchSourceKind = 'upload' | 'watched_folder';
+export type TItemStatus = 'pending' | 'registered' | 'duplicate' | 'rejected' | 'skipped_partial';
+export type TRejectReason = 'path_traversal' | 'size_limit' | 'type_not_allowed' | 'unstable_file' | 'corrupt';
+export type TItemResolution = 'none' | 'reimported' | 'not_applicable';
+export type TOccurrenceKind = 'upload' | 'archive_member' | 'watched_folder' | 'yandex_disk' | 'smb';
+export type TDocType = 'tz' | 'pd' | 'rd' | 'contract' | 'boq' | 'qa_form' | 'letter' | 'minutes' | 'supplier_quote' | 'other';
+export type TSourceSetStatus = 'draft' | 'frozen';
+export type TInclusion = 'included' | 'excluded_not_applicable';
+export type TChannelOrigin = 'local' | 'yandex_disk' | 'smb';
+export type TChannelErrorCode = 'share_unavailable' | 'outside_intake_root' | 'intake_root_not_configured' | 'overlaps_storage' | 'internal';
+
+export interface IBatchCounts {
+  total: number;
+  pending: number;
+  registered: number;
+  duplicate: number;
+  rejected: number;
+  /** Отклонённые и недокопированные элементы без исхода. */
+  unresolved: number;
+}
+
+export interface IImportBatch {
+  id: string;
+  tenderId: string;
+  stageId: string | null;
+  sourceKind: TBatchSourceKind;
+  intakeChannelId: string | null;
+  status: TBatchStatus;
+  uploadName: string | null;
+  failureCode: string | null;
+  expanded: boolean;
+  createdAt: string;
+  completedAt: string | null;
+  counts: IBatchCounts;
+}
+
+export interface IImportItem {
+  id: string;
+  batchId: string;
+  memberPath: string;
+  observedName: string;
+  status: TItemStatus;
+  rejectReason: TRejectReason | null;
+  rejectDetail: string | null;
+  sizeBytes: number | null;
+  sha256: string | null;
+  documentRevisionId: string | null;
+  resolution: TItemResolution;
+  resolvedByItemId: string | null;
+  resolutionDecisionId: string | null;
+  resolvedAt: string | null;
+  rowVersion: number;
+}
+
+export interface IImportBatchDetail extends IImportBatch {
+  items: IImportItem[];
+  /** Задания разбора партии по статусам. */
+  jobs: Record<string, number>;
+}
+
+export type TResolveItemInput =
+  | { resolution: 'reimported'; resolvedByItemId: string }
+  | { resolution: 'not_applicable'; reason: string };
+
+export interface IDocument {
+  id: string;
+  tenderId: string;
+  title: string;
+  docType: TDocType;
+  docCode: string | null;
+  scopeNote: string | null;
+  revisions: number;
+  latestRevisionId: string | null;
+  latestReceivedAt: string | null;
+  rowVersion: number;
+  updatedAt: string;
+}
+
+export interface IOccurrence {
+  id: string;
+  sourceKind: TOccurrenceKind;
+  sourceLocator: string;
+  observedName: string;
+  observedAt: string;
+  importItemId: string | null;
+  intakeChannelId: string | null;
+}
+
+export interface IRevision {
+  id: string;
+  documentId: string;
+  revisionSeq: number;
+  sha256: string;
+  sizeBytes: number;
+  mediaType: string;
+  supersedesRevisionId: string | null;
+  receivedAt: string;
+  occurrences: IOccurrence[];
+}
+
+export interface IDocumentDetail extends IDocument {
+  revisionList: IRevision[];
+}
+
+export interface IDocumentPatch {
+  title?: string;
+  docType?: TDocType;
+  docCode?: string | null;
+  scopeNote?: string | null;
+}
+
+export interface ISourceSetRevision {
+  id: string;
+  sourceSetId: string;
+  stageId: string;
+  seq: number;
+  status: TSourceSetStatus;
+  baseRevisionId: string | null;
+  contentHash: string | null;
+  rowVersion: number;
+  updatedAt: string;
+}
+
+export interface ISourceSetLatestItem {
+  documentRevisionId: string;
+  documentId: string;
+  documentTitle: string;
+  revisionSeq: number;
+  inclusion: TInclusion;
+  reason: string | null;
+}
+
+export interface ISourceSet {
+  id: string;
+  purpose: string;
+  revisions: ISourceSetRevision[];
+  latestItems: ISourceSetLatestItem[];
+}
+
+export interface ISourceSetItemInput {
+  documentRevisionId: string;
+  inclusion: TInclusion;
+  reason?: string | null;
+}
+
+export interface IStageInputEvent {
+  id?: string;
+  seq: number;
+  eventType: string;
+  refType: string | null;
+  refId: string | null;
+  actorKind: string;
+  createdAt: string;
+}
+
+export interface IStageInputEvents {
+  inputVersion: number;
+  items: IStageInputEvent[];
+}
+
+export interface IIntakeChannel {
+  id: string;
+  tenderId: string;
+  kind: 'watched_folder';
+  origin: TChannelOrigin;
+  locator: string;
+  active: boolean;
+  freshnessSeconds: number;
+  scanIntervalSeconds: number;
+  lastScanStartedAt: string | null;
+  lastSuccessfulScanAt: string | null;
+  lastErrorCode: TChannelErrorCode | string | null;
+  lastErrorAt: string | null;
+  pendingUnstable: number;
+  /** Свежесть: последний успешный скан в пределах окна. */
+  current: boolean;
+  disabledReason: string | null;
+  rowVersion: number;
+}
+
+export interface IIntakeChannelCreateInput {
+  origin: TChannelOrigin;
+  locator: string;
+  freshnessSeconds?: number;
+  scanIntervalSeconds?: number;
+}
+
+export interface IIntakeChannelPatch {
+  origin?: TChannelOrigin;
+  locator?: string;
+  freshnessSeconds?: number;
+  scanIntervalSeconds?: number;
+  active?: boolean;
+  disabledReason?: string;
+}
+
+export interface IScanAccepted {
+  jobId: string;
+  created: boolean;
 }

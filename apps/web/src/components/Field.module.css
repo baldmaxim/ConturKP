@@ -31,6 +31,12 @@
   transition: border-color var(--duration-fast) var(--ease-out);
 }
 
+.textarea {
+  min-height: 96px;
+  padding: var(--space-2) var(--space-3);
+  resize: vertical;
+}
+
 .control:disabled,
 input.control:read-only {
   background: var(--surface-2);

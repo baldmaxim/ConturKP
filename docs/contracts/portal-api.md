@@ -37,7 +37,10 @@
 | `GET /admin/audit-events` | `admin.audit` | — | журнал событий вне тендеров: входы, пользователи, отказы Origin/CSRF (этап 02) |
 | `POST /me/api-tokens`, `DELETE /me/api-tokens/{id}` | `mcp.propose` | IK | выпуск и отзыв MCP-токена; секрет показывается один раз |
 | `GET /settings`, `PUT /settings/{key}` | `admin.settings` | IM | часовой пояс отображения, политика внешней обработки |
-| `GET /tenders/{id}/intake-channels`, `PUT /intake-channels/{id}` | `tender.read` / `admin.intake` | IM | каналы поступления, свежесть сканирования; отключение — с причиной (state-machines §1.1) |
+| `GET /tenders/{id}/intake-channels` | участник или `admin.tender` | — | каналы поступления, признак свежести `current`, последний успешный скан, ошибка, число файлов, ожидающих стабильности (этап 03) |
+| `POST /tenders/{id}/intake-channels` | `admin.intake` | IK | наблюдаемая папка (`origin`: `local`/`yandex_disk`/`smb`) только внутри `INTAKE_ROOTS` (этап 03) |
+| `PATCH /intake-channels/{id}` | `admin.intake` / `hold.resolve` (только отключение) | IM | настройки канала; отключение — с причиной, может руководитель тендера (state-machines §1.1) |
+| `POST /intake-channels/{id}/scan` | `source.write` | — | внеочередной скан (одно активное задание на канал) |
 | `GET /delivery-destinations`, `POST /delivery-destinations`, `POST /delivery-destinations/{id}/versions` | `admin.delivery` | IK | назначения; среда задаётся при создании и не меняется; корень и политика — новой версией (R01-05) |
 | `GET /integrations/status` | `tender.read` | — | статусы интеграций и время последней проверки |
 | `GET /health`, `GET /ready` | — | — | эксплуатация (ADR-011) |
@@ -58,16 +61,18 @@
 
 | Метод и путь | Право | Ключи | Назначение |
 |---|---|---|---|
-| `POST /stages/{id}/imports` | `source.write` | IK | загрузка файлов или архива; создаёт `import_batch` и задания |
-| `GET /imports/{id}` | `tender.read` | — | состав партии, отклонённые элементы с причинами и их исход |
+| `POST /stages/{id}/imports?name=<имя>` | `source.write` | IK | загрузка одного файла или ZIP: тело — сам файл (`application/octet-stream`); права проверяются до чтения тела; создаёт `import_batch`, событие `import_accepted` и задание разбора; ответ `202` (этап 03) |
+| `GET /stages/{id}/imports` | `tender.read` | — | партии тендера со счётчиками элементов (этап 03) |
+| `GET /imports/{id}` | `tender.read` | — | состав партии, отклонённые элементы с причинами и их исход, состояние заданий |
+| `POST /jobs/{id}/cancel` | `source.write` | — | отмена задания тендера: `queued` — сразу, `running` — флаг для владельца (state-machines §2) |
 | `POST /import-items/{id}/resolve` | `source.write` (повторный импорт) / `hold.resolve` (неприменимость) | IM, IK | исход отклонённого элемента: связь с элементом повторного импорта или решение руководителя о неприменимости с причиной (R01-09) |
 | `GET /stages/{id}/documents`, `GET /documents/{id}` | `tender.read` | — | документы и редакции |
 | `PATCH /documents/{id}` | `source.write` | IM | тип, код, область применения, группировка редакций |
 | `GET /document-revisions/{id}/content` | `tender.read` | — | оригинал по правам (ADR-003) |
-| `GET /stages/{id}/source-sets` | `tender.read` | — | наборы и ревизии |
-| `POST /source-sets/{id}/revisions` | `source.write` | IK | новая `draft`-ревизия от базовой |
+| `GET /stages/{id}/source-sets` | `tender.read` | — | наборы, ревизии и состав последней ревизии |
+| `POST /stages/{id}/source-set-revisions` | `source.write` | IK | новая `draft`-ревизия рабочего набора этапа от последней (набор создаётся при первом обращении; вместо `POST /source-sets/{id}/revisions` этапа 01 — набора до первого обращения ещё нет) |
 | `PUT /source-set-revisions/{id}/items` | `source.write` | IM | состав `draft`-ревизии |
-| `POST /source-set-revisions/{id}/freeze` | `source.write` | IM, IK | заморозка, `content_hash` |
+| `POST /source-set-revisions/{id}/freeze` | `source.write` | IM, IK | заморозка, `content_hash` — этап 04 (охранное условие требует распознавания) |
 | `POST /stages/{id}/evidence-scopes` | `source.write` | IK | фиксация снимка области доказательств: редакции с выбранными прогонами, письма, редакции транскрипций (R01-01) |
 | `GET /evidence-scopes/{id}` | `tender.read` | — | состав снимка по типам и `content_hash`; письма из недоступных ящиков показываются только счётчиком без содержимого |
 | `GET /stages/{id}/input-events` | `tender.read` | — | события барьера актуальности и решения по ним |

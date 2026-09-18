@@ -8,3 +8,8 @@ export * from './sessions.ts';
 export * from './tenders.ts';
 export * from './idempotency.ts';
 export * from './heartbeat.ts';
+export * from './stageEvents.ts';
+export * from './jobs.ts';
+export * from './sources.ts';
+export * from './intake.ts';
+export * from './sourceSets.ts';

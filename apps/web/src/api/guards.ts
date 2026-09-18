@@ -1,4 +1,4 @@
-import type { IStage, ITender, IUser } from './types';
+import type { IDocument, IIntakeChannel, ISourceSetRevision, IStage, ITender, IUser } from './types';
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 
@@ -10,3 +10,12 @@ export const isStage = (value: unknown): value is IStage =>
 
 export const isUser = (value: unknown): value is IUser =>
   isRecord(value) && typeof value.id === 'string' && typeof value.login === 'string' && typeof value.rowVersion === 'number';
+
+export const isDocument = (value: unknown): value is IDocument =>
+  isRecord(value) && typeof value.id === 'string' && typeof value.title === 'string' && typeof value.docType === 'string' && typeof value.rowVersion === 'number';
+
+export const isSourceSetRevision = (value: unknown): value is ISourceSetRevision =>
+  isRecord(value) && typeof value.id === 'string' && typeof value.sourceSetId === 'string' && typeof value.rowVersion === 'number';
+
+export const isIntakeChannel = (value: unknown): value is IIntakeChannel =>
+  isRecord(value) && typeof value.id === 'string' && typeof value.locator === 'string' && typeof value.rowVersion === 'number';

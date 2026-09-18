@@ -1,0 +1,36 @@
+.path {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  overflow-wrap: anywhere;
+}
+
+.reason {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.detail {
+  display: block;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  overflow-wrap: anywhere;
+}
+
+.sha {
+  font-family: var(--font-mono);
+}
+
+/* Элемент без исхода: левая полоса --warning (цвет дублируется бейджем «Нужен исход»). */
+.flagRow td:first-child {
+  box-shadow: inset 4px 0 0 var(--warning);
+}
+
+.flagCard {
+  border-left: 4px solid var(--warning);
+}

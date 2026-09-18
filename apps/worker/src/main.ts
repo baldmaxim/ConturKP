@@ -1,20 +1,25 @@
-// Процесс worker (ADR-001 §6). На этапе 02 — только запуск, сверка схемы и heartbeat для /ready;
-// очередь заданий и обработчики появляются на этапе 03 (ADR-004).
+// Процесс worker (ADR-001 §6, ADR-004): сверка схемы, heartbeat для /ready, цикл заданий
+// (импорт, регистрация, сканирование наблюдаемых папок), recovery истёкших аренд.
 import { hostname } from 'node:os';
 import { ConfigError, loadConfig } from '@kontur/config';
 import { beat, checkSchema, createPool } from '@kontur/db';
+import { BlobStore } from '@kontur/storage';
+import { HANDLERS } from './handlers/index.ts';
+import { WorkerRuntime } from './runtime.ts';
 
 const log = (message: string): void => console.log(`${new Date().toISOString()} [worker] ${message}`);
 
 const main = async (): Promise<void> => {
   const config = loadConfig();
-  const pool = createPool(config.databaseUrl, 2);
+  const pool = createPool(config.databaseUrl, 4);
   const schema = await checkSchema(pool);
   if (!schema.ok) {
     log(`схема БД не совпадает с кодом: ${schema.problem}. Выполните npm run db:migrate`);
     await pool.end();
     process.exit(3);
   }
+  const store = new BlobStore(config.storageRoot);
+  await store.init();
   const startedAt = new Date();
   const processId = `worker:${hostname()}:${process.pid}:${startedAt.getTime()}`;
   const tick = async (): Promise<void> => {
@@ -26,11 +31,16 @@ const main = async (): Promise<void> => {
   };
   await tick();
   const timer = setInterval(() => void tick(), config.workerHeartbeatSeconds * 1000);
-  log(`запущен (схема ${schema.dbVersion}), heartbeat каждые ${config.workerHeartbeatSeconds} с`);
+  const runtime = new WorkerRuntime({ pool, store, config, handlers: HANDLERS, workerId: processId, log });
+  const controller = new AbortController();
+  const loop = runtime.loop(controller.signal);
+  log(`запущен (схема ${schema.dbVersion}), обработчики: ${Object.keys(HANDLERS).join(', ')}`);
   const stop = (signal: string): void => {
     log(`остановка по ${signal}`);
     clearInterval(timer);
-    void pool.end().then(() => process.exit(0));
+    controller.abort();
+    // Незавершённое задание остаётся running до истечения аренды и возвращается recovery-проходом.
+    void loop.finally(() => pool.end()).then(() => process.exit(0));
     setTimeout(() => process.exit(0), 5000).unref();
   };
   process.on('SIGINT', () => stop('SIGINT'));

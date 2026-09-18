@@ -37,6 +37,8 @@ export interface ICommandSpec {
   // сохранённого ответа по ключу идемпотентности и до run (R02-01): повтор не обходит
   // отзыв назначения или роли. run повторяет проверки под своими блокировками.
   authorize: (client: PoolClient, ctx: IAccessContext, req: Request) => Promise<void>;
+  // Материал хэша запроса для идемпотентности; по умолчанию — метод, URL и JSON-тело.
+  requestKey?: (req: Request) => string;
   run: (client: PoolClient, ctx: IAccessContext, req: Request) => Promise<ICommandResult>;
 }
 
@@ -96,7 +98,7 @@ export const command =
         throw new HttpError(400, 'VALIDATION_FAILED', 'команда требует заголовка Idempotency-Key (8–200 символов)');
       }
       const requestHash = createHash('sha256')
-        .update(`${req.method} ${req.originalUrl}\n${JSON.stringify(req.body ?? null)}`)
+        .update(spec.requestKey ? spec.requestKey(req) : `${req.method} ${req.originalUrl}\n${JSON.stringify(req.body ?? null)}`)
         .digest('hex');
       const result = await withTransaction(pool, async (client) => {
         await spec.authorize(client, ctx, req);

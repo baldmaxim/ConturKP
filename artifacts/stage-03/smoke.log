@@ -1,0 +1,22 @@
+# npm run smoke — 2026-09-18T12:18:10.951Z
+# Node v24.14.1, PostgreSQL postgresql://***@127.0.0.1:55432/postgres
+PASS  db:setup — роли и база — база kontur_kp_smoke_test: создана; роли и права выставлены
+PASS  db:migrate — пустая БД — готово, применено миграций: 2
+PASS  db:migrate — повторный запуск без изменений
+PASS  bootstrap — первый администратор-руководитель
+PASS  bootstrap — повтор отклонён
+PASS  db:seed-demo — синтетические данные — демо-данные готовы
+PASS  config:check — без значений секретов
+PASS  server + worker — /ready 200 — {"database":{"ok":true,"detail":"доступна"},"schema":{"ok":true,"detail":"версия 2"},"storage":{"ok":true,"detail":"доступно на запись"},"worker":{"ok":true,"detail":"heartbeat свежий"}}
+PASS  неаутентифицированный запрос — 401
+PASS  вход администратора — HTTP 200
+PASS  список тендеров (демо) — тендеров: 2
+PASS  интерфейс раздаётся сервером с CSP
+PASS  назначение на демо-тендер
+PASS  загрузка архива обработана worker: ТЗ зарегистрирован, ../ отклонён — статус completed_with_errors
+PASS  worker остановлен → задание не потеряно, выполнено после запуска
+PASS  наблюдаемая папка: файл импортирован worker, канал актуален
+PASS  перезапуск server — /ready 200
+PASS  перезапуск server — сессия действительна
+PASS  журналы процессов без секретов
+Итог: PASS

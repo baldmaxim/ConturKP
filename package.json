@@ -31,6 +31,7 @@
   "dependencies": {
     "express": "^5.2.1",
     "pg": "^8.23.0",
+    "yauzl": "^3.4.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
@@ -38,6 +39,7 @@
     "@types/node": "^24.13.5",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
+    "@types/yauzl": "^3.4.0",
     "argon2": "0.45.1",
     "supertest": "^7.2.2",
     "typescript": "^7.0.2",

@@ -9,11 +9,13 @@ interface IBadgeProps {
   label: string;
   icon: TIconName;
   tone?: TBadgeTone;
+  /** Пунктирная рамка: неполная обработка и незавершённые состояния (BRAND.md §4.6). */
+  dashed?: boolean;
 }
 
 /** Бейдж статуса: подпись + иконка + цвет (цвет не единственный носитель смысла). */
-export const Badge: FC<IBadgeProps> = ({ label, icon, tone = 'neutral' }) => (
-  <span className={cx(styles.badge, styles[tone])} title={label}>
+export const Badge: FC<IBadgeProps> = ({ label, icon, tone = 'neutral', dashed = false }) => (
+  <span className={cx(styles.badge, styles[tone], dashed && styles.dashed)} title={label}>
     <Icon name={icon} size={16} />
     <span className={styles.text}>{label}</span>
   </span>

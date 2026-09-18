@@ -62,6 +62,60 @@ export const AuditQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 
+// ---- источники (этап 03)
+
+export const DOC_TYPE = z.enum(['tz', 'pd', 'rd', 'contract', 'boq', 'qa_form', 'letter', 'minutes', 'supplier_quote', 'other']);
+
+export const PatchDocumentRequest = z
+  .object({
+    title: text(500).optional(),
+    docType: DOC_TYPE.optional(),
+    docCode: optionalText(100),
+    scopeNote: optionalText(2000),
+  })
+  .strict();
+
+export const ResolveImportItemRequest = z.discriminatedUnion('resolution', [
+  z.object({ resolution: z.literal('reimported'), resolvedByItemId: z.uuid() }).strict(),
+  z.object({ resolution: z.literal('not_applicable'), reason: z.string().trim().min(5).max(4000) }).strict(),
+]);
+
+export const CreateChannelRequest = z
+  .object({
+    origin: z.enum(['local', 'yandex_disk', 'smb']),
+    locator: z.string().trim().min(1).max(1000),
+    freshnessSeconds: z.number().int().min(60).max(7 * 86400).default(900),
+    scanIntervalSeconds: z.number().int().min(5).max(86400).default(60),
+  })
+  .strict();
+
+export const PatchChannelRequest = z
+  .object({
+    origin: z.enum(['local', 'yandex_disk', 'smb']).optional(),
+    locator: z.string().trim().min(1).max(1000).optional(),
+    freshnessSeconds: z.number().int().min(60).max(7 * 86400).optional(),
+    scanIntervalSeconds: z.number().int().min(5).max(86400).optional(),
+    active: z.boolean().optional(),
+    disabledReason: z.string().trim().min(5).max(2000).optional(),
+  })
+  .strict();
+
+export const PutSourceSetItemsRequest = z
+  .object({
+    items: z
+      .array(
+        z
+          .object({
+            documentRevisionId: z.uuid(),
+            inclusion: z.enum(['included', 'excluded_not_applicable']),
+            reason: z.string().trim().min(3).max(2000).nullable().optional(),
+          })
+          .strict(),
+      )
+      .max(5000),
+  })
+  .strict();
+
 // ---- ответы
 
 export interface IMe {

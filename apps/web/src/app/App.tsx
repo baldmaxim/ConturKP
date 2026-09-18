@@ -2,6 +2,8 @@ import { useEffect, type FC } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { watchSystemTheme } from '../hooks/themeStore';
 import { AdminPage } from '../pages/AdminPage';
+import { DocumentPage } from '../pages/DocumentPage';
+import { ImportBatchPage } from '../pages/ImportBatchPage';
 import { LoginPage } from '../pages/LoginPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { StagePage } from '../pages/StagePage';
@@ -32,6 +34,8 @@ export const App: FC = () => {
             <Route index element={<TendersPage />} />
             <Route path="tenders/:tenderId" element={<TenderPage />} />
             <Route path="stages/:stageId" element={<StagePage />} />
+            <Route path="imports/:importId" element={<ImportBatchPage />} />
+            <Route path="documents/:documentId" element={<DocumentPage />} />
             <Route path="admin" element={<AdminPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>

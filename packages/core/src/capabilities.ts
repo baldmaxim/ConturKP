@@ -4,14 +4,14 @@
 export type Role = 'admin' | 'manager' | 'engineer';
 export type MemberRole = 'engineer' | 'manager';
 
-export type GlobalCapability = 'admin.users' | 'admin.tender' | 'admin.audit';
-export type TenderCapability = 'tender.read' | 'stage.write' | 'stage.manage' | 'audit.read' | 'admin.tender';
+export type GlobalCapability = 'admin.users' | 'admin.tender' | 'admin.audit' | 'admin.intake';
+export type TenderCapability = 'tender.read' | 'stage.write' | 'stage.manage' | 'audit.read' | 'admin.tender' | 'source.write' | 'hold.resolve';
 
 export const ROLES: readonly Role[] = ['admin', 'manager', 'engineer'];
 export const MEMBER_ROLES: readonly MemberRole[] = ['engineer', 'manager'];
 
 export const globalCapabilities = (roles: ReadonlySet<Role>): GlobalCapability[] =>
-  roles.has('admin') ? ['admin.users', 'admin.tender', 'admin.audit'] : [];
+  roles.has('admin') ? ['admin.users', 'admin.tender', 'admin.audit', 'admin.intake'] : [];
 
 // Назначение действует, только пока у пользователя есть соответствующая глобальная роль:
 // снятие роли сразу лишает прав по тендеру без правки назначений.
@@ -26,8 +26,9 @@ export const tenderCapabilities = (
 ): TenderCapability[] => {
   const role = effectiveMemberRole(roles, memberRole);
   const caps: TenderCapability[] = [];
-  if (role) caps.push('tender.read', 'stage.write');
-  if (role === 'manager') caps.push('stage.manage');
+  if (role) caps.push('tender.read', 'stage.write', 'source.write');
+  // Решения о неприменимости (элементы импорта, удержания) — только руководитель тендера (ADR-006 §3).
+  if (role === 'manager') caps.push('stage.manage', 'hold.resolve');
   if (role === 'manager' || roles.has('admin')) caps.push('audit.read');
   if (roles.has('admin')) caps.push('admin.tender');
   return caps;
@@ -42,6 +43,8 @@ export const ADMIN_AUDIT_ACTIONS: readonly string[] = [
   'tender.update',
   'tender.member.assign',
   'tender.member.remove',
+  'intake.channel.create',
+  'intake.channel.update',
   'demo.seed',
 ];
 

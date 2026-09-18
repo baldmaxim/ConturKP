@@ -1,0 +1,57 @@
+.locator {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.folder {
+  flex: none;
+  margin-top: 1px;
+  color: var(--muted);
+}
+
+.stale {
+  color: var(--warning);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+/* Деградация интеграции (BRAND.md §9.10): --warning-soft и server-off. */
+.error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--warning-soft);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+.errorIcon {
+  flex: none;
+  margin-top: 1px;
+  color: var(--warning);
+}
+
+.absent {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--space-1);
+  color: var(--text);
+}
+
+.absent svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.warn {
+  color: var(--warning);
+}

@@ -1,12 +1,25 @@
 // Конфигурация процессов портала из переменных окружения (ADR-011 §3).
 // Значения секретов никогда не выводятся: отчёт содержит только «задано / не задано».
 import { readFileSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
+
+const MIB = 1024 * 1024;
 
 export type KonturEnv = 'development' | 'test' | 'production';
 
 export interface ITlsConfig {
   certFile: string;
   keyFile: string;
+}
+
+// Лимиты импорта (A38): размер загрузки, распаковки и число элементов архива.
+export interface IImportLimits {
+  maxUploadBytes: number;
+  maxEntryBytes: number;
+  maxArchiveTotalBytes: number;
+  maxArchiveEntries: number;
+  // Отношение распакованного размера к сжатому для одного элемента (защита от zip-бомб).
+  maxCompressionRatio: number;
 }
 
 export interface IAppConfig {
@@ -22,6 +35,12 @@ export interface IAppConfig {
   workerHeartbeatSeconds: number;
   workerStaleSeconds: number;
   webDistDir: string | null;
+  limits: IImportLimits;
+  // Наблюдаемые папки допускаются только внутри этих корней (проверка realpath при каждом скане).
+  intakeRoots: string[];
+  intakeStabilitySeconds: number;
+  jobLeaseSeconds: number;
+  gpuTakeoverGraceSeconds: number;
 }
 
 interface IConfigKey {
@@ -48,6 +67,13 @@ export const CONFIG_KEYS: IConfigKey[] = [
   { name: 'SESSION_IDLE_MINUTES', secret: false, required: false, purpose: 'истечение неактивной сессии, по умолчанию 720' },
   { name: 'SESSION_ABSOLUTE_HOURS', secret: false, required: false, purpose: 'абсолютный срок сессии, по умолчанию 168' },
   { name: 'WEB_DIST_DIR', secret: false, required: false, purpose: 'каталог собранного интерфейса' },
+  { name: 'INTAKE_ROOTS', secret: false, required: false, purpose: 'корни наблюдаемых папок через «;» (без них каналы не сканируются)' },
+  { name: 'INTAKE_STABILITY_SECONDS', secret: false, required: false, purpose: 'сколько секунд файл не меняется до импорта, по умолчанию 10' },
+  { name: 'IMPORT_MAX_UPLOAD_MB', secret: false, required: false, purpose: 'лимит загрузки, по умолчанию 512' },
+  { name: 'IMPORT_MAX_ENTRY_MB', secret: false, required: false, purpose: 'лимит элемента архива после распаковки, по умолчанию 1024' },
+  { name: 'IMPORT_MAX_ARCHIVE_MB', secret: false, required: false, purpose: 'лимит суммы распаковки архива, по умолчанию 4096' },
+  { name: 'IMPORT_MAX_ARCHIVE_ENTRIES', secret: false, required: false, purpose: 'лимит числа элементов архива, по умолчанию 5000' },
+  { name: 'JOB_LEASE_SECONDS', secret: false, required: false, purpose: 'аренда задания, по умолчанию 60' },
   { name: 'TENDERHUB_URL', secret: false, required: false, purpose: 'интеграция TenderHub (этап 06)' },
   { name: 'TENDERHUB_API_KEY', secret: true, required: false, purpose: 'интеграция TenderHub (этап 06)' },
   { name: 'LOCALAI_URL', secret: false, required: false, purpose: 'внутренний адрес LocalAI (этап 05); наружу не публикуется' },
@@ -137,7 +163,24 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
     workerHeartbeatSeconds: 10,
     workerStaleSeconds: 60,
     webDistDir: env.WEB_DIST_DIR || null,
+    limits: {
+      maxUploadBytes: intFrom(env, 'IMPORT_MAX_UPLOAD_MB', 512, problems) * MIB,
+      maxEntryBytes: intFrom(env, 'IMPORT_MAX_ENTRY_MB', 1024, problems) * MIB,
+      maxArchiveTotalBytes: intFrom(env, 'IMPORT_MAX_ARCHIVE_MB', 4096, problems) * MIB,
+      maxArchiveEntries: intFrom(env, 'IMPORT_MAX_ARCHIVE_ENTRIES', 5000, problems),
+      maxCompressionRatio: 200,
+    },
+    intakeRoots: (env.INTAKE_ROOTS ?? '')
+      .split(';')
+      .map((s) => s.trim())
+      .filter(Boolean),
+    intakeStabilitySeconds: intFrom(env, 'INTAKE_STABILITY_SECONDS', 10, problems),
+    jobLeaseSeconds: intFrom(env, 'JOB_LEASE_SECONDS', 60, problems),
+    gpuTakeoverGraceSeconds: 120,
   };
+  for (const root of config.intakeRoots) {
+    if (!isAbsolute(root)) problems.push(`INTAKE_ROOTS: «${root}» должен быть абсолютным путём`);
+  }
   if (problems.length > 0) throw new ConfigError(problems);
   return config;
 };

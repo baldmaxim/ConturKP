@@ -57,3 +57,8 @@
   color: var(--danger);
   background: var(--danger-soft);
 }
+
+.dashed {
+  border-style: dashed;
+  border-color: currentColor;
+}

@@ -33,6 +33,10 @@ export interface ICommandSpec {
   action: string;
   entityType: string;
   idempotent?: boolean;
+  // Проверка текущих прав и области объекта. Выполняется в транзакции команды до выдачи
+  // сохранённого ответа по ключу идемпотентности и до run (R02-01): повтор не обходит
+  // отзыв назначения или роли. run повторяет проверки под своими блокировками.
+  authorize: (client: PoolClient, ctx: IAccessContext, req: Request) => Promise<void>;
   run: (client: PoolClient, ctx: IAccessContext, req: Request) => Promise<ICommandResult>;
 }
 
@@ -95,6 +99,7 @@ export const command =
         .update(`${req.method} ${req.originalUrl}\n${JSON.stringify(req.body ?? null)}`)
         .digest('hex');
       const result = await withTransaction(pool, async (client) => {
+        await spec.authorize(client, ctx, req);
         if (key) {
           await lockIdempotencyKey(client, ctx.principal.userId, key);
           const stored = await findIdempotent(client, ctx.principal.userId, key);

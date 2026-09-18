@@ -77,6 +77,11 @@ export const setRoles = async (db: Queryable, userId: string, roles: Role[], gra
   );
 };
 
+// Перезапись хэша в новом формате при входе: не пользовательское изменение, версия строки не меняется.
+export const rehashPassword = async (db: Queryable, userId: string, oldHash: string, newHash: string): Promise<void> => {
+  await db.query('UPDATE app_user SET password_hash = $3 WHERE id = $1 AND password_hash = $2', [userId, oldHash, newHash]);
+};
+
 export interface IUserPatch {
   displayName?: string | undefined;
   status?: 'active' | 'disabled' | undefined;
@@ -94,6 +99,14 @@ export const updateUser = async (db: Queryable, id: string, patch: IUserPatch): 
       WHERE id = $1`,
     [id, patch.displayName ?? null, patch.status ?? null, patch.passwordHash ?? null],
   );
+};
+
+// Все изменения, способные убрать или добавить активного администратора (снятие роли,
+// отключение, bootstrap), сериализуются одной транзакционной блокировкой и берут её первой,
+// до блокировок строк пользователей: иначе две транзакции над разными пользователями
+// параллельно видят «администраторов двое» и снимают обоих (R02-03).
+export const lockAdminSet = async (db: Queryable): Promise<void> => {
+  await db.query("SELECT pg_advisory_xact_lock(hashtext('kontur_kp_admin_set'))");
 };
 
 export const countActiveAdmins = async (db: Queryable): Promise<number> => {

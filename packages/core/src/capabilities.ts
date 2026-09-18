@@ -33,6 +33,26 @@ export const tenderCapabilities = (
   return caps;
 };
 
+// Журнал тендера — производное представление его данных (R02-02). Руководитель тендера видит
+// все события. Администратор без назначения — только административные события карточки и
+// участников: их содержимое ему и так доступно. События этапов и дальнейшего содержимого
+// (названия, сроки, старые значения) ему не выдаются.
+export const ADMIN_AUDIT_ACTIONS: readonly string[] = [
+  'tender.create',
+  'tender.update',
+  'tender.member.assign',
+  'tender.member.remove',
+  'demo.seed',
+];
+
+export type AuditScope = { kind: 'all' } | { kind: 'actions'; actions: readonly string[] } | { kind: 'none' };
+
+export const tenderAuditScope = (roles: ReadonlySet<Role>, memberRole: MemberRole | null | undefined): AuditScope => {
+  if (effectiveMemberRole(roles, memberRole) === 'manager') return { kind: 'all' };
+  if (roles.has('admin')) return { kind: 'actions', actions: ADMIN_AUDIT_ACTIONS };
+  return { kind: 'none' };
+};
+
 // Карточку тендера и состав участников видит участник или администратор;
 // содержимое тендера (этапы и далее) — только участник (ADR-006: администратор без
 // назначения не видит данных тендера).

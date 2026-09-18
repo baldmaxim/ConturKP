@@ -3,7 +3,7 @@
 // Команда отказывает, если активный администратор уже есть: повторно открыть «первую
 // регистрацию» нельзя; дальше пользователей ведёт администратор через интерфейс.
 import { passwordProblem, hashPassword, type Role } from '@kontur/core';
-import { countActiveAdmins, insertUser, withTransaction, writeAudit, type Pool } from '@kontur/db';
+import { countActiveAdmins, insertUser, lockAdminSet, withTransaction, writeAudit, type Pool } from '@kontur/db';
 
 export class BootstrapRefused extends Error {}
 
@@ -20,7 +20,7 @@ export const bootstrapOwner = async (pool: Pool, input: IBootstrapInput): Promis
   if (!input.roles.includes('admin')) throw new BootstrapRefused('первый пользователь должен иметь роль admin');
   const passwordHash = await hashPassword(input.password);
   return withTransaction(pool, async (client) => {
-    await client.query("SELECT pg_advisory_xact_lock(hashtext('kontur_kp_bootstrap'))");
+    await lockAdminSet(client);
     if ((await countActiveAdmins(client)) > 0) {
       throw new BootstrapRefused('активный администратор уже существует; bootstrap повторно не выполняется');
     }

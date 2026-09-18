@@ -81,12 +81,13 @@ const evaluate = async (expression) => {
 const waitFor = async (expression, timeoutMs = 10_000) => {
   const until = Date.now() + timeoutMs;
   while (Date.now() < until) {
-    if (await evaluate(`Boolean(${expression})`)) return true;
+    // Сразу после перехода document.body может отсутствовать: ошибку вычисления считаем «ещё нет».
+    if (await evaluate(`Boolean(${expression})`).catch(() => false)) return true;
     await sleep(200);
   }
   return false;
 };
-const text = (s) => `document.body.innerText.includes(${JSON.stringify(s)})`;
+const text = (s) => `(document.body?.innerText ?? '').includes(${JSON.stringify(s)})`;
 // Ввод значения в управляемое поле React: нативный setter + событие input.
 const fill = (selector, value) =>
   evaluate(`(() => { const el = document.querySelector(${JSON.stringify(selector)});

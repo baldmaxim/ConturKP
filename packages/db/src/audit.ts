@@ -64,18 +64,21 @@ const SELECT_EVENTS = `
     LEFT JOIN app_user u ON u.id = e.actor_user_id`;
 
 // Право audit.read проверяется вызывающим обработчиком до вызова (ctx обязателен).
+// actions = null — все события тендера; иначе только перечисленные действия (R02-02).
 export const listTenderAudit = async (
   db: Queryable,
   _ctx: IAccessContext,
   tenderId: string,
+  actions: readonly string[] | null,
   beforeSeq: number | null,
   limit: number,
 ): Promise<IAuditEventRow[]> => {
   const r = await db.query<IAuditEventRow>(
     `${SELECT_EVENTS}
       WHERE e.tender_id = $1 AND ($2::bigint IS NULL OR e.seq < $2)
+        AND ($4::text[] IS NULL OR e.action = ANY($4::text[]))
       ORDER BY e.seq DESC LIMIT $3`,
-    [tenderId, beforeSeq, limit],
+    [tenderId, beforeSeq, limit, actions],
   );
   return r.rows;
 };

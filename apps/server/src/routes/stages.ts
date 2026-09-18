@@ -14,6 +14,12 @@ const loadStage = async (db: Queryable, ctx: IAccessContext, id: string, lock = 
   return s;
 };
 
+const requireStageWrite = (ctx: IAccessContext, s: IStageRow): void => {
+  if (!tenderCapabilities(ctx.roles, memberRoleOf(ctx, s.tender_id)).includes('stage.write')) {
+    throw forbidden('stage.write', { entityType: 'tender_stage', entityId: s.id, tenderId: s.tender_id });
+  }
+};
+
 const toDate = (value: string | null | undefined): Date | null | undefined =>
   value === undefined ? undefined : value === null ? null : new Date(value);
 
@@ -36,6 +42,7 @@ export const stagesRouter = (pool: Pool): Router => {
       action: 'stage.create',
       entityType: 'tender_stage',
       idempotent: true,
+      authorize: async (client, ctx, req) => requireTenderCap(ctx, await loadTender(client, ctx, uuidParam(req, 'id', 'tender')), 'stage.manage'),
       run: async (client, ctx, req) => {
         // Порядок блокировок: тендер → этап (state-machines §1.2); номер этапа выдаётся под блокировкой тендера.
         const t = await loadTender(client, ctx, uuidParam(req, 'id', 'tender'), true);
@@ -70,12 +77,11 @@ export const stagesRouter = (pool: Pool): Router => {
     command(pool, {
       action: 'stage.update',
       entityType: 'tender_stage',
+      authorize: async (client, ctx, req) => requireStageWrite(ctx, await loadStage(client, ctx, uuidParam(req, 'id', 'tender_stage'))),
       run: async (client, ctx, req) => {
         const id = uuidParam(req, 'id', 'tender_stage');
         const s = await loadStage(client, ctx, id, true);
-        if (!tenderCapabilities(ctx.roles, memberRoleOf(ctx, s.tender_id)).includes('stage.write')) {
-          throw forbidden('stage.write', { entityType: 'tender_stage', entityId: id, tenderId: s.tender_id });
-        }
+        requireStageWrite(ctx, s);
         if (requireIfMatch(req, id) !== s.row_version) throw versionConflict(toStage(s));
         const body = parseBody(PatchStageRequest, req.body);
         await updateStage(client, ctx, id, { title: body.title, submissionDeadline: toDate(body.submissionDeadline) });

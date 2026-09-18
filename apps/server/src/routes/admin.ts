@@ -5,6 +5,7 @@ import {
   countActiveAdmins,
   getUser,
   insertUser,
+  lockAdminSet,
   listGlobalAudit,
   listUsers,
   revokeUserSessions,
@@ -47,6 +48,7 @@ export const adminRouter = (pool: Pool, clock: () => Date): Router => {
       action: 'admin.user.create',
       entityType: 'app_user',
       idempotent: true,
+      authorize: async (_client, ctx) => requireGlobal(ctx, 'admin.users', 'app_user'),
       run: async (client, ctx, req) => {
         requireGlobal(ctx, 'admin.users', 'app_user');
         const body = parseBody(CreateUserRequest, req.body);
@@ -72,9 +74,12 @@ export const adminRouter = (pool: Pool, clock: () => Date): Router => {
     command(pool, {
       action: 'admin.user.update',
       entityType: 'app_user',
+      authorize: async (_client, ctx, req) => requireGlobal(ctx, 'admin.users', 'app_user', uuidParam(req, 'id', 'app_user')),
       run: async (client, ctx, req) => {
         const id = uuidParam(req, 'id', 'app_user');
         requireGlobal(ctx, 'admin.users', 'app_user', id);
+        // Блокировка набора администраторов — до блокировки строки пользователя (единый порядок).
+        await lockAdminSet(client);
         const u = await loadUser(client, id, true);
         if (requireIfMatch(req, id) !== u.row_version) throw versionConflict(toUser(u));
         const body = parseBody(PatchUserRequest, req.body);
@@ -113,6 +118,7 @@ export const adminRouter = (pool: Pool, clock: () => Date): Router => {
     command(pool, {
       action: 'admin.user.password_reset',
       entityType: 'app_user',
+      authorize: async (_client, ctx, req) => requireGlobal(ctx, 'admin.users', 'app_user', uuidParam(req, 'id', 'app_user')),
       run: async (client, ctx, req) => {
         const id = uuidParam(req, 'id', 'app_user');
         requireGlobal(ctx, 'admin.users', 'app_user', id);

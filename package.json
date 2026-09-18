@@ -38,6 +38,7 @@
     "@types/node": "^24.13.5",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
+    "argon2": "0.45.1",
     "supertest": "^7.2.2",
     "typescript": "^7.0.2",
     "vitest": "^5.0.1"

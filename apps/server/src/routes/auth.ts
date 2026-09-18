@@ -3,11 +3,12 @@
 import { randomBytes } from 'node:crypto';
 import type { IAppConfig } from '@kontur/config';
 import { ChangePasswordRequest, LoginRequest, type IMe } from '@kontur/contracts';
-import { burnPasswordCheck, globalCapabilities, hashPassword, verifyPassword } from '@kontur/core';
+import { burnPasswordCheck, globalCapabilities, hashPassword, needsRehash, verifyPassword } from '@kontur/core';
 import {
   findCredential,
   getPasswordHash,
   loadAccessContext,
+  rehashPassword,
   insertSession,
   revokeSession,
   revokeUserSessions,
@@ -75,6 +76,9 @@ export const authRouter = (config: IAppConfig, pool: Pool, clock: () => Date): R
       return;
     }
     limiter.succeed(login);
+    if (cred.password_hash && needsRehash(cred.password_hash)) {
+      await rehashPassword(pool, cred.id, cred.password_hash, await hashPassword(body.data.password));
+    }
     const token = randomBytes(32).toString('base64url');
     const csrf = randomBytes(32).toString('base64url');
     const now = clock();
@@ -103,6 +107,8 @@ export const authRouter = (config: IAppConfig, pool: Pool, clock: () => Date): R
     command(pool, {
       action: 'auth.logout',
       entityType: 'session',
+      // Выход и смена своего пароля относятся только к текущей сессии и пользователю.
+      authorize: async () => undefined,
       run: async (client, _ctx, req) => {
         const { sessionId } = requireAuth(req);
         await revokeSession(client, sessionId, clock(), 'logout');
@@ -131,6 +137,7 @@ export const authRouter = (config: IAppConfig, pool: Pool, clock: () => Date): R
     command(pool, {
       action: 'me.password.change',
       entityType: 'app_user',
+      authorize: async () => undefined,
       run: async (client, ctx, req) => {
         const body = parseBody(ChangePasswordRequest, req.body);
         const current = await getPasswordHash(client, ctx.principal.userId);

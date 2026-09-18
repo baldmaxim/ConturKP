@@ -1,6 +1,6 @@
 // Тендеры, участники и журнал тендера (portal-api §2.2). Чужой тендер — 404 (ADR-006 §7).
 import { CreateTenderRequest, PatchTenderRequest, PutMemberRequest, AuditQuery } from '@kontur/contracts';
-import { formatEtag, globalCapabilities, tenderCapabilities, type TenderCapability } from '@kontur/core';
+import { formatEtag, globalCapabilities, tenderAuditScope, tenderCapabilities, type TenderCapability } from '@kontur/core';
 import {
   activeMembership,
   bumpTenderVersion,
@@ -36,6 +36,10 @@ export const requireTenderCap = (ctx: IAccessContext, t: ITenderRow, cap: Tender
   }
 };
 
+const requireGlobalTender = (ctx: IAccessContext): void => {
+  if (!globalCapabilities(ctx.roles).includes('admin.tender')) throw forbidden('admin.tender', { entityType: 'tender' });
+};
+
 const changes = (before: Record<string, unknown>, after: Record<string, unknown>): Record<string, unknown> => {
   const diff: Record<string, unknown> = {};
   for (const key of Object.keys(after)) {
@@ -67,8 +71,9 @@ export const tendersRouter = (pool: Pool): Router => {
       action: 'tender.create',
       entityType: 'tender',
       idempotent: true,
+      authorize: async (_client, ctx) => requireGlobalTender(ctx),
       run: async (client, ctx, req) => {
-        if (!globalCapabilities(ctx.roles).includes('admin.tender')) throw forbidden('admin.tender', { entityType: 'tender' });
+        requireGlobalTender(ctx);
         const body = parseBody(CreateTenderRequest, req.body);
         const id = await insertTender(client, ctx, {
           code: body.code,
@@ -101,6 +106,7 @@ export const tendersRouter = (pool: Pool): Router => {
     command(pool, {
       action: 'tender.update',
       entityType: 'tender',
+      authorize: async (client, ctx, req) => requireTenderCap(ctx, await loadTender(client, ctx, uuidParam(req, 'id', 'tender')), 'admin.tender'),
       run: async (client, ctx, req) => {
         const id = uuidParam(req, 'id', 'tender');
         const t = await loadTender(client, ctx, id, true);
@@ -138,6 +144,7 @@ export const tendersRouter = (pool: Pool): Router => {
     command(pool, {
       action: 'tender.member.assign',
       entityType: 'tender_member',
+      authorize: async (client, ctx, req) => requireTenderCap(ctx, await loadTender(client, ctx, uuidParam(req, 'id', 'tender')), 'admin.tender'),
       run: async (client, ctx, req) => {
         const id = uuidParam(req, 'id', 'tender');
         const userId = uuidParam(req, 'userId', 'app_user');
@@ -186,6 +193,7 @@ export const tendersRouter = (pool: Pool): Router => {
     command(pool, {
       action: 'tender.member.remove',
       entityType: 'tender_member',
+      authorize: async (client, ctx, req) => requireTenderCap(ctx, await loadTender(client, ctx, uuidParam(req, 'id', 'tender')), 'admin.tender'),
       run: async (client, ctx, req) => {
         const id = uuidParam(req, 'id', 'tender');
         const userId = uuidParam(req, 'userId', 'app_user');
@@ -214,8 +222,11 @@ export const tendersRouter = (pool: Pool): Router => {
     query(pool, 'tender.audit.read', 'tender', async (ctx, req, res) => {
       const t = await loadTender(pool, ctx, uuidParam(req, 'id', 'tender'));
       requireTenderCap(ctx, t, 'audit.read');
+      const scope = tenderAuditScope(ctx.roles, t.member_role);
+      if (scope.kind === 'none') throw forbidden('audit.read', { entityType: 'tender', entityId: t.id, tenderId: t.id });
       const q = parseBody(AuditQuery, req.query);
-      const rows = await listTenderAudit(pool, ctx, t.id, q.cursor ? Number(q.cursor) : null, q.limit + 1);
+      const actions = scope.kind === 'all' ? null : scope.actions;
+      const rows = await listTenderAudit(pool, ctx, t.id, actions, q.cursor ? Number(q.cursor) : null, q.limit + 1);
       const page = rows.slice(0, q.limit);
       const hasMore = rows.length > q.limit;
       res.json({ items: page.map(toAuditEvent), hasMore, nextCursor: hasMore ? String(page.at(-1)?.seq) : null });

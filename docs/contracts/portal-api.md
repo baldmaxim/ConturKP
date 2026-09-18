@@ -17,7 +17,7 @@
 | Область | ресурсы тендера доступны только участникам; иначе `404` (ADR-006) |
 | Аудит | каждая команда и каждый отказ пишут `audit_event` |
 
-Коды ошибок (`code`): `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `PRECONDITION_REQUIRED`, `VERSION_CONFLICT`, `STATE_CONFLICT`, `VALIDATION_FAILED`, `IDEMPOTENCY_KEY_REUSED`, `BLOCKER_PRESENT`, `INTEGRATION_UNAVAILABLE`, `INTEGRATION_BLOCKED`, `RATE_LIMITED`, `INTERNAL`.
+Коды ошибок (`code`): `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `PRECONDITION_REQUIRED`, `VERSION_CONFLICT`, `STATE_CONFLICT`, `VALIDATION_FAILED`, `IDEMPOTENCY_KEY_REUSED`, `BLOCKER_PRESENT`, `RELEASE_IS_TEST`, `ENVIRONMENT_MISMATCH`, `INTEGRATION_UNAVAILABLE`, `INTEGRATION_BLOCKED`, `RATE_LIMITED`, `INTERNAL`.
 
 Ответ `BLOCKER_PRESENT` содержит список блокеров с кодами из матрицы (`state-machines.md` §11.1), классом и пояснением.
 
@@ -33,6 +33,8 @@
 | `GET /me` | — | — | пользователь, роли, назначения, возможности |
 | `POST /me/api-tokens`, `DELETE /me/api-tokens/{id}` | `mcp.propose` | IK | выпуск и отзыв MCP-токена; секрет показывается один раз |
 | `GET /settings`, `PUT /settings/{key}` | `admin.settings` | IM | часовой пояс отображения, политика внешней обработки |
+| `GET /tenders/{id}/intake-channels`, `PUT /intake-channels/{id}` | `tender.read` / `admin.intake` | IM | каналы поступления, свежесть сканирования; отключение — с причиной (state-machines §1.1) |
+| `GET /delivery-destinations`, `POST /delivery-destinations`, `POST /delivery-destinations/{id}/versions` | `admin.delivery` | IK | назначения; среда задаётся при создании и не меняется; корень и политика — новой версией (R01-05) |
 | `GET /integrations/status` | `tender.read` | — | статусы интеграций и время последней проверки |
 | `GET /health`, `GET /ready` | — | — | эксплуатация (ADR-011) |
 
@@ -59,6 +61,9 @@
 | `POST /source-sets/{id}/revisions` | `source.write` | IK | новая `draft`-ревизия от базовой |
 | `PUT /source-set-revisions/{id}/items` | `source.write` | IM | состав `draft`-ревизии |
 | `POST /source-set-revisions/{id}/freeze` | `source.write` | IM, IK | заморозка, `content_hash` |
+| `POST /stages/{id}/evidence-scopes` | `source.write` | IK | фиксация снимка области доказательств: редакции с выбранными прогонами, письма, редакции транскрипций (R01-01) |
+| `GET /evidence-scopes/{id}` | `tender.read` | — | состав снимка по типам и `content_hash`; письма из недоступных ящиков показываются только счётчиком без содержимого |
+| `GET /stages/{id}/input-events` | `tender.read` | — | события барьера актуальности и решения по ним |
 
 ### 2.4. Распознавание, доказательства, поиск
 
@@ -98,7 +103,7 @@
 | `POST /requirements/{id}/revisions` | `requirement.write` | IM | новая формулировка с сохранением цитат |
 | `POST /requirements/{id}/transitions` | `requirement.write` | IM | подтверждение, отклонение, замена |
 | `POST /requirements/{id}/coverage-links`, `POST /coverage-links/{id}/transitions` | `requirement.write` | IM, IK | покрытие расчётом |
-| `POST /stages/{id}/review-runs`, `GET /review-runs/{id}` | `review.run` / `tender.read` | IK | запуск проверки и результаты с охватом |
+| `POST /stages/{id}/review-runs`, `GET /review-runs/{id}` | `review.run` / `tender.read` | IK | запуск проверки на снимке области (создаётся или переиспользуется в той же транзакции) и результаты с охватом |
 | `GET /model-suggestions`, `POST /model-suggestions/{id}/accept`, `…/reject` | `tender.read` / `finding.write` | IM, IK | гипотезы модели; принимает только человек |
 | `GET /stages/{id}/findings`, `POST /findings`, `POST /findings/{id}/transitions` | `tender.read` / `finding.write` | IM, IK | замечания и переходы |
 | `POST /discrepancies/{id}/status-events` | `finding.write` | IK | изменение одной оси статуса с основанием |
@@ -119,14 +124,14 @@
 
 | Метод и путь | Право | Ключи | Назначение |
 |---|---|---|---|
-| `POST /stages/{id}/release-candidates` | `candidate.create` | IK | сборка кандидата из закреплённых входов |
+| `POST /stages/{id}/release-candidates` | `candidate.create` | IK | сборка кандидата из закреплённых входов; обязательный `mode` (`production`/`test`), дальше неизменен; проверки должны быть на одном снимке области |
 | `GET /release-candidates/{id}` | `tender.read` | — | состав, манифест, файлы, блокеры |
 | `GET /candidate-files/{id}/content` | `tender.read` | — | просмотр именно того файла, который согласуется |
 | `POST /release-candidates/{id}/approve` | `candidate.approve` | IM, IK | согласование руководителем |
 | `POST /release-candidates/{id}/return` | `candidate.approve` | IM, IK | возврат на доработку с причиной |
 | `POST /approvals/{id}/revoke` | `candidate.approve` | IM, IK | отзыв согласования до выпуска |
 | `POST /release-candidates/{id}/release` | `candidate.release` | IM, IK | выпуск назначенным инженером |
-| `GET /stages/{id}/holds`, `POST /holds/{id}/resolve` | `tender.read` / `hold.resolve` | IM, IK | удержания готовности (I04) |
+| `GET /stages/{id}/holds`, `POST /holds/{id}/resolve` | `tender.read` / `hold.resolve` | IM, IK | удержания по событиям входов для конкретного кандидата: «не влияет» или «требуется новый кандидат» (I04, R01-03) |
 | `GET /releases/{id}`, `GET /releases/{id}/manifest` | `tender.read` | — | выпуск и манифест |
 
 ### 2.10. Размещение, отправка, сравнение
@@ -136,7 +141,9 @@
 | `GET /releases/{id}/deliveries` | `tender.read` | — | состояние по каждому назначению |
 | `POST /deliveries/{id}/retry` | `delivery.manage` | IM, IK | повтор одного назначения |
 | `POST /deliveries/{id}/resolve-conflict` | `delivery.manage` | IM, IK | решение по конфликту имени и хэша |
-| `POST /releases/{id}/send-events` | `send.register` | IK | регистрация отправки с основанием |
+| `POST /deliveries/{id}/redirect` | `delivery.manage` | IM, IK | новая доставка на текущую версию назначения той же среды; старая → `superseded` |
+| `POST /releases/{id}/send-events` | `send.register` | IK | регистрация отправки с основанием; только для выпуска `mode = production`, иначе `RELEASE_IS_TEST`; под барьером актуальности |
+| `POST /releases/{id}/compliance-incidents` | `send.register` | IK | учёт недопустимой отправки, совершённой вне системы; не создаёт отправку |
 | `POST /send-events/{id}/verify` | `send.register` | IM, IK | сверка состава вложений с манифестом |
 | `POST /comparisons`, `GET /comparisons/{id}` | `tender.read` | IK | сравнение двух выпусков |
 | `POST /change-explanations/{id}/confirm` | `finding.write` | IM, IK | подтверждение причины изменения человеком |

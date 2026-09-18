@@ -76,25 +76,33 @@ interface RdwebApiClient {                       // проект, X-05 — BLOCK
 Факт: HTTP API на loopback, общий Bearer-токен, фильтр только по источнику, ID фрагмента из пути и номера чанка (`docs/discovery.md` §5).
 
 ```ts
+type SourceUnitRef =                             // единица источника (ADR-008 §1)
+  | { type: 'recognition_run'; id: string; documentRevisionId: string }
+  | { type: 'communication'; id: string }
+  | { type: 'transcript_revision'; id: string };
+
 interface LocalAiIndex {                         // проект, X-04
   upsertFragments(input: {
     tenderId: string;
-    documentRevisionId: string;
+    sourceUnit: SourceUnitRef;                   // каждый фрагмент принадлежит ровно одной единице
     fragments: Array<{ portalFragmentId: string; text: string; page?: number; kind: string }>;
   }): Promise<AdapterResult<{ indexed: number; indexVersion: string }>>;
 
   search(input: {
+    tenderId: string;
     query: string;
-    allowedDocumentRevisionIds: string[];        // фильтр применяется до top-k
+    allowedSourceUnitIds: string[];              // полная область: снимок минус единицы, недоступные пользователю; фильтр до top-k
+    scopeHash: string;                           // для аудита и сверки ответа
     limit: number;
-  }): Promise<AdapterResult<Array<{ portalFragmentId: string; score: number }>>>;
+  }): Promise<AdapterResult<Array<{ portalFragmentId: string; sourceUnitId: string; score: number }>>>;
 
   status(): Promise<AdapterResult<{ available: boolean; indexVersion: string }>>;
 }
 ```
 
-- Ответ, содержащий фрагмент вне `allowedDocumentRevisionIds`, отклоняется адаптером целиком и пишется в аудит.
-- До X-04 адаптер возвращает `UNAVAILABLE` для `search`, статус интеграции — `BLOCKED_EXTERNAL`; смысловой поиск в интерфейсе честно помечен недоступным (ADR-008 §6).
+- `allowedSourceUnitIds` строит сервер портала из снимка `evidence_scope` и прав пользователя в момент запроса (ADR-008 §3–4). Разные прогоны распознавания одного PDF — разные единицы, поэтому поздний прогон не попадает в исторический поиск (R01-02).
+- Проверка ответа: для каждого `portalFragmentId` портал по своей БД проверяет, что фрагмент существует, принадлежит указанной единице и единица входит в `allowedSourceUnitIds`. Любое несовпадение — ответ отклоняется целиком и пишется в аудит; отбрасывание отдельных строк после top-k не применяется.
+- До X-04 адаптер возвращает `UNAVAILABLE` для `search`, статус интеграции — `BLOCKED_EXTERNAL`; смысловой поиск в интерфейсе честно помечен недоступным (ADR-008 §9).
 - Портал не использует генерацию ответов LocalAI и `linkedContractId`.
 
 ## 5. MailHub (переписка)
@@ -155,6 +163,7 @@ interface DeliveryTarget {                       // проект контрак�
 ```
 
 - Реализации: `YandexDiskTarget` (API и способ сверки содержимого уточняются по официальной документации на этапе 14), `SmbTarget` (UNC-путь, служебная учётная запись).
+- Адаптер получает корень и политику только из закреплённой `delivery_destination_version` доставки, а не из текущей настройки назначения (R01-05).
 - Загружаются точные байты файлов кандидата; повторная генерация запрещена (I02).
 - Существующий файл с другим отпечатком — `CONFLICT`, без перезаписи (A30).
 - Публичные ссылки не создаются; внутренние материалы размещаются только если это разрешено настройкой назначения.

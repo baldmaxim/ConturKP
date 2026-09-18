@@ -38,7 +38,7 @@
 | Выпуск | `release_candidate`, `candidate_file`, `approval`, `readiness_hold`, `release` | Портал |
 | Размещение и отправка | `delivery_destination`, `delivery_destination_version`, `delivery`, `delivery_attempt`, `delivery_file_state`, `send_event`, `compliance_incident` | Портал; хранилища — копии |
 | Сравнение | `comparison`, `change_explanation` | Портал |
-| Сервисные | `audit_event`, `job`, `resource_slot`, `idempotency_record`, `integration_status`, `sync_cursor`, `setting` | Портал |
+| Сервисные | `audit_event`, `job`, `resource_slot`, `idempotency_record`, `integration_status`, `sync_cursor`, `setting`, `process_heartbeat` | Портал |
 
 Соответствие сущностям спецификации (§4): Tender → `tender`; TenderStage → `tender_stage`; CalculationRevision → `calculation_revision`; Document / DocumentRevision → `document` / `document_revision`; RecognitionRun / EvidenceFragment → `recognition_run` / `evidence_fragment`; SourceSetRevision → `source_set_revision`; Requirement / CoverageLink → `requirement` / `coverage_link`; Communication / QuestionAnswer / Negotiation → `communication` / `qa_item` / `negotiation_session`; Decision / Discrepancy / Finding → `decision` / `discrepancy` / `finding`; ApplicationTemplate / ApplicationDraft → `application_template` / `application_draft`; ReviewRun → `review_run`; ReleaseCandidate / Approval / Release → `release_candidate` / `approval` / `release`; Delivery / SendEvent → `delivery` / `send_event`; ChangeExplanation → `change_explanation`; AuditEvent / Job → `audit_event` / `job`.
 
@@ -146,8 +146,8 @@ erDiagram
 |---|---|---|---|
 | `app_user` | mutable | `kind` (`human`/`service`), `service_kind` (`integration`/`model`/`system`, только для service), `login`, `display_name`, `password_hash` (только human), `status` (`active`/`disabled`) | `login` уникален; у service нет пароля |
 | `user_role` | mutable | `user_id`, `role` (`admin`/`manager`/`engineer`) | роли только у `human` (триггер) |
-| `tender_member` | mutable | `tender_id`, `user_id`, `member_role` (`engineer`/`manager`), `assigned_by`, `assigned_at`, `removed_at` | активных инженеров на тендер не больше двух (проверка в транзакции назначения); только `human` |
-| `session` | mutable | `token_hash`, `user_id`, `csrf_hash`, `expires_at`, `revoked_at`, `last_seen_at` | хранится хэш, не токен |
+| `tender_member` | mutable | `tender_id`, `user_id`, `member_role` (`engineer`/`manager`), `assigned_by`, `assigned_at`, `removed_at`, `removed_by` | активных инженеров на тендер не больше двух (проверка в транзакции назначения и триггер под блокировкой тендера); только активный `human` с той же глобальной ролью; строки не удаляются — снятие через `removed_at` |
+| `session` | mutable | `token_hash`, `user_id`, `csrf_hash`, `expires_at`, `revoked_at`, `revoke_reason`, `last_seen_at` | хранится хэш, не токен |
 | `api_token` | mutable | `user_id`, `client_kind` (`mcp_codex`/`mcp_cursor`/`other`), `token_hash`, `scopes` (`read`, `propose`), `expires_at`, `revoked_at` | нет областей `approve`/`release`/`send`/`admin` на уровне схемы (CHECK) |
 | `mailbox` | mutable | `system` (`mailhub`), `external_account_id`, `address` | (`system`, `external_account_id`) уникальны |
 | `mailbox_access` | mutable | `mailbox_id`, `user_id`, `source` (`manual`/`mailhub_sync`), `granted_by`, `revoked_at` | один активный доступ на пару |
@@ -293,13 +293,15 @@ erDiagram
 
 | Таблица | Класс | Ключевые колонки | Ограничения |
 |---|---|---|---|
-| `audit_event` | append-only | `occurred_at`, `actor_user_id`, `principal_id`, `principal_kind` (`human`/`model_via_mcp`/`integration`/`system`), `on_behalf_of_user_id`, `action`, `entity_type`, `entity_id`, `tender_id`, `request_id`, `outcome` (`allowed`/`denied`/`failed`), `details` (без секретов) | отказ тоже событие (A25) |
+| `audit_event` | append-only | `seq` (порядок и курсор), `occurred_at`, `actor_user_id`, `principal_id`, `principal_kind` (`human`/`model_via_mcp`/`integration`/`system`/`anonymous`), `on_behalf_of_user_id`, `action`, `entity_type`, `entity_id`, `tender_id`, `request_id`, `outcome` (`allowed`/`denied`/`failed`), `details` (без секретов) | отказ тоже событие (A25) |
 | `job` | mutable | `kind`, `dedupe_key`, `payload`, `status` (§2 state-machines), `resource_class` (`default`/`network`/`gpu`), `priority`, `run_after`, `attempts`, `max_attempts`, `lease_token`, `locked_by`, `locked_until`, `cancel_requested`, `last_error_code`, `tender_id` | частичный уникальный индекс `dedupe_key` для незавершённых (ADR-004); `lease_token` новый при каждом захвате; все записи обработчика условны по нему (R01-06) |
 | `resource_slot` | mutable | `slot_key` (`gpu`), `holder_job_id`, `lease_token`, `locked_until` | один держатель; перехват только после истечения аренды и защитного интервала (ADR-004) |
 | `idempotency_record` | frozen-after | `principal_id`, `key`, `request_hash`, `response_status`, `response_body`, `expires_at` | PK (`principal_id`, `key`) |
 | `integration_status` | mutable | `system`, `component`, `status` (`NOT_IMPLEMENTED`/`VERIFIED_FIXTURE`/`VERIFIED_LIVE`/`BLOCKED_EXTERNAL`), `evidence_ref`, `verified_at`, `last_success_at`, `last_error_code` | `VERIFIED_LIVE` только с доказательством живой проверки |
 | `sync_cursor` | mutable | `system`, `stream`, `position`, `updated_at` | позиция polling (spec §6) |
 | `setting` | mutable | `key`, `value`, `updated_by` | часовой пояс отображения, политика внешней обработки |
+| `process_heartbeat` | mutable | `process_id`, `kind` (`worker`), `pid`, `started_at`, `last_seen_at` | служебная таблица для `/ready` (ADR-011 §4), добавлена на этапе 02; не бизнес-данные |
+| `schema_migration` | служебная | `version`, `name`, `sha256`, `applied_at` | ведёт раннер миграций (ADR-002 §5) |
 
 ## 5. Хэши содержимого
 

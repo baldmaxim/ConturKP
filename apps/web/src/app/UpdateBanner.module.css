@@ -1,0 +1,54 @@
+/* Смартфон — над нижним краем и safe area; ≥768 px — под шапкой. Баннер немодальный. */
+.banner {
+  position: fixed;
+  z-index: 35;
+  left: max(var(--space-3), env(safe-area-inset-left));
+  right: max(var(--space-3), env(safe-area-inset-right));
+  bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--info-soft);
+  color: var(--text);
+  box-shadow: var(--shadow-2);
+  animation: banner-in var(--duration-base) var(--ease-out);
+}
+
+.icon {
+  flex: none;
+  color: var(--info);
+}
+
+.text {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+@media (min-width: 768px) {
+  .banner {
+    top: calc(env(safe-area-inset-top) + var(--header-height) + var(--space-3));
+    bottom: auto;
+    left: 50%;
+    right: auto;
+    width: min(720px, calc(100% - 48px));
+    transform: translateX(-50%);
+    animation: none;
+  }
+}
+
+@keyframes banner-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+}

@@ -1,0 +1,170 @@
+.appBar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  padding-top: env(safe-area-inset-top);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-1);
+}
+
+.inner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--header-height);
+  max-width: 1440px;
+  margin: 0 auto;
+  padding-inline: max(var(--page-gutter), env(safe-area-inset-left)) max(var(--page-gutter), env(safe-area-inset-right));
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  border-radius: var(--radius-md);
+}
+
+.nav,
+.actions {
+  display: none;
+}
+
+.menuButton {
+  margin-left: auto;
+}
+
+.navLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-lg);
+  color: var(--muted);
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.navLink:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.active:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.menuPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-height: calc(100dvh - var(--header-height) - env(safe-area-inset-top));
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-4) max(var(--page-gutter), env(safe-area-inset-right)) max(var(--space-4), env(safe-area-inset-bottom))
+    max(var(--page-gutter), env(safe-area-inset-left));
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  animation: menu-in var(--duration-fast) var(--ease-out);
+}
+
+.menuUser {
+  display: flex;
+  flex-direction: column;
+}
+
+.menuName {
+  font-weight: 600;
+}
+
+.menuLogin {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.menuNav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.menuActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.user {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+@media (min-width: 768px) {
+  .nav {
+    display: flex;
+    gap: var(--space-1);
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-left: auto;
+  }
+
+  .menuButton,
+  .menuPanel {
+    display: none;
+  }
+
+  /* 768–1023 px: в навигации только иконки, подпись остаётся для скринридера. */
+  .nav .navLink span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .user {
+    max-width: 160px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .nav .navLink span {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+  }
+
+  .user {
+    max-width: 240px;
+  }
+}
+
+@keyframes menu-in {
+  from {
+    transform: translateY(-8px);
+    opacity: 0;
+  }
+}

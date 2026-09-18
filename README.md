@@ -2,7 +2,18 @@
 
 Локальный портал подготовки, проверки, согласования и выпуска коммерческих предложений Генподрядчика.
 
-Репозиторий начинается с согласованной концепции и пакета поэтапной разработки. Код портала пока не реализован.
+Разработка идёт по этапам пакета `docs/spec/`. Реализован каркас этапа 02: вход, роли и назначения, тендеры и этапы, журнал действий, health/readiness. Остальные модули — следующие этапы.
+
+## Запуск
+
+Чистый старт, тесты и доступ из LAN — [docs/runbooks/clean-start.md](docs/runbooks/clean-start.md). Кратко: `npm ci`, `npm run pg:init && npm run pg:start`, `.env` по образцу `.env.example`, `npm run db:setup && npm run db:migrate`, `npm run bootstrap -- --login … --name "…"`, `npm run build`, `npm run start:server` и `npm run start:worker`.
+
+| Каталог | Содержимое |
+|---|---|
+| `apps/server`, `apps/worker`, `apps/web` | процессы server и worker, интерфейс |
+| `packages/core`, `packages/db`, `packages/contracts`, `packages/config` | доменные правила, доступ к БД, схемы API, конфигурация |
+| `docs/migrations` | SQL-миграции |
+| `tests` | интеграционные тесты на изолированной PostgreSQL |
 
 ## Начало разработки
 

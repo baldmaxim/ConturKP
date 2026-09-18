@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="56 56 400 400" width="512" height="512">
+  <title>Контур КП</title>
+  <!-- Знак «Контур КП»: лист документа, фрагмент выделен контуром с ручками. Фон непрозрачный, значимая часть в круге r=204,8 (maskable). -->
+  <rect width="512" height="512" fill="#0F5B6E"/>
+  <path d="M144 96H368V416H144Z" fill="#FFFFFF"/>
+  <path d="M192 152H336M192 360H304" fill="none" stroke="#0F5B6E" stroke-width="16"/>
+  <path d="M208 256H304" fill="none" stroke="#0F5B6E" stroke-width="32"/>
+  <path d="M184 216H328V296H184Z" fill="none" stroke="#0F5B6E" stroke-width="16"/>
+  <path d="M168 200h32v32h-32zM312 200h32v32h-32zM168 280h32v32h-32zM312 280h32v32h-32z" fill="#0F5B6E"/>
+</svg>

@@ -1,0 +1,51 @@
+.group {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: calc(var(--control-h) - 6px);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-md);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.option:hover {
+  color: var(--text);
+}
+
+.compact {
+  min-width: calc(var(--control-h) - 6px);
+  padding: 0;
+}
+
+.checked {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+@media (pointer: coarse) {
+  .option {
+    min-height: 44px;
+  }
+
+  .compact {
+    min-width: 44px;
+  }
+}

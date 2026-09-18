@@ -1,0 +1,223 @@
+// Тестовая обвязка: изолированная БД на файл тестов (имя содержит test), клиент с cookie/CSRF.
+import { randomBytes } from 'node:crypto';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import pg from 'pg';
+import request from 'supertest';
+import type { IAppConfig } from '../packages/config/src/index.ts';
+import { hashPassword, type Role } from '../packages/core/src/index.ts';
+import { createPool, dropDatabase, insertUser, migrate, setupDatabase, type Pool } from '../packages/db/src/index.ts';
+import { createApp } from '../apps/server/src/app.ts';
+
+export const ADMIN_URL = process.env.KONTUR_TEST_ADMIN_URL ?? 'postgresql://postgres@127.0.0.1:55432/postgres';
+export const ORIGIN = 'http://127.0.0.1:5173';
+export const PASSWORD = 'correct-horse-battery';
+
+const urlFor = (user: string, db: string): string => {
+  const u = new URL(ADMIN_URL);
+  u.username = user;
+  u.password = '';
+  u.pathname = `/${db}`;
+  return u.toString();
+};
+
+export interface ITestDb {
+  name: string;
+  appUrl: string;
+  migratorUrl: string;
+  pool: Pool;
+  drop: () => Promise<void>;
+}
+
+export const createTestDb = async (): Promise<ITestDb> => {
+  const name = `kontur_kp_test_${randomBytes(5).toString('hex')}`;
+  await setupDatabase(ADMIN_URL, name);
+  const migratorUrl = urlFor('kontur_migrator', name);
+  const client = new pg.Client({ connectionString: migratorUrl });
+  await client.connect();
+  try {
+    await migrate(client, { testMode: true });
+  } finally {
+    await client.end();
+  }
+  const appUrl = urlFor('kontur_app', name);
+  const pool = createPool(appUrl, 5);
+  return {
+    name,
+    appUrl,
+    migratorUrl,
+    pool,
+    drop: async () => {
+      await pool.end();
+      await dropDatabase(ADMIN_URL, name);
+    },
+  };
+};
+
+export const testConfig = (overrides: Partial<IAppConfig> = {}): IAppConfig => ({
+  env: 'test',
+  databaseUrl: '',
+  storageRoot: mkdtempSync(join(tmpdir(), 'kontur-storage-')),
+  httpHost: '127.0.0.1',
+  httpPort: 0,
+  allowedOrigins: [ORIGIN],
+  tls: null,
+  sessionIdleMinutes: 30,
+  sessionAbsoluteHours: 24,
+  workerHeartbeatSeconds: 10,
+  workerStaleSeconds: 60,
+  webDistDir: join(tmpdir(), 'kontur-no-web'),
+  ...overrides,
+});
+
+export class Clock {
+  now = new Date('2026-09-18T09:00:00Z');
+  read = (): Date => new Date(this.now);
+  advanceMinutes(m: number): void {
+    this.now = new Date(this.now.getTime() + m * 60_000);
+  }
+}
+
+export const makeApp = (db: ITestDb, clock = new Clock(), config = testConfig()) =>
+  createApp({ config, pool: db.pool, clock: clock.read, logError: () => undefined });
+
+let cachedHash: Promise<string> | null = null;
+export const createUser = async (pool: Pool, login: string, roles: Role[], displayName = login): Promise<string> => {
+  cachedHash ??= hashPassword(PASSWORD);
+  return insertUser(pool, { login, displayName, passwordHash: await cachedHash, roles }, null);
+};
+
+type App = ReturnType<typeof makeApp>;
+type Method = 'get' | 'post' | 'put' | 'patch' | 'delete';
+
+export interface IRequestOptions {
+  body?: unknown;
+  headers?: Record<string, string | undefined>;
+  csrf?: boolean;
+  origin?: string | null;
+}
+
+// Клиент браузера: хранит cookie, для изменяющих запросов ставит Origin и X-CSRF-Token.
+export class TestClient {
+  readonly cookies = new Map<string, string>();
+  private readonly app: App;
+
+  constructor(app: App) {
+    this.app = app;
+  }
+
+  private absorb(res: request.Response): void {
+    const raw = res.headers['set-cookie'] as unknown as string[] | undefined;
+    for (const c of raw ?? []) {
+      const pair = c.split(';')[0] ?? '';
+      const i = pair.indexOf('=');
+      const name = pair.slice(0, i);
+      const value = decodeURIComponent(pair.slice(i + 1));
+      if (value === '' || /Expires=Thu, 01 Jan 1970/i.test(c)) this.cookies.delete(name);
+      else this.cookies.set(name, value);
+    }
+  }
+
+  async req(method: Method, path: string, o: IRequestOptions = {}): Promise<request.Response> {
+    let r = request(this.app)[method](path);
+    if (this.cookies.size > 0) r = r.set('Cookie', [...this.cookies].map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('; '));
+    if (method !== 'get') {
+      const origin = o.origin === undefined ? ORIGIN : o.origin;
+      if (origin) r = r.set('Origin', origin);
+      const csrf = this.cookies.get('kkp_csrf');
+      if (o.csrf !== false && csrf) r = r.set('X-CSRF-Token', csrf);
+    }
+    for (const [k, v] of Object.entries(o.headers ?? {})) if (v !== undefined) r = r.set(k, v);
+    const res = o.body !== undefined ? await r.send(o.body as object) : await r;
+    this.absorb(res);
+    return res;
+  }
+
+  get(path: string, o?: IRequestOptions) {
+    return this.req('get', `/api/v1${path}`, o);
+  }
+  post(path: string, body?: unknown, o: IRequestOptions = {}) {
+    return this.req('post', `/api/v1${path}`, { ...o, body });
+  }
+  put(path: string, body?: unknown, o: IRequestOptions = {}) {
+    return this.req('put', `/api/v1${path}`, { ...o, body });
+  }
+  patch(path: string, body?: unknown, o: IRequestOptions = {}) {
+    return this.req('patch', `/api/v1${path}`, { ...o, body });
+  }
+  delete(path: string, o: IRequestOptions = {}) {
+    return this.req('delete', `/api/v1${path}`, o);
+  }
+
+  async login(login: string, password = PASSWORD): Promise<request.Response> {
+    return this.post('/auth/login', { login, password });
+  }
+}
+
+export const idem = (): Record<string, string> => ({ 'Idempotency-Key': `test-${randomBytes(8).toString('hex')}` });
+
+export interface IScenario {
+  admin: TestClient;
+  manager: TestClient;
+  eng1: TestClient;
+  eng2: TestClient;
+  eng3: TestClient;
+  ids: Record<'admin' | 'manager' | 'eng1' | 'eng2' | 'eng3', string>;
+  tenderA: string;
+  tenderB: string;
+  stageA: string;
+  stageB: string;
+}
+
+// Тендер A: руководитель, инженеры 1 и 2. Тендер B: руководитель и инженер 3. Создаётся через API.
+export const buildScenario = async (db: ITestDb, app: App): Promise<IScenario> => {
+  const ids = {
+    admin: await createUser(db.pool, 'admin', ['admin'], 'Администратор'),
+    manager: await createUser(db.pool, 'manager', ['manager'], 'Руководитель'),
+    eng1: await createUser(db.pool, 'eng1', ['engineer'], 'Инженер 1'),
+    eng2: await createUser(db.pool, 'eng2', ['engineer'], 'Инженер 2'),
+    eng3: await createUser(db.pool, 'eng3', ['engineer'], 'Инженер 3'),
+  };
+  const clients = {
+    admin: new TestClient(app),
+    manager: new TestClient(app),
+    eng1: new TestClient(app),
+    eng2: new TestClient(app),
+    eng3: new TestClient(app),
+  };
+  for (const [login, c] of Object.entries(clients)) {
+    const r = await c.login(login);
+    if (r.status !== 200) throw new Error(`вход ${login}: ${r.status}`);
+  }
+  const mkTender = async (code: string, members: [string, string][]) => {
+    const t = await clients.admin.post('/tenders', { code, title: `Тендер ${code}` }, { headers: idem() });
+    if (t.status !== 201) throw new Error(`тендер ${code}: ${t.status} ${t.text}`);
+    let etag = t.headers.etag as string;
+    for (const [userId, memberRole] of members) {
+      const m = await clients.admin.put(`/tenders/${t.body.id}/members/${userId}`, { memberRole }, { headers: { 'If-Match': etag } });
+      if (m.status !== 200) throw new Error(`назначение: ${m.status} ${m.text}`);
+      etag = m.headers.etag as string;
+    }
+    return t.body.id as string;
+  };
+  const tenderA = await mkTender('A-1', [[ids.manager, 'manager'], [ids.eng1, 'engineer'], [ids.eng2, 'engineer']]);
+  const tenderB = await mkTender('B-1', [[ids.manager, 'manager'], [ids.eng3, 'engineer']]);
+  const sA = await clients.manager.post(`/tenders/${tenderA}/stages`, { title: 'Этап A1' }, { headers: idem() });
+  const sB = await clients.manager.post(`/tenders/${tenderB}/stages`, { title: 'Этап B1' }, { headers: idem() });
+  if (sA.status !== 201 || sB.status !== 201) throw new Error(`этапы: ${sA.status} ${sB.status}`);
+  return { ...clients, ids, tenderA, tenderB, stageA: sA.body.id, stageB: sB.body.id };
+};
+
+export const auditRows = async (pool: Pool, where: string, params: unknown[] = []) =>
+  (
+    await pool.query<{
+      action: string;
+      outcome: string;
+      actor_user_id: string | null;
+      entity_type: string | null;
+      entity_id: string | null;
+      tender_id: string | null;
+      details: Record<string, unknown>;
+    }>(`SELECT action, outcome, actor_user_id, entity_type, entity_id, tender_id, details FROM audit_event WHERE ${where} ORDER BY seq`, params)
+  ).rows;

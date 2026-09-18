@@ -1,0 +1,62 @@
+.logo {
+  display: inline-flex;
+  align-items: center;
+}
+
+.wordmark {
+  display: inline-flex;
+}
+
+.logo img {
+  width: auto;
+}
+
+.logoLight,
+.mark {
+  display: block;
+}
+
+.header img {
+  height: 28px;
+}
+
+.large img {
+  height: 40px;
+}
+
+.logoDark {
+  display: none;
+}
+
+:global(:root[data-theme='dark']) .wordmark .logoLight {
+  display: none;
+}
+
+:global(:root[data-theme='dark']) .wordmark .logoDark {
+  display: block;
+}
+
+.mark {
+  border-radius: var(--radius-md);
+}
+
+/* Уже 390 px — только знак 28 px (BRAND.md §2.6). */
+.collapsible .wordmark {
+  display: none;
+}
+
+@media (min-width: 390px) {
+  .collapsible .wordmark {
+    display: inline-flex;
+  }
+
+  .collapsible .mark {
+    display: none;
+  }
+}
+
+@media (min-width: 768px) {
+  .header img {
+    height: 32px;
+  }
+}

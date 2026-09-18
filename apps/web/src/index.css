@@ -1,0 +1,259 @@
+/* Дизайн-токены «Контур КП» (BRAND.md §3.3, §5, §7, §10). Hex допустим только здесь. */
+
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #F4F6F8;
+  --surface: #FFFFFF;
+  --surface-2: #EDF1F4;
+  --text: #16202A;
+  --muted: #56626E;
+  --border: #768390;
+  --border-subtle: #D6DDE3;
+  --accent: #0F5B6E;
+  --accent-hover: #0B4857;
+  --accent-contrast: #FFFFFF;
+  --accent-soft: #E2F0F4;
+  --danger: #B42318;
+  --danger-contrast: #FFFFFF;
+  --danger-soft: #FCEBE9;
+  --warning: #8A5100;
+  --warning-soft: #FDF1DA;
+  --success: #18703D;
+  --success-soft: #E6F4EB;
+  --info: #2B5FB8;
+  --info-soft: #E8EFFA;
+  --derived: #6B45B5;
+  --derived-soft: #F0EBF9;
+  --focus: #2563EB;
+  --hatch: #DCE2E7;
+  --scrim: rgba(12, 17, 22, 0.48);
+  --shadow-1: 0 1px 2px rgba(16, 24, 32, 0.08);
+  --shadow-2: 0 6px 16px rgba(16, 24, 32, 0.12);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0E1318;
+  --surface: #151C23;
+  --surface-2: #1C252E;
+  --text: #E6ECF1;
+  --muted: #9AA7B3;
+  --border: #6E7B88;
+  --border-subtle: #2A3540;
+  --accent: #5BB8CE;
+  --accent-hover: #7CC8DA;
+  --accent-contrast: #06232B;
+  --accent-soft: #123440;
+  --danger: #F2857A;
+  --danger-contrast: #2A0703;
+  --danger-soft: #3A1714;
+  --warning: #E9B45A;
+  --warning-soft: #35270F;
+  --success: #62C48E;
+  --success-soft: #12301F;
+  --info: #86AEF2;
+  --info-soft: #15253F;
+  --derived: #BBA2F2;
+  --derived-soft: #261C3C;
+  --focus: #7DB0FF;
+  --hatch: #2A3540;
+  --scrim: rgba(0, 0, 0, 0.6);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.55);
+}
+
+:root {
+  /* Шрифты: Inter/JetBrains Mono не поставляются в сборке этапа 02 — используется локально
+     установленный шрифт или системный фолбэк. Внешних CDN нет (портал в LAN). */
+  --font-sans: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  --text-xs: 12px;
+  --leading-xs: 16px;
+  --text-sm: 13px;
+  --leading-sm: 18px;
+  --text-md: 14px;
+  --leading-md: 20px;
+  --text-base: 16px;
+  --leading-base: 24px;
+  --text-lg: 18px;
+  --leading-lg: 26px;
+  --text-xl: 20px;
+  --leading-xl: 28px;
+  --text-2xl: 24px;
+  --leading-2xl: 32px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 999px;
+
+  --control-height: 36px;
+  --control-height-touch: 44px;
+  /* Текущая высота элементов управления: 44 px при сенсорном указателе (см. ниже). */
+  --control-h: var(--control-height);
+
+  --header-height: 56px;
+  --page-gutter: var(--space-4);
+
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 250ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+}
+
+@media (pointer: coarse) {
+  :root {
+    --control-h: var(--control-height-touch);
+  }
+}
+
+@media (min-width: 768px) {
+  :root {
+    --page-gutter: var(--space-6);
+    --header-height: 64px;
+  }
+}
+
+@media (min-width: 1280px) {
+  :root {
+    --page-gutter: var(--space-8);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+  -webkit-tap-highlight-color: transparent;
+  overflow-wrap: break-word;
+}
+
+@media (min-width: 768px) {
+  body {
+    font-size: var(--text-md);
+    line-height: var(--leading-md);
+  }
+}
+
+#root {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+a,
+button,
+input,
+select,
+textarea,
+label,
+summary {
+  touch-action: manipulation;
+}
+
+a {
+  color: var(--accent);
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* Поля ввода — 16 px на любой ширине: иначе iOS/Android масштабируют форму. */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 600;
+}
+
+p {
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Смена страниц: кросс-фейд 200 мс через View Transitions API (BRAND.md §10). */
+::view-transition-old(root) {
+  animation-duration: var(--duration-base);
+  animation-timing-function: var(--ease-in);
+}
+
+::view-transition-new(root) {
+  animation-duration: var(--duration-base);
+  animation-timing-function: var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}

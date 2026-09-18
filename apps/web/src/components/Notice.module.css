@@ -1,0 +1,56 @@
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  color: var(--text);
+}
+
+.icon {
+  flex: none;
+  margin-top: 2px;
+}
+
+.text {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.action {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.info {
+  background: var(--info-soft);
+}
+
+.info .icon {
+  color: var(--info);
+}
+
+.warning {
+  background: var(--warning-soft);
+}
+
+.warning .icon {
+  color: var(--warning);
+}
+
+.danger {
+  background: var(--danger-soft);
+}
+
+.danger .icon {
+  color: var(--danger);
+}
+
+.success {
+  background: var(--success-soft);
+}
+
+.success .icon {
+  color: var(--success);
+}

@@ -1,0 +1,15 @@
+.main {
+  flex: 1;
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: var(--space-4) max(var(--page-gutter), env(safe-area-inset-right)) max(var(--space-12), env(safe-area-inset-bottom))
+    max(var(--page-gutter), env(safe-area-inset-left));
+  min-width: 0;
+}
+
+@media (min-width: 768px) {
+  .main {
+    padding-top: var(--space-6);
+  }
+}

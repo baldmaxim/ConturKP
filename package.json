@@ -1,0 +1,45 @@
+{
+  "name": "kontur-kp",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.11 <25"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit && npm run typecheck -w @kontur/web",
+    "test": "vitest run",
+    "pg:init": "node scripts/pg-local.mjs init",
+    "pg:start": "node scripts/pg-local.mjs start",
+    "pg:stop": "node scripts/pg-local.mjs stop",
+    "db:setup": "node --env-file-if-exists=.env scripts/db-setup.ts",
+    "db:migrate": "node --env-file-if-exists=.env scripts/db-migrate.ts",
+    "db:seed-demo": "node --env-file-if-exists=.env scripts/seed-demo.ts",
+    "bootstrap": "node --env-file-if-exists=.env scripts/bootstrap.ts",
+    "config:check": "node --env-file-if-exists=.env scripts/config-check.ts",
+    "dev:server": "node --env-file-if-exists=.env --watch apps/server/src/main.ts",
+    "dev:worker": "node --env-file-if-exists=.env apps/worker/src/main.ts",
+    "dev:web": "npm run dev -w @kontur/web",
+    "build": "npm run build -w @kontur/web",
+    "start:server": "node --env-file-if-exists=.env apps/server/src/main.ts",
+    "start:worker": "node --env-file-if-exists=.env apps/worker/src/main.ts",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "pg": "^8.23.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.13.5",
+    "@types/pg": "^8.23.1",
+    "@types/supertest": "^7.2.1",
+    "supertest": "^7.2.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.1"
+  }
+}

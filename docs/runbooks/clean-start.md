@@ -1,0 +1,64 @@
+# Чистый старт (разработка, Windows)
+
+Этап 02. Службы Windows, резервные копии и целевой ПК — этап 17 (ADR-011).
+
+## Требования
+
+- Node.js 24 LTS (проверено на 24.14.1), npm 11.
+- PostgreSQL ≥ 16 в `PATH` (`initdb`, `pg_ctl`, `psql`); проверено на 18.3.
+
+## Шаги
+
+```powershell
+npm ci
+
+# 1. Локальный кластер PostgreSQL в runtime/pg (только 127.0.0.1:55432, trust — только для разработки)
+npm run pg:init
+npm run pg:start
+
+# 2. Конфигурация: скопировать образец и при необходимости поправить пути
+Copy-Item .env.example .env
+npm run config:check          # показывает «задано / не задано», значения не выводит
+
+# 3. Роли kontur_migrator / kontur_app / kontur_backup и база
+npm run db:setup
+npm run db:migrate            # повторный запуск: «новых миграций нет»
+
+# 4. Первый администратор-руководитель (пароль вводится скрыто, ≥ 12 символов)
+npm run bootstrap -- --login <логин> --name "<Имя Фамилия>"
+# повторный bootstrap при наличии активного администратора отклоняется (код 4)
+
+# 5. Демо-данные (необязательно; только development/test; пароль вводится скрыто)
+npm run db:seed-demo
+
+# 6. Сборка интерфейса и запуск двух процессов (в разных терминалах)
+npm run build
+npm run start:server          # http://127.0.0.1:3000
+npm run start:worker
+
+# 7. Проверка готовности
+curl http://127.0.0.1:3000/api/v1/ready   # 200 и ready=true: БД, схема, хранилище, heartbeat worker
+```
+
+Разработка интерфейса с горячей перезагрузкой: `npm run dev:server`, `npm run start:worker`, `npm run dev:web` → http://127.0.0.1:5173 (Vite проксирует `/api` на 3000; origin 5173 указан в `ALLOWED_ORIGINS`).
+
+## Доступ из LAN/VPN
+
+Без TLS сервер отказывается слушать не-loopback адрес (`config:check` покажет ошибку). Для LAN задайте `HTTP_HOST`, `TLS_CERT_FILE`, `TLS_KEY_FILE` и `ALLOWED_ORIGINS=https://<имя>`. Выпуск сертификата и сетевое имя — U-02. LocalAI остаётся внутренним сервисом: портал не проксирует его наружу, адрес и токен — только в окружении worker/server.
+
+## Тесты
+
+```powershell
+npm run pg:start              # если кластер остановлен
+npm test                      # vitest: отдельная база kontur_kp_test_* на каждый файл
+npm run typecheck
+npm run smoke                 # реальные процессы; нужен npm run build; итог — artifacts/stage-02/smoke.log
+```
+
+Тестовый кластер другой машины задаётся `KONTUR_TEST_ADMIN_URL` (суперпользователь). Раннер миграций в режиме `test` отказывается работать с базой без `test` в имени.
+
+## Остановка
+
+```powershell
+npm run pg:stop
+```

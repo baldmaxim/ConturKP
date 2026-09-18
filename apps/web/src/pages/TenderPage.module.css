@@ -1,0 +1,9 @@
+.code {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.panel {
+  padding-top: var(--space-4);
+}

@@ -31,6 +31,10 @@
 |---|---|---|---|
 | `POST /auth/login`, `POST /auth/logout` | — | — | вход и выход |
 | `GET /me` | — | — | пользователь, роли, назначения, возможности |
+| `POST /me/password` | — | — | смена своего пароля по текущему; прочие сессии отзываются (этап 02) |
+| `GET /admin/users`, `POST /admin/users` | `admin.users` | IK | пользователи; открытой регистрации нет, первого администратора создаёт bootstrap с консоли сервера (этап 02) |
+| `PATCH /admin/users/{id}`, `POST /admin/users/{id}/password` | `admin.users` | IM | имя, статус, роли, сброс пароля; отключение и сброс отзывают сессии; последнего администратора снять нельзя (этап 02) |
+| `GET /admin/audit-events` | `admin.audit` | — | журнал событий вне тендеров: входы, пользователи, отказы Origin/CSRF (этап 02) |
 | `POST /me/api-tokens`, `DELETE /me/api-tokens/{id}` | `mcp.propose` | IK | выпуск и отзыв MCP-токена; секрет показывается один раз |
 | `GET /settings`, `PUT /settings/{key}` | `admin.settings` | IM | часовой пояс отображения, политика внешней обработки |
 | `GET /tenders/{id}/intake-channels`, `PUT /intake-channels/{id}` | `tender.read` / `admin.intake` | IM | каналы поступления, свежесть сканирования; отключение — с причиной (state-machines §1.1) |
@@ -42,10 +46,12 @@
 
 | Метод и путь | Право | Ключи | Назначение |
 |---|---|---|---|
-| `GET /tenders`, `POST /tenders` | `tender.read` / `admin.tender` | IK | список и создание |
-| `GET /tenders/{id}`, `PATCH /tenders/{id}` | `tender.read` / `admin.tender` | IM | карточка |
-| `PUT /tenders/{id}/members/{userId}`, `DELETE …` | `admin.tender` | IM | назначения; не более двух инженеров |
-| `GET /tenders/{id}/stages`, `POST /tenders/{id}/stages` | `tender.read` / `admin.tender` | IK | этапы |
+| `GET /tenders`, `POST /tenders` | участник или `admin.tender` / `admin.tender` | IK | список и создание; участник видит свои тендеры, администратор — карточки всех |
+| `GET /tenders/{id}`, `PATCH /tenders/{id}` | участник или `admin.tender` / `admin.tender` | IM | карточка; `capabilities` в ответе — права текущего пользователя по тендеру |
+| `GET /tenders/{id}/members` | участник или `admin.tender` | — | участники и версия тендера |
+| `PUT /tenders/{id}/members/{userId}`, `DELETE …` | `admin.tender` | IM (ETag тендера) | назначения; не более двух инженеров; роль назначения требует той же глобальной роли |
+| `GET /tenders/{id}/stages`, `POST /tenders/{id}/stages` | `tender.read` / `stage.manage` | IK | этапы; создаёт руководитель тендера (этап 02) |
+| `GET /stages/{id}`, `PATCH /stages/{id}` | `tender.read` / `stage.write` | IM | название и срок подачи этапа (этап 02) |
 | `PUT /stages/{id}/calculation-source` | `admin.tender` | IM | связь с версией тендера TenderHub (Q-03) |
 
 ### 2.3. Источники и набор источников

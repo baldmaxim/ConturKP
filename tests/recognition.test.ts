@@ -229,6 +229,20 @@ describe('импорт экспорта RDWeb', () => {
     expect(codes).toEqual(expect.arrayContaining(['unexpected_member', 'results_html_missing']));
   });
 
+  it('второй PDF в архиве не мешает: выбирается совпавший с редакцией', async () => {
+    const alien = buildRdwebExport({ docName: 'Посторонний' });
+    const fx0 = buildRdwebExport({
+      docName: 'ТЗ-два-PDF',
+      extraMembers: [{ name: 'Приложение.pdf', data: alien.pdf }],
+    });
+    const revisionId = await registerPdf('ТЗ-два-PDF.pdf', fx0.pdf);
+    const accepted = await postExport(revisionId, fx0.zip);
+    await drain(worker);
+    const run = (await s.eng1.get(`/recognition-runs/${accepted.body.id}`)).body;
+    expect(run.status, JSON.stringify(run)).toBe('complete');
+    expect((run.quality.warnings as { code: string }[]).map((w) => w.code)).toContain('duplicate_member_role');
+  });
+
   it('неизвестный тип блока импортируется с пометкой', async () => {
     const fx0 = buildRdwebExport({ docName: 'ТЗ-таблица', unknownBlockTypes: ['table'] });
     const revisionId = await registerPdf('ТЗ-таблица.pdf', fx0.pdf);

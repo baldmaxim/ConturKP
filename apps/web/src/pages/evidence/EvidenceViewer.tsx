@@ -72,11 +72,8 @@ export const EvidenceViewer: FC = () => {
       }
       canvas.width = Math.floor(viewport.width);
       canvas.height = Math.floor(viewport.height);
-      const context = canvas.getContext('2d');
-      if (!context) {
-        throw new Error('canvas недоступен');
-      }
-      const renderTask = page.render({ canvas, canvasContext: context, viewport });
+      // pdf.js 5 сам берёт контекст у canvas; canvasContext здесь объявлен устаревшим.
+      const renderTask = page.render({ canvas, viewport });
       task = renderTask;
       await renderTask.promise;
       if (cancelled) {

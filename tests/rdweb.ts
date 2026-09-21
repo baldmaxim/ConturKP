@@ -2,7 +2,7 @@
 // весь текст синтетический. Негативные варианты формата задаются параметрами, а не отдельными
 // файлами, поэтому «повёрнутая страница», «чужой PDF» и «битый JSON» проверяются одним кодом.
 import { createHash } from 'node:crypto';
-import { buildZip, fakePdf, type IZipEntry } from './zip.ts';
+import { buildZip, realPdf, type IZipEntry } from './zip.ts';
 
 export interface IRdwebFixture {
   docName?: string;
@@ -65,8 +65,6 @@ export const buildRdwebExport = (o: IRdwebFixture = {}): { zip: Buffer; pdf: Buf
   const stamps = o.stamps ?? 'per-page';
   const cropMode = o.cropUrls ?? 'except-stamps';
   const cropValue = o.cropUrlValue ?? 'https://rdweb.example.internal/crops';
-  const pdf = o.pdf ?? fakePdf(`фикстура ${docName}`);
-
   const pagesOut = Array.from({ length: pageCount }, (_, i) => ({
     page_index: i,
     page_label: i + 1,
@@ -74,6 +72,9 @@ export const buildRdwebExport = (o: IRdwebFixture = {}): { zip: Buffer; pdf: Buf
     height_px: rotated.has(i) ? 2480 : 3508,
     rotation: rotated.has(i) ? 90 : 0,
   }));
+  // PDF настоящий, и повороты его страниц совпадают с объявленными в экспорте: фикстура
+  // проверяет не только разбор, но и отрисовку участка оригинала на pdf.js.
+  const pdf = o.pdf ?? realPdf(pagesOut.map((p) => ({ rotate: p.rotation })), docName);
 
   const blocks: IBlockOut[] = [];
   const textBlockIds: string[] = [];

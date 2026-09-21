@@ -33,7 +33,7 @@
 | F01 | Договор: обязательства и противоречия с расчётом | 08, 09 | data-model §4.7; test-plan A02 | A02 | test-plan A02 | — | DESIGNED |
 | F02 | ТЗ, его редакции и согласованные замены | 08, 09 | data-model §4.3, §4.7; walkthroughs §1 | A01, A06 | test-plan A01/A06 | — | DESIGNED |
 | F03 | Формы приложений компании и заказчика | 11, 12 | data-model §4.8; state-machines §11.1 (`TEMPLATE_DEMO`) | A09, A41 | test-plan A09/A41; Q-08 | — | DESIGNED |
-| F04 | RDWeb — основное распознавание | 04 | contracts/adapters §3; ADR-007 §9 | A16, A17, A43 | test-plan A16/A17/A43; Q-02, X-05 | — | DESIGNED |
+| F04 | RDWeb — основное распознавание | 04 | contracts/adapters §3 «Реализация (этап 04)»; ADR-007 §9; миграция 0005; `packages/adapters` | A16, A17, A43 | `tests/adapters.test.ts`, `tests/recognition.test.ts`, `tests/bbox.test.ts`, `artifacts/stage-04/{vitest,ui-check}.log`; Q-02 открыт, X-05 вне объёма этапа | — | IMPLEMENTED (импорт экспорта); автоматическая постановка задач — BLOCKED_EXTERNAL |
 | F05 | LocalAI — поиск по закреплённым версиям | 05 | ADR-008; contracts/adapters §4 | A10, A11, A12, A42 | test-plan A10–A12/A42; X-04, Q-13 | — | DESIGNED |
 | F06 | TenderHub — закрытие расчёта и коммерческая стоимость | 06, 10 | ADR-007 §5–8; contracts/adapters §2; data-model §4.5 | A07, A18, A19, A20, A21, A22, A23 | test-plan A07/A18–A23; Q-01, Q-05, X-01, U-04 | — | DESIGNED |
 | F07 | Переговоры: записи, транскрипции, подсказки | 07 | contracts/adapters §6; data-model §4.6 | A03 | test-plan A03; Q-06 | — | DESIGNED |

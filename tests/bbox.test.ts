@@ -2,7 +2,7 @@
 // гипотезы пространства: координаты уже в растровом (повёрнутом) виде и координаты
 // в неповёрнутом виде, когда поворот надо применить самим.
 import { describe, expect, it } from 'vitest';
-import { bboxSpaceMatchesViewport, bboxToRect, polygonToPoints } from '../apps/web/src/utils/bbox';
+import { bboxSpaceMatchesViewport, bboxToRect, polygonToPoints } from '../apps/web/src/utils/bbox.ts';
 
 const viewport = { width: 1000, height: 500 };
 

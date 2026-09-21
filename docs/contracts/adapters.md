@@ -71,6 +71,32 @@ interface RdwebApiClient {                       // проект, X-05 — BLOCK
 - `crop_url` сохраняется как справочная ссылка и не загружается (SSRF, A38).
 - Неизвестный `block_type` импортируется с пометкой и предупреждением, а не отбрасывается.
 
+### Реализация (этап 04)
+
+`RdwebExportImporter` реализован пакетом `packages/adapters` (`src/rdweb/*`) как **чистый разбор**: на вход — строки и SHA-256 членов архива, на выход — страницы, фрагменты и предупреждения. В адаптере нет `fetch`, `node:http/https/net` и `node:fs` (проверяется статически, `tests/adapters.test.ts`), поэтому загрузить внешнюю ссылку он не может физически. ZIP открывает worker существующим `readZip` (`apps/worker/src/archive.ts`).
+
+Уточнения сигнатуры против эскиза этапа 01:
+
+```ts
+importRdwebExport(input: {
+  archive: IRdwebArchive;                       // члены архива, уже прочитанные вызывающим
+  expect: { pdfSha256: string };                // SHA-256 зарегистрированной редакции
+  limits?: Partial<IRdwebLimits>;
+}): { ok: true; value: IRdwebImport } | { ok: false; error: { code: RdwebFailureCode; message: string } };
+
+inspectRdwebBlocks(blocksJson: string): …      // счётчики без текста; CLI — scripts/rdweb-inspect.ts
+```
+
+- Коды отказа: `pdf_missing`, `pdf_mismatch`, `blocks_json_missing`, `blocks_json_invalid`, `results_md_missing`, `schema_version_unsupported`, `coordinate_space_unsupported`, `archive_unsafe`, `archive_corrupt`, `too_large`.
+- Отказ допускается только там, где непонимание схемы сделало бы доказательство ложным: чужая `schema_version` и чужое `coordinate_space`. Всё остальное — предупреждение прогона (`quality.warnings`), потому что схема подтверждена одним образцом (R-05).
+- Текст блоков берётся только из `_results.md` (в `_blocks.json` текста нет). Соответствие md ↔ JSON — по `block_id`; секция без блока сохраняется без координат с предупреждением `block_not_in_blocks_json`.
+- Роль члена архива определяется по расширению, точное имя образца (`_blocks.json`, `_results.md`, `_results.html`) даёт приоритет. Если PDF в архиве несколько, выбирается тот, чей SHA-256 совпал с зарегистрированной редакцией: иначе верный результат отклонялся бы из-за порядка членов архива. Прочие кандидаты на роль попадают в предупреждение `duplicate_member_role`.
+- Штампы: повторяющиеся строки `**Stamp:**` страницы дедуплицируются по тексту и привязываются к stamp-блокам страницы по `ordinal`, только если количества совпали; иначе — фрагменты уровня страницы с предупреждением `stamp_binding_ambiguous`. Текст штампа не теряется ни при каком исходе.
+- `sheet_label` берётся разбором текста штампа («Лист N из M»); не распознали — `null`. Номер страницы файла в `page_label` им не подменяется.
+- Пространство координат фиксируется явно (`bbox_space`): экспорт даёт растровое (`page_rotated`). PDF-парсера в портале нет, поэтому пространство хранится как факт, а не «нормализуется» по догадке (I18).
+
+`RdwebApiClient` на этапе 04 **не реализуется**: объём этапа сужен владельцем до импорта экспортного архива, API RDWeb не подтверждён (Q-02) и остаётся `BLOCKED_EXTERNAL` по X-05.
+
 ## 4. LocalAI (индекс и смысловой поиск)
 
 Факт: HTTP API на loopback, общий Bearer-токен, фильтр только по источнику, ID фрагмента из пути и номера чанка (`docs/discovery.md` §5).
@@ -190,7 +216,7 @@ interface ModelGateway {                         // проект; провайд
 |---|---|---|
 | `TenderHubReader` | NOT_IMPLEMENTED | ключ `tenders:read` и разрешённый тендер (U-04) |
 | `TenderHubRevisionReader` | BLOCKED_EXTERNAL | X-01 |
-| `RdwebExportImporter` | NOT_IMPLEMENTED | реализация этапа 04 на обезличенной фикстуре |
+| `RdwebExportImporter` | VERIFIED_FIXTURE (этап 04) | разрешённый live-smoke на настоящем экспорте (`scripts/rdweb-inspect.ts`) |
 | `RdwebApiClient` | BLOCKED_EXTERNAL | X-05 |
 | `LocalAiIndex` | BLOCKED_EXTERNAL | X-04, ответ владельца LocalAI (Q-13) |
 | `MailHubReader` | BLOCKED_EXTERNAL | X-03 |

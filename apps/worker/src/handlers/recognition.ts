@@ -46,7 +46,7 @@ const hashOf = async (source: Readable): Promise<string> => {
 // Чтение архива в структуру адаптера: сам адаптер ZIP не открывает и в файловую систему
 // не ходит. Небезопасный элемент (выход за корень, ссылка, шифрование) отменяет весь
 // импорт: доказательство из такого архива принимать нельзя (A38).
-export const readRdwebArchive = async (ctx: IJobContext, sha256: string): Promise<IRdwebArchive> => {
+export const readRdwebArchive = async (ctx: IJobContext, sha256: string, expectPdfSha256: string): Promise<IRdwebArchive> => {
   const maxMeta = ctx.config.recognition.maxMetadataBytes;
   const archive: IRdwebArchive = {
     pdf: null,
@@ -94,7 +94,13 @@ export const readRdwebArchive = async (ctx: IJobContext, sha256: string): Promis
     return archive;
   }
   const asCandidates = (m: Map<string, { score: number }>) => [...m].map(([memberPath, v]) => ({ memberPath, score: v.score }));
-  const pdf = pickMember(asCandidates(pdfs));
+  // Если PDF в архиве несколько, выигрывает тот, что совпал с зарегистрированной редакцией:
+  // иначе верный результат отклонялся бы из-за порядка членов архива. Ни одного совпавшего —
+  // берём обычного кандидата, и импорт честно закончится отказом pdf_mismatch.
+  const matched = [...pdfs].find(([, v]) => v.sha256 === expectPdfSha256) ?? null;
+  const pdf = matched
+    ? { chosen: { memberPath: matched[0], score: 2 }, ignored: [...pdfs.keys()].filter((p) => p !== matched[0]) }
+    : pickMember(asCandidates(pdfs));
   const json = pickMember(asCandidates(jsons));
   const md = pickMember(asCandidates(mds));
   archive.pdf = pdf.chosen ? { memberPath: pdf.chosen.memberPath, sha256: pdfs.get(pdf.chosen.memberPath)!.sha256 } : null;
@@ -115,7 +121,7 @@ export const handleRecognitionImport = async (ctx: IJobContext): Promise<void> =
   }
   await ctx.withLease((client) => startRun(client, runId));
 
-  const archive = await readRdwebArchive(ctx, run.source_artifact_sha256);
+  const archive = await readRdwebArchive(ctx, run.source_artifact_sha256, run.revision_blob_sha256);
   // Ожидание — SHA-256 зарегистрированной редакции: чужой или старый результат не принимается.
   const result = importRdwebExport({
     archive,

@@ -12,6 +12,7 @@ import {
   lockOwnedJob,
   markScanStarted,
   recoverExpiredJobs,
+  requeueJob,
   succeedJob,
   withTransaction,
   type IJobRow,
@@ -209,7 +210,18 @@ export class WorkerRuntime {
           this.log(`задание ${job.id}: аренда потеряна при фиксации терминальной ошибки, результат не записан`);
           return;
         }
-        this.log(`задание ${job.id}: фиксация терминальной ошибки не удалась: ${terminalErr instanceof Error ? terminalErr.message : 'unknown'}`);
+        // Доменный отказ не зафиксирован (откат транзакции): объявлять задание failed нельзя —
+        // это вернуло бы расхождение «задание failed, партия running». Задание возвращается
+        // в очередь с задержкой и остаётся видимым как незавершённое (R03-05).
+        const detail = terminalErr instanceof Error ? terminalErr.message : 'unknown';
+        const requeued = await requeueJob(this.o.pool, job, token, {
+          code: 'terminal_fixation_failed',
+          message: `${code}: доменный отказ не зафиксирован (${detail})`,
+        });
+        this.log(
+          `задание ${job.kind} ${job.id}: фиксация терминальной ошибки не удалась (${detail}) → ${requeued ? 'возвращено в очередь' : 'аренда потеряна'}; failed не выставляется`,
+        );
+        return;
       }
     }
     const r = await failJob(this.o.pool, job, token, { retryable, code, message });

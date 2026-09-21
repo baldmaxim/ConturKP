@@ -143,19 +143,21 @@ const OWNS_JOB = `j.id = $1 AND j.lease_token = $2 AND j.status = 'running'
     AND (j.resource_class <> 'gpu'
          OR EXISTS (SELECT 1 FROM resource_slot s WHERE s.slot_key = 'gpu' AND s.holder_job_id = j.id AND s.lease_token = j.lease_token))`;
 
-// Продление аренды задания и слота — одним оператором: раздельные обновления могли оставить
-// обработчик с «живой» арендой задания при уже отданном слоте.
+// Продление аренды: слот GPU обновляется первым и берёт блокировку своей строки, поэтому
+// конкурентный перехват сериализуется с heartbeat. Аренда задания продлевается, только если
+// слот действительно продлён (R03-04): раздельные обновления давали окно, в котором прежний
+// владелец считал аренду живой после передачи слота.
 export const heartbeatJob = async (db: Queryable, id: string, token: string, leaseMs: number): Promise<IHeartbeat> => {
   const r = await db.query<{ cancel_requested: boolean }>(
-    `WITH updated AS (
-       UPDATE job j SET locked_until = now() + make_interval(secs => $3::double precision / 1000), updated_at = now()
-        WHERE ${OWNS_JOB}
-        RETURNING j.id, j.cancel_requested, j.locked_until, j.resource_class
-     ), slot AS (
-       UPDATE resource_slot s SET locked_until = (SELECT locked_until FROM updated)
+    `WITH slot AS (
+       UPDATE resource_slot s SET locked_until = now() + make_interval(secs => $3::double precision / 1000)
         WHERE s.slot_key = 'gpu' AND s.holder_job_id = $1 AND s.lease_token = $2
-          AND EXISTS (SELECT 1 FROM updated WHERE resource_class = 'gpu')
         RETURNING s.slot_key
+     ), updated AS (
+       UPDATE job j SET locked_until = now() + make_interval(secs => $3::double precision / 1000), updated_at = now()
+        WHERE j.id = $1 AND j.lease_token = $2 AND j.status = 'running'
+          AND (j.resource_class <> 'gpu' OR EXISTS (SELECT 1 FROM slot))
+        RETURNING j.cancel_requested
      )
      SELECT cancel_requested FROM updated`,
     [id, token, leaseMs],
@@ -165,11 +167,21 @@ export const heartbeatJob = async (db: Queryable, id: string, token: string, lea
   return { ok: true, cancelRequested: row.cancel_requested };
 };
 
-// Блокировка задания с проверкой токена (и слота для gpu) — первая операция транзакции
-// доменного результата.
+// Блокировка задания с проверкой токена — первая операция транзакции доменного результата.
+// Для класса gpu дополнительно блокируется строка слота: перехват (claimJob) ждёт завершения
+// доменной транзакции, а не отбирает слот в её середине (R03-04).
 export const lockOwnedJob = async (db: Queryable, id: string, token: string): Promise<boolean> => {
-  const r = await db.query(`SELECT 1 FROM job j WHERE ${OWNS_JOB} FOR UPDATE OF j`, [id, token]);
-  return (r.rowCount ?? 0) > 0;
+  const job = await db.query<{ resource_class: ResourceClass }>(
+    "SELECT resource_class FROM job WHERE id = $1 AND lease_token = $2 AND status = 'running' FOR UPDATE",
+    [id, token],
+  );
+  if ((job.rowCount ?? 0) === 0) return false;
+  if (job.rows[0]!.resource_class !== 'gpu') return true;
+  const slot = await db.query(
+    "SELECT 1 FROM resource_slot WHERE slot_key = 'gpu' AND holder_job_id = $1 AND lease_token = $2 FOR UPDATE",
+    [id, token],
+  );
+  return (slot.rowCount ?? 0) > 0;
 };
 
 const releaseSlot = async (db: Queryable, id: string, token: string): Promise<void> => {
@@ -222,6 +234,27 @@ export const failJob = async (
   }
   const ok = await finish(db, job.id, token, 'failed', e.code, e.message.slice(0, 500));
   return { ok, status: 'failed' };
+};
+
+// Возврат задания в очередь без объявления результата: используется, когда доменную фиксацию
+// терминальной ошибки не удалось записать (R03-05). Правило «обе записи или ни одной»:
+// объявлять задание failed без доменного отказа нельзя.
+export const requeueJob = async (
+  db: Queryable,
+  job: Pick<IJobRow, 'id' | 'attempts'>,
+  token: string,
+  e: { code: string; message: string },
+): Promise<boolean> => {
+  const r = await db.query(
+    `UPDATE job j SET status = 'queued', lease_token = NULL, locked_by = NULL, locked_until = NULL,
+            run_after = now() + make_interval(secs => $3::double precision / 1000),
+            last_error_code = $4, last_error_message = $5, updated_at = now()
+      WHERE ${OWNS_JOB}`,
+    [job.id, token, backoffMs(job.attempts), e.code, e.message.slice(0, 500)],
+  );
+  if ((r.rowCount ?? 0) === 0) return false;
+  await releaseSlot(db, job.id, token);
+  return true;
 };
 
 // Recovery-проход: задания с истёкшей арендой возвращаются в очередь, токен обнуляется (A15).

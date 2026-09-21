@@ -32,6 +32,7 @@ export interface IRecognitionRunRow {
   document_revision_id: string;
   tender_id: string;
   document_id: string;
+  revision_blob_sha256: string;
   engine: RecognitionEngine;
   engine_schema_version: string | null;
   source_artifact_sha256: string;
@@ -51,7 +52,7 @@ export interface IRecognitionRunRow {
 }
 
 const SELECT_RUN = `
-  SELECT r.*, dr.document_id
+  SELECT r.*, dr.document_id, dr.blob_sha256 AS revision_blob_sha256
     FROM recognition_run r JOIN document_revision dr ON dr.id = r.document_revision_id`;
 
 export const getRun = async (db: Queryable, id: string, lock = false): Promise<IRecognitionRunRow | null> => {

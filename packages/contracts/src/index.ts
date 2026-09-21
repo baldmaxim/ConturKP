@@ -116,6 +116,42 @@ export const PutSourceSetItemsRequest = z
   })
   .strict();
 
+// ---- распознавание и доказательства (этап 04)
+
+export const RECOGNITION_ENGINE = z.enum(['rdweb_export', 'rdweb_api', 'text_layer', 'local_ocr']);
+export const RECOGNITION_STATUS = z.enum(['queued', 'running', 'complete', 'partial', 'failed']);
+export const RECOGNITION_PAGE_STATUS = z.enum(['recognized', 'missing', 'failed']);
+export const FRAGMENT_ORIGIN = z.enum([
+  'document_text',
+  'recognized_text',
+  'model_description',
+  'negotiation_speech',
+  'negotiation_hint',
+  'email_body',
+  'attachment_text',
+]);
+export const FRAGMENT_KIND = z.enum([
+  'text_block',
+  'image_block',
+  'stamp_block',
+  'unknown_block',
+  'summary',
+  'description',
+  'entities',
+  'verification',
+  'unknown_section',
+]);
+export const BBOX_SPACE = z.enum(['page_unrotated', 'page_rotated']);
+
+export const RecognitionFragmentsQuery = z.object({
+  pageIndex: z.coerce.number().int().min(0).optional(),
+  cursor: z.string().regex(/^-?\d{1,9}:-?\d{1,9}:[0-9a-f-]{36}$/).optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(200),
+});
+
+// Заморозка состава: тело пустое, решение подтверждается If-Match и ключом идемпотентности.
+export const FreezeSourceSetRequest = z.object({}).strict();
+
 // ---- ответы
 
 export interface IMe {

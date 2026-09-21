@@ -82,6 +82,7 @@ export const testConfig = (overrides: Partial<IAppConfig> = {}): IAppConfig => (
   intakeStabilitySeconds: 1,
   jobLeaseSeconds: 60,
   gpuTakeoverGraceSeconds: 120,
+  recognition: { maxMetadataBytes: 8 * 1024 * 1024, maxTotalTextChars: 4 * 1024 * 1024 },
   ...overrides,
 });
 

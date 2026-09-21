@@ -4,7 +4,7 @@
 // партия, событие import_accepted и задание разбора — в одной транзакции команды.
 import type { IAppConfig } from '@kontur/config';
 import { ResolveImportItemRequest } from '@kontur/contracts';
-import { classifyFile, formatEtag, safeRelativePath } from '@kontur/core';
+import { classifyFile, formatEtag } from '@kontur/core';
 import {
   createBatch,
   emitStageEvents,
@@ -24,25 +24,15 @@ import {
   type Pool,
   type Queryable,
 } from '@kontur/db';
-import { BlobLimitError, type BlobStore, type IStoredBlob } from '@kontur/storage';
-import { Router, type NextFunction, type Request, type Response } from 'express';
-import { auditFailure, command, parseBody, query, requireIfMatch, toHttpError, uuidParam, versionConflict } from '../http/command.ts';
+import type { BlobStore } from '@kontur/storage';
+import { Router } from 'express';
+import { command, parseBody, query, requireIfMatch, uuidParam, versionConflict } from '../http/command.ts';
+import { receiveUpload, uploadedBlob, uploadName } from '../http/upload.ts';
 import { requireCtx } from '../http/context.ts';
 import { HttpError, notFound } from '../http/errors.ts';
 import { toBatch, toItem } from '../sourceMappers.ts';
 import { loadStage } from './stages.ts';
 import { hasTenderCap, requireTenderCapById } from './scope.ts';
-
-const uploads = new WeakMap<Request, IStoredBlob>();
-
-const uploadName = (req: Request): string => {
-  const raw = typeof req.query.name === 'string' ? req.query.name : '';
-  const safe = safeRelativePath(raw);
-  if (!safe.ok || safe.path.includes('/') || safe.path.length > 255) {
-    throw new HttpError(400, 'VALIDATION_FAILED', 'параметр name — имя файла без каталога');
-  }
-  return safe.path;
-};
 
 const batchBody = async (db: Queryable, ctx: IAccessContext, id: string) => {
   const b = await getBatchSummary(db, ctx, id);
@@ -58,51 +48,32 @@ const batchBody = async (db: Queryable, ctx: IAccessContext, id: string) => {
 export const importsRouter = (pool: Pool, store: BlobStore, config: IAppConfig): Router => {
   const router = Router();
 
-  // Шаг 1 загрузки: права проверяются до чтения тела; тело — в хранилище с лимитом размера.
-  const receiveUpload = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const ctx = requireCtx(req);
-      const stage = await loadStage(pool, ctx, uuidParam(req, 'id', 'tender_stage'));
-      requireTenderCapById(ctx, stage.tender_id, 'source.write', { entityType: 'tender_stage', entityId: stage.id });
-      uploadName(req);
-      if (!req.is('application/octet-stream')) throw new HttpError(400, 'VALIDATION_FAILED', 'тело загрузки — application/octet-stream');
-      const key = req.header('idempotency-key');
-      if (!key || key.length < 8 || key.length > 200) throw new HttpError(400, 'VALIDATION_FAILED', 'команда требует заголовка Idempotency-Key (8–200 символов)');
-      const declared = Number(req.header('content-length') ?? '0');
-      if (declared > config.limits.maxUploadBytes) throw new BlobLimitError(config.limits.maxUploadBytes);
-      await store.ensureDirs();
-      uploads.set(req, await store.putStream(req, config.limits.maxUploadBytes, false));
-      next();
-    } catch (err) {
-      const httpErr =
-        err instanceof BlobLimitError
-          ? new HttpError(413, 'VALIDATION_FAILED', `файл больше ${Math.round(config.limits.maxUploadBytes / 1048576)} МиБ`)
-          : toHttpError(err);
-      if (!httpErr) return next(err);
-      // Остаток тела дочитывается и отбрасывается: клиент получает ответ, а не обрыв соединения.
-      req.resume();
-      await auditFailure(pool, req, 'source.import.accept', 'import_batch', httpErr);
-      next(httpErr);
-    }
-  };
-
   router.post(
     '/stages/:id/imports',
     // Шаг 1 (права, имя, приём файла) пишет свои отказы в журнал сам; шаг 2 — команда.
-    (req, res, next) => {
-      receiveUpload(req, res, next).catch(next);
-    },
+    receiveUpload({
+      pool,
+      store,
+      config,
+      action: 'source.import.accept',
+      entityType: 'import_batch',
+      authorize: async (req) => {
+        const ctx = requireCtx(req);
+        const stage = await loadStage(pool, ctx, uuidParam(req, 'id', 'tender_stage'));
+        requireTenderCapById(ctx, stage.tender_id, 'source.write', { entityType: 'tender_stage', entityId: stage.id });
+      },
+    }),
     command(pool, {
       action: 'source.import.accept',
       entityType: 'import_batch',
       idempotent: true,
-      requestKey: (req) => `upload ${req.params.id} ${uploadName(req)} ${uploads.get(req)?.sha256 ?? ''}`,
+      requestKey: (req) => `upload ${req.params.id} ${uploadName(req)} ${uploadedBlob(req)?.sha256 ?? ''}`,
       authorize: async (client, ctx, req) => {
         const stage = await loadStage(client, ctx, uuidParam(req, 'id', 'tender_stage'));
         requireTenderCapById(ctx, stage.tender_id, 'source.write', { entityType: 'tender_stage', entityId: stage.id });
       },
       run: async (client, ctx, req) => {
-        const stored = uploads.get(req);
+        const stored = uploadedBlob(req);
         if (!stored) throw new HttpError(400, 'VALIDATION_FAILED', 'файл не получен');
         const name = uploadName(req);
         const stage = await loadStage(client, ctx, uuidParam(req, 'id', 'tender_stage'));

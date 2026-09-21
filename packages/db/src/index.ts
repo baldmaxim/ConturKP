@@ -13,3 +13,4 @@ export * from './jobs.ts';
 export * from './sources.ts';
 export * from './intake.ts';
 export * from './sourceSets.ts';
+export * from './recognition.ts';

@@ -26,7 +26,7 @@ import {
 import { BlobStore } from '../packages/storage/src/index.ts';
 import { handleIntakeScan } from '../apps/worker/src/handlers/intake.ts';
 import { LeaseLostError, type IJobContext } from '../apps/worker/src/runtime.ts';
-import { buildScenario, createTestDb, drain, idem, makeApp, makeWorker, testConfig, type IScenario, type ITestDb } from './helpers.ts';
+import { buildScenario, createTestDb, drain, idem, makeApp, makeWorker, seedRecognition, testConfig, type IScenario, type ITestDb } from './helpers.ts';
 import { fakePdf } from './zip.ts';
 
 let db: ITestDb;
@@ -82,7 +82,11 @@ describe('R03-01: состав замороженной ревизии набо�
       "INSERT INTO source_set_item (source_set_revision_id, document_revision_id, inclusion, decided_by) VALUES ($1, $2, 'included', $3)",
       [frozen, revisionId, s.ids.eng1],
     );
-    await asOwner((c) => c.query("UPDATE source_set_revision SET status = 'frozen', frozen_at = now(), content_hash = 'r0301' WHERE id = $1", [frozen]));
+    // Охранное условие заморозки (миграция 0005): у включённой редакции должно быть распознавание.
+    await seedRecognition(db.pool, revisionId);
+    await asOwner((c) =>
+      c.query("UPDATE source_set_revision SET status = 'frozen', frozen_at = now(), frozen_by = $2, content_hash = 'r0301' WHERE id = $1", [frozen, s.ids.eng1]),
+    );
     const draft = await createDraftRevision(db.pool, setId, s.ids.eng1);
     // Черновик создаётся копией состава базовой ревизии: убираем копию, чтобы перенос строки
     // не отклонялся уникальным индексом, а проверялся именно guard замороженной ревизии.

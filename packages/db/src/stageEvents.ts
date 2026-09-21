@@ -7,12 +7,14 @@ import type { Queryable } from './pool.ts';
 export type StageEventType =
   | 'import_accepted'
   | 'document_revision_registered'
-  | 'source_set_changed';
+  | 'source_set_changed'
+  | 'recognition_run_completed';
 
 const CLASS_OF: Record<StageEventType, 'source'> = {
   import_accepted: 'source',
   document_revision_registered: 'source',
   source_set_changed: 'source',
+  recognition_run_completed: 'source',
 };
 
 export interface IStageEventInput {

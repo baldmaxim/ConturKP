@@ -1,7 +1,7 @@
 // Состав источников этапа (state-machines §5): draft-ревизия, включение и исключение с причиной,
 // событие source_set_changed, неизменность замороженной ревизии на уровне БД.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildScenario, createTestDb, drain, idem, makeApp, makeWorker, testConfig, type IScenario, type ITestDb } from './helpers.ts';
+import { buildScenario, createTestDb, drain, idem, makeApp, makeWorker, seedRecognition, testConfig, type IScenario, type ITestDb } from './helpers.ts';
 import { fakePdf } from './zip.ts';
 
 let db: ITestDb;
@@ -80,8 +80,13 @@ describe('состав источников этапа', () => {
     const owner = new pg.Client({ connectionString: db.migratorUrl });
     await owner.connect();
     try {
-      // Заморозка появится на этапе 04 (нужно распознавание); здесь проверяется только защита БД.
-      await owner.query("UPDATE source_set_revision SET status = 'frozen', frozen_at = now(), content_hash = 'test' WHERE id = $1", [rev]);
+      // Охранное условие заморозки (миграция 0005) требует распознавания у включённых редакций;
+      // здесь оно создаётся напрямую, потому что проверяется только защита БД, а не разбор архива.
+      await seedRecognition(db.pool, revs[0]!);
+      await owner.query(
+        "UPDATE source_set_revision SET status = 'frozen', frozen_at = now(), frozen_by = $2, content_hash = 'test' WHERE id = $1",
+        [rev, s.ids.eng1],
+      );
       await expect(db.pool.query('DELETE FROM source_set_item WHERE source_set_revision_id = $1', [rev])).rejects.toThrow(/замороженной/);
       await expect(db.pool.query("UPDATE source_set_revision SET status = 'draft' WHERE id = $1", [rev])).rejects.toThrow(/frozen-after/);
     } finally {

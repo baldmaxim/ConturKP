@@ -180,6 +180,42 @@ export class TestClient {
   }
 }
 
+// Прогон распознавания для тестов, которым нужен факт распознавания, а не его разбор
+// (охранное условие заморозки, область). Идёт по настоящей машине состояний: queued → running →
+// терминальный статус, поэтому проверяет заодно и триггеры миграции 0005.
+export const seedRecognition = async (
+  pool: Pool,
+  revisionId: string,
+  status: 'queued' | 'running' | 'complete' | 'partial' | 'failed' = 'complete',
+  pages: { total: number; recognized: number } = { total: 2, recognized: 2 },
+): Promise<string> => {
+  const rev = await pool.query<{ tender_id: string }>('SELECT tender_id FROM document_revision WHERE id = $1', [revisionId]);
+  const sha = randomBytes(32).toString('hex');
+  await pool.query("INSERT INTO blob (sha256, size_bytes, media_type, storage_key) VALUES ($1, 1, 'application/zip', $2)", [sha, `seed/${sha}`]);
+  const run = await pool.query<{ id: string }>(
+    `INSERT INTO recognition_run (document_revision_id, tender_id, engine, source_artifact_sha256, source_artifact_name)
+     VALUES ($1, $2, 'rdweb_export', $3, 'seed.zip') RETURNING id`,
+    [revisionId, rev.rows[0]!.tender_id, sha],
+  );
+  const id = run.rows[0]!.id;
+  if (status === 'queued') return id;
+  await pool.query("UPDATE recognition_run SET status = 'running', started_at = now(), row_version = row_version + 1 WHERE id = $1", [id]);
+  if (status === 'running') return id;
+  if (status === 'failed') {
+    await pool.query(
+      `UPDATE recognition_run SET status = 'failed', failure_code = 'seed', finished_at = now(), row_version = row_version + 1 WHERE id = $1`,
+      [id],
+    );
+    return id;
+  }
+  await pool.query(
+    `UPDATE recognition_run SET status = $2, engine_schema_version = '1', pages_total = $3, pages_recognized = $4,
+            finished_at = now(), row_version = row_version + 1 WHERE id = $1`,
+    [id, status, pages.total, status === 'complete' ? pages.total : Math.min(pages.recognized, pages.total - 1)],
+  );
+  return id;
+};
+
 export const idem = (): Record<string, string> => ({ 'Idempotency-Key': `test-${randomBytes(8).toString('hex')}` });
 
 export interface IScenario {

@@ -7,7 +7,7 @@ import { emitStageEvents, lockTenderStages } from './stageEvents.ts';
 
 export type ItemStatus = 'pending' | 'skipped_partial' | 'rejected' | 'registered' | 'duplicate';
 export type RejectReason = 'path_traversal' | 'size_limit' | 'type_not_allowed' | 'unstable_file' | 'corrupt';
-export type OccurrenceKind = 'upload' | 'watched_folder' | 'archive_member' | 'yandex_disk' | 'smb';
+export type OccurrenceKind = 'upload' | 'watched_folder' | 'archive_member' | 'yandex_disk' | 'smb' | 'rdweb_export';
 
 export const insertBlob = async (
   db: Queryable,
@@ -180,11 +180,15 @@ export const registerItem = async (
       actorUserId: o.actorUserId,
     });
   }
-  await db.query(
-    `INSERT INTO document_occurrence (document_revision_id, tender_id, source_kind, source_locator, observed_name, import_item_id, intake_channel_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [result.revisionId, item.tender_id, o.sourceKind, o.locator, item.observed_name, item.id, o.channelId],
-  );
+  await insertOccurrence(db, {
+    documentRevisionId: result.revisionId,
+    tenderId: item.tender_id,
+    sourceKind: o.sourceKind,
+    locator: o.locator,
+    observedName: item.observed_name,
+    importItemId: item.id,
+    channelId: o.channelId,
+  });
   await db.query(
     "UPDATE import_item SET status = $2, document_revision_id = $3, updated_at = now(), row_version = row_version + 1 WHERE id = $1 AND status = 'pending'",
     [item.id, result.status, result.revisionId],
@@ -353,6 +357,27 @@ export const listRevisions = async (db: Queryable, documentId: string): Promise<
 export const getRevision = async (db: Queryable, ctx: IAccessContext, id: string): Promise<IRevisionRow | null> => {
   const r = await db.query<IRevisionRow>(`${SELECT_REVISION} WHERE r.id = $1 AND r.tender_id = ANY($2::uuid[])`, [id, contentTenderIds(ctx)]);
   return r.rows[0] ?? null;
+};
+
+// Происхождение редакции: где именно этот же байт-в-байт файл наблюдался (путь — история,
+// не идентичность). Экспорт RDWeb регистрирует происхождение rdweb_export (этап 04).
+export const insertOccurrence = async (
+  db: Queryable,
+  o: {
+    documentRevisionId: string;
+    tenderId: string;
+    sourceKind: OccurrenceKind;
+    locator: string;
+    observedName: string;
+    importItemId?: string | null;
+    channelId?: string | null;
+  },
+): Promise<void> => {
+  await db.query(
+    `INSERT INTO document_occurrence (document_revision_id, tender_id, source_kind, source_locator, observed_name, import_item_id, intake_channel_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [o.documentRevisionId, o.tenderId, o.sourceKind, o.locator, o.observedName, o.importItemId ?? null, o.channelId ?? null],
+  );
 };
 
 export interface IOccurrenceRow {

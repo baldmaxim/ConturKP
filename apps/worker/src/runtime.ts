@@ -130,14 +130,26 @@ export class WorkerRuntime {
     const token = job.lease_token!;
     const controller = new AbortController();
     let stopReason: 'lost' | 'cancel' | null = null;
-    const beat = setInterval(() => {
+    // После подтверждённой потери аренды новые heartbeat не отправляются (R03-11):
+    // обработчик может ещё не завершиться по AbortSignal, но трогать аренду он больше не должен.
+    let beating = false;
+    const beat: NodeJS.Timeout = setInterval(() => {
+      if (beating || stopReason === 'lost') return;
+      beating = true;
       heartbeatJob(this.o.pool, job.id, token, this.leaseMs).then(
         (hb) => {
-          if (!hb.ok) stopReason = 'lost';
-          else if (hb.cancelRequested) stopReason = stopReason ?? 'cancel';
+          beating = false;
+          if (!hb.ok) {
+            stopReason = 'lost';
+            clearInterval(beat);
+          } else if (hb.cancelRequested) {
+            stopReason = stopReason ?? 'cancel';
+          }
           if (stopReason) controller.abort();
         },
-        () => undefined,
+        () => {
+          beating = false;
+        },
       );
     }, Math.max(200, Math.floor(this.leaseMs / 3)));
     let completed = false;

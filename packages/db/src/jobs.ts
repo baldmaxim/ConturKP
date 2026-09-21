@@ -137,70 +137,100 @@ export interface IHeartbeat {
   cancelRequested: boolean;
 }
 
-// Условие владения: для задания класса gpu аренда действительна, только пока слот принадлежит
-// этому же заданию и тому же токену (R03-04). Иначе прежний владелец считается потерявшим аренду.
+// ЕДИНЫЙ ПОРЯДОК БЛОКИРОВОК GPU: resource_slot → job (ADR-004, R03-10).
+// Любой переход, затрагивающий обе строки, берёт сначала слот, затем задание — иначе
+// heartbeat и доменная транзакция образуют цикл ожидания.
+//
+// Условие владения заданием: для класса gpu аренда действительна, только пока слот
+// принадлежит этому же заданию и тому же токену (R03-04).
 const OWNS_JOB = `j.id = $1 AND j.lease_token = $2 AND j.status = 'running'
     AND (j.resource_class <> 'gpu'
          OR EXISTS (SELECT 1 FROM resource_slot s WHERE s.slot_key = 'gpu' AND s.holder_job_id = j.id AND s.lease_token = j.lease_token))`;
 
-// Продление аренды: слот GPU обновляется первым и берёт блокировку своей строки, поэтому
-// конкурентный перехват сериализуется с heartbeat. Аренда задания продлевается, только если
-// слот действительно продлён (R03-04): раздельные обновления давали окно, в котором прежний
-// владелец считал аренду живой после передачи слота.
-export const heartbeatJob = async (db: Queryable, id: string, token: string, leaseMs: number): Promise<IHeartbeat> => {
-  const r = await db.query<{ cancel_requested: boolean }>(
-    `WITH slot AS (
-       UPDATE resource_slot s SET locked_until = now() + make_interval(secs => $3::double precision / 1000)
-        WHERE s.slot_key = 'gpu' AND s.holder_job_id = $1 AND s.lease_token = $2
-        RETURNING s.slot_key
-     ), updated AS (
-       UPDATE job j SET locked_until = now() + make_interval(secs => $3::double precision / 1000), updated_at = now()
-        WHERE j.id = $1 AND j.lease_token = $2 AND j.status = 'running'
-          AND (j.resource_class <> 'gpu' OR EXISTS (SELECT 1 FROM slot))
-        RETURNING j.cancel_requested
-     )
-     SELECT cancel_requested FROM updated`,
-    [id, token, leaseMs],
-  );
-  const row = r.rows[0];
-  if (!row) return { ok: false, cancelRequested: false };
-  return { ok: true, cancelRequested: row.cancel_requested };
+const isGpuJob = async (db: Queryable, id: string): Promise<boolean> => {
+  const r = await db.query<{ resource_class: ResourceClass }>('SELECT resource_class FROM job WHERE id = $1', [id]);
+  return r.rows[0]?.resource_class === 'gpu';
 };
 
-// Блокировка задания с проверкой токена — первая операция транзакции доменного результата.
-// Для класса gpu дополнительно блокируется строка слота: перехват (claimJob) ждёт завершения
-// доменной транзакции, а не отбирает слот в её середине (R03-04).
+// Продление аренды — короткая транзакция в порядке слот → задание: обе аренды продлеваются
+// вместе либо не меняется ничего (R03-11). Потеря аренды задания не продлевает слот, и наоборот.
+export const heartbeatJob = async (pool: pg.Pool, id: string, token: string, leaseMs: number): Promise<IHeartbeat> => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const gpu = await isGpuJob(client, id);
+    if (gpu) {
+      const slot = await client.query(
+        "SELECT 1 FROM resource_slot WHERE slot_key = 'gpu' AND holder_job_id = $1 AND lease_token = $2 FOR UPDATE",
+        [id, token],
+      );
+      if ((slot.rowCount ?? 0) === 0) {
+        await client.query('ROLLBACK');
+        return { ok: false, cancelRequested: false };
+      }
+    }
+    const job = await client.query<{ cancel_requested: boolean }>(
+      "SELECT cancel_requested FROM job WHERE id = $1 AND lease_token = $2 AND status = 'running' FOR UPDATE",
+      [id, token],
+    );
+    if ((job.rowCount ?? 0) === 0) {
+      await client.query('ROLLBACK');
+      return { ok: false, cancelRequested: false };
+    }
+    const until = await client.query<{ locked_until: Date }>(
+      'UPDATE job SET locked_until = now() + make_interval(secs => $2::double precision / 1000), updated_at = now() WHERE id = $1 RETURNING locked_until',
+      [id, leaseMs],
+    );
+    if (gpu) {
+      await client.query("UPDATE resource_slot SET locked_until = $3 WHERE slot_key = 'gpu' AND holder_job_id = $1 AND lease_token = $2", [
+        id,
+        token,
+        until.rows[0]!.locked_until,
+      ]);
+    }
+    await client.query('COMMIT');
+    return { ok: true, cancelRequested: job.rows[0]!.cancel_requested };
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
+// Блокировка задания перед доменной записью. Порядок тот же: сначала слот (для gpu), затем задание.
 export const lockOwnedJob = async (db: Queryable, id: string, token: string): Promise<boolean> => {
-  const job = await db.query<{ resource_class: ResourceClass }>(
-    "SELECT resource_class FROM job WHERE id = $1 AND lease_token = $2 AND status = 'running' FOR UPDATE",
-    [id, token],
-  );
-  if ((job.rowCount ?? 0) === 0) return false;
-  if (job.rows[0]!.resource_class !== 'gpu') return true;
-  const slot = await db.query(
-    "SELECT 1 FROM resource_slot WHERE slot_key = 'gpu' AND holder_job_id = $1 AND lease_token = $2 FOR UPDATE",
-    [id, token],
-  );
-  return (slot.rowCount ?? 0) > 0;
+  if (await isGpuJob(db, id)) {
+    const slot = await db.query(
+      "SELECT 1 FROM resource_slot WHERE slot_key = 'gpu' AND holder_job_id = $1 AND lease_token = $2 FOR UPDATE",
+      [id, token],
+    );
+    if ((slot.rowCount ?? 0) === 0) return false;
+  }
+  const job = await db.query("SELECT 1 FROM job WHERE id = $1 AND lease_token = $2 AND status = 'running' FOR UPDATE", [id, token]);
+  return (job.rowCount ?? 0) > 0;
 };
 
-const releaseSlot = async (db: Queryable, id: string, token: string): Promise<void> => {
-  await db.query(
-    "UPDATE resource_slot SET holder_job_id = NULL, lease_token = NULL, locked_until = NULL WHERE holder_job_id = $1 AND lease_token = $2",
-    [id, token],
-  );
-};
+// Освобождение слота и перевод задания — один оператор в порядке слот → задание:
+// CTE слота выполняется первым, задание зависит от него через EXISTS для класса gpu.
+const RELEASE_SLOT_CTE = `released AS (
+      UPDATE resource_slot s SET holder_job_id = NULL, lease_token = NULL, locked_until = NULL
+       WHERE s.slot_key = 'gpu' AND s.holder_job_id = $1 AND s.lease_token = $2
+       RETURNING s.slot_key
+    )`;
+
+const OWNS_JOB_AFTER_RELEASE = `j.id = $1 AND j.lease_token = $2 AND j.status = 'running'
+    AND (j.resource_class <> 'gpu' OR EXISTS (SELECT 1 FROM released))`;
 
 const finish = async (db: Queryable, id: string, token: string, status: 'succeeded' | 'failed' | 'cancelled', code: string | null, message: string | null): Promise<boolean> => {
   const r = await db.query(
-    `UPDATE job j SET status = $3, lease_token = NULL, locked_until = NULL, finished_at = now(), updated_at = now(),
+    `WITH ${RELEASE_SLOT_CTE}
+     UPDATE job j SET status = $3, lease_token = NULL, locked_until = NULL, finished_at = now(), updated_at = now(),
             last_error_code = coalesce($4, last_error_code), last_error_message = coalesce($5, last_error_message)
-      WHERE ${OWNS_JOB}`,
+      WHERE ${OWNS_JOB_AFTER_RELEASE}`,
     [id, token, status, code, message],
   );
-  if ((r.rowCount ?? 0) === 0) return false;
-  await releaseSlot(db, id, token);
-  return true;
+  return (r.rowCount ?? 0) > 0;
 };
 
 export const succeedJob = (db: Queryable, id: string, token: string): Promise<boolean> => finish(db, id, token, 'succeeded', null, null);
@@ -222,14 +252,14 @@ export const failJob = async (
 ): Promise<{ ok: boolean; status: JobStatus }> => {
   if (e.retryable && job.attempts < job.max_attempts) {
     const r = await db.query(
-      `UPDATE job j SET status = 'queued', lease_token = NULL, locked_by = NULL, locked_until = NULL,
+      `WITH ${RELEASE_SLOT_CTE}
+       UPDATE job j SET status = 'queued', lease_token = NULL, locked_by = NULL, locked_until = NULL,
               run_after = now() + make_interval(secs => $3::double precision / 1000),
               last_error_code = $4, last_error_message = $5, updated_at = now()
-        WHERE ${OWNS_JOB}`,
+        WHERE ${OWNS_JOB_AFTER_RELEASE}`,
       [job.id, token, backoffMs(job.attempts), e.code, e.message.slice(0, 500)],
     );
     if ((r.rowCount ?? 0) === 0) return { ok: false, status: 'running' };
-    await releaseSlot(db, job.id, token);
     return { ok: true, status: 'queued' };
   }
   const ok = await finish(db, job.id, token, 'failed', e.code, e.message.slice(0, 500));
@@ -246,15 +276,14 @@ export const requeueJob = async (
   e: { code: string; message: string },
 ): Promise<boolean> => {
   const r = await db.query(
-    `UPDATE job j SET status = 'queued', lease_token = NULL, locked_by = NULL, locked_until = NULL,
+    `WITH ${RELEASE_SLOT_CTE}
+     UPDATE job j SET status = 'queued', lease_token = NULL, locked_by = NULL, locked_until = NULL,
             run_after = now() + make_interval(secs => $3::double precision / 1000),
             last_error_code = $4, last_error_message = $5, updated_at = now()
-      WHERE ${OWNS_JOB}`,
+      WHERE ${OWNS_JOB_AFTER_RELEASE}`,
     [job.id, token, backoffMs(job.attempts), e.code, e.message.slice(0, 500)],
   );
-  if ((r.rowCount ?? 0) === 0) return false;
-  await releaseSlot(db, job.id, token);
-  return true;
+  return (r.rowCount ?? 0) > 0;
 };
 
 // Recovery-проход: задания с истёкшей арендой возвращаются в очередь, токен обнуляется (A15).

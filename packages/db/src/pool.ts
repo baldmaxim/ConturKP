@@ -30,5 +30,13 @@ export const withTransaction = async <T>(pool: pg.Pool, fn: (client: pg.PoolClie
   }
 };
 
+// Пул отличается от клиента наличием счётчиков соединений: это позволяет одной и той же
+// операции работать и самостоятельной короткой транзакцией (дан пул), и внутри уже открытой
+// транзакции вызывающего (дан клиент).
+export const isPoolLike = (db: Queryable): boolean => typeof (db as unknown as { totalCount?: unknown }).totalCount === 'number';
+
+export const inTransaction = async <T>(db: Queryable, fn: (client: Queryable) => Promise<T>): Promise<T> =>
+  isPoolLike(db) ? withTransaction(db as unknown as pg.Pool, (client) => fn(client)) : fn(db);
+
 export const databaseNameOf = (connectionString: string): string =>
   decodeURIComponent(new URL(connectionString).pathname.replace(/^\//, ''));

@@ -25,9 +25,11 @@ const init = () => {
   mkdirSync(DATA_DIR, { recursive: true });
   const code = run('initdb', ['-D', DATA_DIR, '-U', 'postgres', '-A', 'trust', '-E', 'UTF8', '--locale=C']);
   if (code !== 0) return code;
+  // Логическая репликация тестовому кластеру не нужна: её фоновый процесс на этой машине
+  // аварийно завершался и ронял весь кластер (см. отчёт этапа 03).
   appendFileSync(
     resolve(DATA_DIR, 'postgresql.conf'),
-    `\nlisten_addresses = '127.0.0.1'\nport = ${PORT}\ntimezone = 'UTC'\n`,
+    `\nlisten_addresses = '127.0.0.1'\nport = ${PORT}\ntimezone = 'UTC'\nmax_logical_replication_workers = 0\n`,
   );
   writeFileSync(
     resolve(DATA_DIR, 'pg_hba.conf'),

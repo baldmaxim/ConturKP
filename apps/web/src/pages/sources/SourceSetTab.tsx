@@ -1,9 +1,11 @@
 import { useState, type FC, type ReactNode } from 'react';
-import { describeError, hasCode } from '../../api/errors';
+import { describeError, hasCode, stateConflictCurrent } from '../../api/errors';
+import { freezeSourceSet } from '../../api/recognitionEndpoints';
 import { createSourceSetDraft, listDocuments, listSourceSets } from '../../api/sourceEndpoints';
-import type { ISourceSetLatestItem, ISourceSetRevision } from '../../api/types';
+import type { IFreezeBlockingItem, ISourceSetLatestItem, ISourceSetRevision } from '../../api/types';
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorState } from '../../components/ErrorState';
 import { LoadingState } from '../../components/LoadingState';
@@ -36,11 +38,30 @@ const inclusionBadge = (item: ISourceSetLatestItem): ReactNode =>
     <Badge tone="neutral" icon="user-check" label={INCLUSION_LABELS.excluded_not_applicable} />
   );
 
-/** Состав источников этапа: текущая ревизия, черновик и его правка. Заморозка — на этапе 04. */
+const BLOCKING_REASONS: Record<IFreezeBlockingItem['reason'], string> = {
+  no_recognition: 'распознавание не выполнялось',
+  recognition_in_progress: 'распознавание ещё идёт',
+  recognition_failed: 'распознавание не принято',
+};
+
+// Сервер присылает перечень блокирующих редакций в current.blocking (409 STATE_CONFLICT).
+const blockingOf = (error: unknown): IFreezeBlockingItem[] => {
+  const current = stateConflictCurrent(error);
+  if (!current || typeof current !== 'object' || !('blocking' in current)) {
+    return [];
+  }
+  const blocking = (current as { blocking: unknown }).blocking;
+  return Array.isArray(blocking) ? (blocking as IFreezeBlockingItem[]) : [];
+};
+
+/** Состав источников этапа: текущая ревизия, черновик, его правка и заморозка. */
 export const SourceSetTab: FC<ISourceSetTabProps> = ({ stageId, canWrite }) => {
   const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [freezing, setFreezing] = useState(false);
+  const [blocking, setBlocking] = useState<IFreezeBlockingItem[]>([]);
   const idempotency = useIdempotencyKey();
   const setsRes = useApiResource((signal) => listSourceSets(stageId, signal), stageId);
   const docsRes = useApiResource((signal) => listDocuments(stageId, signal), stageId);
@@ -69,6 +90,34 @@ export const SourceSetTab: FC<ISourceSetTabProps> = ({ stageId, canWrite }) => {
       }
     } finally {
       setCreating(false);
+    }
+  };
+
+  const freeze = async (): Promise<void> => {
+    if (!draft) {
+      return;
+    }
+    setFreezing(true);
+    try {
+      await freezeSourceSet(draft.id, draft.rowVersion, idempotency.keyFor({ revisionId: draft.id, action: 'freeze' }));
+      idempotency.reset();
+      setBlocking([]);
+      setConfirming(false);
+      toast.push({ kind: 'success', text: 'Состав заморожен.' });
+      setsRes.reload();
+    } catch (error) {
+      if (hasCode(error, 'IDEMPOTENCY_KEY_REUSED')) {
+        idempotency.reset();
+      }
+      const items = blockingOf(error);
+      setBlocking(items);
+      setConfirming(false);
+      toast.push({ kind: 'error', text: `Состав не заморожен: ${describeError(error)}` });
+      if (hasCode(error, 'VERSION_CONFLICT') || hasCode(error, 'STATE_CONFLICT')) {
+        setsRes.reload();
+      }
+    } finally {
+      setFreezing(false);
     }
   };
 
@@ -195,16 +244,45 @@ export const SourceSetTab: FC<ISourceSetTabProps> = ({ stageId, canWrite }) => {
         </h2>
         {!editing && latest && canWrite ? (
           draft ? (
-            <Button icon="pencil" onClick={() => setEditing(true)}>
-              Изменить состав
-            </Button>
+            <>
+              <Button icon="pencil" onClick={() => setEditing(true)}>
+                Изменить состав
+              </Button>
+              <Button variant="primary" icon="check" onClick={() => setConfirming(true)}>
+                Заморозить состав
+              </Button>
+            </>
           ) : (
             createButton
           )
         ) : null}
       </div>
-      <Notice tone="info">Заморозка состава появится вместе с распознаванием (этап 04).</Notice>
+      {blocking.length > 0 ? (
+        <Notice tone="warning">
+          <span>Заморозка требует распознавания включённых редакций. Не готовы:</span>
+          <ul>
+            {blocking.map((item) => (
+              <li key={item.documentRevisionId}>{`${item.documentTitle} · ред. ${item.revisionSeq} — ${BLOCKING_REASONS[item.reason]}`}</li>
+            ))}
+          </ul>
+        </Notice>
+      ) : null}
       {renderBody()}
+      {confirming && draft ? (
+        <ConfirmDialog
+          title="Заморозить состав источников"
+          confirmLabel="Заморозить"
+          confirmIcon="check"
+          busy={freezing}
+          onConfirm={() => void freeze()}
+          onClose={() => setConfirming(false)}
+        >
+          <p>
+            После заморозки состав ревизии не меняется: новые документы попадут в следующий черновик. Редакции с неполным
+            распознаванием войдут в состав как есть — их неполнота останется видимой.
+          </p>
+        </ConfirmDialog>
+      ) : null}
     </section>
   );
 };

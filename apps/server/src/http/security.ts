@@ -16,7 +16,9 @@ const CSP = [
   "script-src 'self'",
   "style-src 'self'",
   "img-src 'self' data:",
-  "font-src 'self'",
+  // pdf.js подключает шрифты документа через FontFace с blob-URL, созданным нашим же
+  // скриптом из уже полученного файла: внешних запросов это не добавляет (script-src 'self').
+  "font-src 'self' blob:",
   "connect-src 'self'",
   "manifest-src 'self'",
   "worker-src 'self'",

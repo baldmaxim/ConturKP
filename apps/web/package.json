@@ -9,6 +9,7 @@
     "icons:generate": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
+    "pdfjs-dist": "^5.7.284",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router-dom": "^7.18.4"

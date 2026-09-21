@@ -51,7 +51,7 @@ export const DocumentPage: FC = () => {
           <h2 id="doc-revisions" className={form.sectionTitle}>
             Редакции
           </h2>
-          <RevisionList revisions={doc.revisionList} latestRevisionId={doc.latestRevisionId} />
+          <RevisionList revisions={doc.revisionList} latestRevisionId={doc.latestRevisionId} canWrite={canWrite} />
         </section>
       </div>
     </>

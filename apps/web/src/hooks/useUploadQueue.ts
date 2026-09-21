@@ -62,7 +62,7 @@ const describeUploadError = (error: unknown): string => {
 export const useUploadQueue = (stageId: string, onAccepted: (batch: IImportBatch) => void): IUploadQueue => {
   const [entries, setEntries] = useState<IUploadEntry[]>([]);
   const sources = useRef(new Map<string, ISource>());
-  const current = useRef<{ id: string; handle: IUploadHandle } | null>(null);
+  const current = useRef<{ id: string; handle: IUploadHandle<IImportBatch> } | null>(null);
   const onAcceptedRef = useRef(onAccepted);
   onAcceptedRef.current = onAccepted;
 

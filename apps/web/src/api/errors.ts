@@ -60,3 +60,11 @@ export const conflictCurrent = <T>(error: unknown, guard: (value: unknown) => va
   const current = error.problem?.current;
   return guard(current) ? current : null;
 };
+
+/** Блокирующие редакции из 409 STATE_CONFLICT заморозки состава: сервер называет каждую. */
+export const stateConflictCurrent = (error: unknown): unknown => {
+  if (!(error instanceof ApiError) || error.code !== 'STATE_CONFLICT') {
+    return null;
+  }
+  return error.problem?.current ?? null;
+};

@@ -3,6 +3,7 @@ import { Route, Routes } from 'react-router-dom';
 import { watchSystemTheme } from '../hooks/themeStore';
 import { AdminPage } from '../pages/AdminPage';
 import { DocumentPage } from '../pages/DocumentPage';
+import { EvidenceViewer } from '../pages/evidence/EvidenceViewer';
 import { ImportBatchPage } from '../pages/ImportBatchPage';
 import { LoginPage } from '../pages/LoginPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
@@ -36,6 +37,7 @@ export const App: FC = () => {
             <Route path="stages/:stageId" element={<StagePage />} />
             <Route path="imports/:importId" element={<ImportBatchPage />} />
             <Route path="documents/:documentId" element={<DocumentPage />} />
+            <Route path="evidence/:fragmentId" element={<EvidenceViewer />} />
             <Route path="admin" element={<AdminPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>

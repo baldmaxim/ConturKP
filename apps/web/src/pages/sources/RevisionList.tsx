@@ -5,6 +5,7 @@ import { Badge } from '../../components/Badge';
 import { EmptyState } from '../../components/EmptyState';
 import { Icon } from '../../components/Icon';
 import { formatDateTime } from '../../utils/datetime';
+import { RecognitionPanel } from './RecognitionPanel';
 import { formatBytes, occurrenceKindLabel, shortSha } from '../../utils/sourceLabels';
 import list from '../../styles/list.module.css';
 import styles from './RevisionList.module.css';
@@ -12,10 +13,11 @@ import styles from './RevisionList.module.css';
 interface IRevisionListProps {
   revisions: IRevision[];
   latestRevisionId: string | null;
+  canWrite: boolean;
 }
 
 /** Редакции документа (новые сверху) и происхождения каждой редакции. */
-export const RevisionList: FC<IRevisionListProps> = ({ revisions, latestRevisionId }) => {
+export const RevisionList: FC<IRevisionListProps> = ({ revisions, latestRevisionId, canWrite }) => {
   if (revisions.length === 0) {
     return <EmptyState icon="file-question-mark" title="Редакций нет" text="У документа пока нет зарегистрированных редакций." />;
   }
@@ -73,6 +75,7 @@ export const RevisionList: FC<IRevisionListProps> = ({ revisions, latestRevision
               </ul>
             )}
           </details>
+          <RecognitionPanel revisionId={rev.id} canWrite={canWrite} />
         </li>
       ))}
     </ul>

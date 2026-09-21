@@ -1,10 +1,12 @@
-// Загрузка файла источника: тело — сам файл (application/octet-stream), имя — параметр name.
+// Загрузка файла телом запроса (application/octet-stream), имя — параметр name.
 // XMLHttpRequest вместо fetch ради прогресса отправки (fetch не сообщает о ходе upload).
+// Один путь для источников этапа и для экспорта распознавания: различаются только адрес
+// и тип ответа.
 import { API_BASE, ApiError, csrfToken, isProblem, notifyUnauthenticated } from './client';
-import type { IImportBatch, IProblem } from './types';
+import type { IImportBatch, IProblem, IRecognitionRunAccepted } from './types';
 
-export interface IUploadHandle {
-  promise: Promise<IImportBatch>;
+export interface IUploadHandle<T> {
+  promise: Promise<T>;
   abort: () => void;
 }
 
@@ -29,19 +31,9 @@ const problemOf = (xhr: XMLHttpRequest): IProblem => {
   };
 };
 
-/**
- * Отправляет файл в этап. idempotencyKey — один на файл: повтор после сетевой ошибки идёт с тем же ключом,
- * и сервер не создаст вторую партию. onProgress получает долю отправленного (0…1).
- */
-export const uploadImport = (
-  stageId: string,
-  file: File,
-  idempotencyKey: string,
-  onProgress: (fraction: number) => void,
-): IUploadHandle => {
+const xhrUpload = <T>(url: string, file: File, idempotencyKey: string, onProgress: (fraction: number) => void): IUploadHandle<T> => {
   const xhr = new XMLHttpRequest();
-  const promise = new Promise<IImportBatch>((resolve, reject) => {
-    const url = `${API_BASE}/stages/${encodeURIComponent(stageId)}/imports?name=${encodeURIComponent(file.name)}`;
+  const promise = new Promise<T>((resolve, reject) => {
     xhr.open('POST', url);
     xhr.setRequestHeader('Accept', 'application/json');
     xhr.setRequestHeader('Content-Type', 'application/octet-stream');
@@ -58,7 +50,7 @@ export const uploadImport = (
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
-          resolve(JSON.parse(xhr.responseText) as IImportBatch);
+          resolve(JSON.parse(xhr.responseText) as T);
         } catch {
           reject(new ApiError('Ответ сервера не разобран', xhr.status, null));
         }
@@ -76,3 +68,37 @@ export const uploadImport = (
   });
   return { promise, abort: () => xhr.abort() };
 };
+
+/**
+ * Отправляет файл в этап. idempotencyKey — один на файл: повтор после сетевой ошибки идёт с тем же ключом,
+ * и сервер не создаст вторую партию. onProgress получает долю отправленного (0…1).
+ */
+export const uploadImport = (
+  stageId: string,
+  file: File,
+  idempotencyKey: string,
+  onProgress: (fraction: number) => void,
+): IUploadHandle<IImportBatch> =>
+  xhrUpload<IImportBatch>(
+    `${API_BASE}/stages/${encodeURIComponent(stageId)}/imports?name=${encodeURIComponent(file.name)}`,
+    file,
+    idempotencyKey,
+    onProgress,
+  );
+
+/**
+ * Отправляет экспортный архив RDWeb к зарегистрированной редакции. Соответствие PDF
+ * проверяет сервер по SHA-256: чужой или старый результат отклоняется прогоном.
+ */
+export const uploadRecognitionExport = (
+  revisionId: string,
+  file: File,
+  idempotencyKey: string,
+  onProgress: (fraction: number) => void,
+): IUploadHandle<IRecognitionRunAccepted> =>
+  xhrUpload<IRecognitionRunAccepted>(
+    `${API_BASE}/document-revisions/${encodeURIComponent(revisionId)}/recognition-imports?name=${encodeURIComponent(file.name)}`,
+    file,
+    idempotencyKey,
+    onProgress,
+  );

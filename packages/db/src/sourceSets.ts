@@ -1,5 +1,6 @@
 // Состав источников этапа (state-machines §5): набор working, draft-ревизия с включением
-// или исключением каждой редакции с причиной. Заморозка требует распознавания (этап 04).
+// или исключением каждой редакции с причиной. Заморозка требует распознавания (этап 04):
+// у каждой включённой редакции есть завершённый или явно неполный прогон.
 import type { Queryable } from './pool.ts';
 
 export interface ISourceSetRevisionRow {
@@ -17,6 +18,7 @@ export interface ISourceSetRevisionRow {
 
 export interface ISourceSetItemRow {
   document_revision_id: string;
+  blob_sha256: string;
   inclusion: 'included' | 'excluded_not_applicable' | 'inherited';
   reason: string | null;
   decided_by: string | null;
@@ -70,7 +72,8 @@ export const createDraftRevision = async (db: Queryable, setId: string, userId: 
 
 export const listSetItems = async (db: Queryable, revisionId: string): Promise<ISourceSetItemRow[]> => {
   const r = await db.query<ISourceSetItemRow>(
-    `SELECT i.document_revision_id, i.inclusion, i.reason, i.decided_by, d.id AS document_id, d.title AS document_title, dr.revision_seq
+    `SELECT i.document_revision_id, i.inclusion, i.reason, i.decided_by, dr.blob_sha256,
+            d.id AS document_id, d.title AS document_title, dr.revision_seq
        FROM source_set_item i
        JOIN document_revision dr ON dr.id = i.document_revision_id
        JOIN document d ON d.id = dr.document_id
@@ -97,4 +100,17 @@ export const replaceSetItems = async (
     );
   }
   await db.query('UPDATE source_set_revision SET updated_at = now(), row_version = row_version + 1 WHERE id = $1', [revisionId]);
+};
+
+// draft → frozen. Охранное условие проверяет вызывающий (blockingFreezeItems); триггер
+// миграции 0005 повторяет проверку второй линией. 0 строк — ревизия уже не черновик.
+export const freezeSetRevision = async (db: Queryable, id: string, f: { contentHash: string; userId: string }): Promise<boolean> => {
+  const r = await db.query(
+    `UPDATE source_set_revision
+        SET status = 'frozen', frozen_at = now(), frozen_by = $3, content_hash = $2,
+            updated_at = now(), row_version = row_version + 1
+      WHERE id = $1 AND status = 'draft'`,
+    [id, f.contentHash, f.userId],
+  );
+  return (r.rowCount ?? 0) > 0;
 };

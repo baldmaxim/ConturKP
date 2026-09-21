@@ -1,12 +1,14 @@
 // Состав источников этапа (portal-api §2.3; state-machines §5): набор working, draft-ревизия,
 // включение или исключение редакции с причиной; каждое изменение — событие source_set_changed.
-// Заморозка ревизии требует распознавания всех включённых редакций и появится на этапе 04.
-import { PutSourceSetItemsRequest } from '@kontur/contracts';
-import { formatEtag } from '@kontur/core';
+// Заморозка ревизии требует распознавания всех включённых редакций (этап 04).
+import { FreezeSourceSetRequest, PutSourceSetItemsRequest } from '@kontur/contracts';
+import { formatEtag, sourceSetContentHash } from '@kontur/core';
 import {
+  blockingFreezeItems,
   createDraftRevision,
   emitStageEvents,
   ensureWorkingSet,
+  freezeSetRevision,
   getSetRevision,
   listSetItems,
   listSetRevisions,
@@ -150,6 +152,75 @@ export const sourceSetsRouter = (pool: Pool): Router => {
                 included: body.items.filter((i) => i.inclusion === 'included').length,
                 excluded: body.items.filter((i) => i.inclusion === 'excluded_not_applicable').length,
               },
+            },
+          ],
+        };
+      },
+    }),
+  );
+
+  // Заморозка состава (state-machines §5). Событий барьера не порождает: состав не меняется,
+  // меняется только его статус. Охранное условие — распознавание включённых редакций (I18).
+  router.post(
+    '/source-set-revisions/:id/freeze',
+    command(pool, {
+      action: 'source.set.freeze',
+      entityType: 'source_set_revision',
+      idempotent: true,
+      authorize: async (client, ctx, req) => {
+        const { stage } = await loadRevision(client, ctx, uuidParam(req, 'id', 'source_set_revision'));
+        requireTenderCapById(ctx, stage.tender_id, 'source.write', { entityType: 'source_set_revision', entityId: req.params.id as string });
+      },
+      run: async (client, ctx, req) => {
+        const id = uuidParam(req, 'id', 'source_set_revision');
+        parseBody(FreezeSourceSetRequest, req.body);
+        const probe = await loadRevision(client, ctx, id);
+        await loadStage(client, ctx, probe.stage.id, true);
+        const { rev, stage } = await loadRevision(client, ctx, id, true);
+        const target = { tenderId: stage.tender_id, entityId: id };
+        if (requireIfMatch(req, id) !== rev.row_version) throw versionConflict(toRevision(rev));
+        if (rev.status !== 'draft') throw new HttpError(409, 'STATE_CONFLICT', 'ревизия уже заморожена', { current: toRevision(rev) }, target);
+        const items = await listSetItems(client, id);
+        const included = items.filter((i) => i.inclusion !== 'excluded_not_applicable');
+        if (included.length === 0) {
+          throw new HttpError(409, 'STATE_CONFLICT', 'в составе нет ни одной включённой редакции', {}, target);
+        }
+        const blocking = await blockingFreezeItems(client, id);
+        if (blocking.length > 0) {
+          throw new HttpError(
+            409,
+            'STATE_CONFLICT',
+            'заморозка требует распознавания включённых редакций',
+            {
+              current: {
+                blocking: blocking.map((b) => ({
+                  documentRevisionId: b.document_revision_id,
+                  documentId: b.document_id,
+                  documentTitle: b.document_title,
+                  revisionSeq: b.revision_seq,
+                  reason: b.reason,
+                })),
+              },
+            },
+            target,
+          );
+        }
+        const contentHash = sourceSetContentHash(
+          items.map((i) => ({ documentRevisionId: i.document_revision_id, blobSha256: i.blob_sha256, inclusion: i.inclusion })),
+        );
+        await freezeSetRevision(client, id, { contentHash, userId: ctx.principal.userId });
+        const after = (await getSetRevision(client, id))!;
+        return {
+          status: 200,
+          body: { ...toRevision(after), items: items.map((i) => ({ documentRevisionId: i.document_revision_id, inclusion: i.inclusion, reason: i.reason })) },
+          etag: formatEtag(id, after.row_version),
+          audit: [
+            {
+              action: 'source.set.freeze',
+              entityType: 'source_set_revision',
+              entityId: id,
+              tenderId: stage.tender_id,
+              details: { seq: after.seq, contentHash, included: included.length, excluded: items.length - included.length },
             },
           ],
         };

@@ -4,7 +4,6 @@
 // и время изменения не менялись INTAKE_STABILITY_SECONDS и не изменились во время копирования.
 // Удаление файла из папки ничего не удаляет. Успешный скан — полный проход без файлов,
 // ожидающих стабильности.
-import { createReadStream } from 'node:fs';
 import { lstat, opendir, realpath, stat } from 'node:fs/promises';
 import { join, relative, resolve, sep } from 'node:path';
 import { classifyFile, safeRelativePath } from '@kontur/core';
@@ -22,8 +21,9 @@ import {
   observeFile,
   type INewItem,
 } from '@kontur/db';
-import { BlobLimitError } from '@kontur/storage';
-import { RetryableJobError, type IJobContext } from '../runtime.ts';
+import { BlobLimitError, type IStoredBlob } from '@kontur/storage';
+import { RetryableJobError, type IJobContext, type IJobHandlerSpec } from '../runtime.ts';
+import { assertUnchanged, openVerifiedFile, SourceChangedError, UnsafeSourceError } from './safeRead.ts';
 import { addItem } from './imports.ts';
 
 const TEMP_NAME = /^(~\$|\.~lock)|\.(tmp|part|partial|crdownload|download)$/i;
@@ -87,7 +87,8 @@ export const handleIntakeScan = async (ctx: IJobContext): Promise<void> => {
   let root: string;
   let files: IFound[];
   try {
-    root = await resolveChannelRoot(channel.locator, ctx.config.intakeRoots, ctx.config.storageRoot);
+    // Хранилище сравнивается по физическому корню: alias/junction не должен скрывать пересечение (R03-06).
+    root = await resolveChannelRoot(channel.locator, ctx.config.intakeRoots, ctx.store.canonicalRoot());
     files = await walk(root, (abs) => ctx.store.contains(abs));
   } catch (err) {
     const code = err instanceof IntakeRootError ? err.message : 'share_unavailable';
@@ -99,7 +100,8 @@ export const handleIntakeScan = async (ctx: IJobContext): Promise<void> => {
   await ctx.store.ensureDirs();
   const states = await loadFileStates(ctx.pool, channelId);
   const stableMs = ctx.config.intakeStabilitySeconds * 1000;
-  const items: { item: Omit<INewItem, 'batchId'>; found: IFound; sha: string | null }[] = [];
+  // blob — метаданные записанного содержимого; строка в БД появится под арендой (R03-09).
+  const items: { item: Omit<INewItem, 'batchId'>; found: IFound; sha: string | null; blob: (IStoredBlob & { mediaType: string }) | null }[] = [];
   let pendingUnstable = 0;
 
   for (const f of files) {
@@ -115,26 +117,34 @@ export const handleIntakeScan = async (ctx: IJobContext): Promise<void> => {
     const safe = safeRelativePath(f.rel);
     const base = { tenderId: channel.tender_id, memberPath: f.rel, observedName };
     if (f.symlink || !safe.ok) {
-      items.push({ item: { ...base, status: 'rejected', rejectReason: 'path_traversal', rejectDetail: f.symlink ? 'ссылка не открывается' : (safe.ok ? '' : safe.detail) }, found: f, sha: null });
+      items.push({ item: { ...base, status: 'rejected', rejectReason: 'path_traversal', rejectDetail: f.symlink ? 'ссылка не открывается' : (safe.ok ? '' : safe.detail) }, found: f, sha: null, blob: null });
       continue;
     }
-    // «Нестабильным» считается только сбой чтения исходного файла (занят копированием, исчез);
+    // Путь проверяется заново непосредственно перед чтением, и читается открытый дескриптор,
+    // а не путь (R03-07). «Нестабильным» считается только сбой чтения исходного файла;
     // ошибки хранилища и БД — сбой задания, а не молчаливое откладывание.
+    let verified;
+    try {
+      verified = await openVerifiedFile(f.abs, root, { size: f.size, mtimeMs: f.mtimeMs });
+    } catch (err) {
+      if (err instanceof UnsafeSourceError) {
+        items.push({ item: { ...base, status: 'rejected', rejectReason: 'path_traversal', rejectDetail: err.message }, found: f, sha: null, blob: null });
+      } else if (err instanceof SourceChangedError || ['EBUSY', 'EPERM', 'EACCES', 'ENOENT'].includes((err as NodeJS.ErrnoException).code ?? '')) {
+        pendingUnstable += 1;
+      } else {
+        throw err;
+      }
+      continue;
+    }
     let sourceError: NodeJS.ErrnoException | null = null;
-    const source = createReadStream(f.abs);
+    const source = verified.handle.createReadStream({ autoClose: false });
     source.on('error', (e: NodeJS.ErrnoException) => {
       sourceError = e;
     });
     try {
       const stored = await ctx.store.putStream(source, ctx.config.limits.maxEntryBytes);
-      const after = await stat(f.abs);
-      if (after.size !== f.size || Math.trunc(after.mtimeMs) !== f.mtimeMs || stored.sizeBytes !== f.size) {
-        // Файл изменился во время копирования: частичный, ждём следующего скана (A15).
-        pendingUnstable += 1;
-        continue;
-      }
+      await assertUnchanged(verified, stored.sizeBytes);
       const verdict = classifyFile(f.rel, stored.head, stored.sizeBytes);
-      await insertBlob(ctx.pool, { sha256: stored.sha256, sizeBytes: stored.sizeBytes, mediaType: verdict.kind === 'rejected' ? 'application/octet-stream' : verdict.mediaType, storageKey: stored.storageKey });
       const item: Omit<INewItem, 'batchId'> =
         verdict.kind === 'document'
           ? { ...base, status: 'pending', blobSha: stored.sha256, sizeBytes: stored.sizeBytes }
@@ -146,17 +156,21 @@ export const handleIntakeScan = async (ctx: IJobContext): Promise<void> => {
               blobSha: stored.sha256,
               sizeBytes: stored.sizeBytes,
             };
-      items.push({ item, found: f, sha: stored.sha256 });
+      const mediaType = verdict.kind === 'rejected' ? 'application/octet-stream' : verdict.mediaType;
+      // Строка blob пишется только под действующей арендой, вместе с партией (R03-09).
+      items.push({ item, found: f, sha: stored.sha256, blob: { ...stored, mediaType } });
     } catch (err) {
       const code = (sourceError as NodeJS.ErrnoException | null)?.code;
       if (err instanceof BlobLimitError) {
-        items.push({ item: { ...base, status: 'rejected', rejectReason: 'size_limit', rejectDetail: 'файл больше лимита' }, found: f, sha: null });
-      } else if (code === 'EBUSY' || code === 'EPERM' || code === 'EACCES' || code === 'ENOENT') {
-        // Исходный файл занят копированием или исчез между обходом и чтением.
+        items.push({ item: { ...base, status: 'rejected', rejectReason: 'size_limit', rejectDetail: 'файл больше лимита' }, found: f, sha: null, blob: null });
+      } else if (err instanceof SourceChangedError || code === 'EBUSY' || code === 'EPERM' || code === 'EACCES' || code === 'ENOENT') {
+        // Исходный файл занят копированием, исчез или изменился при чтении.
         pendingUnstable += 1;
       } else {
         throw err;
       }
+    } finally {
+      await verified.handle.close().catch(() => undefined);
     }
   }
 
@@ -176,6 +190,9 @@ export const handleIntakeScan = async (ctx: IJobContext): Promise<void> => {
       // Момент «поступил» для папки — регистрация сканом: событие партии до регистрации элементов.
       await emitStageEvents(client, { tenderId: channel.tender_id, stageIds: null, eventType: 'import_accepted', refType: 'import_batch', refId: batchId, actorUserId: null });
       for (const x of items) {
+        if (x.blob) {
+          await insertBlob(client, { sha256: x.blob.sha256, sizeBytes: x.blob.sizeBytes, mediaType: x.blob.mediaType, storageKey: x.blob.storageKey });
+        }
         await addItem(client, { ...x.item, batchId });
         await markImported(client, channelId, x.found.rel, x.found.size, x.found.mtimeMs, x.sha);
       }
@@ -185,4 +202,12 @@ export const handleIntakeScan = async (ctx: IJobContext): Promise<void> => {
     await markMissing(client, channelId, files.map((f) => f.rel));
     await markScanResult(client, channelId, { startedAt, pendingUnstable, errorCode: null });
   });
+};
+
+// Терминальная ошибка скана фиксируется как ошибка канала в той же транзакции (R03-05).
+export const intakeScanHandler: IJobHandlerSpec = {
+  run: handleIntakeScan,
+  onTerminalFailure: async (client, ctx, failure) => {
+    await markScanResult(client, String(ctx.job.payload.channelId), { startedAt: new Date(), pendingUnstable: 0, errorCode: failure.code });
+  },
 };

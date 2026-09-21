@@ -1,9 +1,9 @@
 import type { JobHandler } from '../runtime.ts';
-import { handleImportExpand, handleImportRegister } from './imports.ts';
-import { handleIntakeScan } from './intake.ts';
+import { importExpandHandler, importRegisterHandler } from './imports.ts';
+import { intakeScanHandler } from './intake.ts';
 
 export const HANDLERS: Record<string, JobHandler> = {
-  'import.expand': handleImportExpand,
-  'import.register': handleImportRegister,
-  'intake.scan': handleIntakeScan,
+  'import.expand': importExpandHandler,
+  'import.register': importRegisterHandler,
+  'intake.scan': intakeScanHandler,
 };

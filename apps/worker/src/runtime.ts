@@ -55,7 +55,22 @@ export interface IJobContext {
   throwIfStopped: () => void;
 }
 
-export type JobHandler = (ctx: IJobContext) => Promise<void>;
+export interface IJobFailure {
+  code: string;
+  message: string;
+}
+
+// Обработчик задания. onTerminalFailure — доменная фиксация терминальной ошибки (попытки
+// исчерпаны или ошибка неповторяемая): выполняется в одной транзакции с переводом задания
+// в failed и под действующей арендой (R03-05). Потеря аренды означает, что не пишется ничего.
+export interface IJobHandlerSpec {
+  run: (ctx: IJobContext) => Promise<void>;
+  onTerminalFailure?: (client: PoolClient, ctx: IJobContext, failure: IJobFailure) => Promise<void>;
+}
+
+export type JobHandler = IJobHandlerSpec | ((ctx: IJobContext) => Promise<void>);
+
+const specOf = (handler: JobHandler): IJobHandlerSpec => (typeof handler === 'function' ? { run: handler } : handler);
 
 export interface IWorkerOptions {
   pool: Pool;
@@ -150,20 +165,20 @@ export class WorkerRuntime {
         if (stopReason === 'cancel') throw new JobCancelledError('отмена запрошена');
       },
     };
+    const spec = this.o.handlers[job.kind] ? specOf(this.o.handlers[job.kind]!) : null;
     try {
-      const handler = this.o.handlers[job.kind];
-      if (!handler) throw new PermanentJobError('unknown_kind', `нет обработчика ${job.kind}`);
-      await handler(ctx);
+      if (!spec) throw new PermanentJobError('unknown_kind', `нет обработчика ${job.kind}`);
+      await spec.run(ctx);
       if (!completed) await ctx.complete();
       this.log(`задание ${job.kind} ${job.id} выполнено`);
     } catch (err) {
-      await this.onError(job, token, err);
+      await this.onError(job, token, err, spec, ctx);
     } finally {
       clearInterval(beat);
     }
   }
 
-  private async onError(job: IJobRow, token: string, err: unknown): Promise<void> {
+  private async onError(job: IJobRow, token: string, err: unknown, spec: IJobHandlerSpec | null, ctx: IJobContext): Promise<void> {
     if (err instanceof LeaseLostError) {
       // Аренда перехвачена: ничего не пишем (R01-06 п. 1).
       this.log(`задание ${job.id}: аренда потеряна, результат не записан`);
@@ -177,6 +192,26 @@ export class WorkerRuntime {
     const retryable = !(err instanceof PermanentJobError);
     const code = err instanceof RetryableJobError || err instanceof PermanentJobError ? err.code : 'internal';
     const message = err instanceof Error ? err.message : 'неизвестная ошибка';
+    const terminal = !retryable || job.attempts >= job.max_attempts;
+    // Граница терминальной ошибки: доменный отказ и статус задания фиксируются вместе,
+    // после проверки аренды (R03-05). Отдельного «добивания» после failJob быть не должно.
+    if (terminal && spec?.onTerminalFailure) {
+      try {
+        await withTransaction(this.o.pool, async (client) => {
+          if (!(await lockOwnedJob(client, job.id, token))) throw new LeaseLostError();
+          await spec.onTerminalFailure!(client, ctx, { code, message });
+          if (!(await failJob(client, job, token, { retryable: false, code, message })).ok) throw new LeaseLostError();
+        });
+        this.log(`задание ${job.kind} ${job.id}: терминальная ошибка ${code} → failed, доменный отказ зафиксирован`);
+        return;
+      } catch (terminalErr) {
+        if (terminalErr instanceof LeaseLostError) {
+          this.log(`задание ${job.id}: аренда потеряна при фиксации терминальной ошибки, результат не записан`);
+          return;
+        }
+        this.log(`задание ${job.id}: фиксация терминальной ошибки не удалась: ${terminalErr instanceof Error ? terminalErr.message : 'unknown'}`);
+      }
+    }
     const r = await failJob(this.o.pool, job, token, { retryable, code, message });
     this.log(`задание ${job.kind} ${job.id}: ошибка ${code} → ${r.ok ? r.status : 'аренда потеряна'}`);
   }

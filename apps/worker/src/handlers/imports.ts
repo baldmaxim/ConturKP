@@ -4,6 +4,7 @@ import { open } from 'node:fs/promises';
 import { classifyFile, type FileVerdict } from '@kontur/core';
 import {
   enqueueJob,
+  failBatch,
   finalizeBatchIfDone,
   getBatch,
   getChannel,
@@ -18,7 +19,7 @@ import {
 } from '@kontur/db';
 import { BlobLimitError, HEAD_BYTES, type BlobStore } from '@kontur/storage';
 import { ArchiveOpenError, readZip } from '../archive.ts';
-import { PermanentJobError, type IJobContext } from '../runtime.ts';
+import { PermanentJobError, type IJobContext, type IJobHandlerSpec } from '../runtime.ts';
 
 export const readHead = async (store: BlobStore, sha256: string): Promise<Buffer> => {
   const fh = await open(store.pathOf(sha256), 'r');
@@ -196,4 +197,22 @@ export const handleImportRegister = async (ctx: IJobContext): Promise<void> => {
     }
     await finalizeBatchIfDone(client, item.batch_id);
   });
+};
+
+// Терминальная ошибка разбора или регистрации: партия переводится в failed в одной транзакции
+// с переводом задания (R03-05). Незавершённые элементы остаются pending — пробел виден в истории,
+// событие import_accepted остаётся непокрытым.
+export const importExpandHandler: IJobHandlerSpec = {
+  run: handleImportExpand,
+  onTerminalFailure: async (client, ctx, failure) => {
+    await failBatch(client, String(ctx.job.payload.batchId), failure.code);
+  },
+};
+
+export const importRegisterHandler: IJobHandlerSpec = {
+  run: handleImportRegister,
+  onTerminalFailure: async (client, ctx, failure) => {
+    const item = await getItem(client, String(ctx.job.payload.itemId));
+    if (item) await failBatch(client, item.batch_id, failure.code);
+  },
 };

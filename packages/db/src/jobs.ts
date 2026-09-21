@@ -137,22 +137,38 @@ export interface IHeartbeat {
   cancelRequested: boolean;
 }
 
+// Условие владения: для задания класса gpu аренда действительна, только пока слот принадлежит
+// этому же заданию и тому же токену (R03-04). Иначе прежний владелец считается потерявшим аренду.
+const OWNS_JOB = `j.id = $1 AND j.lease_token = $2 AND j.status = 'running'
+    AND (j.resource_class <> 'gpu'
+         OR EXISTS (SELECT 1 FROM resource_slot s WHERE s.slot_key = 'gpu' AND s.holder_job_id = j.id AND s.lease_token = j.lease_token))`;
+
+// Продление аренды задания и слота — одним оператором: раздельные обновления могли оставить
+// обработчик с «живой» арендой задания при уже отданном слоте.
 export const heartbeatJob = async (db: Queryable, id: string, token: string, leaseMs: number): Promise<IHeartbeat> => {
-  const r = await db.query<{ cancel_requested: boolean; locked_until: Date }>(
-    `UPDATE job SET locked_until = now() + make_interval(secs => $3::double precision / 1000), updated_at = now()
-      WHERE id = $1 AND lease_token = $2 AND status = 'running'
-      RETURNING cancel_requested, locked_until`,
+  const r = await db.query<{ cancel_requested: boolean }>(
+    `WITH updated AS (
+       UPDATE job j SET locked_until = now() + make_interval(secs => $3::double precision / 1000), updated_at = now()
+        WHERE ${OWNS_JOB}
+        RETURNING j.id, j.cancel_requested, j.locked_until, j.resource_class
+     ), slot AS (
+       UPDATE resource_slot s SET locked_until = (SELECT locked_until FROM updated)
+        WHERE s.slot_key = 'gpu' AND s.holder_job_id = $1 AND s.lease_token = $2
+          AND EXISTS (SELECT 1 FROM updated WHERE resource_class = 'gpu')
+        RETURNING s.slot_key
+     )
+     SELECT cancel_requested FROM updated`,
     [id, token, leaseMs],
   );
   const row = r.rows[0];
   if (!row) return { ok: false, cancelRequested: false };
-  await db.query('UPDATE resource_slot SET locked_until = $3 WHERE holder_job_id = $1 AND lease_token = $2', [id, token, row.locked_until]);
   return { ok: true, cancelRequested: row.cancel_requested };
 };
 
-// Блокировка задания с проверкой токена — первая операция транзакции доменного результата.
+// Блокировка задания с проверкой токена (и слота для gpu) — первая операция транзакции
+// доменного результата.
 export const lockOwnedJob = async (db: Queryable, id: string, token: string): Promise<boolean> => {
-  const r = await db.query("SELECT 1 FROM job WHERE id = $1 AND lease_token = $2 AND status = 'running' FOR UPDATE", [id, token]);
+  const r = await db.query(`SELECT 1 FROM job j WHERE ${OWNS_JOB} FOR UPDATE OF j`, [id, token]);
   return (r.rowCount ?? 0) > 0;
 };
 
@@ -165,9 +181,9 @@ const releaseSlot = async (db: Queryable, id: string, token: string): Promise<vo
 
 const finish = async (db: Queryable, id: string, token: string, status: 'succeeded' | 'failed' | 'cancelled', code: string | null, message: string | null): Promise<boolean> => {
   const r = await db.query(
-    `UPDATE job SET status = $3, lease_token = NULL, locked_until = NULL, finished_at = now(), updated_at = now(),
+    `UPDATE job j SET status = $3, lease_token = NULL, locked_until = NULL, finished_at = now(), updated_at = now(),
             last_error_code = coalesce($4, last_error_code), last_error_message = coalesce($5, last_error_message)
-      WHERE id = $1 AND lease_token = $2 AND status = 'running'`,
+      WHERE ${OWNS_JOB}`,
     [id, token, status, code, message],
   );
   if ((r.rowCount ?? 0) === 0) return false;
@@ -194,10 +210,10 @@ export const failJob = async (
 ): Promise<{ ok: boolean; status: JobStatus }> => {
   if (e.retryable && job.attempts < job.max_attempts) {
     const r = await db.query(
-      `UPDATE job SET status = 'queued', lease_token = NULL, locked_by = NULL, locked_until = NULL,
+      `UPDATE job j SET status = 'queued', lease_token = NULL, locked_by = NULL, locked_until = NULL,
               run_after = now() + make_interval(secs => $3::double precision / 1000),
               last_error_code = $4, last_error_message = $5, updated_at = now()
-        WHERE id = $1 AND lease_token = $2 AND status = 'running'`,
+        WHERE ${OWNS_JOB}`,
       [job.id, token, backoffMs(job.attempts), e.code, e.message.slice(0, 500)],
     );
     if ((r.rowCount ?? 0) === 0) return { ok: false, status: 'running' };

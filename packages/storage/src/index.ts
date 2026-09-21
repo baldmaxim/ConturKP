@@ -4,7 +4,7 @@
 // то же содержимое уже есть, дедупликация). Файл получает атрибут «только чтение».
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, type ReadStream } from 'node:fs';
-import { chmod, link, mkdir, open, readdir, rm, stat } from 'node:fs/promises';
+import { chmod, link, mkdir, open, readdir, realpath, rm, stat } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import type { Readable } from 'node:stream';
 
@@ -16,6 +16,15 @@ export interface IStoredBlob {
   storageKey: string;
   created: boolean;
   head: Buffer;
+}
+
+// Существующий объект не совпал с ожидаемым содержимым: дальше работать с ним нельзя (ADR-003 §2).
+export class StorageCorruptionError extends Error {
+  readonly sha256: string;
+  constructor(sha256: string, detail: string) {
+    super(`хранилище повреждено: объект ${sha256} ${detail}`);
+    this.sha256 = sha256;
+  }
 }
 
 export class BlobLimitError extends Error {
@@ -35,9 +44,16 @@ const TMP_MAX_AGE_MS = 24 * 3600_000;
 
 export class BlobStore {
   readonly root: string;
+  // Физический (канонический) корень: путь из конфигурации может быть junction/ссылкой,
+  // а проверки пересечения с наблюдаемыми папками должны идти в одном пространстве путей (R03-06).
+  private canonical: string | null = null;
 
   constructor(root: string) {
     this.root = resolve(root);
+  }
+
+  canonicalRoot(): string {
+    return this.canonical ?? this.root;
   }
 
   pathOf(sha256: string): string {
@@ -45,15 +61,18 @@ export class BlobStore {
   }
 
   // Путь принадлежит хранилищу (для исключения из сканирования наблюдаемых папок).
+  // Сравнение — с физическим корнем, если он уже определён.
   contains(path: string): boolean {
     const p = resolve(path);
-    return p === this.root || p.startsWith(this.root + sep);
+    const root = this.canonicalRoot();
+    return p === root || p.startsWith(root + sep) || p === this.root || p.startsWith(this.root + sep);
   }
 
   async ensureDirs(): Promise<void> {
     await mkdir(join(this.root, 'sha256'), { recursive: true });
     await mkdir(join(this.root, 'tmp'), { recursive: true });
     await mkdir(join(this.root, 'derived'), { recursive: true });
+    this.canonical = await realpath(this.root);
   }
 
   // При старте процесса: каталоги и очистка временных файлов старше суток (ADR-003 §3).
@@ -106,10 +125,15 @@ export class BlobStore {
         throw err;
       }
       created = false;
+      // Объект уже есть: по ADR-003 сверяются и размер, и хэш содержимого (R03-08).
       const existing = await stat(target);
       if (existing.size !== size) {
         await rm(tmp, { force: true });
-        throw new Error(`хранилище повреждено: ${sha256} другого размера`);
+        throw new StorageCorruptionError(sha256, `имеет размер ${existing.size} вместо ${size}`);
+      }
+      if (!(await this.verify(sha256))) {
+        await rm(tmp, { force: true });
+        throw new StorageCorruptionError(sha256, 'не совпадает по SHA-256 с ожидаемым содержимым');
       }
     }
     // Жёсткая ссылка делит атрибуты с временным именем: сначала убираем его, затем «только чтение».

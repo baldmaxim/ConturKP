@@ -248,21 +248,17 @@ try {
   await clickEvidenceLink(pair.a);
   const firstDrawn = await waitFor(`document.querySelector('canvas ~ div') !== null`, 40_000);
   const styleA = await overlayStyle();
-  // Возврат назад — это переход внутри приложения: панель монтируется заново, поэтому
-  // страницу прогона нужно выбрать снова, и только затем открыть второе доказательство.
-  await evaluate('history.back()');
-  await waitFor(text('Показать страницы и фрагменты'), 20_000);
-  await clickButton('Показать страницы и фрагменты');
-  await waitFor(`[...document.querySelectorAll('button')].some((b) => b.querySelector('span')?.innerText.trim() === '1')`, 20_000);
-  await clickPage('1');
-  await waitFor(text('blk-0-txt'), 20_000);
-  await clickEvidenceLink(pair.b);
-  // Переход внутри приложения между двумя фрагментами одной страницы одного PDF: рамка
-  // обязана смениться, а не остаться от прежнего доказательства (R04-14).
+  // Переход между двумя доказательствами без ухода с маршрута /evidence/:id: экран не
+  // пересоздаётся, меняется только фрагмент. Именно так выглядит SPA-переход по ссылке
+  // из другого места приложения, и именно здесь рамка прежнего фрагмента может остаться.
+  await evaluate(`(() => { history.pushState({}, '', '/evidence/' + ${JSON.stringify(pair.b)});
+    dispatchEvent(new PopStateEvent('popstate')); return true; })()`);
+  const routeChanged = await waitFor(`location.pathname === '/evidence/' + ${JSON.stringify(pair.b)}`, 10_000);
+  // Рамка обязана смениться вместе с фрагментом, а не остаться от прежнего (R04-14).
   const styleChanged = await waitFor(`(() => { const d = document.querySelector('canvas ~ div');
     return d !== null && d.getAttribute('style') !== ${JSON.stringify(styleA)}; })()`, 40_000);
   const styleB = await overlayStyle();
-  record('R04-14: переход между фрагментами меняет выделение', firstDrawn && styleChanged, `A=${styleA} B=${styleB}`);
+  record('R04-14: переход между фрагментами меняет выделение', firstDrawn && routeChanged && styleChanged, `A=${styleA} B=${styleB}`);
 
   // ---- R04-15: выдача фрагментов принадлежит выбранной странице
   await send('Page.navigate', { url: `${BASE}/documents/${docId}?stage=${stageId}` });

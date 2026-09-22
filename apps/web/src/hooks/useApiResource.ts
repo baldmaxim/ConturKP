@@ -12,6 +12,11 @@ export interface IApiResource<T> {
 /**
  * Загружает ресурс при монтировании и при смене key; отменяет устаревшие запросы.
  * key — строка, однозначно задающая запрос (например, id тендера).
+ *
+ * Данные принадлежат ключу: при смене key прежний результат немедленно перестаёт быть
+ * текущим и очищается. Иначе экран показывал бы данные прежнего объекта как данные нового —
+ * для доказательств это прямая ложь (R04-14, R04-15). Повторная загрузка тем же ключом
+ * (reload) данные сохраняет: поллинг не должен мигать пустым экраном.
  */
 export const useApiResource = <T>(loader: (signal: AbortSignal) => Promise<T>, key: string): IApiResource<T> => {
   const [data, setData] = useState<T | null>(null);
@@ -22,8 +27,14 @@ export const useApiResource = <T>(loader: (signal: AbortSignal) => Promise<T>, k
   const loaderRef = useRef(loader);
   loaderRef.current = loader;
 
+  const shownKey = useRef(key);
+
   useEffect(() => {
     const controller = new AbortController();
+    if (shownKey.current !== key) {
+      shownKey.current = key;
+      setData(null);
+    }
     setLoading(true);
     setError(null);
     loaderRef

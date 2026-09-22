@@ -27,18 +27,41 @@ type IRender = IEvidenceOverlay;
 export const EvidenceViewer: FC = () => {
   const { fragmentId = '' } = useParams();
   const res = useApiResource((signal) => getEvidence(fragmentId, signal), fragmentId);
+  // Ключ отрисовки: всё, что влияет на выделение. Пока он не совпал с показанным, рамка
+  // прежнего фрагмента текущей не считается — она относилась бы не к этому тексту (R04-14).
+  const overlayKey = res.data
+    ? [
+        res.data.id,
+        res.data.contentUrl ?? '',
+        res.data.pageIndex ?? 'none',
+        res.data.bboxSpace ?? '',
+        res.data.rotation ?? '',
+        (res.data.bboxNorm ?? []).join(','),
+        (res.data.polygonNorm ?? []).join(','),
+        res.data.pageWidthPx ?? '',
+        res.data.pageHeightPx ?? '',
+      ].join('|')
+    : '';
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [render, setRender] = useState<IRender | null>(null);
-  const [renderError, setRenderError] = useState<string | null>(null);
+  // Отрисованное хранится вместе с ключом, которому оно принадлежит: рамка прежнего
+  // фрагмента не должна ни мгновения считаться рамкой нового (R04-14).
+  const [drawn, setDrawn] = useState<{ key: string; render: IRender } | null>(null);
+  const [renderError, setRenderError] = useState<{ key: string; message: string } | null>(null);
 
   const fragment: IEvidenceDetail | null = res.data;
+  const render = drawn && drawn.key === overlayKey ? drawn.render : null;
+  const drawError = renderError && renderError.key === overlayKey ? renderError.message : null;
 
   useEffect(() => {
     if (!fragment?.contentUrl || fragment.pageIndex === null) {
+      // Ни страницы, ни ссылки на оригинал: прежний холст и выделение перестают быть текущими.
+      setDrawn(null);
+      setRenderError(null);
       return undefined;
     }
     let cancelled = false;
     let task: { cancel: () => void } | null = null;
+    const key = overlayKey;
     const draw = async (): Promise<void> => {
       setRenderError(null);
       const pdfjs = await import('pdfjs-dist');
@@ -76,8 +99,9 @@ export const EvidenceViewer: FC = () => {
         void doc.destroy();
         return;
       }
-      setRender(
-        evidenceOverlay({
+      setDrawn({
+        key,
+        render: evidenceOverlay({
           bboxNorm: fragment.bboxNorm,
           polygonNorm: fragment.polygonNorm,
           space: fragment.bboxSpace ?? 'page_rotated',
@@ -85,19 +109,21 @@ export const EvidenceViewer: FC = () => {
           viewport,
           page: { widthPx: fragment.pageWidthPx, heightPx: fragment.pageHeightPx },
         }),
-      );
+      });
       void doc.destroy();
     };
     draw().catch((error: unknown) => {
       if (!cancelled) {
-        setRenderError(error instanceof Error ? error.message : 'страница не отрисована');
+        setRenderError({ key, message: error instanceof Error ? error.message : 'страница не отрисована' });
       }
     });
     return () => {
       cancelled = true;
       task?.cancel();
     };
-  }, [fragment?.contentUrl, fragment?.pageIndex, fragment?.bboxSpace, fragment?.rotation]);
+    // Ключ включает всё, что влияет на выделение: смена фрагмента на той же странице того
+    // же PDF обязана перерисовать рамку, а не оставить прежнюю (R04-14).
+  }, [overlayKey]);
 
   if (res.loading && !fragment) {
     return <LoadingState />;
@@ -161,7 +187,7 @@ export const EvidenceViewer: FC = () => {
             Координаты фрагмента вне допустимого диапазона — выделение не наносится. Показана вся страница оригинала.
           </Notice>
         ) : null}
-        {renderError ? <Notice tone="danger">{`Страница не отрисована: ${renderError}`}</Notice> : null}
+        {drawError ? <Notice tone="danger">{`Страница не отрисована: ${drawError}`}</Notice> : null}
         {fragment.contentUrl ? (
           <div className={styles.stage}>
             <canvas ref={canvasRef} className={styles.canvas} aria-label={`Страница ${pageNo ?? ''} оригинала`} />

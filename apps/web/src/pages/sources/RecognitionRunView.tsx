@@ -45,6 +45,12 @@ const originBadge = (fragment: IEvidenceFragment): ReactNode => {
 /** Страницы прогона и фрагменты выбранной страницы. Текст и описание модели различимы (I06). */
 export const RecognitionRunView: FC<IRecognitionRunViewProps> = ({ runId }) => {
   const [pageIndex, setPageIndex] = useState<number | null>(null);
+  // Выбор другой страницы немедленно снимает накопленные порции и их ошибку.
+  const selectPage = (next: number | null): void => {
+    setPageIndex(next);
+    setMore(null);
+    setMoreError(null);
+  };
   const runRes = useApiResource((signal) => getRecognitionRun(runId, signal), runId);
   const fragmentsKey = `${runId}:${pageIndex ?? 'none'}`;
   const fragmentsRes = useApiResource(
@@ -56,12 +62,17 @@ export const RecognitionRunView: FC<IRecognitionRunViewProps> = ({ runId }) => {
   const [more, setMore] = useState<IMorePages | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState<unknown>(null);
-  const appended = more && more.key === fragmentsKey ? more : null;
-  const fragments = [...(fragmentsRes.data?.items ?? []), ...(appended?.items ?? [])];
-  const nextCursor = appended ? appended.nextCursor : (fragmentsRes.data?.nextCursor ?? null);
+  // Всё, что показано и что можно догрузить, принадлежит текущему ключу. База ещё не
+  // пришла — нет ни фрагментов, ни курсора: выдача прежней страницы под номером новой
+  // и уход её курсора с чужим pageIndex недопустимы (R04-15).
+  const base = fragmentsRes.data;
+  const appended = base && more && more.key === fragmentsKey ? more : null;
+  const fragments = base ? [...base.items, ...(appended?.items ?? [])] : [];
+  const nextCursor = base ? (appended ? appended.nextCursor : base.nextCursor) : null;
+  const shownMoreError = appended || (base && more === null) ? moreError : null;
 
   const loadMore = (): void => {
-    if (pageIndex === null || nextCursor === null || loadingMore) {
+    if (pageIndex === null || base === null || nextCursor === null || loadingMore) {
       return;
     }
     setLoadingMore(true);
@@ -99,7 +110,7 @@ export const RecognitionRunView: FC<IRecognitionRunViewProps> = ({ runId }) => {
             <button
               type="button"
               className={pageIndex === page.pageIndex ? `${styles.page} ${styles.pageActive}` : styles.page}
-              onClick={() => setPageIndex(pageIndex === page.pageIndex ? null : page.pageIndex)}
+              onClick={() => selectPage(pageIndex === page.pageIndex ? null : page.pageIndex)}
               disabled={page.status !== 'recognized'}
             >
               <span className={styles.pageNo}>{page.pageLabel ?? String(page.pageIndex + 1)}</span>
@@ -166,7 +177,7 @@ export const RecognitionRunView: FC<IRecognitionRunViewProps> = ({ runId }) => {
         </details>
       ) : null}
 
-      {moreError ? <Notice tone="danger">{`Следующая порция не загружена: ${describeError(moreError)}`}</Notice> : null}
+      {shownMoreError ? <Notice tone="danger">{`Следующая порция не загружена: ${describeError(shownMoreError)}`}</Notice> : null}
       {nextCursor !== null ? (
         <Button variant="ghost" onClick={loadMore} disabled={loadingMore}>
           {loadingMore ? 'Загрузка…' : `Показать ещё (загружено ${fragments.length})`}

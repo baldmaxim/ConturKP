@@ -147,7 +147,12 @@ export const RecognitionFragmentsQuery = z.object({
   pageIndex: z.coerce.number().int().min(0).optional(),
   // Курсор выдаёт сам сервер: (page_index, ordinal, part_index, id). Части длинного текста
   // обязаны входить в ключ, иначе страницы выдачи пересекаются или теряются (R04-06, R04-07).
-  cursor: z.string().regex(/^-?\d{1,9}:-?\d{1,9}:-?\d{1,9}:[0-9a-f-]{36}$/).optional(),
+  // Четвёртый компонент — настоящий UUID, а не «36 символов из [0-9a-f-]»: иначе похожая,
+  // но недопустимая строка доходила до `::uuid` в SQL и возвращала 500 вместо 400 (R04-16).
+  cursor: z
+    .string()
+    .regex(/^-?\d{1,9}:-?\d{1,9}:-?\d{1,9}:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
+    .optional(),
   limit: z.coerce.number().int().min(1).max(500).default(200),
 });
 

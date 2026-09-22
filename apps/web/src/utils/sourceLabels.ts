@@ -158,6 +158,8 @@ export const RECOGNITION_FAILURE_LABELS: Record<string, string> = {
   archive_corrupt: 'Архив не читается',
   too_large: 'Экспорт превышает пределы разбора',
   pdf_unreadable: 'Оригинал не открывается — число страниц не подтверждено',
+  export_group_mismatch: 'Распознавание в архиве относится к другому документу',
+  export_group_ambiguous: 'В архиве несколько подходящих комплектов — выбор неоднозначен',
   not_found: 'Прогон не найден',
   internal: 'Внутренняя ошибка',
 };
@@ -204,7 +206,7 @@ export const RECOGNITION_WARNING_LABELS: Record<string, string> = {
   page_heading_mismatch: 'Заголовок страницы не совпал с её номером',
   stamp_binding_ambiguous: 'Штамп не привязан к блоку — сохранён на уровне страницы',
   coords_missing: 'У блока нет координат',
-  coords_out_of_range: 'Координаты вне диапазона — усечены',
+  coords_out_of_range: 'Координаты вне диапазона — выделение не показано',
   polygon_invalid: 'Многоугольник блока не разобран',
   block_page_unknown: 'Блок ссылается на неизвестную страницу',
   rotation_unexpected: 'Неожиданный угол поворота страницы',

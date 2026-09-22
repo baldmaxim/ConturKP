@@ -24,7 +24,7 @@ const config = testConfig();
 const tight = testConfig({
   storageRoot: config.storageRoot,
   limits: { maxUploadBytes: 64 * 1024 * 1024, maxEntryBytes: 4096, maxArchiveTotalBytes: 16384, maxArchiveEntries: 6, maxCompressionRatio: 20 },
-  recognition: { maxMetadataBytes: 4000, maxMetadataTotalBytes: 6000, maxTotalTextChars: 4 * 1024 * 1024, maxPdfBytes: 16 * 1024 * 1024 },
+  recognition: { maxMetadataBytes: 4000, maxMetadataTotalBytes: 6000, maxTotalTextChars: 4 * 1024 * 1024, maxPdfBytes: 16 * 1024 * 1024, maxPages: 10_000 },
 });
 
 const octet = { 'Content-Type': 'application/octet-stream' };

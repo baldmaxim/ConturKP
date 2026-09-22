@@ -205,6 +205,12 @@ erDiagram
 - `evidence_fragment` получил составной внешний ключ (`run_id`, `document_revision_id`, `tender_id`) на `recognition_run (id, document_revision_id, tender_id)` и условие `run_id IS NULL OR document_revision_id IS NOT NULL`. Простого FK на `document_revision (id)` было мало: строка могла ссылаться на редакцию чужого тендера при корректных `run_id` и `tender_id` (R04-05, I17).
 - `evidence_fragment.part_index`/`part_total` — длинный текст блока сохраняется несколькими неизменяемыми фрагментами со стабильными ключами `<ключ>#pN` вместо усечения; индекс `evidence_fragment_page_idx` и курсор чтения включают `part_index`, поэтому порядок частей определён (R04-06).
 
+#### Поправки после ревью 04-2 (миграция 0007)
+
+- Терминализация прогона требует не только совпадения счётчиков, но и точного набора номеров страниц `0..pages_total-1`: одной страницы с номером 999 при `pages_total = 1` больше недостаточно, чтобы объявить полноту (R04-10, I18).
+- `evidence_fragment (run_id, page_index)` — внешний ключ на `recognition_page (run_id, page_index)`. Доказательство не может ссылаться на страницу, которой в прогоне нет; фрагмент без страницы (`page_index IS NULL`) по-прежнему штатен — так сохраняются секции без блока и непривязанные штампы (R04-10).
+- Частичный уникальный индекс `recognition_run_active_key` на `document_revision_id` со статусами `queued`/`running`: на редакции допустим один незавершённый прогон. Иначе два архива, принятые подряд, становятся братьями с общим `supersedes_run_id`, и история версий распознавания перестаёт быть цепочкой (R04-12, A10).
+
 Значения `evidence_fragment.origin` (I06): `document_text` (текстовый слой или текст документа), `recognized_text` (RDWeb/OCR), `model_description` (описание, summary, verification модели), `negotiation_speech` (реплика транскрипции), `negotiation_hint` (подсказка сервиса переговоров), `email_body`, `attachment_text`. Решение человека фрагментом не является и хранится в `decision`.
 
 ### 4.5. Расчёт

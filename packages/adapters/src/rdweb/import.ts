@@ -28,6 +28,8 @@ export interface IRdwebArchive {
   corrupt: string | null;
   // Metadata выбранного комплекта не найдена рядом с совпавшим PDF (R04-08): описание расхождения.
   groupMismatch: string | null;
+  // Комплект выбран неоднозначно (R04-08): выбирать доказательство эвристикой нельзя.
+  groupAmbiguous: string | null;
 }
 
 const sha256 = (s: string): string => createHash('sha256').update(s, 'utf8').digest('hex');
@@ -178,6 +180,9 @@ export const importRdwebExport = (input: {
   if (a.corrupt) return { ok: false, error: { code: 'archive_corrupt', message: a.corrupt } };
   if (a.unsafe.length > 0) {
     return { ok: false, error: { code: 'archive_unsafe', message: `${a.unsafe[0]!.memberPath}: ${a.unsafe[0]!.detail}` } };
+  }
+  if (a.groupAmbiguous) {
+    return { ok: false, error: { code: 'export_group_ambiguous', message: a.groupAmbiguous } };
   }
   if (a.groupMismatch) {
     return { ok: false, error: { code: 'export_group_mismatch', message: a.groupMismatch } };

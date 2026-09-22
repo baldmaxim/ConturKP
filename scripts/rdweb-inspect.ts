@@ -30,6 +30,7 @@ const archive: IRdwebArchive = {
   unsafe: [],
   corrupt: null,
   groupMismatch: null,
+  groupAmbiguous: null,
 };
 const pdfs = new Map<string, { score: number; sha256: string; bytes: Uint8Array }>();
 const jsons = new Map<string, { score: number; text: string }>();

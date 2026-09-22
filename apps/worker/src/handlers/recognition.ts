@@ -86,6 +86,7 @@ export const readRdwebArchive = async (ctx: IJobContext, sha256: string, expectP
     unsafe: [],
     corrupt: null,
     groupMismatch: null,
+    groupAmbiguous: null,
   };
   // У каждого члена запоминается комплект экспорта (общее имя без роли): metadata обязана
   // принадлежать тому же комплекту, что и совпавший по SHA-256 PDF (R04-08).
@@ -156,10 +157,14 @@ export const readRdwebArchive = async (ctx: IJobContext, sha256: string, expectP
     return archive;
   }
   const asCandidates = (m: Map<string, { score: number }>) => [...m].map(([memberPath, v]) => ({ memberPath, score: v.score }));
-  // Если PDF в архиве несколько, выигрывает тот, что совпал с зарегистрированной редакцией:
-  // иначе верный результат отклонялся бы из-за порядка членов архива. Ни одного совпавшего —
-  // берём обычного кандидата, и импорт честно закончится отказом pdf_mismatch.
-  const matched = [...pdfs].find(([, v]) => v.sha256 === expectPdfSha256) ?? null;
+  // Совпавший с редакцией PDF выбирается по SHA-256, а не по порядку членов архива. Совпавших
+  // больше одного — комплект неоднозначен: какой из них считать источником доказательства,
+  // объяснить нечем, поэтому импорт отклоняется, а не решается эвристикой (R04-08).
+  const matchedAll = [...pdfs].filter(([, v]) => v.sha256 === expectPdfSha256);
+  const matched = matchedAll[0] ?? null;
+  if (matchedAll.length > 1) {
+    archive.groupAmbiguous = `с редакцией совпало несколько PDF архива: ${matchedAll.map(([p]) => p).join(', ')}`;
+  }
   const pdf = matched
     ? { chosen: { memberPath: matched[0], score: 2 }, ignored: [...pdfs.keys()].filter((p) => p !== matched[0]) }
     : pickMember(asCandidates(pdfs));
@@ -179,6 +184,14 @@ export const readRdwebArchive = async (ctx: IJobContext, sha256: string, expectP
     const foreign = [...(jsonForeign ? jsons.keys() : mds.keys())].join(', ') || 'нет';
     archive.groupMismatch =
       `рядом с PDF ${matched[0]} нет ${missing} того же комплекта экспорта; найдено у других комплектов: ${foreign}`;
+  }
+  // В комплекте у каждой обязательной роли должен быть ровно один кандидат: выбор «по
+  // наибольшему совпадению имени» здесь недопустим — это молчаливое решение за инженера.
+  if (matched && archive.groupAmbiguous === null) {
+    const many = groupJsons.size > 1 ? ['_blocks.json', [...groupJsons.keys()]] : groupMds.size > 1 ? ['_results.md', [...groupMds.keys()]] : null;
+    if (many) {
+      archive.groupAmbiguous = `в комплекте PDF ${matched[0]} несколько файлов роли ${many[0] as string}: ${(many[1] as string[]).join(', ')}`;
+    }
   }
   const json = pickMember(asCandidates(groupJsons));
   const md = pickMember(asCandidates(groupMds));

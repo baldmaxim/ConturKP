@@ -16,7 +16,9 @@ export type RdwebFailureCode =
   // Достоверное число страниц оригинала получить не удалось: без него полнота недоказуема (R04-03).
   | 'pdf_unreadable'
   // Metadata принадлежит другому комплекту экспорта, чем совпавший по SHA-256 PDF (R04-08).
-  | 'export_group_mismatch';
+  | 'export_group_mismatch'
+  // Комплект выбран неоднозначно: на обязательную роль больше одного кандидата (R04-08).
+  | 'export_group_ambiguous';
 
 export type RdwebFragmentOrigin = 'recognized_text' | 'model_description';
 export type RdwebFragmentKind =

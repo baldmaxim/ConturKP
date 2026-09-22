@@ -23,6 +23,15 @@ interface IRecognitionRunViewProps {
   runId: string;
 }
 
+/** Размер порции выдачи фрагментов: совпадает с пределом контракта по умолчанию. */
+const PAGE_SIZE = 200;
+
+interface IMorePages {
+  key: string;
+  items: IEvidenceFragment[];
+  nextCursor: string | null;
+}
+
 const pageBadge = (page: IRecognitionPage): ReactNode => {
   const meta = RECOGNITION_PAGE_STATUS[page.status];
   return <Badge tone={meta.tone} icon={meta.icon} dashed={meta.dashed} label={meta.label} />;
@@ -37,10 +46,33 @@ const originBadge = (fragment: IEvidenceFragment): ReactNode => {
 export const RecognitionRunView: FC<IRecognitionRunViewProps> = ({ runId }) => {
   const [pageIndex, setPageIndex] = useState<number | null>(null);
   const runRes = useApiResource((signal) => getRecognitionRun(runId, signal), runId);
+  const fragmentsKey = `${runId}:${pageIndex ?? 'none'}`;
   const fragmentsRes = useApiResource(
-    (signal) => (pageIndex === null ? Promise.resolve(null) : listFragments(runId, { pageIndex, limit: 200 }, signal)),
-    `${runId}:${pageIndex ?? 'none'}`,
+    (signal) => (pageIndex === null ? Promise.resolve(null) : listFragments(runId, { pageIndex, limit: PAGE_SIZE }, signal)),
+    fragmentsKey,
   );
+  // Следующие порции догружаются по курсору, который выдал сервер. Перезапрос первой страницы
+  // выдачу не продолжает: часть фрагментов осталась бы недоступной (R04-07).
+  const [more, setMore] = useState<IMorePages | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<unknown>(null);
+  const appended = more && more.key === fragmentsKey ? more : null;
+  const fragments = [...(fragmentsRes.data?.items ?? []), ...(appended?.items ?? [])];
+  const nextCursor = appended ? appended.nextCursor : (fragmentsRes.data?.nextCursor ?? null);
+
+  const loadMore = (): void => {
+    if (pageIndex === null || nextCursor === null || loadingMore) {
+      return;
+    }
+    setLoadingMore(true);
+    setMoreError(null);
+    listFragments(runId, { pageIndex, limit: PAGE_SIZE, cursor: nextCursor })
+      .then((next) => {
+        setMore({ key: fragmentsKey, items: [...(appended?.items ?? []), ...next.items], nextCursor: next.nextCursor });
+      })
+      .catch((reason: unknown) => setMoreError(reason))
+      .finally(() => setLoadingMore(false));
+  };
 
   if (runRes.loading && !runRes.data) {
     return <LoadingState />;
@@ -88,7 +120,7 @@ export const RecognitionRunView: FC<IRecognitionRunViewProps> = ({ runId }) => {
         <Notice tone="danger">{`Фрагменты не загружены: ${describeError(fragmentsRes.error)}`}</Notice>
       ) : (
         <ul className={styles.fragments}>
-          {(fragmentsRes.data?.items ?? []).map((fragment) => (
+          {fragments.map((fragment) => (
             <li key={fragment.id} className={styles.fragment}>
               <div className={styles.fragmentHead}>
                 {originBadge(fragment)}
@@ -119,7 +151,7 @@ export const RecognitionRunView: FC<IRecognitionRunViewProps> = ({ runId }) => {
               </AppLink>
             </li>
           ))}
-          {(fragmentsRes.data?.items ?? []).length === 0 ? <li className={list.muted}>На странице нет фрагментов.</li> : null}
+          {fragments.length === 0 ? <li className={list.muted}>На странице нет фрагментов.</li> : null}
         </ul>
       )}
 
@@ -134,9 +166,10 @@ export const RecognitionRunView: FC<IRecognitionRunViewProps> = ({ runId }) => {
         </details>
       ) : null}
 
-      {fragmentsRes.data?.nextCursor ? (
-        <Button variant="ghost" onClick={() => fragmentsRes.reload()}>
-          Показаны первые 200 фрагментов страницы
+      {moreError ? <Notice tone="danger">{`Следующая порция не загружена: ${describeError(moreError)}`}</Notice> : null}
+      {nextCursor !== null ? (
+        <Button variant="ghost" onClick={loadMore} disabled={loadingMore}>
+          {loadingMore ? 'Загрузка…' : `Показать ещё (загружено ${fragments.length})`}
         </Button>
       ) : null}
     </div>

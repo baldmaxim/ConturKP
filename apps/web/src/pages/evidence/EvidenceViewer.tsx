@@ -8,7 +8,7 @@ import { LoadingState } from '../../components/LoadingState';
 import { Notice } from '../../components/Notice';
 import { PageHeader } from '../../components/PageHeader';
 import { useApiResource } from '../../hooks/useApiResource';
-import { bboxSpaceMatchesViewport, bboxToRect, polygonToPoints, type IRect } from '../../utils/bbox';
+import { evidenceOverlay, type IEvidenceOverlay } from '../../utils/bbox';
 import { FRAGMENT_ORIGIN, fragmentKindLabel, recognitionWarningLabel } from '../../utils/sourceLabels';
 import form from '../../styles/form.module.css';
 import list from '../../styles/list.module.css';
@@ -16,11 +16,7 @@ import styles from './EvidenceViewer.module.css';
 
 const MAX_WIDTH = 1400;
 
-interface IRender {
-  rect: IRect | null;
-  polygon: { x: number; y: number }[];
-  spaceMatches: boolean | null;
-}
+type IRender = IEvidenceOverlay;
 
 /**
  * Доказательство: участок локального оригинала PDF с выделением. Страница рисуется в браузере
@@ -80,13 +76,16 @@ export const EvidenceViewer: FC = () => {
         void doc.destroy();
         return;
       }
-      const space = fragment.bboxSpace ?? 'page_rotated';
-      const rotation = fragment.rotation ?? 0;
-      setRender({
-        rect: fragment.bboxNorm ? bboxToRect(fragment.bboxNorm, space, rotation, viewport) : null,
-        polygon: fragment.polygonNorm ? polygonToPoints(fragment.polygonNorm, space, rotation, viewport) : [],
-        spaceMatches: bboxSpaceMatchesViewport({ widthPx: fragment.pageWidthPx, heightPx: fragment.pageHeightPx }, viewport),
-      });
+      setRender(
+        evidenceOverlay({
+          bboxNorm: fragment.bboxNorm,
+          polygonNorm: fragment.polygonNorm,
+          space: fragment.bboxSpace ?? 'page_rotated',
+          rotation: fragment.rotation ?? 0,
+          viewport,
+          page: { widthPx: fragment.pageWidthPx, heightPx: fragment.pageHeightPx },
+        }),
+      );
       void doc.destroy();
     };
     draw().catch((error: unknown) => {
@@ -153,7 +152,13 @@ export const EvidenceViewer: FC = () => {
         ) : null}
         {render?.spaceMatches === false ? (
           <Notice tone="warning">
-            Размеры страницы в экспорте не совпали с размерами страницы PDF: выделение может быть смещено. Сверяйтесь с текстом.
+            Размеры страницы в экспорте не совпали с размерами страницы PDF: пространство координат не подтверждено, выделение не
+            наносится. Сверяйтесь с текстом фрагмента.
+          </Notice>
+        ) : null}
+        {render?.suppressed && render.spaceMatches !== false ? (
+          <Notice tone="warning">
+            Координаты фрагмента вне допустимого диапазона — выделение не наносится. Показана вся страница оригинала.
           </Notice>
         ) : null}
         {renderError ? <Notice tone="danger">{`Страница не отрисована: ${renderError}`}</Notice> : null}

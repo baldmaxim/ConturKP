@@ -2,7 +2,7 @@
 // гипотезы пространства: координаты уже в растровом (повёрнутом) виде и координаты
 // в неповёрнутом виде, когда поворот надо применить самим.
 import { describe, expect, it } from 'vitest';
-import { bboxSpaceMatchesViewport, bboxToRect, polygonToPoints } from '../apps/web/src/utils/bbox.ts';
+import { bboxSpaceMatchesViewport, bboxToRect, evidenceOverlay, polygonToPoints } from '../apps/web/src/utils/bbox.ts';
 
 const viewport = { width: 1000, height: 500 };
 
@@ -33,8 +33,9 @@ describe('координаты доказательства', () => {
   it('вырожденные значения не дают ложной рамки', () => {
     expect(bboxToRect([0.1, 0.2, 0.3], 'page_rotated', 0, viewport)).toBeNull();
     expect(bboxToRect([0.1, Number.NaN, 0.3, 0.6], 'page_rotated', 0, viewport)).toBeNull();
-    // Значения вне [0, 1] усечены, а не отброшены: рамка остаётся внутри страницы.
-    expect(rounded(bboxToRect([-0.5, 0, 1.5, 1], 'page_rotated', 0, viewport))).toEqual({ left: 0, top: 0, width: 1000, height: 500 });
+    // Значения вне [0, 1] не «подправляются»: обрезка дала бы правдоподобную, но ложную
+    // область оригинала, а неверная рамка хуже её отсутствия (R04-09).
+    expect(bboxToRect([-0.5, 0, 1.5, 1], 'page_rotated', 0, viewport)).toBeNull();
   });
 
   it('многоугольник переводится в точки того же пространства', () => {
@@ -43,10 +44,15 @@ describe('координаты доказательства', () => {
       { x: 1000, y: 0 },
       { x: 1000, y: 500 },
     ]);
-    expect(roundedPoints(polygonToPoints([0, 0, 1, 0], 'page_unrotated', 90, viewport))).toEqual([
+    // Многоугольник короче трёх точек — не многоугольник: точек не будет.
+    expect(polygonToPoints([0, 0, 1, 0], 'page_unrotated', 90, viewport)).toEqual([]);
+    expect(roundedPoints(polygonToPoints([0, 0, 1, 0, 1, 1], 'page_unrotated', 90, viewport))).toEqual([
       { x: 1000, y: 0 },
       { x: 1000, y: 500 },
+      { x: 0, y: 500 },
     ]);
+    // Координаты вне диапазона отбрасываются целиком (R04-09).
+    expect(polygonToPoints([0, 0, 1.4, 0, 1, 1], 'page_rotated', 0, viewport)).toEqual([]);
   });
 
   it('сверка пространства по пропорциям страницы', () => {
@@ -54,5 +60,31 @@ describe('координаты доказательства', () => {
     expect(bboxSpaceMatchesViewport({ widthPx: 1000, heightPx: 2000 }, viewport)).toBe(false);
     // Без размеров из экспорта вывода нет — и подсказка не выдумывается.
     expect(bboxSpaceMatchesViewport({ widthPx: null, heightPx: null }, viewport)).toBeNull();
+  });
+
+  // R04-09: выделение наносится только там, где его положение доказуемо.
+  it('рамка не наносится, пока пространство координат не подтверждено', () => {
+    const base = { bboxNorm: [0.1, 0.1, 0.9, 0.9], polygonNorm: null, space: 'page_rotated' as const, rotation: 0, viewport };
+    const ok = evidenceOverlay({ ...base, page: { widthPx: 2000, heightPx: 1000 } });
+    expect(ok.spaceMatches).toBe(true);
+    expect(ok.rect).not.toBeNull();
+    expect(ok.suppressed).toBe(false);
+
+    // Пропорции страницы экспорта не сошлись с отрисованной: рамка была бы ложной.
+    const mismatch = evidenceOverlay({ ...base, page: { widthPx: 1000, heightPx: 2000 } });
+    expect(mismatch.spaceMatches).toBe(false);
+    expect(mismatch.rect).toBeNull();
+    expect(mismatch.polygon).toEqual([]);
+    expect(mismatch.suppressed).toBe(true);
+
+    // Координаты вне диапазона: страница открывается, выделения нет.
+    const broken = evidenceOverlay({ ...base, bboxNorm: [-0.2, 0.1, 1.4, 0.3], page: { widthPx: 2000, heightPx: 1000 } });
+    expect(broken.rect).toBeNull();
+    expect(broken.suppressed).toBe(true);
+
+    // Координат нет вовсе — это не подавление, а штатное отсутствие рамки.
+    const none = evidenceOverlay({ ...base, bboxNorm: null, page: { widthPx: 2000, heightPx: 1000 } });
+    expect(none.rect).toBeNull();
+    expect(none.suppressed).toBe(false);
   });
 });

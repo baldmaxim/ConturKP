@@ -145,7 +145,9 @@ export const BBOX_SPACE = z.enum(['page_unrotated', 'page_rotated']);
 
 export const RecognitionFragmentsQuery = z.object({
   pageIndex: z.coerce.number().int().min(0).optional(),
-  cursor: z.string().regex(/^-?\d{1,9}:-?\d{1,9}:[0-9a-f-]{36}$/).optional(),
+  // Курсор выдаёт сам сервер: (page_index, ordinal, part_index, id). Части длинного текста
+  // обязаны входить в ключ, иначе страницы выдачи пересекаются или теряются (R04-06, R04-07).
+  cursor: z.string().regex(/^-?\d{1,9}:-?\d{1,9}:-?\d{1,9}:[0-9a-f-]{36}$/).optional(),
   limit: z.coerce.number().int().min(1).max(500).default(200),
 });
 

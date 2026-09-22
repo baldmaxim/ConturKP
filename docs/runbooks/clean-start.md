@@ -33,14 +33,14 @@ npm run db:seed-demo
 
 # 6. Сборка интерфейса и запуск двух процессов (в разных терминалах)
 npm run build
-npm run start:server          # http://127.0.0.1:3000
+npm run start:server          # http://127.0.0.1:3200 (не 3000 — там Quantor)
 npm run start:worker
 
 # 7. Проверка готовности
-curl http://127.0.0.1:3000/api/v1/ready   # 200 и ready=true: БД, схема, хранилище, heartbeat worker
+curl http://127.0.0.1:3200/api/v1/ready   # 200 и ready=true: БД, схема, хранилище, heartbeat worker
 ```
 
-Разработка интерфейса с горячей перезагрузкой: `npm run dev:server`, `npm run start:worker`, `npm run dev:web` → http://127.0.0.1:5173 (Vite проксирует `/api` на 3000; origin 5173 указан в `ALLOWED_ORIGINS`).
+Разработка интерфейса с горячей перезагрузкой: `npm run dev:server`, `npm run start:worker`, `npm run dev:web` → http://127.0.0.1:5273 (Vite проксирует `/api` на 3200; origin 5273 указан в `ALLOWED_ORIGINS`).
 
 ## Источники и наблюдаемые папки (этап 03)
 

@@ -30,17 +30,18 @@ export default defineConfig({
   ],
   server: {
     host: '127.0.0.1',
-    port: 5173,
+    // 5273 — отдельно от Vite по умолчанию (5173) и от Quantor (:3000/:3001)
+    port: 5273,
     strictPort: true,
     proxy: {
-      '/api': { target: 'http://127.0.0.1:3000', changeOrigin: false },
+      '/api': { target: 'http://127.0.0.1:3200', changeOrigin: false },
     },
   },
   preview: {
     host: '127.0.0.1',
-    port: 4173,
+    port: 4273,
     proxy: {
-      '/api': { target: 'http://127.0.0.1:3000', changeOrigin: false },
+      '/api': { target: 'http://127.0.0.1:3200', changeOrigin: false },
     },
   },
   build: {

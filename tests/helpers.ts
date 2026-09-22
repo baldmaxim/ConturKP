@@ -14,7 +14,7 @@ import { WorkerRuntime } from '../apps/worker/src/runtime.ts';
 import { BlobStore } from '../packages/storage/src/index.ts';
 
 export const ADMIN_URL = process.env.KONTUR_TEST_ADMIN_URL ?? 'postgresql://postgres@127.0.0.1:55432/postgres';
-export const ORIGIN = 'http://127.0.0.1:5173';
+export const ORIGIN = 'http://127.0.0.1:5273';
 export const PASSWORD = 'correct-horse-battery';
 
 const urlFor = (user: string, db: string): string => {

@@ -94,7 +94,7 @@ describe('конфигурация', () => {
     KONTUR_ENV: 'development',
     DATABASE_URL: 'postgresql://kontur_app:s3cr3t-value@127.0.0.1:5432/kontur',
     STORAGE_ROOT: 'C:/data/kontur',
-    ALLOWED_ORIGINS: 'http://127.0.0.1:3000',
+    ALLOWED_ORIGINS: 'http://127.0.0.1:3200',
     TENDERHUB_API_KEY: 'th-secret-key-value',
   };
 

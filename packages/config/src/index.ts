@@ -73,7 +73,7 @@ export const CONFIG_KEYS: IConfigKey[] = [
   { name: 'DATABASE_ADMIN_URL', secret: true, required: false, purpose: 'суперпользователь только для db:setup' },
   { name: 'STORAGE_ROOT', secret: false, required: true, purpose: 'корень файлового хранилища (ADR-003)' },
   { name: 'HTTP_HOST', secret: false, required: false, purpose: 'адрес прослушивания, по умолчанию 127.0.0.1' },
-  { name: 'HTTP_PORT', secret: false, required: false, purpose: 'порт, по умолчанию 3000' },
+  { name: 'HTTP_PORT', secret: false, required: false, purpose: 'порт, по умолчанию 3200 (не 3000 — занят Quantor)' },
   { name: 'ALLOWED_ORIGINS', secret: false, required: true, purpose: 'разрешённые Origin через запятую' },
   { name: 'TLS_CERT_FILE', secret: false, required: false, purpose: 'сертификат HTTPS (обязателен вне 127.0.0.1)' },
   { name: 'TLS_KEY_FILE', secret: true, required: false, purpose: 'закрытый ключ HTTPS' },
@@ -136,7 +136,7 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
     if (key.required && !env[key.name]) problems.push(`${key.name} не задано`);
   }
   const httpHost = env.HTTP_HOST || '127.0.0.1';
-  const httpPort = intFrom(env, 'HTTP_PORT', 3000, problems);
+  const httpPort = intFrom(env, 'HTTP_PORT', 3200, problems);
   const certFile = env.TLS_CERT_FILE;
   const keyFile = env.TLS_KEY_FILE;
   if (Boolean(certFile) !== Boolean(keyFile)) {

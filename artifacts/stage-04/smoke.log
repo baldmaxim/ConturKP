@@ -1,13 +1,13 @@
-# npm run smoke — 2026-09-21T15:53:56.345Z
+# npm run smoke — 2026-09-22T11:41:14.406Z
 # Node v24.14.1, PostgreSQL postgresql://***@127.0.0.1:55432/postgres
 PASS  db:setup — роли и база — база kontur_kp_smoke_test: создана; роли и права выставлены
-PASS  db:migrate — пустая БД — готово, применено миграций: 5
+PASS  db:migrate — пустая БД — готово, применено миграций: 6
 PASS  db:migrate — повторный запуск без изменений
 PASS  bootstrap — первый администратор-руководитель
 PASS  bootstrap — повтор отклонён
 PASS  db:seed-demo — синтетические данные — демо-данные готовы
 PASS  config:check — без значений секретов
-PASS  server + worker — /ready 200 — {"database":{"ok":true,"detail":"доступна"},"schema":{"ok":true,"detail":"версия 5"},"storage":{"ok":true,"detail":"доступно на запись"},"worker":{"ok":true,"detail":"heartbeat свежий"}}
+PASS  server + worker — /ready 200 — {"database":{"ok":true,"detail":"доступна"},"schema":{"ok":true,"detail":"версия 6"},"storage":{"ok":true,"detail":"доступно на запись"},"worker":{"ok":true,"detail":"heartbeat свежий"}}
 PASS  неаутентифицированный запрос — 401
 PASS  вход администратора — HTTP 200
 PASS  список тендеров (демо) — тендеров: 2

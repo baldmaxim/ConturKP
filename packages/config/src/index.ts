@@ -32,6 +32,8 @@ export interface IRecognitionLimits {
   maxTotalTextChars: number;
   // Оригинал читается в память ради достоверного числа страниц (R04-03).
   maxPdfBytes: number;
+  // Предел числа страниц оригинала: из него строятся страницы прогона и объекты разбора (R04-11).
+  maxPages: number;
 }
 
 export interface IAppConfig {
@@ -91,6 +93,7 @@ export const CONFIG_KEYS: IConfigKey[] = [
   { name: 'RECOGNITION_MAX_TEXT_MB', secret: false, required: false, purpose: 'лимит суммарного текста фрагментов одного прогона, по умолчанию 64' },
   { name: 'RECOGNITION_MAX_METADATA_TOTAL_MB', secret: false, required: false, purpose: 'лимит суммы metadata-кандидатов архива в памяти, по умолчанию 128' },
   { name: 'RECOGNITION_MAX_PDF_MB', secret: false, required: false, purpose: 'лимит чтения оригинала для подсчёта страниц, по умолчанию 256' },
+  { name: 'RECOGNITION_MAX_PAGES', secret: false, required: false, purpose: 'предел числа страниц оригинала для разбора, по умолчанию 10000' },
   { name: 'TENDERHUB_URL', secret: false, required: false, purpose: 'интеграция TenderHub (этап 06)' },
   { name: 'TENDERHUB_API_KEY', secret: true, required: false, purpose: 'интеграция TenderHub (этап 06)' },
   { name: 'LOCALAI_URL', secret: false, required: false, purpose: 'внутренний адрес LocalAI (этап 05); наружу не публикуется' },
@@ -199,6 +202,7 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
       maxMetadataTotalBytes: intFrom(env, 'RECOGNITION_MAX_METADATA_TOTAL_MB', 128, problems) * MIB,
       maxTotalTextChars: intFrom(env, 'RECOGNITION_MAX_TEXT_MB', 64, problems) * MIB,
       maxPdfBytes: intFrom(env, 'RECOGNITION_MAX_PDF_MB', 256, problems) * MIB,
+      maxPages: intFrom(env, 'RECOGNITION_MAX_PAGES', 10_000, problems),
     },
   };
   for (const root of config.intakeRoots) {

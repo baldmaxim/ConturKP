@@ -14,6 +14,14 @@ export interface IRdwebFixture {
   omitPagesInBlocks?: number[];
   // Страницы с заголовком «## Page N» без единого блока и без текста (R04-03).
   emptyMdPages?: number[];
+  // Координаты блоков вне [0,1]: доказательство не должно молча «подправляться» (R04-09).
+  outOfRangeCoords?: boolean;
+  // Размеры страниц экспорта не совпадают с геометрией PDF: рамку наносить нельзя (R04-09).
+  pageSizeMismatch?: boolean;
+  // Блоки, ссылающиеся на страницу за пределами PDF (R04-10).
+  outOfRangePageBlocks?: number[];
+  // Дополнительные текстовые блоки на первой странице: набор больше страницы выдачи (R04-07).
+  extraTextBlocks?: number;
   unknownBlockTypes?: string[];
   polygonPages?: number[];
   stamps?: 'per-page' | 'none';
@@ -75,8 +83,9 @@ export const buildRdwebExport = (o: IRdwebFixture = {}): { zip: Buffer; pdf: Buf
   const allPages = Array.from({ length: pageCount }, (_, i) => ({
     page_index: i,
     page_label: i + 1,
-    width_px: rotated.has(i) ? 3508 : 2480,
-    height_px: rotated.has(i) ? 2480 : 3508,
+    // Геометрия экспорта может разойтись с PDF: тогда пространство координат не подтверждено.
+    width_px: o.pageSizeMismatch ? 1000 : rotated.has(i) ? 3508 : 2480,
+    height_px: o.pageSizeMismatch ? 1000 : rotated.has(i) ? 2480 : 3508,
     rotation: rotated.has(i) ? 90 : 0,
   }));
   // PDF настоящий, и повороты его страниц совпадают с объявленными в экспорте: фикстура
@@ -106,10 +115,16 @@ export const buildRdwebExport = (o: IRdwebFixture = {}): { zip: Buffer; pdf: Buf
       shape_type: polygon ? 'polygon' : 'rectangle',
       status: 'recognized',
       export_status: 'recognized',
-      coords_norm: [0.1, 0.12 + 0.2 * (ordinal % 3), 0.9, 0.3 + 0.2 * (ordinal % 3)],
+      coords_norm: o.outOfRangeCoords
+        ? [-0.25, 0.1, 1.4, 0.3]
+        : [0.1, 0.12 + 0.2 * (ordinal % 3), 0.9, 0.3 + 0.2 * (ordinal % 3)],
       crop_url: cropMode === 'none' || (cropMode === 'except-stamps' && isStamp) ? '' : `${cropValue}/${id}.png`,
     };
-    if (polygon) b.polygon_points = [[0.1, 0.1], [0.9, 0.1], [0.9, 0.3], [0.1, 0.3]];
+    if (polygon) {
+      b.polygon_points = o.outOfRangeCoords
+        ? [[-0.5, 0.1], [1.9, 0.1], [1.9, 0.3], [-0.5, 0.3]]
+        : [[0.1, 0.1], [0.9, 0.1], [0.9, 0.3], [0.1, 0.3]];
+    }
     return b;
   };
 
@@ -132,7 +147,19 @@ export const buildRdwebExport = (o: IRdwebFixture = {}): { zip: Buffer; pdf: Buf
         blocks.push(u);
         unknownBlockIds.push(u.block_id);
       }
+      for (let i = 0; i < (o.extraTextBlocks ?? 0); i += 1) {
+        const extra = mkBlock(p, `ext${i}`, 'text');
+        blocks.push(extra);
+        textBlockIds.push(extra.block_id);
+      }
     }
+  }
+
+  // Блоки, ссылающиеся на несуществующую страницу оригинала: их page_index сохранять нельзя.
+  for (const p of o.outOfRangePageBlocks ?? []) {
+    const b = mkBlock(p, 'oor', 'text');
+    blocks.push(b);
+    textBlockIds.push(b.block_id);
   }
 
   const blocksDoc = {
@@ -171,6 +198,14 @@ export const buildRdwebExport = (o: IRdwebFixture = {}): { zip: Buffer; pdf: Buf
         md.push('Вторая строка распознанного текста.');
       }
       if (stamps === 'per-page') md.push('', stampLine(p));
+      md.push('');
+    }
+  }
+  for (const p of o.outOfRangePageBlocks ?? []) {
+    md.push(`## Page ${p + 1}`, '');
+    for (const b of blocks.filter((x) => x.page_index === p)) {
+      md.push(`### BLOCK #${b.ordinal} [TEXT]: ${b.block_id}`, '');
+      md.push(`Текст блока за пределами оригинала ${b.block_id}.`);
       md.push('');
     }
   }

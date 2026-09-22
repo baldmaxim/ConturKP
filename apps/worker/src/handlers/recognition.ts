@@ -5,7 +5,7 @@
 // поэтому единственный слот GPU (ADR-004) этим заданием не занимается.
 import { createHash } from 'node:crypto';
 import type { Readable } from 'node:stream';
-import { classifyMember, importRdwebExport, pickMember, type IRdwebArchive } from '@kontur/adapters';
+import { classifyMember, groupKeyOf, importRdwebExport, pickMember, type IRdwebArchive } from '@kontur/adapters';
 import {
   cancelRun,
   emitStageEvents,
@@ -85,10 +85,13 @@ export const readRdwebArchive = async (ctx: IJobContext, sha256: string, expectP
     ignored: [],
     unsafe: [],
     corrupt: null,
+    groupMismatch: null,
   };
-  const pdfs = new Map<string, { score: number; sha256: string }>();
-  const jsons = new Map<string, { score: number; text: string }>();
-  const mds = new Map<string, { score: number; text: string }>();
+  // У каждого члена запоминается комплект экспорта (общее имя без роли): metadata обязана
+  // принадлежать тому же комплекту, что и совпавший по SHA-256 PDF (R04-08).
+  const pdfs = new Map<string, { score: number; group: string; sha256: string }>();
+  const jsons = new Map<string, { score: number; group: string; text: string }>();
+  const mds = new Map<string, { score: number; group: string; text: string }>();
   try {
     await readZip(ctx.store.pathOf(sha256), async (entry) => {
       ctx.throwIfStopped();
@@ -125,10 +128,11 @@ export const readRdwebArchive = async (ctx: IJobContext, sha256: string, expectP
         archive.resultsHtmlPresent = true;
         return 'continue';
       }
+      const group = groupKeyOf(entry.memberPath, role) ?? entry.memberPath.toLowerCase();
       if (role === 'pdf') {
         const read = await hashOf(await entry.open(), Math.min(limits.maxEntryBytes, remaining));
         unpacked += read.bytes;
-        pdfs.set(entry.memberPath, { score, sha256: read.sha256 });
+        pdfs.set(entry.memberPath, { score, group, sha256: read.sha256 });
         return 'continue';
       }
       if (entry.declaredSize > maxMeta) throw new ArchiveRejectedError('too_large', `${entry.memberPath}: ${entry.declaredSize} байт`);
@@ -141,8 +145,8 @@ export const readRdwebArchive = async (ctx: IJobContext, sha256: string, expectP
       metadataBytes += buf.length;
       unpacked += buf.length;
       const text = buf.toString('utf8');
-      if (role === 'blocks_json') jsons.set(entry.memberPath, { score, text });
-      else mds.set(entry.memberPath, { score, text });
+      if (role === 'blocks_json') jsons.set(entry.memberPath, { score, group, text });
+      else mds.set(entry.memberPath, { score, group, text });
       return 'continue';
     });
   } catch (err) {
@@ -159,12 +163,30 @@ export const readRdwebArchive = async (ctx: IJobContext, sha256: string, expectP
   const pdf = matched
     ? { chosen: { memberPath: matched[0], score: 2 }, ignored: [...pdfs.keys()].filter((p) => p !== matched[0]) }
     : pickMember(asCandidates(pdfs));
-  const json = pickMember(asCandidates(jsons));
-  const md = pickMember(asCandidates(mds));
+  // Metadata берётся только из комплекта совпавшего PDF: иначе в один архив можно положить
+  // PDF одного документа и распознавание другого, и проверка SHA-256 подмену не заметит (R04-08).
+  const group = matched ? matched[1].group : null;
+  const sameGroup = <V extends { group: string; score: number }>(m: Map<string, V>): Map<string, V> =>
+    group === null ? m : new Map([...m].filter(([, v]) => v.group === group));
+  const groupJsons = sameGroup(jsons);
+  const groupMds = sameGroup(mds);
+  // Подмена комплекта — это когда файл роли в архиве есть, но принадлежит другому комплекту.
+  // Если файла нет вовсе, причина прежняя и точнее: blocks_json_missing / results_md_missing.
+  const jsonForeign = jsons.size > 0 && groupJsons.size === 0;
+  const mdForeign = mds.size > 0 && groupMds.size === 0;
+  if (matched && (jsonForeign || mdForeign)) {
+    const missing = jsonForeign ? '_blocks.json' : '_results.md';
+    const foreign = [...(jsonForeign ? jsons.keys() : mds.keys())].join(', ') || 'нет';
+    archive.groupMismatch =
+      `рядом с PDF ${matched[0]} нет ${missing} того же комплекта экспорта; найдено у других комплектов: ${foreign}`;
+  }
+  const json = pickMember(asCandidates(groupJsons));
+  const md = pickMember(asCandidates(groupMds));
   archive.pdf = pdf.chosen ? { memberPath: pdf.chosen.memberPath, sha256: pdfs.get(pdf.chosen.memberPath)!.sha256 } : null;
   archive.blocksJson = json.chosen ? jsons.get(json.chosen.memberPath)!.text : null;
   archive.resultsMd = md.chosen ? mds.get(md.chosen.memberPath)!.text : null;
-  archive.ignored = [...pdf.ignored, ...json.ignored, ...md.ignored];
+  const otherGroups = [...jsons.keys(), ...mds.keys()].filter((p) => !groupJsons.has(p) && !groupMds.has(p));
+  archive.ignored = [...pdf.ignored, ...json.ignored, ...md.ignored, ...otherGroups];
   return archive;
 };
 
@@ -193,12 +215,16 @@ export const handleRecognitionImport = async (ctx: IJobContext): Promise<void> =
       if (err instanceof PdfUnreadableError) throw new PermanentJobError('pdf_unreadable', err.message);
       throw err;
     }
+    // Предел числа страниц применяется к оригиналу до любых выделений по нему (R04-11).
+    if (pageCount > ctx.config.recognition.maxPages) {
+      throw new PermanentJobError('too_large', `в оригинале ${pageCount} страниц, предел разбора — ${ctx.config.recognition.maxPages}`);
+    }
   }
   // Ожидание — SHA-256 зарегистрированной редакции: чужой или старый результат не принимается.
   const result = importRdwebExport({
     archive,
     expect: { pdfSha256: run.revision_blob_sha256, pdfPageCount: pageCount },
-    limits: { maxTotalTextChars: ctx.config.recognition.maxTotalTextChars },
+    limits: { maxTotalTextChars: ctx.config.recognition.maxTotalTextChars, maxPages: ctx.config.recognition.maxPages },
   });
   if (!result.ok) throw new PermanentJobError(result.error.code, result.error.message);
   const value = result.value;

@@ -26,6 +26,8 @@ export interface IRdwebArchive {
   // Небезопасные члены (выход за корень, ссылка, шифрование) — отказ всего архива, а не пропуск.
   unsafe: { memberPath: string; detail: string }[];
   corrupt: string | null;
+  // Metadata выбранного комплекта не найдена рядом с совпавшим PDF (R04-08): описание расхождения.
+  groupMismatch: string | null;
 }
 
 const sha256 = (s: string): string => createHash('sha256').update(s, 'utf8').digest('hex');
@@ -55,15 +57,22 @@ export const sheetLabelOf = (stampText: string): string | null => {
   return m ? m[1]!.replace(/\s+/g, ' ').trim().slice(0, 120) : null;
 };
 
-const clip01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
+// Координаты доказательства не «подправляются»: число вне [0,1] означает, что пространство
+// экспорта не то, за которое мы его принимаем. Обрезка превратила бы такую ошибку в
+// правдоподобную, но ложную область оригинала, а неверно нанесённая рамка хуже её
+// отсутствия (I18, A17, R04-09). Поэтому координаты отбрасываются целиком, текст остаётся.
+const inRange01 = (v: number): boolean => Number.isFinite(v) && v >= 0 && v <= 1;
 
 const bboxOf = (coords: number[] | null | undefined, warn: (code: string, sample: string) => void, blockId: string): number[] | null => {
   if (!coords || coords.length !== 4 || coords.some((c) => !Number.isFinite(c))) {
     warn('coords_missing', blockId);
     return null;
   }
-  if (coords.some((c) => c < 0 || c > 1)) warn('coords_out_of_range', blockId);
-  const [a, b, c, d] = coords.map(clip01) as [number, number, number, number];
+  if (!coords.every(inRange01)) {
+    warn('coords_out_of_range', blockId);
+    return null;
+  }
+  const [a, b, c, d] = coords as [number, number, number, number];
   return [Math.min(a, c), Math.min(b, d), Math.max(a, c), Math.max(b, d)];
 };
 
@@ -78,7 +87,11 @@ const polygonOf = (points: (number | number[])[] | null | undefined, warn: (code
     warn('polygon_invalid', blockId);
     return null;
   }
-  return flat.map(clip01);
+  if (!flat.every(inRange01)) {
+    warn('coords_out_of_range', blockId);
+    return null;
+  }
+  return flat;
 };
 
 // Поиск block_id в заголовке секции markdown: сначала по хвосту после двоеточия и по
@@ -166,6 +179,9 @@ export const importRdwebExport = (input: {
   if (a.unsafe.length > 0) {
     return { ok: false, error: { code: 'archive_unsafe', message: `${a.unsafe[0]!.memberPath}: ${a.unsafe[0]!.detail}` } };
   }
+  if (a.groupMismatch) {
+    return { ok: false, error: { code: 'export_group_mismatch', message: a.groupMismatch } };
+  }
   if (!Number.isInteger(input.expect.pdfPageCount) || input.expect.pdfPageCount < 1) {
     return { ok: false, error: { code: 'pdf_unreadable', message: 'число страниц оригинала не определено' } };
   }
@@ -222,6 +238,11 @@ export const importRdwebExport = (input: {
   // Проверяемая база полноты — сам оригинал. Состав _blocks.json к ней только сопоставляется:
   // экспорт, «забывший» страницу, обязан давать неполноту, а не тихий complete (I18, R04-03).
   const pagesTotal = input.expect.pdfPageCount;
+  // Предел числа страниц обязан считаться по оригиналу: именно из него строятся страницы
+  // прогона и выделяются объекты, а не из перечня в экспорте (R04-11).
+  if (pagesTotal > limits.maxPages) {
+    return { ok: false, error: { code: 'too_large', message: `в оригинале ${pagesTotal} страниц, предел разбора — ${limits.maxPages}` } };
+  }
   if (pageMeta.size !== pagesTotal) warn('blocks_page_count_mismatch', `${pageMeta.size} против ${pagesTotal} страниц PDF`);
   for (const pageIndex of pageMeta.keys()) if (pageIndex >= pagesTotal) warn('page_index_out_of_range', String(pageIndex));
 
@@ -293,7 +314,11 @@ export const importRdwebExport = (input: {
     if (!pageMeta.has(b.page_index)) warn('block_page_unknown', b.block_id);
     // Отсутствие статуса больше не значит «распознано»: молчание экспорта не доказательство.
     const declared = (b.status ?? b.export_status ?? '').trim().toLowerCase();
-    if (declared === 'recognized') pagesWithRecognizedBlock.add(b.page_index);
+    // Блок за пределами оригинала не создаёт ссылку на несуществующую страницу: текст
+    // сохраняется, но привязки к странице у него нет (R04-10).
+    const pageKnown = b.page_index < pagesTotal;
+    if (!pageKnown) warn('page_index_out_of_range', b.block_id);
+    if (declared === 'recognized' && pageKnown) pagesWithRecognizedBlock.add(b.page_index);
     const type = b.block_type.toLowerCase();
     if (!(KNOWN_BLOCK_TYPES as readonly string[]).includes(type)) warn('unknown_block_type', b.block_type);
     const kind = KIND_OF_TYPE[type] ?? 'unknown_block';
@@ -306,14 +331,14 @@ export const importRdwebExport = (input: {
     const geometry = {
       externalBlockId: b.block_id,
       ordinal: b.ordinal ?? null,
-      pageIndex: b.page_index,
+      pageIndex: pageKnown ? b.page_index : null,
       bboxNorm: bboxOf(b.coords_norm, warn, b.block_id),
       bboxSpace: 'page_rotated' as const,
       shapeType: (b.shape_type ?? '').toLowerCase() === 'polygon' ? ('polygon' as const) : ('rectangle' as const),
       polygonNorm: polygonOf(b.polygon_points, warn, b.block_id),
       rotation,
       externalCropUrl: cropUrl ? cropUrl.slice(0, 2000) : null,
-      warnings: kind === 'unknown_block' ? ['unknown_block_type'] : [],
+      warnings: [...(kind === 'unknown_block' ? ['unknown_block_type'] : []), ...(pageKnown ? [] : ['page_index_out_of_range'])],
     };
     if (geometry.shapeType === 'rectangle') geometry.polygonNorm = null;
     if (section && section.body.length > 0) {
@@ -343,10 +368,13 @@ export const importRdwebExport = (input: {
 
   // Секции markdown без блока в _blocks.json: текст сохраняется без координат.
   for (const [orphanOrdinal, s] of orphanSections.entries()) {
-    const pageIndex = mdPageIndex.get(s.pageOrder) ?? null;
+    const rawPage = mdPageIndex.get(s.pageOrder) ?? null;
+    const pageIndex = rawPage !== null && rawPage < pagesTotal ? rawPage : null;
+    if (rawPage !== null && pageIndex === null) warn('page_index_out_of_range', s.heading);
     if (s.body.length === 0) continue;
     // Ключ детерминирован: число уже собранных фрагментов в него не входит (R04-06).
     const keyOrdinal = s.ordinal ?? `o${orphanOrdinal}`;
+    const orphanWarnings = ['block_not_in_blocks_json', ...(rawPage !== null && pageIndex === null ? ['page_index_out_of_range'] : [])];
     pushFragment(st, {
       origin: 'recognized_text',
       fragmentKind: 'unknown_block',
@@ -362,13 +390,15 @@ export const importRdwebExport = (input: {
       derivedModelRef: null,
       externalCropUrl: null,
       text: s.body,
-      warnings: ['block_not_in_blocks_json'],
+      warnings: orphanWarnings,
     });
   }
 
   // ---- штампы: привязка к stamp-блокам страницы, когда количества совпали
   const sheetLabels = new Map<number, string>();
   for (const [pageIndex, texts] of stampsByPage) {
+    const pageKnown = pageIndex < pagesTotal;
+    if (!pageKnown) warn('page_index_out_of_range', `штамп страницы ${pageIndex}`);
     const stampBlocks = doc.blocks.filter((b) => b.page_index === pageIndex && b.block_type.toLowerCase() === 'stamp');
     stampBlocks.sort((x, y) => (x.ordinal ?? 0) - (y.ordinal ?? 0));
     const bound = stampBlocks.length === texts.length && texts.length > 0;
@@ -383,7 +413,7 @@ export const importRdwebExport = (input: {
         fragmentKey: b ? `block:${b.block_id}:stamp` : `stamp:p${pageIndex}:${i}`,
         externalBlockId: b?.block_id ?? null,
         ordinal: b?.ordinal ?? i,
-        pageIndex,
+        pageIndex: pageKnown ? pageIndex : null,
         bboxNorm: b ? bboxOf(b.coords_norm, warn, b.block_id) : null,
         bboxSpace: b ? 'page_rotated' : null,
         shapeType: b ? 'rectangle' : null,
@@ -392,7 +422,7 @@ export const importRdwebExport = (input: {
         derivedModelRef: null,
         externalCropUrl: null,
         text,
-        warnings: bound ? [] : ['stamp_binding_ambiguous'],
+        warnings: [...(bound ? [] : ['stamp_binding_ambiguous']), ...(pageKnown ? [] : ['page_index_out_of_range'])],
       });
     });
   }

@@ -18,6 +18,7 @@ const archiveOf = (o: IRdwebFixture = {}, patch: Partial<IRdwebArchive> = {}) =>
     ignored: [],
     unsafe: [],
     corrupt: null,
+    groupMismatch: null,
     ...patch,
   };
   // Число страниц оригинала — вход разбора: адаптер сам PDF не читает (R04-03).
@@ -123,6 +124,7 @@ describe('адаптер RDWeb: разбор экспорта', () => {
         ignored: [],
         unsafe: [],
         corrupt: null,
+        groupMismatch: null,
       },
       expect: { pdfSha256: fx.expected.pdfSha256, pdfPageCount: fx.expected.pagesTotal },
     });
@@ -168,6 +170,7 @@ describe('адаптер RDWeb: разбор экспорта', () => {
       ignored: [],
       unsafe: [],
       corrupt: null,
+      groupMismatch: null,
     };
     const split = ok(importRdwebExport({ archive, expect: expectOf, limits: { maxFragmentChars: 1000 } }));
     const parts = split.fragments.filter((f) => f.warnings.includes('text_split')).sort((a, b) => a.partIndex - b.partIndex);

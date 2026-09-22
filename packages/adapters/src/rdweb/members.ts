@@ -25,6 +25,30 @@ export const classifyMember = (memberPath: string): IMemberChoice => {
   return { role: 'other', score: 0 };
 };
 
+// Комплект экспорта: PDF и его metadata приходят одним набором с общим именем
+// (`A.pdf`, `A_blocks.json`, `A_results.md`, `A_results.html` — discovery §7.1).
+// Ключ группы — путь без роли: по нему metadata привязывается к своему PDF, а не выбирается
+// независимо. Иначе в один архив можно положить PDF одного документа и распознавание другого,
+// и SHA-256 такую подмену не поймает (R04-08).
+const SUFFIXES: Record<Exclude<RdwebMemberRole, 'other'>, string[]> = {
+  pdf: ['.pdf'],
+  blocks_json: ['_blocks.json', '.json'],
+  results_md: ['_results.md', '.md'],
+  results_html: ['_results.html', '.html', '.htm'],
+};
+
+export const groupKeyOf = (memberPath: string, role: RdwebMemberRole): string | null => {
+  if (role === 'other') return null;
+  const lower = memberPath.replace(/\\/g, '/').toLowerCase();
+  const slash = lower.lastIndexOf('/');
+  const dir = slash >= 0 ? lower.slice(0, slash + 1) : '';
+  const name = slash >= 0 ? lower.slice(slash + 1) : lower;
+  for (const suffix of SUFFIXES[role]) {
+    if (name.endsWith(suffix)) return dir + name.slice(0, name.length - suffix.length);
+  }
+  return dir + name;
+};
+
 export interface IPickedMember {
   memberPath: string;
   score: number;

@@ -82,7 +82,12 @@ export const testConfig = (overrides: Partial<IAppConfig> = {}): IAppConfig => (
   intakeStabilitySeconds: 1,
   jobLeaseSeconds: 60,
   gpuTakeoverGraceSeconds: 120,
-  recognition: { maxMetadataBytes: 8 * 1024 * 1024, maxTotalTextChars: 4 * 1024 * 1024 },
+  recognition: {
+    maxMetadataBytes: 8 * 1024 * 1024,
+    maxMetadataTotalBytes: 16 * 1024 * 1024,
+    maxTotalTextChars: 4 * 1024 * 1024,
+    maxPdfBytes: 16 * 1024 * 1024,
+  },
   ...overrides,
 });
 
@@ -187,7 +192,7 @@ export class TestClient {
 export const seedRecognition = async (
   pool: Pool,
   revisionId: string,
-  status: 'queued' | 'running' | 'complete' | 'partial' | 'failed' = 'complete',
+  status: 'queued' | 'running' | 'complete' | 'partial' | 'failed' | 'cancelled' = 'complete',
   pages: { total: number; recognized: number } = { total: 2, recognized: 2 },
 ): Promise<string> => {
   const rev = await pool.query<{ tender_id: string }>('SELECT tender_id FROM document_revision WHERE id = $1', [revisionId]);
@@ -209,10 +214,25 @@ export const seedRecognition = async (
     );
     return id;
   }
+  if (status === 'cancelled') {
+    await pool.query("UPDATE recognition_run SET status = 'cancelled', finished_at = now(), row_version = row_version + 1 WHERE id = $1", [id]);
+    return id;
+  }
+  // Счётчики полноты сверяются со строками страниц (R04-04): заголовок прогона и его
+  // содержимое обязаны совпадать, поэтому фикстура вставляет страницы, а не только числа.
+  const recognized = status === 'complete' ? pages.total : Math.min(pages.recognized, pages.total - 1);
+  for (let i = 0; i < pages.total; i += 1) {
+    const ok = i < recognized;
+    await pool.query(
+      `INSERT INTO recognition_page (run_id, page_index, page_label, width_px, height_px, rotation, status)
+       VALUES ($1, $2, $3, $4, $5, 0, $6)`,
+      [id, i, String(i + 1), ok ? 2480 : null, ok ? 3508 : null, ok ? 'recognized' : 'missing'],
+    );
+  }
   await pool.query(
     `UPDATE recognition_run SET status = $2, engine_schema_version = '1', pages_total = $3, pages_recognized = $4,
             finished_at = now(), row_version = row_version + 1 WHERE id = $1`,
-    [id, status, pages.total, status === 'complete' ? pages.total : Math.min(pages.recognized, pages.total - 1)],
+    [id, status, pages.total, recognized],
   );
   return id;
 };

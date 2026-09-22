@@ -18,13 +18,16 @@ const newBlob = async (): Promise<string> => {
   return sha;
 };
 
-const newRun = async (revisionId: string, tenderId: string, extra: { supersedes?: string } = {}): Promise<string> => {
+const newRun = async (revisionId: string, tenderId: string, extra: { supersedes?: string; start?: boolean } = {}): Promise<string> => {
   const r = await db.pool.query<{ id: string }>(
     `INSERT INTO recognition_run (document_revision_id, tender_id, engine, source_artifact_sha256, supersedes_run_id)
      VALUES ($1, $2, 'rdweb_export', $3, $4) RETURNING id`,
     [revisionId, tenderId, await newBlob(), extra.supersedes ?? null],
   );
-  return r.rows[0]!.id;
+  const id = r.rows[0]!.id;
+  // Страницы и фрагменты принимает только выполняющийся прогон (R04-04).
+  if (extra.start) await db.pool.query("UPDATE recognition_run SET status = 'running', started_at = now(), row_version = row_version + 1 WHERE id = $1", [id]);
+  return id;
 };
 
 beforeAll(async () => {
@@ -77,6 +80,12 @@ describe('схема распознавания: права и триггеры'
     ).rejects.toThrow(/недопустимый переход/);
 
     await db.pool.query("UPDATE recognition_run SET status = 'running', started_at = now(), row_version = row_version + 1 WHERE id = $1", [id]);
+    for (const [i, st] of ['recognized', 'recognized', 'missing'].entries()) {
+      await db.pool.query(
+        "INSERT INTO recognition_page (run_id, page_index, width_px, height_px, status) VALUES ($1, $2, $3, $4, $5)",
+        [id, i, st === 'recognized' ? 100 : null, st === 'recognized' ? 200 : null, st],
+      );
+    }
     // Полнота не декларируется без подтверждения: complete с нехваткой страниц — нарушение CHECK (I18).
     await expect(
       db.pool.query(
@@ -123,7 +132,7 @@ describe('схема распознавания: права и триггеры'
   });
 
   it('страницы и фрагменты неизменяемы, форма координат проверяется', async () => {
-    const run = await newRun(revs[1]!, s.tenderA);
+    const run = await newRun(revs[1]!, s.tenderA, { start: true });
     await db.pool.query(
       "INSERT INTO recognition_page (run_id, page_index, page_label, width_px, height_px, rotation, status) VALUES ($1, 0, '1', 100, 200, 90, 'recognized')",
       [run],
@@ -172,7 +181,7 @@ describe('схема распознавания: права и триггеры'
   });
 
   it('фрагмент чужого тендера не привязывается к прогону (составной внешний ключ)', async () => {
-    const run = await newRun(revs[1]!, s.tenderA);
+    const run = await newRun(revs[1]!, s.tenderA, { start: true });
     await expect(
       db.pool.query(
         `INSERT INTO evidence_fragment (tender_id, source_unit_type, source_unit_id, run_id, document_revision_id, origin, fragment_kind, fragment_key, text, text_sha256)

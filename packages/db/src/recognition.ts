@@ -5,7 +5,7 @@ import { contentTenderIds, type IAccessContext } from './access.ts';
 import type { Queryable } from './pool.ts';
 
 export type RecognitionEngine = 'rdweb_export' | 'rdweb_api' | 'text_layer' | 'local_ocr';
-export type RecognitionStatus = 'queued' | 'running' | 'complete' | 'partial' | 'failed';
+export type RecognitionStatus = 'queued' | 'running' | 'complete' | 'partial' | 'failed' | 'cancelled';
 export type RecognitionPageStatus = 'recognized' | 'missing' | 'failed';
 export type FragmentOrigin =
   | 'document_text'
@@ -74,7 +74,7 @@ export const listRunsForRevision = async (db: Queryable, revisionId: string): Pr
 // Прогон, который уже держит эту пару «редакция + архив» (частичный уникальный индекс).
 export const findRunByArtifact = async (db: Queryable, revisionId: string, sha256: string): Promise<IRecognitionRunRow | null> => {
   const r = await db.query<IRecognitionRunRow>(
-    `${SELECT_RUN} WHERE r.document_revision_id = $1 AND r.source_artifact_sha256 = $2 AND r.status <> 'failed'`,
+    `${SELECT_RUN} WHERE r.document_revision_id = $1 AND r.source_artifact_sha256 = $2 AND r.status NOT IN ('failed', 'cancelled')`,
     [revisionId, sha256],
   );
   return r.rows[0] ?? null;
@@ -141,6 +141,18 @@ export const finishRun = async (
             finished_at = now(), row_version = row_version + 1
       WHERE id = $1 AND status = 'running'`,
     [id, f.status, f.engineSchemaVersion, f.pagesTotal, f.pagesRecognized, JSON.stringify(f.quality)],
+  );
+  return (r.rowCount ?? 0) > 0;
+};
+
+// Отмена задания обязана терминализовать прогон: иначе он навсегда остаётся queued/running,
+// блокирует заморозку состава как recognition_in_progress и держит пару «редакция + архив»
+// (R04-02). Отмена — не ошибка, поэтому failure_code пуст.
+export const cancelRun = async (db: Queryable, id: string): Promise<boolean> => {
+  const r = await db.query(
+    `UPDATE recognition_run SET status = 'cancelled', finished_at = now(), row_version = row_version + 1
+      WHERE id = $1 AND status IN ('queued', 'running')`,
+    [id],
   );
   return (r.rowCount ?? 0) > 0;
 };
@@ -234,6 +246,9 @@ export interface IEvidenceFragmentRow {
   derived_model_ref: string | null;
   external_crop_url: string | null;
   warnings: string[];
+  // Часть длинного текста блока: доказательство не усекается, а разбивается (R04-06).
+  part_index: number;
+  part_total: number;
   created_at: Date;
 }
 
@@ -254,6 +269,8 @@ export interface INewFragment {
   derivedModelRef: string | null;
   externalCropUrl: string | null;
   warnings: string[];
+  partIndex: number;
+  partTotal: number;
 }
 
 export const insertFragments = async (
@@ -283,17 +300,20 @@ export const insertFragments = async (
           f.derivedModelRef,
           f.externalCropUrl,
           JSON.stringify(f.warnings),
+          f.partIndex,
+          f.partTotal,
         );
         return (
           `($1, 'recognition_run', $2, $2, $3, $${i + 1}, $${i + 2}, $${i + 3}, $${i + 4}, $${i + 5}, $${i + 6}, ` +
-          `$${i + 7}::numeric[], $${i + 8}, $${i + 9}, $${i + 10}::numeric[], $${i + 11}, $${i + 12}, $${i + 13}, $${i + 14}, $${i + 15}, $${i + 16}::jsonb)`
+          `$${i + 7}::numeric[], $${i + 8}, $${i + 9}, $${i + 10}::numeric[], $${i + 11}, $${i + 12}, $${i + 13}, $${i + 14}, $${i + 15}, $${i + 16}::jsonb, $${i + 17}, $${i + 18})`
         );
       })
       .join(', ');
     await db.query(
       `INSERT INTO evidence_fragment (tender_id, source_unit_type, source_unit_id, run_id, document_revision_id,
          origin, fragment_kind, fragment_key, external_block_id, ordinal, page_index, bbox_norm, bbox_space,
-         shape_type, polygon_norm, rotation, text, text_sha256, derived_model_ref, external_crop_url, warnings)
+         shape_type, polygon_norm, rotation, text, text_sha256, derived_model_ref, external_crop_url, warnings,
+         part_index, part_total)
        VALUES ${values} ON CONFLICT (run_id, fragment_key) DO NOTHING`,
       params,
     );
@@ -305,7 +325,9 @@ export interface IFragmentPage {
   nextCursor: string | null;
 }
 
-// Курсор по (page_index, ordinal, id): порядок совпадает с индексом evidence_fragment_page_idx.
+// Курсор по (page_index, ordinal, part_index, id): порядок совпадает с индексом
+// evidence_fragment_page_idx. part_index в ключе обязателен — иначе части одного длинного
+// блока упорядочивались бы случайным uuid (R04-06).
 export const listFragments = async (
   db: Queryable,
   runId: string,
@@ -316,16 +338,24 @@ export const listFragments = async (
     `SELECT * FROM evidence_fragment
       WHERE run_id = $1
         AND ($2::int IS NULL OR page_index = $2::int)
-        AND ($5::uuid IS NULL OR (coalesce(page_index, -1), coalesce(ordinal, -1), id) > ($3::int, $4::int, $5::uuid))
-      ORDER BY coalesce(page_index, -1), coalesce(ordinal, -1), id
-      LIMIT $6`,
-    [runId, q.pageIndex ?? null, after ? Number(after[0]) : null, after ? Number(after[1]) : null, after?.[2] ?? null, q.limit + 1],
+        AND ($6::uuid IS NULL OR (coalesce(page_index, -1), coalesce(ordinal, -1), part_index, id) > ($3::int, $4::int, $5::int, $6::uuid))
+      ORDER BY coalesce(page_index, -1), coalesce(ordinal, -1), part_index, id
+      LIMIT $7`,
+    [
+      runId,
+      q.pageIndex ?? null,
+      after ? Number(after[0]) : null,
+      after ? Number(after[1]) : null,
+      after ? Number(after[2]) : null,
+      after?.[3] ?? null,
+      q.limit + 1,
+    ],
   );
   const items = r.rows.slice(0, q.limit);
   const last = items[items.length - 1];
   return {
     items,
-    nextCursor: r.rows.length > q.limit && last ? `${last.page_index ?? -1}:${last.ordinal ?? -1}:${last.id}` : null,
+    nextCursor: r.rows.length > q.limit && last ? `${last.page_index ?? -1}:${last.ordinal ?? -1}:${last.part_index}:${last.id}` : null,
   };
 };
 
@@ -389,7 +419,7 @@ export interface IBlockingItemRow {
   document_id: string;
   document_title: string;
   revision_seq: number;
-  reason: 'no_recognition' | 'recognition_in_progress' | 'recognition_failed';
+  reason: 'no_recognition' | 'recognition_in_progress' | 'recognition_failed' | 'recognition_cancelled';
 }
 
 export const blockingFreezeItems = async (db: Queryable, revisionId: string): Promise<IBlockingItemRow[]> => {
@@ -400,6 +430,8 @@ export const blockingFreezeItems = async (db: Queryable, revisionId: string): Pr
                             AND r.status IN ('queued', 'running')) THEN 'recognition_in_progress'
               WHEN EXISTS (SELECT 1 FROM recognition_run r WHERE r.document_revision_id = i.document_revision_id
                             AND r.status = 'failed') THEN 'recognition_failed'
+              WHEN EXISTS (SELECT 1 FROM recognition_run r WHERE r.document_revision_id = i.document_revision_id
+                            AND r.status = 'cancelled') THEN 'recognition_cancelled'
               ELSE 'no_recognition'
             END AS reason
        FROM source_set_item i

@@ -119,7 +119,7 @@ export const PutSourceSetItemsRequest = z
 // ---- распознавание и доказательства (этап 04)
 
 export const RECOGNITION_ENGINE = z.enum(['rdweb_export', 'rdweb_api', 'text_layer', 'local_ocr']);
-export const RECOGNITION_STATUS = z.enum(['queued', 'running', 'complete', 'partial', 'failed']);
+export const RECOGNITION_STATUS = z.enum(['queued', 'running', 'complete', 'partial', 'failed', 'cancelled']);
 export const RECOGNITION_PAGE_STATUS = z.enum(['recognized', 'missing', 'failed']);
 export const FRAGMENT_ORIGIN = z.enum([
   'document_text',

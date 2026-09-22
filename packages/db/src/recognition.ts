@@ -80,6 +80,24 @@ export const findRunByArtifact = async (db: Queryable, revisionId: string, sha25
   return r.rows[0] ?? null;
 };
 
+// Незавершённый прогон редакции. История прогонов обязана быть цепочкой, поэтому второй
+// архив, принятый до обработки первого, получает отказ, а не общего предшественника (R04-12).
+export const activeRunForRevision = async (db: Queryable, revisionId: string): Promise<IRecognitionRunRow | null> => {
+  const r = await db.query<IRecognitionRunRow>(
+    `${SELECT_RUN} WHERE r.document_revision_id = $1 AND r.status IN ('queued', 'running') LIMIT 1`,
+    [revisionId],
+  );
+  return r.rows[0] ?? null;
+};
+
+// Блокировка приёма архивов по одной редакции: два запроса выполняются строго по очереди,
+// поэтому проверка «активный прогон уже есть» не разъезжается со вставкой нового прогона.
+// Блокировка именно advisory: строку document_revision заблокировать нельзя — таблица
+// неизменяема, и права UPDATE у роли приложения нет (0002). Снимается концом транзакции.
+export const lockRevisionForRecognition = async (db: Queryable, revisionId: string): Promise<void> => {
+  await db.query("SELECT pg_advisory_xact_lock(hashtext('recognition_import'), hashtext($1))", [revisionId]);
+};
+
 // Последний завершённый прогон редакции — предшественник нового (A10).
 export const latestFinishedRun = async (db: Queryable, revisionId: string): Promise<IRecognitionRunRow | null> => {
   const r = await db.query<IRecognitionRunRow>(

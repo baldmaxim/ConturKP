@@ -7,6 +7,7 @@ import type { IAppConfig } from '@kontur/config';
 import { RecognitionFragmentsQuery } from '@kontur/contracts';
 import { classifyFile } from '@kontur/core';
 import {
+  activeRunForRevision,
   createRun,
   enqueueJob,
   findRunByArtifact,
@@ -16,6 +17,7 @@ import {
   getScopedRun,
   insertBlob,
   latestFinishedRun,
+  lockRevisionForRecognition,
   listFragments,
   listPages,
   listRunsForRevision,
@@ -78,6 +80,9 @@ export const recognitionRouter = (pool: Pool, store: BlobStore, config: IAppConf
           mediaType: verdict.mediaType,
           storageKey: stored.storageKey,
         });
+        // Приём архивов по одной редакции сериализуется: проверка «активный прогон уже есть»
+        // не должна разъезжаться со вставкой нового прогона (R04-12).
+        await lockRevisionForRecognition(client, id);
         // Пара «редакция + архив» уже импортируется или импортирована: второго прогона нет.
         const existing = await findRunByArtifact(client, id, stored.sha256);
         if (existing) {
@@ -94,6 +99,18 @@ export const recognitionRouter = (pool: Pool, store: BlobStore, config: IAppConf
               },
             ],
           };
+        }
+        // Пока предыдущий прогон не завершён, второй архив не принимается: иначе у двух
+        // прогонов оказался бы общий предшественник и история перестала бы быть цепочкой (R04-12).
+        const active = await activeRunForRevision(client, id);
+        if (active) {
+          throw new HttpError(
+            409,
+            'STATE_CONFLICT',
+            'по этой редакции уже идёт распознавание: дождитесь его завершения или отмените задание',
+            { current: toRun(active) },
+            { tenderId: rev.tender_id, entityId: id },
+          );
         }
         // Новая версия распознавания того же PDF встаёт за прежним прогоном (A10).
         const previous = await latestFinishedRun(client, id);

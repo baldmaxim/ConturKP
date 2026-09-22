@@ -19,6 +19,12 @@ const newBlob = async (): Promise<string> => {
 };
 
 const newRun = async (revisionId: string, tenderId: string, extra: { supersedes?: string; start?: boolean } = {}): Promise<string> => {
+  // Один незавершённый прогон на редакцию (R04-12): прежняя попытка закрывается отменой.
+  await db.pool.query(
+    `UPDATE recognition_run SET status = 'cancelled', finished_at = now(), row_version = row_version + 1
+      WHERE document_revision_id = $1 AND status IN ('queued', 'running')`,
+    [revisionId],
+  );
   const r = await db.pool.query<{ id: string }>(
     `INSERT INTO recognition_run (document_revision_id, tender_id, engine, source_artifact_sha256, supersedes_run_id)
      VALUES ($1, $2, 'rdweb_export', $3, $4) RETURNING id`,
@@ -116,19 +122,35 @@ describe('схема распознавания: права и триггеры'
 
   it('одна пара «редакция + архив» — один прогон, после failed повтор разрешён', async () => {
     const sha = await newBlob();
+    // Редакция берётся та, что в проверке заморозки исключена: завершённый прогон на ней
+    // не влияет на другие сценарии файла.
+    const revision = revs[1]!;
+    await db.pool.query(
+      "UPDATE recognition_run SET status = 'cancelled', finished_at = now(), row_version = row_version + 1 WHERE document_revision_id = $1 AND status IN ('queued', 'running')",
+      [revision],
+    );
     const insert = () =>
       db.pool.query<{ id: string }>(
         `INSERT INTO recognition_run (document_revision_id, tender_id, engine, source_artifact_sha256)
          VALUES ($1, $2, 'rdweb_export', $3) RETURNING id`,
-        [revs[0], s.tenderA, sha],
+        [revision, s.tenderA, sha],
       );
     const first = (await insert()).rows[0]!.id;
-    await expect(insert()).rejects.toThrow(/recognition_run_artifact_key/);
     await db.pool.query(
       "UPDATE recognition_run SET status = 'failed', failure_code = 'test', finished_at = now(), row_version = row_version + 1 WHERE id = $1",
       [first],
     );
-    await expect(insert()).resolves.toBeTruthy();
+    // После failed тот же архив можно импортировать заново: сбой мог быть техническим.
+    const second = (await insert()).rows[0]!.id;
+    // Успешно завершённый прогон эту пару занимает: повтор уже обработанного архива отклоняется.
+    await db.pool.query("UPDATE recognition_run SET status = 'running', started_at = now(), row_version = row_version + 1 WHERE id = $1", [second]);
+    await db.pool.query("INSERT INTO recognition_page (run_id, page_index, width_px, height_px, status) VALUES ($1, 0, 100, 200, 'recognized')", [second]);
+    await db.pool.query(
+      `UPDATE recognition_run SET status = 'complete', engine_schema_version = '1', pages_total = 1, pages_recognized = 1,
+              finished_at = now(), row_version = row_version + 1 WHERE id = $1`,
+      [second],
+    );
+    await expect(insert()).rejects.toThrow(/recognition_run_artifact_key/);
   });
 
   it('страницы и фрагменты неизменяемы, форма координат проверяется', async () => {

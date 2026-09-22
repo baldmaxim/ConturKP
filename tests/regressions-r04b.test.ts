@@ -24,6 +24,12 @@ const newBlob = async (): Promise<string> => {
 // Прогон в заданном состоянии. Страницы вставляются, пока прогон выполняется, — иначе
 // терминализация не сойдётся со счётчиками (R04-04).
 const newRun = async (revisionId: string, tenderId: string, start = true): Promise<string> => {
+  // Один незавершённый прогон на редакцию (R04-12): прежняя попытка закрывается отменой.
+  await db.pool.query(
+    `UPDATE recognition_run SET status = 'cancelled', finished_at = now(), row_version = row_version + 1
+      WHERE document_revision_id = $1 AND status IN ('queued', 'running')`,
+    [revisionId],
+  );
   const r = await db.pool.query<{ id: string }>(
     `INSERT INTO recognition_run (document_revision_id, tender_id, engine, source_artifact_sha256)
      VALUES ($1, $2, 'rdweb_export', $3) RETURNING id`,

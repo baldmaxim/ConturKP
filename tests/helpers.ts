@@ -87,6 +87,7 @@ export const testConfig = (overrides: Partial<IAppConfig> = {}): IAppConfig => (
     maxMetadataTotalBytes: 16 * 1024 * 1024,
     maxTotalTextChars: 4 * 1024 * 1024,
     maxPdfBytes: 16 * 1024 * 1024,
+    maxPages: 10_000,
   },
   ...overrides,
 });
@@ -195,6 +196,13 @@ export const seedRecognition = async (
   status: 'queued' | 'running' | 'complete' | 'partial' | 'failed' | 'cancelled' = 'complete',
   pages: { total: number; recognized: number } = { total: 2, recognized: 2 },
 ): Promise<string> => {
+  // На редакции допустим только один незавершённый прогон (R04-12): прежняя попытка,
+  // оставленная фикстурой активной, честно закрывается отменой.
+  await pool.query(
+    `UPDATE recognition_run SET status = 'cancelled', finished_at = now(), row_version = row_version + 1
+      WHERE document_revision_id = $1 AND status IN ('queued', 'running')`,
+    [revisionId],
+  );
   const rev = await pool.query<{ tender_id: string }>('SELECT tender_id FROM document_revision WHERE id = $1', [revisionId]);
   const sha = randomBytes(32).toString('hex');
   await pool.query("INSERT INTO blob (sha256, size_bytes, media_type, storage_key) VALUES ($1, 1, 'application/zip', $2)", [sha, `seed/${sha}`]);

@@ -101,6 +101,17 @@ const clickButton = (label, scope = 'document') =>
   evaluate(`(() => { const root = ${scope}; if (!root) return false;
     const b = [...root.querySelectorAll('button')].find((x) => x.innerText.trim() === ${JSON.stringify(label)} && !x.disabled);
     if (!b) return false; b.click(); return true; })()`);
+// Кнопка страницы прогона: номер лежит в первом span, остальное — подпись и бейдж.
+const clickPage = (label) =>
+  evaluate(`(() => { const b = [...document.querySelectorAll('button')].find((x) => !x.disabled && x.querySelector('span')?.innerText.trim() === ${JSON.stringify(label)});
+    if (!b) return false; b.click(); return true; })()`);
+// Переход внутри приложения (без перезагрузки): ссылка «Открыть участок оригинала».
+const clickEvidenceLink = (id) =>
+  evaluate(`(() => { const a = document.querySelector('a[href="/evidence/' + ${JSON.stringify(id)} + '"]');
+    if (!a) return false; a.click(); return true; })()`);
+const overlayStyle = () =>
+  evaluate(`(() => { const d = document.querySelector('canvas ~ div'); return d ? d.getAttribute('style') : null; })()`);
+
 const setFiles = async (selector, files) => {
   const doc = await send('DOM.getDocument', { depth: -1 });
   const node = await send('DOM.querySelector', { nodeId: doc.result.root.nodeId, selector });
@@ -213,6 +224,64 @@ try {
   record('выделение нанесено поверх страницы', highlighted, stageDom);
   record('I06: происхождение текста названо', await evaluate(`${text('Распознанный текст RDWeb')} || ${text('Описание модели')}`));
   record('crop_url не загружается: внешних запросов нет', await evaluate(`performance.getEntriesByType('resource').every((e) => new URL(e.name).origin === location.origin)`));
+
+  // ---- R04-14: выделение принадлежит показанному фрагменту
+  await send('Page.navigate', { url: `${BASE}/documents/${docId}?stage=${stageId}` });
+  await waitFor(text('Показать страницы и фрагменты'));
+  await clickButton('Показать страницы и фрагменты');
+  await waitFor(`[...document.querySelectorAll('button')].some((b) => b.querySelector('span')?.innerText.trim() === '1')`);
+  await clickPage('1');
+  const page0Ready = await waitFor(text('blk-0-txt'), 20_000);
+  record('страница 1 прогона открыта, её фрагменты видны', page0Ready);
+
+  // Два фрагмента одной страницы одного PDF с разными прямоугольниками.
+  const pair = await evaluate(`(async () => {
+    const d = await (await fetch('/api/v1/documents/${docId}')).json();
+    const runs = await (await fetch('/api/v1/document-revisions/' + d.latestRevisionId + '/recognition-runs')).json();
+    const f = await (await fetch('/api/v1/recognition-runs/' + runs.items[0].id + '/fragments?pageIndex=0')).json();
+    const rects = f.items.filter((x) => x.bboxNorm && x.shapeType !== 'polygon');
+    const a = rects[0];
+    const b = rects.find((x) => JSON.stringify(x.bboxNorm) !== JSON.stringify(a?.bboxNorm));
+    return a && b ? { a: a.id, b: b.id } : null; })()`);
+  record('на странице есть два фрагмента с разными рамками', pair !== null);
+
+  await clickEvidenceLink(pair.a);
+  const firstDrawn = await waitFor(`document.querySelector('canvas ~ div') !== null`, 40_000);
+  const styleA = await overlayStyle();
+  // Возврат назад — это переход внутри приложения: панель монтируется заново, поэтому
+  // страницу прогона нужно выбрать снова, и только затем открыть второе доказательство.
+  await evaluate('history.back()');
+  await waitFor(text('Показать страницы и фрагменты'), 20_000);
+  await clickButton('Показать страницы и фрагменты');
+  await waitFor(`[...document.querySelectorAll('button')].some((b) => b.querySelector('span')?.innerText.trim() === '1')`, 20_000);
+  await clickPage('1');
+  await waitFor(text('blk-0-txt'), 20_000);
+  await clickEvidenceLink(pair.b);
+  // Переход внутри приложения между двумя фрагментами одной страницы одного PDF: рамка
+  // обязана смениться, а не остаться от прежнего доказательства (R04-14).
+  const styleChanged = await waitFor(`(() => { const d = document.querySelector('canvas ~ div');
+    return d !== null && d.getAttribute('style') !== ${JSON.stringify(styleA)}; })()`, 40_000);
+  const styleB = await overlayStyle();
+  record('R04-14: переход между фрагментами меняет выделение', firstDrawn && styleChanged, `A=${styleA} B=${styleB}`);
+
+  // ---- R04-15: выдача фрагментов принадлежит выбранной странице
+  await send('Page.navigate', { url: `${BASE}/documents/${docId}?stage=${stageId}` });
+  await waitFor(text('Показать страницы и фрагменты'));
+  await clickButton('Показать страницы и фрагменты');
+  await waitFor(`[...document.querySelectorAll('button')].some((b) => b.querySelector('span')?.innerText.trim() === '1')`);
+  await clickPage('1');
+  await waitFor(text('blk-0-txt'), 20_000);
+  // Ответ на выдачу фрагментов задерживается: видно, что показывает интерфейс до ответа.
+  await evaluate(`(() => { const f = window.fetch.bind(window);
+    window.fetch = (...a) => (String(a[0]).includes('/fragments?') ? new Promise((r) => setTimeout(() => r(f(...a)), 2500)) : f(...a));
+    return true; })()`);
+  await clickPage('2');
+  await sleep(600);
+  const staleShown = await evaluate(text('blk-0-txt'));
+  const staleMore = await evaluate(`[...document.querySelectorAll('button')].some((b) => b.innerText.trim().startsWith('Показать ещё'))`);
+  record('R04-15: до ответа фрагменты прежней страницы не показываются', !staleShown && !staleMore);
+  const page1Ready = await waitFor(text('blk-1-txt'), 30_000);
+  record('R04-15: после ответа видны фрагменты выбранной страницы', page1Ready && !(await evaluate(text('blk-0-txt'))));
 
   // ---- заморозка состава источников
   await send('Page.navigate', { url: `${BASE}/stages/${stageId}?tab=sources` });

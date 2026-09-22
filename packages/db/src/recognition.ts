@@ -98,10 +98,14 @@ export const lockRevisionForRecognition = async (db: Queryable, revisionId: stri
   await db.query("SELECT pg_advisory_xact_lock(hashtext('recognition_import'), hashtext($1))", [revisionId]);
 };
 
-// Последний завершённый прогон редакции — предшественник нового (A10).
+// Хвост истории распознавания редакции — предшественник нового прогона (A10). Именно хвост,
+// а не просто последний завершённый: перекрывать середину цепочки нельзя, и это же условие
+// проверяет охранник вставки (миграция 0008, R04-12).
 export const latestFinishedRun = async (db: Queryable, revisionId: string): Promise<IRecognitionRunRow | null> => {
   const r = await db.query<IRecognitionRunRow>(
-    `${SELECT_RUN} WHERE r.document_revision_id = $1 AND r.status IN ('complete', 'partial') ORDER BY r.created_at DESC LIMIT 1`,
+    `${SELECT_RUN} WHERE r.document_revision_id = $1 AND r.status IN ('complete', 'partial')
+        AND NOT EXISTS (SELECT 1 FROM recognition_run c WHERE c.supersedes_run_id = r.id AND c.status NOT IN ('failed', 'cancelled'))
+      ORDER BY r.created_at DESC LIMIT 1`,
     [revisionId],
   );
   return r.rows[0] ?? null;

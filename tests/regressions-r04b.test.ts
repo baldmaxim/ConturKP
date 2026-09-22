@@ -30,9 +30,13 @@ const newRun = async (revisionId: string, tenderId: string, start = true): Promi
       WHERE document_revision_id = $1 AND status IN ('queued', 'running')`,
     [revisionId],
   );
+  // Новый прогон встаёт за хвостом истории редакции (R04-12).
   const r = await db.pool.query<{ id: string }>(
-    `INSERT INTO recognition_run (document_revision_id, tender_id, engine, source_artifact_sha256)
-     VALUES ($1, $2, 'rdweb_export', $3) RETURNING id`,
+    `INSERT INTO recognition_run (document_revision_id, tender_id, engine, source_artifact_sha256, supersedes_run_id)
+     VALUES ($1, $2, 'rdweb_export', $3, (SELECT p.id FROM recognition_run p
+       WHERE p.document_revision_id = $1 AND p.status IN ('complete', 'partial')
+         AND NOT EXISTS (SELECT 1 FROM recognition_run c WHERE c.supersedes_run_id = p.id AND c.status NOT IN ('failed', 'cancelled'))
+       ORDER BY p.created_at DESC LIMIT 1)) RETURNING id`,
     [revisionId, tenderId, await newBlob()],
   );
   const id = r.rows[0]!.id;

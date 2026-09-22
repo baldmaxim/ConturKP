@@ -12,7 +12,9 @@ export type RdwebFailureCode =
   | 'coordinate_space_unsupported'
   | 'archive_unsafe'
   | 'archive_corrupt'
-  | 'too_large';
+  | 'too_large'
+  // Достоверное число страниц оригинала получить не удалось: без него полнота недоказуема (R04-03).
+  | 'pdf_unreadable';
 
 export type RdwebFragmentOrigin = 'recognized_text' | 'model_description';
 export type RdwebFragmentKind =
@@ -53,6 +55,9 @@ export interface IRdwebFragment {
   derivedModelRef: string | null;
   externalCropUrl: string | null;
   warnings: string[];
+  // Часть длинного текста блока: разбиение вместо усечения, текст восстановим склейкой (R04-06).
+  partIndex: number;
+  partTotal: number;
 }
 
 // Предупреждение уровня прогона: код и пример, а не поток строк. Копится счётчиком, чтобы

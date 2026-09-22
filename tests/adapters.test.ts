@@ -20,7 +20,12 @@ const archiveOf = (o: IRdwebFixture = {}, patch: Partial<IRdwebArchive> = {}) =>
     corrupt: null,
     ...patch,
   };
-  return { fx, archive, run: () => importRdwebExport({ archive, expect: { pdfSha256: fx.expected.pdfSha256 } }) };
+  // Число страниц оригинала — вход разбора: адаптер сам PDF не читает (R04-03).
+  return {
+    fx,
+    archive,
+    run: (pdfPageCount = fx.expected.pagesTotal) => importRdwebExport({ archive, expect: { pdfSha256: fx.expected.pdfSha256, pdfPageCount } }),
+  };
 };
 
 const ok = <T>(r: { ok: true; value: T } | { ok: false; error: { code: string; message: string } }): T => {
@@ -119,7 +124,7 @@ describe('адаптер RDWeb: разбор экспорта', () => {
         unsafe: [],
         corrupt: null,
       },
-      expect: { pdfSha256: fx.expected.pdfSha256 },
+      expect: { pdfSha256: fx.expected.pdfSha256, pdfPageCount: fx.expected.pagesTotal },
     });
     expect(r.ok).toBe(false);
     expect(r.ok === false && r.error.code).toBe('pdf_mismatch');
@@ -149,8 +154,11 @@ describe('адаптер RDWeb: разбор экспорта', () => {
     expect(v.warnings.map((w) => w.code)).toEqual(expect.arrayContaining(['unexpected_member', 'results_html_missing']));
   });
 
-  it('пределы разбора: превышение объёма — отказ, длинный фрагмент — усечение с пометкой', () => {
+  // R04-06: доказательство не усекается. Длинный текст блока сохраняется частями со
+  // стабильными ключами, склейка частей возвращает исходный текст целиком.
+  it('пределы разбора: превышение объёма — отказ, длинный фрагмент — разбиение без потерь', () => {
     const fx = buildRdwebExport({ hugeTextChars: 5000 });
+    const expectOf = { pdfSha256: fx.expected.pdfSha256, pdfPageCount: fx.expected.pagesTotal };
     const archive: IRdwebArchive = {
       pdf: { memberPath: 'x.pdf', sha256: fx.expected.pdfSha256 },
       blocksJson: fx.blocksJson,
@@ -161,15 +169,50 @@ describe('адаптер RDWeb: разбор экспорта', () => {
       unsafe: [],
       corrupt: null,
     };
-    const truncated = ok(importRdwebExport({ archive, expect: { pdfSha256: fx.expected.pdfSha256 }, limits: { maxFragmentChars: 1000 } }));
-    const long = truncated.fragments.find((f) => f.warnings.includes('text_truncated'))!;
-    expect(long.text).toHaveLength(1000);
+    const split = ok(importRdwebExport({ archive, expect: expectOf, limits: { maxFragmentChars: 1000 } }));
+    const parts = split.fragments.filter((f) => f.warnings.includes('text_split')).sort((a, b) => a.partIndex - b.partIndex);
+    expect(parts).toHaveLength(5);
+    expect(parts.map((p) => p.partIndex)).toEqual([0, 1, 2, 3, 4]);
+    expect(parts.every((p) => p.partTotal === 5)).toBe(true);
+    expect(parts.map((p) => p.fragmentKey)).toEqual([1, 2, 3, 4, 5].map((n) => `block:${fx.expected.textBlockIds[0]}:text#p${n}`));
+    // Текст восстановим полностью: «успеха с потерянным хвостом» не существует.
+    expect(parts.map((p) => p.text).join('')).toBe('я'.repeat(5000));
+    expect(split.fragments.some((f) => f.warnings.includes('text_truncated'))).toBe(false);
+    // Повторный разбор того же архива даёт те же ключи: они не зависят от числа фрагментов.
+    const again = ok(importRdwebExport({ archive, expect: expectOf, limits: { maxFragmentChars: 1000 } }));
+    expect(again.fragments.map((f) => f.fragmentKey)).toEqual(split.fragments.map((f) => f.fragmentKey));
 
-    const overflow = importRdwebExport({ archive, expect: { pdfSha256: fx.expected.pdfSha256 }, limits: { maxTotalTextChars: 500 } });
+    const overflow = importRdwebExport({ archive, expect: expectOf, limits: { maxTotalTextChars: 500 } });
     expect(overflow.ok === false && overflow.error.code).toBe('too_large');
 
-    const tooManyPages = importRdwebExport({ archive, expect: { pdfSha256: fx.expected.pdfSha256 }, limits: { maxPages: 2 } });
+    const tooManyPages = importRdwebExport({ archive, expect: expectOf, limits: { maxPages: 2 } });
     expect(tooManyPages.ok === false && tooManyPages.error.code).toBe('too_large');
+  });
+
+  // R04-03: база полноты — сам оригинал, а не состав экспорта.
+  it('число страниц берётся у оригинала: экспорт без страницы не даёт complete', () => {
+    const a = archiveOf({ pages: 4, omitPagesInBlocks: [3] });
+    const v = ok(a.run(4));
+    expect(v.pagesTotal).toBe(4);
+    expect(v.pagesRecognized).toBe(3);
+    expect(v.status).toBe('partial');
+    expect(v.pages.map((p) => p.status)).toEqual(['recognized', 'recognized', 'recognized', 'missing']);
+    expect(v.warnings.map((w) => w.code)).toContain('blocks_page_count_mismatch');
+  });
+
+  it('пустой заголовок страницы распознаванием не считается', () => {
+    const a = archiveOf({ pages: 4, emptyMdPages: [3] });
+    const v = ok(a.run(4));
+    expect(v.pagesTotal).toBe(4);
+    expect(v.pages[3]!.status).toBe('missing');
+    expect(v.status).toBe('partial');
+    expect(v.warnings.map((w) => w.code)).toContain('page_output_empty');
+    expect(v.fragments.some((f) => f.pageIndex === 3)).toBe(false);
+  });
+
+  it('без достоверного числа страниц оригинала разбор отклоняется', () => {
+    const r = archiveOf().run(0);
+    expect(r.ok === false && r.error.code).toBe('pdf_unreadable');
   });
 
   it('inspect даёт счётчики без текста', () => {

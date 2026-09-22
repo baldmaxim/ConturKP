@@ -5,6 +5,7 @@
 import { createHash } from 'node:crypto';
 import { importRdwebExport, inspectRdwebBlocks, type IRdwebArchive } from '../packages/adapters/src/index.ts';
 import { ArchiveOpenError, readZip } from '../apps/worker/src/archive.ts';
+import { pdfPageCountOfBytes } from '../apps/worker/src/pdfPages.ts';
 import { classifyMember, pickMember } from '../packages/adapters/src/rdweb/members.ts';
 
 const path = process.argv[2];
@@ -29,7 +30,7 @@ const archive: IRdwebArchive = {
   unsafe: [],
   corrupt: null,
 };
-const pdfs = new Map<string, { score: number; sha256: string }>();
+const pdfs = new Map<string, { score: number; sha256: string; bytes: Uint8Array }>();
 const jsons = new Map<string, { score: number; text: string }>();
 const mds = new Map<string, { score: number; text: string }>();
 
@@ -49,7 +50,7 @@ try {
       return 'continue';
     }
     const data = await readAll(await entry.open());
-    if (role === 'pdf') pdfs.set(entry.memberPath, { score, sha256: createHash('sha256').update(data).digest('hex') });
+    if (role === 'pdf') pdfs.set(entry.memberPath, { score, sha256: createHash('sha256').update(data).digest('hex'), bytes: new Uint8Array(data) });
     else if (role === 'blocks_json') jsons.set(entry.memberPath, { score, text: data.toString('utf8') });
     else mds.set(entry.memberPath, { score, text: data.toString('utf8') });
     return 'continue';
@@ -82,8 +83,11 @@ if (archive.blocksJson) {
 }
 
 // Полный разбор без записи: ожидание SHA берём из самого архива, потому что редакции здесь нет.
+// Число страниц считается по самому PDF архива — это и есть база полноты (R04-03).
 if (archive.pdf && archive.blocksJson && archive.resultsMd) {
-  const result = importRdwebExport({ archive, expect: { pdfSha256: archive.pdf.sha256 } });
+  const pdfPageCount = await pdfPageCountOfBytes(pdfs.get(archive.pdf.memberPath)!.bytes);
+  console.log(`страниц в PDF: ${pdfPageCount}`);
+  const result = importRdwebExport({ archive, expect: { pdfSha256: archive.pdf.sha256, pdfPageCount } });
   if (!result.ok) {
     console.log(`разбор отклонён: ${result.error.code} — ${result.error.message}`);
   } else {

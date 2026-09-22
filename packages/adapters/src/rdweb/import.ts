@@ -99,22 +99,48 @@ interface IBuildState {
   warn: (code: string, sample: string) => void;
 }
 
-const pushFragment = (st: IBuildState, f: Omit<IRdwebFragment, 'text' | 'textSha256'> & { text: string }): void => {
+// Детерминированное разбиение длинного текста: по границе строки, если она попадает в
+// последнюю четверть части, иначе по кодовой точке — суррогатная пара не рвётся. Склейка
+// частей в том же порядке возвращает исходный текст в точности (R04-06).
+export const splitFragmentText = (text: string, max: number): string[] => {
+  if (text.length <= max) return [text];
+  const parts: string[] = [];
+  let rest = text;
+  while (rest.length > max) {
+    let cut = max;
+    const head = rest.charCodeAt(cut - 1);
+    if (head >= 0xd800 && head <= 0xdbff) cut -= 1;
+    const nl = rest.lastIndexOf('\n', cut - 1);
+    if (nl + 1 >= Math.floor(max * 0.75)) cut = nl + 1;
+    parts.push(rest.slice(0, cut));
+    rest = rest.slice(cut);
+  }
+  if (rest.length > 0) parts.push(rest);
+  return parts;
+};
+
+const pushFragment = (st: IBuildState, f: Omit<IRdwebFragment, 'text' | 'textSha256' | 'partIndex' | 'partTotal'> & { text: string }): void => {
   const normalized = normalizeText(f.text);
   if (normalized.length === 0) return;
-  const warnings = [...f.warnings];
-  let text = normalized;
-  if (text.length > st.limits.maxFragmentChars) {
-    text = text.slice(0, st.limits.maxFragmentChars);
-    warnings.push('text_truncated');
-    st.warn('text_truncated', f.fragmentKey);
+  const parts = splitFragmentText(normalized, st.limits.maxFragmentChars);
+  if (parts.length > 1) st.warn('text_split', f.fragmentKey);
+  for (const [i, text] of parts.entries()) {
+    st.totalChars += text.length;
+    if (st.totalChars > st.limits.maxTotalTextChars) {
+      st.overflow = true;
+      return;
+    }
+    st.fragments.push({
+      ...f,
+      // Ключ части детерминирован и не зависит от числа уже собранных фрагментов.
+      fragmentKey: parts.length > 1 ? `${f.fragmentKey}#p${i + 1}` : f.fragmentKey,
+      text,
+      textSha256: sha256(text),
+      warnings: parts.length > 1 ? [...f.warnings, 'text_split'] : [...f.warnings],
+      partIndex: i,
+      partTotal: parts.length,
+    });
   }
-  st.totalChars += text.length;
-  if (st.totalChars > st.limits.maxTotalTextChars) {
-    st.overflow = true;
-    return;
-  }
-  st.fragments.push({ ...f, text, textSha256: sha256(text), warnings });
 };
 
 const labelKind = (label: string, warn: (code: string, sample: string) => void): RdwebFragmentKind => {
@@ -126,7 +152,9 @@ const labelKind = (label: string, warn: (code: string, sample: string) => void):
 
 export const importRdwebExport = (input: {
   archive: IRdwebArchive;
-  expect: { pdfSha256: string };
+  // pdfPageCount — фактическое число страниц зарегистрированного оригинала. Считает вызывающий:
+  // адаптер в файловую систему не ходит. Полнота меряется по нему, а не по составу экспорта (R04-03).
+  expect: { pdfSha256: string; pdfPageCount: number };
   limits?: Partial<IRdwebLimits>;
 }): RdwebResult<IRdwebImport> => {
   const a = input.archive;
@@ -137,6 +165,9 @@ export const importRdwebExport = (input: {
   if (a.corrupt) return { ok: false, error: { code: 'archive_corrupt', message: a.corrupt } };
   if (a.unsafe.length > 0) {
     return { ok: false, error: { code: 'archive_unsafe', message: `${a.unsafe[0]!.memberPath}: ${a.unsafe[0]!.detail}` } };
+  }
+  if (!Number.isInteger(input.expect.pdfPageCount) || input.expect.pdfPageCount < 1) {
+    return { ok: false, error: { code: 'pdf_unreadable', message: 'число страниц оригинала не определено' } };
   }
   if (!a.pdf) return { ok: false, error: { code: 'pdf_missing', message: 'в архиве нет PDF' } };
   if (a.pdf.sha256 !== input.expect.pdfSha256) {
@@ -188,7 +219,11 @@ export const importRdwebExport = (input: {
       label: p.page_label === null || p.page_label === undefined ? null : String(p.page_label),
     });
   }
-  const pagesTotal = pageMeta.size;
+  // Проверяемая база полноты — сам оригинал. Состав _blocks.json к ней только сопоставляется:
+  // экспорт, «забывший» страницу, обязан давать неполноту, а не тихий complete (I18, R04-03).
+  const pagesTotal = input.expect.pdfPageCount;
+  if (pageMeta.size !== pagesTotal) warn('blocks_page_count_mismatch', `${pageMeta.size} против ${pagesTotal} страниц PDF`);
+  for (const pageIndex of pageMeta.keys()) if (pageIndex >= pagesTotal) warn('page_index_out_of_range', String(pageIndex));
 
   // ---- markdown
   const md = parseResultsMd(a.resultsMd);
@@ -199,7 +234,7 @@ export const importRdwebExport = (input: {
   const mdPageIndex = new Map<number, number>();
   for (const p of md.pages) {
     const byNumber = p.pageNumber !== null ? p.pageNumber - 1 : null;
-    const index = byNumber !== null && pageMeta.has(byNumber) ? byNumber : p.pageOrder;
+    const index = byNumber !== null && byNumber < pagesTotal ? byNumber : p.pageOrder;
     if (byNumber !== null && byNumber !== index) warn('page_heading_mismatch', p.raw);
     mdPageIndex.set(p.pageOrder, index);
   }
@@ -239,14 +274,26 @@ export const importRdwebExport = (input: {
   for (const s of md.sections) for (const l of s.labels) if (isStamp(l)) addStamp(mdPageIndex.get(s.pageOrder) ?? null, l.text);
 
   const st: IBuildState = { fragments: [], totalChars: 0, overflow: false, limits, warn };
-  const pagesWithOutput = new Set<number>([...mdPageIndex.values()]);
+  // Заголовок «## Page N» сам по себе выводом не является: страница считается распознанной
+  // только по содержательному признаку — полученному фрагменту либо блоку с явно
+  // подтверждённым статусом обработки (R04-03).
+  const pagesWithHeading = new Set<number>([...mdPageIndex.values()]);
   const pagesWithRecognizedBlock = new Set<number>();
-  const counts: Record<string, number> = { blocks: doc.blocks.length, blocksWithText: 0, cropUrlsPresent: 0, cropUrlsAbsent: 0, cropUrlsFetched: 0 };
+  const counts: Record<string, number> = {
+    blocks: doc.blocks.length,
+    blocksWithText: 0,
+    cropUrlsPresent: 0,
+    cropUrlsAbsent: 0,
+    cropUrlsFetched: 0,
+    pagesInBlocksJson: pageMeta.size,
+  };
 
   // ---- фрагменты блоков
   for (const b of doc.blocks) {
     if (!pageMeta.has(b.page_index)) warn('block_page_unknown', b.block_id);
-    if ((b.status ?? 'recognized') === 'recognized') pagesWithRecognizedBlock.add(b.page_index);
+    // Отсутствие статуса больше не значит «распознано»: молчание экспорта не доказательство.
+    const declared = (b.status ?? b.export_status ?? '').trim().toLowerCase();
+    if (declared === 'recognized') pagesWithRecognizedBlock.add(b.page_index);
     const type = b.block_type.toLowerCase();
     if (!(KNOWN_BLOCK_TYPES as readonly string[]).includes(type)) warn('unknown_block_type', b.block_type);
     const kind = KIND_OF_TYPE[type] ?? 'unknown_block';
@@ -295,13 +342,15 @@ export const importRdwebExport = (input: {
   }
 
   // Секции markdown без блока в _blocks.json: текст сохраняется без координат.
-  for (const s of orphanSections) {
+  for (const [orphanOrdinal, s] of orphanSections.entries()) {
     const pageIndex = mdPageIndex.get(s.pageOrder) ?? null;
     if (s.body.length === 0) continue;
+    // Ключ детерминирован: число уже собранных фрагментов в него не входит (R04-06).
+    const keyOrdinal = s.ordinal ?? `o${orphanOrdinal}`;
     pushFragment(st, {
       origin: 'recognized_text',
       fragmentKind: 'unknown_block',
-      fragmentKey: `md:p${pageIndex ?? -1}:${s.ordinal ?? st.fragments.length}:text`,
+      fragmentKey: `md:p${pageIndex ?? -1}:${keyOrdinal}:text`,
       externalBlockId: null,
       ordinal: s.ordinal ?? null,
       pageIndex,
@@ -352,17 +401,25 @@ export const importRdwebExport = (input: {
     return { ok: false, error: { code: 'too_large', message: `суммарный текст экспорта превышает ${limits.maxTotalTextChars} символов` } };
   }
 
-  const pages: IRdwebPage[] = [...pageMeta.entries()]
-    .sort((x, y) => x[0] - y[0])
-    .map(([pageIndex, meta]) => ({
+  // Фрагмент — содержательный признак обработки страницы: пустой текст в него не попадает.
+  const pagesWithEvidence = new Set<number>();
+  for (const f of st.fragments) if (f.pageIndex !== null) pagesWithEvidence.add(f.pageIndex);
+
+  // Строка заводится на каждую страницу оригинала, а не только на перечисленные в экспорте.
+  const pages: IRdwebPage[] = Array.from({ length: pagesTotal }, (_, pageIndex) => {
+    const meta = pageMeta.get(pageIndex) ?? null;
+    const recognized = pagesWithEvidence.has(pageIndex) || pagesWithRecognizedBlock.has(pageIndex);
+    if (!recognized && pagesWithHeading.has(pageIndex)) warn('page_output_empty', String(pageIndex));
+    return {
       pageIndex,
-      pageLabel: meta.label ?? String(pageIndex + 1),
+      pageLabel: meta?.label ?? String(pageIndex + 1),
       sheetLabel: sheetLabels.get(pageIndex) ?? null,
-      widthPx: meta.widthPx,
-      heightPx: meta.heightPx,
-      rotation: meta.rotation,
-      status: pagesWithOutput.has(pageIndex) || pagesWithRecognizedBlock.has(pageIndex) ? ('recognized' as const) : ('missing' as const),
-    }));
+      widthPx: recognized ? meta?.widthPx ?? null : null,
+      heightPx: recognized ? meta?.heightPx ?? null : null,
+      rotation: meta?.rotation ?? 0,
+      status: recognized ? ('recognized' as const) : ('missing' as const),
+    };
+  });
   const pagesRecognized = pages.filter((p) => p.status === 'recognized').length;
 
   counts.fragments = st.fragments.length;

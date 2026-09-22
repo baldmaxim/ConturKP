@@ -10,6 +10,10 @@ export interface IRdwebFixture {
   rotate90?: number[];
   // Страницы, которых нет в выводе: их блоки не попадают ни в md, ни в _blocks.json (A16).
   omitPagesInMd?: number[];
+  // Страницы, которых нет в pages[] файла _blocks.json: в настоящем PDF они остаются (R04-03).
+  omitPagesInBlocks?: number[];
+  // Страницы с заголовком «## Page N» без единого блока и без текста (R04-03).
+  emptyMdPages?: number[];
   unknownBlockTypes?: string[];
   polygonPages?: number[];
   stamps?: 'per-page' | 'none';
@@ -61,11 +65,14 @@ export const buildRdwebExport = (o: IRdwebFixture = {}): { zip: Buffer; pdf: Buf
   const pageCount = o.pages ?? 4;
   const rotated = new Set(o.rotate90 ?? [1]);
   const omitted = new Set(o.omitPagesInMd ?? []);
+  const omittedInBlocks = new Set(o.omitPagesInBlocks ?? []);
+  const emptyMd = new Set(o.emptyMdPages ?? []);
+  const withoutBlocks = new Set([...omitted, ...omittedInBlocks, ...emptyMd]);
   const polygonPages = new Set(o.polygonPages ?? []);
   const stamps = o.stamps ?? 'per-page';
   const cropMode = o.cropUrls ?? 'except-stamps';
   const cropValue = o.cropUrlValue ?? 'https://rdweb.example.internal/crops';
-  const pagesOut = Array.from({ length: pageCount }, (_, i) => ({
+  const allPages = Array.from({ length: pageCount }, (_, i) => ({
     page_index: i,
     page_label: i + 1,
     width_px: rotated.has(i) ? 3508 : 2480,
@@ -74,7 +81,10 @@ export const buildRdwebExport = (o: IRdwebFixture = {}): { zip: Buffer; pdf: Buf
   }));
   // PDF настоящий, и повороты его страниц совпадают с объявленными в экспорте: фикстура
   // проверяет не только разбор, но и отрисовку участка оригинала на pdf.js.
-  const pdf = o.pdf ?? realPdf(pagesOut.map((p) => ({ rotate: p.rotation })), docName);
+  // Число страниц PDF задаётся отдельно от состава экспорта: omitPagesInBlocks убирает
+  // страницу только из _blocks.json, в самом файле она остаётся (R04-03).
+  const pdf = o.pdf ?? realPdf(allPages.map((p) => ({ rotate: p.rotation })), docName);
+  const pagesOut = allPages.filter((p) => !omittedInBlocks.has(p.page_index));
 
   const blocks: IBlockOut[] = [];
   const textBlockIds: string[] = [];
@@ -104,7 +114,7 @@ export const buildRdwebExport = (o: IRdwebFixture = {}): { zip: Buffer; pdf: Buf
   };
 
   for (let p = 0; p < pageCount; p += 1) {
-    if (omitted.has(p)) continue;
+    if (withoutBlocks.has(p)) continue;
     const text = mkBlock(p, 'txt', 'text');
     blocks.push(text);
     textBlockIds.push(text.block_id);
@@ -142,8 +152,10 @@ export const buildRdwebExport = (o: IRdwebFixture = {}): { zip: Buffer; pdf: Buf
   const hugeText = o.hugeTextChars ? 'я'.repeat(o.hugeTextChars) : null;
   const md: string[] = [`# ${docName}`, ''];
   for (let p = 0; p < pageCount; p += 1) {
-    if (omitted.has(p)) continue;
+    if (omitted.has(p) || omittedInBlocks.has(p)) continue;
     md.push(`## Page ${p + 1}`, '');
+    // Пустая страница вывода: заголовок есть, содержимого нет — распознанной она не считается.
+    if (emptyMd.has(p)) continue;
     for (const b of blocks.filter((x) => x.page_index === p && x.block_type !== 'stamp')) {
       const type = b.block_type.toUpperCase();
       md.push(`### BLOCK #${b.ordinal} [${type}]: ${b.block_id}`, '');
@@ -176,7 +188,7 @@ export const buildRdwebExport = (o: IRdwebFixture = {}): { zip: Buffer; pdf: Buf
   if (o.unsafeMember === 'encrypted') entries.push({ name: 'secret.json', data: Buffer.from('{}'), encrypted: true });
   entries.push(...(o.extraMembers ?? []));
 
-  const missingPages = [...omitted].sort((a, b) => a - b);
+  const missingPages = [...withoutBlocks].sort((a, b) => a - b);
   return {
     zip: buildZip(entries),
     pdf,

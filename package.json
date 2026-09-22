@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "express": "^5.2.1",
+    "pdfjs-dist": "^5.7.284",
     "pg": "^8.23.0",
     "yauzl": "^3.4.0",
     "zod": "^4.6.5"

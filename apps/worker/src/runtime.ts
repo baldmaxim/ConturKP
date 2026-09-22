@@ -67,6 +67,9 @@ export interface IJobFailure {
 export interface IJobHandlerSpec {
   run: (ctx: IJobContext) => Promise<void>;
   onTerminalFailure?: (client: PoolClient, ctx: IJobContext, failure: IJobFailure) => Promise<void>;
+  // Доменная отмена: выполняется в одной транзакции с переводом задания в cancelled и под
+  // действующей арендой (R04-02). Без неё доменный объект остаётся активным без задания.
+  onCancel?: (client: PoolClient, ctx: IJobContext) => Promise<void>;
 }
 
 export type JobHandler = IJobHandlerSpec | ((ctx: IJobContext) => Promise<void>);
@@ -129,7 +132,10 @@ export class WorkerRuntime {
   async execute(job: IJobRow): Promise<void> {
     const token = job.lease_token!;
     const controller = new AbortController();
-    let stopReason: 'lost' | 'cancel' | null = null;
+    // Отмена, запрошенная до захвата (в том числе у задания, вернувшегося в очередь после
+    // recovery), проходит тем же доменно-осведомлённым путём, что и отмена на ходу (R04-02).
+    let stopReason: 'lost' | 'cancel' | null = job.cancel_requested ? 'cancel' : null;
+    if (stopReason) controller.abort();
     // После подтверждённой потери аренды новые heartbeat не отправляются (R03-11):
     // обработчик может ещё не завершиться по AbortSignal, но трогать аренду он больше не должен.
     let beating = false;
@@ -181,6 +187,8 @@ export class WorkerRuntime {
     const spec = this.o.handlers[job.kind] ? specOf(this.o.handlers[job.kind]!) : null;
     try {
       if (!spec) throw new PermanentJobError('unknown_kind', `нет обработчика ${job.kind}`);
+      // Отменённое до захвата задание не выполняется вовсе: сразу доменная отмена (R04-02).
+      ctx.throwIfStopped();
       await spec.run(ctx);
       if (!completed) await ctx.complete();
       this.log(`задание ${job.kind} ${job.id} выполнено`);
@@ -198,8 +206,26 @@ export class WorkerRuntime {
       return;
     }
     if (err instanceof JobCancelledError) {
-      const ok = await confirmCancel(this.o.pool, job.id, token);
-      this.log(`задание ${job.id}: отмена ${ok ? 'подтверждена' : 'не подтверждена (аренда потеряна)'}`);
+      // Доменная отмена и статус задания фиксируются одной транзакцией под действующей арендой:
+      // расхождения «задание cancelled, прогон running» быть не должно (R04-02). Не удалось —
+      // задание возвращается в очередь, как при неудачной фиксации терминальной ошибки (R03-05).
+      try {
+        const ok = await withTransaction(this.o.pool, async (client) => {
+          if (!(await lockOwnedJob(client, job.id, token))) return false;
+          if (spec?.onCancel) await spec.onCancel(client, ctx);
+          return confirmCancel(client, job.id, token);
+        });
+        this.log(`задание ${job.id}: отмена ${ok ? 'подтверждена' : 'не подтверждена (аренда потеряна)'}`);
+      } catch (cancelErr) {
+        const detail = cancelErr instanceof Error ? cancelErr.message : 'unknown';
+        const requeued = await requeueJob(this.o.pool, job, token, {
+          code: 'cancel_fixation_failed',
+          message: `доменная отмена не зафиксирована (${detail})`,
+        });
+        this.log(
+          `задание ${job.id}: фиксация отмены не удалась (${detail}) → ${requeued ? 'возвращено в очередь' : 'аренда потеряна'}`,
+        );
+      }
       return;
     }
     const retryable = !(err instanceof PermanentJobError);

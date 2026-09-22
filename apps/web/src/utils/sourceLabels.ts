@@ -137,6 +137,7 @@ export const RECOGNITION_STATUS: Record<TRecognitionStatus, IBadgeMeta> = {
   complete: { label: 'Распознавание завершено', icon: 'check', tone: 'success' },
   partial: { label: 'Распознано частично', icon: 'file-exclamation-point', tone: 'warning', dashed: true },
   failed: { label: 'Распознавание не принято', icon: 'circle-x', tone: 'danger' },
+  cancelled: { label: 'Распознавание отменено', icon: 'circle-x', tone: 'muted', dashed: true },
 };
 
 export const RECOGNITION_PAGE_STATUS: Record<TRecognitionPageStatus, IBadgeMeta> = {
@@ -156,6 +157,7 @@ export const RECOGNITION_FAILURE_LABELS: Record<string, string> = {
   archive_unsafe: 'В архиве небезопасный элемент',
   archive_corrupt: 'Архив не читается',
   too_large: 'Экспорт превышает пределы разбора',
+  pdf_unreadable: 'Оригинал не открывается — число страниц не подтверждено',
   not_found: 'Прогон не найден',
   internal: 'Внутренняя ошибка',
 };
@@ -206,7 +208,10 @@ export const RECOGNITION_WARNING_LABELS: Record<string, string> = {
   polygon_invalid: 'Многоугольник блока не разобран',
   block_page_unknown: 'Блок ссылается на неизвестную страницу',
   rotation_unexpected: 'Неожиданный угол поворота страницы',
-  text_truncated: 'Текст фрагмента усечён по лимиту',
+  text_split: 'Длинный текст блока сохранён частями — без потерь',
+  blocks_page_count_mismatch: 'Число страниц в _blocks.json не совпало с числом страниц PDF',
+  page_index_out_of_range: 'Страница экспорта выходит за пределы PDF',
+  page_output_empty: 'У страницы есть заголовок, но нет распознанного содержимого',
 };
 
 export const recognitionWarningLabel = (code: string): string => RECOGNITION_WARNING_LABELS[code] ?? code;

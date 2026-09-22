@@ -96,15 +96,54 @@ describe('RT-06: ограждение аренды', () => {
 });
 
 describe('RT-06: отмена', () => {
-  it('отмена во время перехвата: подтверждает только новый владелец при захвате, A не может', async () => {
+  it('отмена во время перехвата: подтверждает только новый владелец, A не может', async () => {
     const { id } = await enqueueJob(db.pool, { kind: 'test.cancel', dedupeKey: 'cancel-1' });
     const a = (await claim('A', 0, ['test.cancel']))!;
     expect(await requestCancel(db.pool, id)).toBe('running');
     await sleep(LEASE + 300);
     await recoverExpiredJobs(db.pool);
-    expect(await claim('B', 0, ['test.cancel'])).toBeNull();
-    expect((await getJob(db.pool, id))!.status).toBe('cancelled');
+    // Захват отменённого задания сам его не завершает: доменный объект (партия, прогон)
+    // известен только обработчику, поэтому отмену проводит worker через onCancel (R04-02).
+    const bJob = (await claim('B', 0, ['test.cancel']))!;
+    expect(bJob.cancel_requested).toBe(true);
+    expect(bJob.status).toBe('running');
+    // Прежний владелец аренду потерял и подтвердить отмену не может.
     expect(await confirmCancel(db.pool, id, a.lease_token!)).toBe(false);
+    expect(await confirmCancel(db.pool, id, bJob.lease_token!)).toBe(true);
+    expect((await getJob(db.pool, id))!.status).toBe('cancelled');
+  });
+
+  // R04-02: задание, отменённое до захвата, проходит через тот же доменный путь.
+  it('worker видит флаг сразу после захвата и завершает отмену вместе с доменным объектом', async () => {
+    const config = testConfig({ jobLeaseSeconds: 1 });
+    const cancelled: string[] = [];
+    let ran = false;
+    const w = new WorkerRuntime({
+      pool: db.pool,
+      store: new BlobStore(config.storageRoot),
+      config,
+      handlers: {
+        'test.precancel': {
+          run: async () => {
+            ran = true;
+          },
+          onCancel: async (_client, ctx) => {
+            cancelled.push(ctx.job.id);
+          },
+        },
+      },
+      workerId: 'P',
+    });
+    const { id } = await enqueueJob(db.pool, { kind: 'test.precancel' });
+    const claimed = (await claim('A', 0, ['test.precancel']))!;
+    expect(await requestCancel(db.pool, id)).toBe('running');
+    await sleep(LEASE + 300);
+    await recoverExpiredJobs(db.pool);
+    expect(await w.runOnce(['test.precancel'])).toBe(true);
+    expect(ran).toBe(false);
+    expect(cancelled).toEqual([id]);
+    expect((await getJob(db.pool, id))!.status).toBe('cancelled');
+    expect(await confirmCancel(db.pool, id, claimed.lease_token!)).toBe(false);
   });
 
   it('действующий владелец видит флаг при heartbeat и подтверждает отмену', async () => {

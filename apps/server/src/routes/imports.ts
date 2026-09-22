@@ -27,6 +27,7 @@ import {
 import type { BlobStore } from '@kontur/storage';
 import { Router } from 'express';
 import { command, parseBody, query, requireIfMatch, uuidParam, versionConflict } from '../http/command.ts';
+import { cancelJobDomain } from '../jobs/cancelDomain.ts';
 import { receiveUpload, uploadedBlob, uploadName } from '../http/upload.ts';
 import { requireCtx } from '../http/context.ts';
 import { HttpError, notFound } from '../http/errors.ts';
@@ -199,6 +200,10 @@ export const importsRouter = (pool: Pool, store: BlobStore, config: IAppConfig):
         const job = (await getJob(client, id))!;
         const status = await requestCancel(client, id);
         if (!status) throw new HttpError(409, 'STATE_CONFLICT', `задание уже в статусе ${job.status}`, {}, { tenderId: job.tender_id, entityId: id });
+        // Задание отменено, не начав выполняться: доменный объект терминализуется здесь же,
+        // одной транзакцией, иначе он остался бы активным без задания (R04-02). У running
+        // отмену подтверждает worker под действующей арендой.
+        if (status === 'cancelled') await cancelJobDomain(client, job);
         return {
           status: 200,
           body: { id, status, cancelRequested: status === 'running' },

@@ -93,6 +93,11 @@ export const RecognitionRunView: FC<IRecognitionRunViewProps> = ({ runId }) => {
               <div className={styles.fragmentHead}>
                 {originBadge(fragment)}
                 <span className={list.muted}>{fragmentKindLabel(fragment.fragmentKind)}</span>
+                {fragment.partTotal > 1 && (
+                  <span className={list.muted}>
+                    часть {fragment.partIndex + 1} из {fragment.partTotal}
+                  </span>
+                )}
               </div>
               <p className={styles.text}>{fragment.text.length > 400 ? `${fragment.text.slice(0, 400)}…` : fragment.text}</p>
               {fragment.warnings.length > 0 ? (

@@ -392,7 +392,7 @@ export interface IScanAccepted {
 
 // ---- распознавание и доказательства (этап 04)
 
-export type TRecognitionStatus = 'queued' | 'running' | 'complete' | 'partial' | 'failed';
+export type TRecognitionStatus = 'queued' | 'running' | 'complete' | 'partial' | 'failed' | 'cancelled';
 export type TRecognitionPageStatus = 'recognized' | 'missing' | 'failed';
 export type TFragmentOrigin = 'document_text' | 'recognized_text' | 'model_description' | 'negotiation_speech' | 'negotiation_hint' | 'email_body' | 'attachment_text';
 export type TFragmentKind =
@@ -485,6 +485,9 @@ export interface IEvidenceFragment {
   /** Справочная ссылка экспорта. Портал её не загружает — показывается текстом (A38). */
   externalCropUrl: string | null;
   warnings: string[];
+  /** Часть длинного текста блока: доказательство разбито, а не усечено. */
+  partIndex: number;
+  partTotal: number;
 }
 
 export interface IFragmentPage {
@@ -509,5 +512,5 @@ export interface IFreezeBlockingItem {
   documentId: string;
   documentTitle: string;
   revisionSeq: number;
-  reason: 'no_recognition' | 'recognition_in_progress' | 'recognition_failed';
+  reason: 'no_recognition' | 'recognition_in_progress' | 'recognition_failed' | 'recognition_cancelled';
 }

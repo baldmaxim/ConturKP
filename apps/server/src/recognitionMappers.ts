@@ -68,6 +68,9 @@ export const toFragment = (f: IEvidenceFragmentRow) => ({
   // Справочная ссылка экспорта: портал её не загружает (A38). Интерфейс показывает её текстом.
   externalCropUrl: f.external_crop_url,
   warnings: f.warnings,
+  // Часть длинного текста блока: доказательство разбито, а не усечено (R04-06).
+  partIndex: f.part_index,
+  partTotal: f.part_total,
 });
 
 export const toEvidence = (f: IScopedFragmentRow) => ({

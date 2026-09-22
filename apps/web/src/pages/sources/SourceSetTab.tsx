@@ -42,6 +42,7 @@ const BLOCKING_REASONS: Record<IFreezeBlockingItem['reason'], string> = {
   no_recognition: 'распознавание не выполнялось',
   recognition_in_progress: 'распознавание ещё идёт',
   recognition_failed: 'распознавание не принято',
+  recognition_cancelled: 'распознавание отменено',
 };
 
 // Сервер присылает перечень блокирующих редакций в current.blocking (409 STATE_CONFLICT).

@@ -100,14 +100,9 @@ export const claimJob = async (pool: pg.Pool, o: IClaimOptions): Promise<IJobRow
       return null;
     }
     // Отмена, запрошенная до захвата или при прежнем владельце, завершается новым владельцем.
-    if (row.cancel_requested) {
-      await client.query(
-        "UPDATE job SET status = 'cancelled', finished_at = now(), updated_at = now() WHERE id = $1",
-        [row.id],
-      );
-      await client.query('COMMIT');
-      return null;
-    }
+    // Задание захватывается штатно и здесь не терминализуется: доменный объект (партия импорта,
+    // прогон распознавания) знает о себе только обработчик, а пакет БД — нет. Worker видит флаг
+    // сразу после захвата и проводит отмену через onCancel одной транзакцией (R04-02).
     const r = await client.query<IJobRow>(
       `UPDATE job SET status = 'running', lease_token = gen_random_uuid(), locked_by = $2,
               locked_until = now() + make_interval(secs => $3::double precision / 1000),

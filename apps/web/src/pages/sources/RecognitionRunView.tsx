@@ -1,4 +1,5 @@
-import { useState, type FC, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FC, type ReactNode } from 'react';
+import { isAbortError } from '../../api/client';
 import { describeError } from '../../api/errors';
 import { getRecognitionRun, listFragments } from '../../api/recognitionEndpoints';
 import type { IEvidenceFragment, IRecognitionPage } from '../../api/types';
@@ -51,6 +52,7 @@ export const RecognitionRunView: FC<IRecognitionRunViewProps> = ({ runId }) => {
     setMore(null);
     setMoreError(null);
   };
+
   const runRes = useApiResource((signal) => getRecognitionRun(runId, signal), runId);
   const fragmentsKey = `${runId}:${pageIndex ?? 'none'}`;
   const fragmentsRes = useApiResource(
@@ -60,8 +62,22 @@ export const RecognitionRunView: FC<IRecognitionRunViewProps> = ({ runId }) => {
   // Следующие порции догружаются по курсору, который выдал сервер. Перезапрос первой страницы
   // выдачу не продолжает: часть фрагментов осталась бы недоступной (R04-07).
   const [more, setMore] = useState<IMorePages | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [moreError, setMoreError] = useState<unknown>(null);
+  // Ход и ошибка догрузки принадлежат ключу страницы: поздний ответ прежней страницы не
+  // имеет права ни блокировать кнопку новой, ни показывать на ней свою ошибку (R04-15).
+  const [loadingMoreKey, setLoadingMoreKey] = useState<string | null>(null);
+  const [moreError, setMoreError] = useState<{ key: string; reason: unknown } | null>(null);
+  const keyRef = useRef(fragmentsKey);
+  keyRef.current = fragmentsKey;
+  const moreAbort = useRef<AbortController | null>(null);
+  useEffect(
+    () => () => {
+      // Выбрана другая страница: догрузка прежней отменяется, её результат уже ничей.
+      moreAbort.current?.abort();
+      moreAbort.current = null;
+    },
+    [fragmentsKey],
+  );
+  const loadingMore = loadingMoreKey === fragmentsKey;
   // Всё, что показано и что можно догрузить, принадлежит текущему ключу. База ещё не
   // пришла — нет ни фрагментов, ни курсора: выдача прежней страницы под номером новой
   // и уход её курсора с чужим pageIndex недопустимы (R04-15).
@@ -69,20 +85,35 @@ export const RecognitionRunView: FC<IRecognitionRunViewProps> = ({ runId }) => {
   const appended = base && more && more.key === fragmentsKey ? more : null;
   const fragments = base ? [...base.items, ...(appended?.items ?? [])] : [];
   const nextCursor = base ? (appended ? appended.nextCursor : base.nextCursor) : null;
-  const shownMoreError = appended || (base && more === null) ? moreError : null;
+  const shownMoreError = moreError && moreError.key === fragmentsKey && base ? moreError.reason : null;
 
   const loadMore = (): void => {
     if (pageIndex === null || base === null || nextCursor === null || loadingMore) {
       return;
     }
-    setLoadingMore(true);
+    const key = fragmentsKey;
+    const shown = appended?.items ?? [];
+    const controller = new AbortController();
+    moreAbort.current?.abort();
+    moreAbort.current = controller;
+    setLoadingMoreKey(key);
     setMoreError(null);
-    listFragments(runId, { pageIndex, limit: PAGE_SIZE, cursor: nextCursor })
+    listFragments(runId, { pageIndex, limit: PAGE_SIZE, cursor: nextCursor }, controller.signal)
       .then((next) => {
-        setMore({ key: fragmentsKey, items: [...(appended?.items ?? []), ...next.items], nextCursor: next.nextCursor });
+        if (keyRef.current !== key) {
+          return;
+        }
+        setMore({ key, items: [...shown, ...next.items], nextCursor: next.nextCursor });
       })
-      .catch((reason: unknown) => setMoreError(reason))
-      .finally(() => setLoadingMore(false));
+      .catch((reason: unknown) => {
+        if (keyRef.current !== key || controller.signal.aborted || isAbortError(reason)) {
+          return;
+        }
+        setMoreError({ key, reason });
+      })
+      .finally(() => {
+        setLoadingMoreKey((cur) => (cur === key ? null : cur));
+      });
   };
 
   if (runRes.loading && !runRes.data) {

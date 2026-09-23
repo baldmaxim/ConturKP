@@ -190,7 +190,19 @@ export const EvidenceViewer: FC = () => {
         {drawError ? <Notice tone="danger">{`Страница не отрисована: ${drawError}`}</Notice> : null}
         {fragment.contentUrl ? (
           <div className={styles.stage}>
-            <canvas ref={canvasRef} className={styles.canvas} aria-label={`Страница ${pageNo ?? ''} оригинала`} />
+            {/*
+              Холст пересоздаётся вместе с ключом отрисовки: пиксели прежней страницы не могут
+              ни мгновения показываться как страница нового фрагмента. Пока страница текущего
+              ключа не нарисована, холст скрыт — пустой прямоугольник честнее чужой страницы
+              (R04-14). Элемент существует с первого кадра: иначе эффекту некуда рисовать.
+            */}
+            <canvas
+              key={overlayKey}
+              ref={canvasRef}
+              className={render ? styles.canvas : styles.canvasPending}
+              aria-label={`Страница ${pageNo ?? ''} оригинала`}
+            />
+            {render === null && drawError === null ? <p className={list.muted}>Страница оригинала загружается…</p> : null}
             {render?.rect ? (
               <div
                 className={styles.highlight}

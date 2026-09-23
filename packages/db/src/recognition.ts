@@ -111,8 +111,17 @@ export const latestFinishedRun = async (db: Queryable, revisionId: string): Prom
   return r.rows[0] ?? null;
 };
 
+// Потомок — только тот прогон, который действительно занял следующее место в истории.
+// Отказавшая и отменённая попытка места не занимает (миграция 0008), поэтому и перекрытым
+// прогон от неё не становится: иначе один сбой объявлял бы прежнюю версию устаревшей (R04-18).
+// Такой потомок не более одного — это держит частичный уникальный индекс.
 export const supersededBy = async (db: Queryable, runId: string): Promise<string | null> => {
-  const r = await db.query<{ id: string }>('SELECT id FROM recognition_run WHERE supersedes_run_id = $1 ORDER BY created_at LIMIT 1', [runId]);
+  const r = await db.query<{ id: string }>(
+    `SELECT id FROM recognition_run
+      WHERE supersedes_run_id = $1 AND status NOT IN ('failed', 'cancelled')
+      ORDER BY created_at LIMIT 1`,
+    [runId],
+  );
   return r.rows[0]?.id ?? null;
 };
 

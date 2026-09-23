@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { isAbortError } from '../api/client';
+import { pendingState, viewOf, type IKeyedState } from './keyedState';
 
 export interface IApiResource<T> {
   data: T | null;
@@ -13,49 +14,53 @@ export interface IApiResource<T> {
  * Загружает ресурс при монтировании и при смене key; отменяет устаревшие запросы.
  * key — строка, однозначно задающая запрос (например, id тендера).
  *
- * Данные принадлежат ключу: при смене key прежний результат немедленно перестаёт быть
- * текущим и очищается. Иначе экран показывал бы данные прежнего объекта как данные нового —
- * для доказательств это прямая ложь (R04-14, R04-15). Повторная загрузка тем же ключом
- * (reload) данные сохраняет: поллинг не должен мигать пустым экраном.
+ * Данные принадлежат ключу **синхронно, на этапе render**: результат отдаётся только тогда,
+ * когда он получен по текущему ключу. Очистки в эффекте недостаточно — эффект выполняется
+ * после render и commit, поэтому один кадр успевал показать данные прежнего объекта как
+ * данные нового. Для портала доказательств это прямая ложь (R04-14, R04-15).
+ * Повторная загрузка тем же ключом (reload) данные сохраняет: поллинг не мигает пустым экраном.
  */
 export const useApiResource = <T>(loader: (signal: AbortSignal) => Promise<T>, key: string): IApiResource<T> => {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [loading, setLoading] = useState(true);
+  const [state, setState] = useState<IKeyedState<T>>(() => pendingState<T>(key));
   const [token, setToken] = useState(0);
   // Актуальный loader без перезапуска эффекта на каждом рендере.
   const loaderRef = useRef(loader);
   loaderRef.current = loader;
+  const keyRef = useRef(key);
+  keyRef.current = key;
 
-  const shownKey = useRef(key);
+  // Состояние чужого ключа не существует для текущего render: ни данных, ни ошибки, идёт загрузка.
+  const current = viewOf(state, key);
 
   useEffect(() => {
     const controller = new AbortController();
-    if (shownKey.current !== key) {
-      shownKey.current = key;
-      setData(null);
-    }
-    setLoading(true);
-    setError(null);
-    loaderRef
-      .current(controller.signal)
-      .then((result) => {
+    setState((prev) => (prev.key === key ? { ...prev, error: null, loading: true } : pendingState<T>(key)));
+    loaderRef.current(controller.signal).then(
+      (result) => {
         if (!controller.signal.aborted) {
-          setData(result);
-          setLoading(false);
+          setState({ key, data: result, error: null, loading: false });
         }
-      })
-      .catch((reason: unknown) => {
+      },
+      (reason: unknown) => {
         if (controller.signal.aborted || isAbortError(reason)) {
           return;
         }
-        setError(reason);
-        setLoading(false);
-      });
+        // Ошибка тоже принадлежит ключу; данные того же ключа при повторной загрузке остаются.
+        setState((prev) => ({ key, data: prev.key === key ? prev.data : null, error: reason, loading: false }));
+      },
+    );
     return () => controller.abort();
   }, [key, token]);
 
   const reload = useCallback(() => setToken((value) => value + 1), []);
 
-  return { data, error, loading, reload, setData };
+  const setData = useCallback<Dispatch<SetStateAction<T | null>>>((value) => {
+    setState((prev) => {
+      const base = prev.key === keyRef.current ? prev : pendingState<T>(keyRef.current);
+      const next = typeof value === 'function' ? (value as (p: T | null) => T | null)(base.data) : value;
+      return { ...base, data: next };
+    });
+  }, []);
+
+  return { data: current.data, error: current.error, loading: current.loading, reload, setData };
 };

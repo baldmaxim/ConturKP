@@ -101,6 +101,10 @@ const clickButton = (label, scope = 'document') =>
   evaluate(`(() => { const root = ${scope}; if (!root) return false;
     const b = [...root.querySelectorAll('button')].find((x) => x.innerText.trim() === ${JSON.stringify(label)} && !x.disabled);
     if (!b) return false; b.click(); return true; })()`);
+// Кнопка, подпись которой начинается с label («Показать ещё (загружено 12)»).
+const clickButtonStarting = (label) =>
+  evaluate(`(() => { const b = [...document.querySelectorAll('button')].find((x) => x.innerText.trim().startsWith(${JSON.stringify(label)}) && !x.disabled);
+    if (!b) return false; b.click(); return true; })()`);
 // Кнопка страницы прогона: номер лежит в первом span, остальное — подпись и бейдж.
 const clickPage = (label) =>
   evaluate(`(() => { const b = [...document.querySelectorAll('button')].find((x) => !x.disabled && x.querySelector('span')?.innerText.trim() === ${JSON.stringify(label)});
@@ -278,6 +282,83 @@ try {
   record('R04-15: до ответа фрагменты прежней страницы не показываются', !staleShown && !staleMore);
   const page1Ready = await waitFor(text('blk-1-txt'), 30_000);
   record('R04-15: после ответа видны фрагменты выбранной страницы', page1Ready && !(await evaluate(text('blk-0-txt'))));
+
+  // ---- R04-14 (ревью 04-4): промежуточные состояния перехода между доказательствами.
+  // Ответ по новому фрагменту и его страница задерживаются: видно, что показано в окне
+  // между сменой маршрута и готовностью нового доказательства. Прежний текст и прежняя
+  // страница не должны считаться текущими ни в одном таком кадре.
+  await send('Page.navigate', { url: `${BASE}/evidence/${pair.a}` });
+  await waitFor(`document.querySelector('canvas ~ div') !== null`, 40_000);
+  const styleBefore = await overlayStyle();
+  const texts = await evaluate(`(async () => {
+    const a = await (await fetch('/api/v1/evidence/${pair.a}')).json();
+    const b = await (await fetch('/api/v1/evidence/${pair.b}')).json();
+    return { a: a.text.slice(0, 30), b: b.text.slice(0, 30) }; })()`);
+  await evaluate(`(() => { const f = window.fetch.bind(window);
+    window.fetch = (...x) => { const u = String(x[0]);
+      const ms = u.includes('/evidence/') ? 2500 : u.includes('/content') ? 4000 : 0;
+      return ms ? new Promise((r) => setTimeout(() => r(f(...x)), ms)) : f(...x); };
+    return true; })()`);
+  await evaluate(`(() => { history.pushState({}, '', '/evidence/' + ${JSON.stringify(pair.b)});
+    dispatchEvent(new PopStateEvent('popstate')); return true; })()`);
+  await sleep(700);
+  const staleText = await evaluate(`(document.body?.innerText ?? '').includes(${JSON.stringify(texts.a)})`);
+  const staleCanvas = await evaluate(`(() => { const c = document.querySelector('canvas');
+    return c !== null && getComputedStyle(c).display !== 'none'; })()`);
+  record('R04-14: до ответа прежнее доказательство не показывается', !staleText && !staleCanvas);
+
+  // Метаданные нового фрагмента пришли, его страница ещё рисуется: старых пикселей быть не должно.
+  const metaShown = await waitFor(`(document.body?.innerText ?? '').includes(${JSON.stringify(texts.b)})`, 20_000);
+  const duringDraw = await evaluate(`(() => { const c = document.querySelector('canvas');
+    return { visible: c !== null && getComputedStyle(c).display !== 'none',
+             overlay: document.querySelector('canvas ~ div') !== null,
+             stale: (document.body?.innerText ?? '').includes(${JSON.stringify(texts.a)}) }; })()`);
+  record(
+    'R04-14: до готовности страницы старая страница скрыта, чужой рамки нет',
+    metaShown && !duringDraw.visible && !duringDraw.overlay && !duringDraw.stale,
+    JSON.stringify(duringDraw),
+  );
+  const redrawn = await waitFor(`(() => { const d = document.querySelector('canvas ~ div');
+    return d !== null && d.getAttribute('style') !== ${JSON.stringify(styleBefore)}; })()`, 60_000);
+  record('R04-14: после готовности показана страница и рамка нового фрагмента', redrawn);
+
+  // ---- R04-15 (ревью 04-4): поздний отказ догрузки прежней страницы не принадлежит новой.
+  await send('Page.navigate', { url: `${BASE}/documents/${docId}?stage=${stageId}` });
+  await waitFor(text('Показать страницы и фрагменты'));
+  await clickButton('Показать страницы и фрагменты');
+  await waitFor(`[...document.querySelectorAll('button')].some((b) => b.querySelector('span')?.innerText.trim() === '1')`);
+  // Сервер отдаёт все фрагменты страницы одной порцией, поэтому курсор подменяется здесь:
+  // проверяется поведение интерфейса, а не пагинация сервера. Запрос догрузки удерживается
+  // и по команде падает — как упал бы настоящий запрос прежней страницы после переключения.
+  await evaluate(`(() => { const f = window.fetch.bind(window); window.__kp = {};
+    window.fetch = async (...x) => { const u = String(x[0]);
+      if (u.includes('/fragments?') && u.includes('cursor=')) {
+        return new Promise((_ok, rej) => { window.__kp.failMore = () => rej(new TypeError('Failed to fetch')); });
+      }
+      const r = await f(...x);
+      if (u.includes('/fragments?') && u.includes('pageIndex=0')) {
+        const body = await r.clone().json();
+        return new Response(JSON.stringify({ ...body, nextCursor: '0:0:0:00000000-0000-4000-8000-000000000000' }),
+          { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return r; };
+    return true; })()`);
+  await clickPage('1');
+  await waitFor(text('blk-0-txt'), 20_000);
+  const moreShown = await waitFor(`[...document.querySelectorAll('button')].some((b) => b.innerText.trim().startsWith('Показать ещё'))`, 10_000);
+  await clickButtonStarting('Показать ещё');
+  await waitFor(`[...document.querySelectorAll('button')].some((b) => b.innerText.trim() === 'Загрузка…')`, 10_000);
+  await clickPage('2');
+  const otherPage = await waitFor(text('blk-1-txt'), 30_000);
+  await evaluate('window.__kp.failMore(), true');
+  await sleep(700);
+  const lateError = await evaluate(text('Следующая порция не загружена'));
+  const stuck = await evaluate(`[...document.querySelectorAll('button')].some((b) => b.innerText.trim() === 'Загрузка…')`);
+  record(
+    'R04-15: поздний отказ догрузки прежней страницы не показан на новой',
+    moreShown && otherPage && !lateError && !stuck,
+    `more=${moreShown} other=${otherPage} error=${lateError} stuck=${stuck}`,
+  );
 
   // ---- заморозка состава источников
   await send('Page.navigate', { url: `${BASE}/stages/${stageId}?tab=sources` });

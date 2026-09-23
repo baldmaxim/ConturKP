@@ -126,7 +126,9 @@ export const RecognitionRunView: FC<IRecognitionRunViewProps> = ({ runId }) => {
   const warnings = run.quality.warnings ?? [];
 
   return (
-    <div className={styles.runView}>
+    // Ключ показанной страницы виден в DOM: по нему проверяется, что выдача и её отсутствие
+    // относятся именно к выбранной странице, в том числе в промежуточных кадрах (R04-15).
+    <div className={styles.runView} data-page-key={fragmentsKey}>
       {run.missingPages.length > 0 ? (
         <Notice tone="warning">
           {`Не распознаны ${plural(run.missingPages.length, ['страница', 'страницы', 'страниц'])}: ${run.missingPages

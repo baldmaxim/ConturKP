@@ -116,6 +116,24 @@ const clickEvidenceLink = (id) =>
 const overlayStyle = () =>
   evaluate(`(() => { const d = document.querySelector('canvas ~ div'); return d ? d.getAttribute('style') : null; })()`);
 
+// Снимок КАЖДОГО зафиксированного кадра DOM: MutationObserver срабатывает после commit,
+// поэтому промежуточный рендер, показавший чужие данные, попадает в запись и не может
+// остаться незамеченным из-за опроса раз в 200 мс (ревью 04-4 к R04-14, R04-15).
+const watchFrames = () =>
+  evaluate(`(() => {
+    window.__frames = [];
+    const snap = () => window.__frames.push({
+      path: location.pathname,
+      pageKey: document.querySelector('[data-page-key]')?.getAttribute('data-page-key') ?? null,
+      text: (document.body?.innerText ?? '').slice(0, 4000),
+    });
+    window.__frameObs?.disconnect();
+    window.__frameObs = new MutationObserver(snap);
+    window.__frameObs.observe(document.body, { subtree: true, childList: true, characterData: true });
+    snap();
+    return true; })()`);
+const frames = () => evaluate('window.__frames ?? []');
+
 const setFiles = async (selector, files) => {
   const doc = await send('DOM.getDocument', { depth: -1 });
   const node = await send('DOM.querySelector', { nodeId: doc.result.root.nodeId, selector });
@@ -275,11 +293,23 @@ try {
   await evaluate(`(() => { const f = window.fetch.bind(window);
     window.fetch = (...a) => (String(a[0]).includes('/fragments?') ? new Promise((r) => setTimeout(() => r(f(...a)), 2500)) : f(...a));
     return true; })()`);
+  await watchFrames();
   await clickPage('2');
   await sleep(600);
   const staleShown = await evaluate(text('blk-0-txt'));
   const staleMore = await evaluate(`[...document.querySelectorAll('button')].some((b) => b.innerText.trim().startsWith('Показать ещё'))`);
   record('R04-15: до ответа фрагменты прежней страницы не показываются', !staleShown && !staleMore);
+  // Ключ выбранной страницы виден в DOM: ни один кадр с ним не вправе содержать выдачу прежней.
+  const page1Key = await evaluate(`document.querySelector('[data-page-key]')?.getAttribute('data-page-key') ?? null`);
+  const pageFrames = await frames();
+  // Кадр 0 — состояние до нажатия (снимок при установке наблюдателя). Всё, что зафиксировано
+  // после, относится уже к выбранной странице, и выдачи прежней там быть не может.
+  const stalePageFrame = pageFrames.slice(1).find((f) => f.text.includes('blk-0-txt'));
+  record(
+    'R04-15: ни один кадр после выбора другой страницы не содержит выдачу прежней',
+    !stalePageFrame,
+    `ключ=${page1Key} кадров=${pageFrames.length}`,
+  );
   const page1Ready = await waitFor(text('blk-1-txt'), 30_000);
   record('R04-15: после ответа видны фрагменты выбранной страницы', page1Ready && !(await evaluate(text('blk-0-txt'))));
 
@@ -299,13 +329,20 @@ try {
       const ms = u.includes('/evidence/') ? 2500 : u.includes('/content') ? 4000 : 0;
       return ms ? new Promise((r) => setTimeout(() => r(f(...x)), ms)) : f(...x); };
     return true; })()`);
+  await watchFrames();
   await evaluate(`(() => { history.pushState({}, '', '/evidence/' + ${JSON.stringify(pair.b)});
     dispatchEvent(new PopStateEvent('popstate')); return true; })()`);
   await sleep(700);
-  const staleText = await evaluate(`(document.body?.innerText ?? '').includes(${JSON.stringify(texts.a)})`);
   const staleCanvas = await evaluate(`(() => { const c = document.querySelector('canvas');
     return c !== null && getComputedStyle(c).display !== 'none'; })()`);
-  record('R04-14: до ответа прежнее доказательство не показывается', !staleText && !staleCanvas);
+  // Ни один зафиксированный кадр под новым адресом не вправе содержать текст прежнего фрагмента.
+  const evidenceFrames = await frames();
+  const staleFrame = evidenceFrames.find((f) => f.path === `/evidence/${pair.b}` && f.text.includes(texts.a));
+  record(
+    'R04-14: ни один кадр под новым адресом не показывает прежнее доказательство',
+    !staleFrame && !staleCanvas,
+    `кадров=${evidenceFrames.length}${staleFrame ? ' есть кадр с прежним текстом' : ''}`,
+  );
 
   // Метаданные нового фрагмента пришли, его страница ещё рисуется: старых пикселей быть не должно.
   const metaShown = await waitFor(`(document.body?.innerText ?? '').includes(${JSON.stringify(texts.b)})`, 20_000);

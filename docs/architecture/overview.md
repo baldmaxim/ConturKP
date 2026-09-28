@@ -51,7 +51,7 @@ flowchart LR
 |---|---|---|
 | `server` | аутентификация, права, команды и чтение API, MCP, раздача интерфейса, `/health`, `/ready` | внешние вызовы, длительные операции |
 | `worker` | задания очереди, адаптеры интеграций, генерация файлов, размещение, инвалидация | принятие решений за человека |
-| PostgreSQL | данные, очередь, аудит, полнотекстовый индекс фрагментов | — |
+| PostgreSQL | данные, очередь, аудит, индекс поиска портала: чанки, полнотекстовые данные, векторы `pgvector` (ADR-012) | — |
 
 Обоснование состава — ADR-001; очередь — ADR-004; запуск и восстановление — ADR-011.
 
@@ -62,8 +62,8 @@ flowchart LR
 | Доступ | `app_user`, `user_role`, `tender_member`, `session`, `api_token`, `mailbox`, `mailbox_access` | вход, выход, назначение на тендер, выпуск MCP-токена, доступ к ящику | — |
 | Тендеры и этапы | `tender`, `tender_stage`, `stage_calculation_source` | создать тендер и этап, связать версию TenderHub | — |
 | Источники | `blob`, `document`, `document_revision`, `document_occurrence`, `import_batch`, `import_item`, `source_set*` | загрузить файлы/архив, подтвердить группировку, изменить и заморозить набор источников | `import`, `watch_folder` |
-| Распознавание и доказательства | `recognition_run`, `recognition_page`, `evidence_fragment`, `fragment_index_state` | импорт экспорта RDWeb, превью цитаты | `recognition`, `index_fragments` |
-| Поиск | — (читает фрагменты) | поиск по области (ADR-008) | — |
+| Распознавание и доказательства | `recognition_run`, `recognition_page`, `evidence_fragment` | импорт экспорта RDWeb, превью цитаты; локальное распознавание — этап 05a | `recognition.import`; `local_ocr` (05a) |
+| Поиск (этап 05) | `search_index_version`, `search_chunk`, `search_chunk_fragment`, `search_chunk_vector`, `embedding_cache`, `fragment_index_state`, `search_run`, `search_run_result` | поиск по области с прогоном (ADR-008, ADR-012 §14), чтение прогона, создание и активация версии индекса | `index.build`, `index.embed`, `index.purge`, `search.semantic` (ADR-004 §7a) |
 | Расчёт | `calculation_capture`, `calculation_revision`, `calculation_position`, `calculation_line`, `position_lineage` | запросить выгрузку, подтвердить сопоставление позиций | `capture_calculation` |
 | Коммуникации | `communication*`, `qa_form`, `qa_item`, `negotiation_*`, `transcript_*` | импорт писем, Q&A, переговоров; подтверждение связи с тендером | `mail_sync`, `import_eml`, `import_negotiation` |
 | Требования | `requirement*`, `coverage_link` | принять/отклонить кандидата, правка формулировки, покрытие | `extract_requirements` |
@@ -107,6 +107,7 @@ flowchart LR
 | Права и изоляция | ADR-006 |
 | Адаптеры и источники истины | ADR-007, `docs/contracts/adapters.md` |
 | Область поиска | ADR-008 |
+| Индекс, прогон поиска, эмбеддинги | ADR-012, `state-machines.md` §20–21 |
 | Модель и правила | ADR-009 |
 | MCP | ADR-010, `docs/contracts/mcp-tools.md` |
 | Эксплуатация | ADR-011 |

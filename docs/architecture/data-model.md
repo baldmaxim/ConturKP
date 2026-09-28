@@ -30,7 +30,8 @@
 | Доступ | `app_user`, `user_role`, `tender_member`, `session`, `api_token`, `mailbox`, `mailbox_access` | Портал |
 | Тендеры | `tender`, `tender_stage`, `stage_calculation_source`, `stage_input_event`, `intake_channel`, `intake_file_state`, `external_ref` | Портал; внешние ID — системы-источники |
 | Источники | `blob`, `document`, `document_revision`, `document_occurrence`, `import_batch`, `import_item`, `source_set`, `source_set_revision`, `source_set_item`, `evidence_scope`, `evidence_scope_item` | Портал (оригиналы и состав) |
-| Распознавание и доказательства | `recognition_run`, `recognition_page`, `evidence_fragment`, `fragment_index_state` | RDWeb/LocalAI — обработка; портал — неизменяемая копия доказательств |
+| Распознавание и доказательства | `recognition_run`, `recognition_page`, `evidence_fragment` | RDWeb и локальное распознавание (D-014) — обработка; портал — неизменяемая копия доказательств |
+| Индекс и поиск | `search_index_version`, `search_chunk`, `search_chunk_fragment`, `search_chunk_vector`, `embedding_cache`, `fragment_index_state`, `search_run`, `search_run_result` | Портал; индекс — производные данные, прогон поиска — журнал (ADR-012, D-013, D-015) |
 | Расчёт | `calculation_capture`, `calculation_content`, `calculation_revision`, `calculation_revision_status_event`, `calculation_position`, `calculation_line`, `position_lineage` | TenderHub — расчёт; портал — снимок ревизии |
 | Коммуникации | `communication`, `communication_occurrence`, `communication_attachment`, `communication_tender_link`, `qa_form`, `qa_item`, `negotiation_session`, `negotiation_participant`, `transcript_revision`, `transcript_segment` | MailHub и сервис переговоров — первичные данные; портал — связи и копии доказательств |
 | Требования и проверки | `requirement`, `requirement_revision`, `requirement_evidence`, `coverage_link`, `review_run`, `review_check_result`, `model_suggestion`, `finding`, `finding_evidence`, `finding_event`, `discrepancy`, `discrepancy_status_event`, `decision`, `question`, `risk_acceptance`, `evidence_dependency` | Портал |
@@ -61,12 +62,27 @@ erDiagram
   DOCUMENT_REVISION ||--o{ RECOGNITION_RUN : "распознавания"
   RECOGNITION_RUN ||--o{ RECOGNITION_PAGE : "страницы"
   RECOGNITION_RUN ||--o{ EVIDENCE_FRAGMENT : "фрагменты"
-  EVIDENCE_FRAGMENT ||--o{ FRAGMENT_INDEX_STATE : "индексы"
   TENDER_STAGE ||--o{ STAGE_INPUT_EVENT : "события входов"
   TENDER ||--o{ INTAKE_CHANNEL : "каналы поступления"
   SOURCE_SET_REVISION ||--o{ EVIDENCE_SCOPE : "основа"
   EVIDENCE_SCOPE ||--o{ EVIDENCE_SCOPE_ITEM : "состав"
   RECOGNITION_RUN ||--o{ EVIDENCE_SCOPE_ITEM : "выбранный прогон"
+```
+
+### 3.1a. Индекс и поиск (этап 05)
+
+```mermaid
+erDiagram
+  SEARCH_INDEX_VERSION ||--o{ SEARCH_CHUNK : "чанки версии"
+  SEARCH_CHUNK ||--o{ SEARCH_CHUNK_FRAGMENT : "упорядоченные фрагменты"
+  EVIDENCE_FRAGMENT ||--o{ SEARCH_CHUNK_FRAGMENT : "входит"
+  SEARCH_CHUNK ||--o| SEARCH_CHUNK_VECTOR : "вектор"
+  SEARCH_INDEX_VERSION ||--o{ FRAGMENT_INDEX_STATE : "состояние по версии"
+  EVIDENCE_FRAGMENT ||--o{ FRAGMENT_INDEX_STATE : "индексы"
+  SEARCH_INDEX_VERSION ||--o{ SEARCH_RUN : "закреплённая версия"
+  EVIDENCE_SCOPE ||--o{ SEARCH_RUN : "сохранённый снимок"
+  SEARCH_RUN ||--o{ SEARCH_RUN_RESULT : "ранги по веткам и итог"
+  EVIDENCE_FRAGMENT ||--o{ SEARCH_RUN_RESULT : "цитата"
 ```
 
 ### 3.2. Расчёт, требования, проверки
@@ -187,7 +203,7 @@ erDiagram
 | `recognition_run` | frozen-after | `document_revision_id`, `tender_id`, `engine` (`rdweb_export`/`rdweb_api`/`text_layer`/`local_ocr`), `engine_schema_version`, `source_artifact_sha256`, `source_artifact_name`, `status` (`queued`/`running`/`complete`/`partial`/`failed`/`cancelled`), `pages_total`, `pages_recognized`, `quality`, `failure_code`, `failure_detail`, `supersedes_run_id`, `row_version` | после финального статуса неизменна; новый OCR — новая строка (A10). Пара (`document_revision_id`, `source_artifact_sha256`) уникальна среди прогонов, не завершившихся отказом или отменой: один архив — один прогон, после `failed` и `cancelled` повтор разрешён. `complete` невозможен, пока `pages_recognized < pages_total` (CHECK, I18); переход в `complete`/`partial` дополнительно сверяет счётчики с фактическими строками `recognition_page` (триггер, R04-04) |
 | `recognition_page` | immutable | `run_id`, `page_index`, `page_label`, `sheet_label`, `width_px`, `height_px`, `rotation`, `status` (`recognized`/`missing`/`failed`) | (`run_id`, `page_index`) уникальны; вставка только в выполняющийся прогон (триггер, R04-04) |
 | `evidence_fragment` | immutable | `tender_id`, `source_unit_type` (`recognition_run`/`communication`/`transcript_revision`), `source_unit_id`, `run_id` или `transcript_segment_id` или `communication_id`, `document_revision_id`, `origin` (см. ниже), `fragment_kind`, `fragment_key`, `external_block_id`, `ordinal`, `page_index`, `bbox_norm numeric[4]`, `bbox_space`, `shape_type`, `polygon_norm`, `rotation`, `text`, `text_sha256`, `derived_model_ref`, `external_crop_url`, `warnings`, `part_index`, `part_total` | ID портала стабилен; текст не редактируется; единица источника — основа фильтра области (ADR-008). Вставка только в выполняющийся прогон (триггер, R04-04). Составной FK (`run_id`, `document_revision_id`, `tender_id`) на прогон: редакция доказательства — это редакция его прогона (R04-05) |
-| `fragment_index_state` | derived | `fragment_id`, `index_system` (`portal_fts`/`portal_vector`), `index_version`, `status`, `skip_reason`, `indexed_at` | можно удалить и пересобрать (I15, A42). **Не создана на этапе 04**: до этапа 05 у неё нет ни писателя, ни читателя — заводится вместе с индексацией. Значение `localai` не заводится: индекс стал внутренним (D-013, ADR-012) |
+| `fragment_index_state` | derived | описана в §4.13 | **не создана на этапе 04**: до этапа 05 у неё нет ни писателя, ни читателя — заводится вместе с индексацией |
 
 #### Реализация (этап 04)
 
@@ -220,6 +236,8 @@ erDiagram
 - Охранник берёт ту же advisory-блокировку по редакции, что и приём архива в API, поэтому проверка «хвост свободен» не разъезжается со вставкой.
 
 Значения `evidence_fragment.origin` (I06): `document_text` (текстовый слой или текст документа), `recognized_text` (RDWeb/OCR), `model_description` (описание, summary, verification модели), `negotiation_speech` (реплика транскрипции), `negotiation_hint` (подсказка сервиса переговоров), `email_body`, `attachment_text`. Решение человека фрагментом не является и хранится в `decision`.
+
+Политика индексации по `origin` (ADR-012 §21–22, AR05-04): в индекс поиска попадают только `document_text` и `recognized_text` (с этапа 07 — `email_body`, `attachment_text`, `negotiation_speech`). `model_description` и `negotiation_hint` не индексируются и не могут стать результатом поиска или единственной цитатой.
 
 ### 4.5. Расчёт
 
@@ -334,6 +352,19 @@ erDiagram
 | `process_heartbeat` | mutable | `process_id`, `kind` (`worker`), `pid`, `started_at`, `last_seen_at` | служебная таблица для `/ready` (ADR-011 §4), добавлена на этапе 02; не бизнес-данные |
 | `schema_migration` | служебная | `version`, `name`, `sha256`, `applied_at` | ведёт раннер миграций (ADR-002 §5) |
 
+### 4.13. Индекс и поиск (этап 05; ADR-012, D-021)
+
+| Таблица | Класс | Ключевые колонки | Ограничения |
+|---|---|---|---|
+| `search_index_version` | mutable | `seq`, `status` (`building`/`active`/`retired`/`failed`), `chunker_version`, `fts_config`, `embedding_input_version`, `embedding_model`, `embedding_model_fingerprint`, `embedding_dim`, `probe_vector` (`halfvec`), `activated_at`, `retired_at`, `purged_at`, `failure_code`, `row_version` | не более одной `active` и одной `building` (частичные уникальные индексы); `embedding_model`, `embedding_model_fingerprint`, `embedding_dim` — все заданы или все `NULL` (версия без векторов); `embedding_dim` от 1 до 4000; параметры версии после создания не меняются, переходы только `building` → `active` → `retired` и `building` → `failed` (триггер); уникальность (`id`, `embedding_dim`) — цель составного FK векторов; строки не удаляются: на них ссылаются прогоны поиска (ADR-012 §5) |
+| `search_chunk` | derived | `index_version_id`, `tender_id`, `source_unit_type`, `source_unit_id`, `run_id`, `page_index`, `part_no`, `chunk_key`, `header_text`, `body_text`, `fts` (`tsvector`: шапка — вес `A`, тело — `B`), `text_sha256` | (`index_version_id`, `chunk_key`) уникальны — повторная индексация идемпотентна; составной FK (`source_unit_id`, `tender_id`) на прогон; уникальность (`id`, `index_version_id`, `source_unit_id`, `tender_id`) — цель FK связей и векторов. На этапе 05 `source_unit_type = 'recognition_run'`; письма и транскрипции добавляет этап 07 |
+| `search_chunk_fragment` | derived | `chunk_id`, `index_version_id`, `source_unit_id`, `tender_id`, `fragment_id`, `ordinal`, `char_start`, `char_end` | составной FK (`chunk_id`, `index_version_id`, `source_unit_id`, `tender_id`) на чанк и (`fragment_id`, `source_unit_id`, `tender_id`) на `evidence_fragment` — фрагмент чужой единицы или тендера непредставим (ADR-012 §3; уникальность (`id`, `source_unit_id`, `tender_id`) у `evidence_fragment` добавляет миграция этапа 05); (`chunk_id`, `ordinal`) уникальны |
+| `search_chunk_vector` | derived | `chunk_id` (PK), `index_version_id`, `source_unit_id`, `tender_id`, `dim`, `embedding` (`halfvec` без модификатора, `STORAGE PLAIN`) | составной FK (`chunk_id`, `index_version_id`, `source_unit_id`, `tender_id`) на чанк; FK (`index_version_id`, `dim`) на `search_index_version (id, embedding_dim)`; `CHECK (vector_dims(embedding) = dim)`. Единица и тендер повторены здесь, чтобы фильтр области стоял в `WHERE` векторной ветки без чтения текстов чанков. ANN-индекса нет намеренно (ADR-012 §7). Исключается из дампа по данным |
+| `embedding_cache` | derived | PK (`text_sha256`, `purpose` (`index`/`query`), `embedding_model`, `embedding_model_fingerprint`, `embedding_input_version`, `dim`), `embedding` (`halfvec`, `STORAGE PLAIN`), `created_at`, `last_used_at` | `CHECK (vector_dims(embedding) = dim)`; вектор берётся только при совпадении всего ключа с версией индекса (ADR-012 §9). Исключается из дампа по данным |
+| `fragment_index_state` | derived | `fragment_id`, `index_version_id`, `index_system` (`portal_fts`/`portal_vector`), `status` (`pending`/`indexed`/`skipped`/`failed`), `skip_reason` (`origin_not_evidence`/`empty_text`/…), `indexed_at` | (`fragment_id`, `index_version_id`, `index_system`) уникальны; основа проверки полноты при активации версии и охвата в результате поиска. Значение `localai` не заводится: индекс стал внутренним (D-013) |
+| `search_run` | frozen-after | `context_kind` (`tender`; `contract` — этап 06a), `tender_id`, `stage_id`, `release_id`, `evidence_scope_id`, `mode` (`working`/`review`/`release`; `comparison` — этап 15), `requested_by`, `principal_id`, `principal_kind`, `on_behalf_of_user_id`, `query_text`, `query_sha256`, `query_normalization_version`, `result_limit`, `scope_hash`, `allowed_source_unit_ids uuid[]`, `scope_counts` (единицы по типам, исключено по правам, страницы распознано из всего, не проиндексировано активной версией), `index_version_id`, `ranking_version`, `embedding_model`, `embedding_model_fingerprint`, `status` (`pending`/`complete`/`degraded`/`failed`), `semantic_status` (`queued`/`running`/`complete`/`unavailable`/`failed`/`timeout`/`cancelled`), `semantic_reason`, `job_id`, `deadline_at`, `timings`, `failure_code`, `finished_at` | закреплённые поля (контекст, запрос, область, версия, ранжирование) не меняются с момента создания; после терминального статуса строка неизменна (триггер); `pending` возможен только при `semantic_status` `queued`/`running`; `context_kind = 'tender'` требует `tender_id`; вид `contract` 06a добавляет расширением `CHECK` и колонкой `contract_id` без изменения статусов (ADR-012 §24). Прогон читает только его автор (тот же пользователь или токен от его имени) |
+| `search_run_result` | immutable | `run_id`, `branch` (`exact`/`fts`/`vector`/`fused`), `rank`, `fragment_id`, `origin`, `score`, `matched_via` (для `fused`: ветки, нашедшие фрагмент), `chunk_key` | (`run_id`, `branch`, `rank`) уникальны; FK на `evidence_fragment`, а не на чанк — цитата переживает удаление версии индекса; вставка только в прогон `pending` (охранник блокирует строку прогона); `fused` пишется только при терминализации по зафиксированному набору веток (ADR-012 §14) |
+
 ## 5. Хэши содержимого
 
 | Хэш | Что входит | Где используется |
@@ -343,6 +374,9 @@ erDiagram
 | `evidence_scope.content_hash` | `source_set_revision.content_hash` + отсортированные типизированные единицы (`unit_type`, ID редакции, ID прогона распознавания, ID письма, ID редакции транскрипции) | закрепление проверенного состава доказательств (R01-01) |
 | `calculation_content.content_hash` | `normalization_version`, позиции, строки, итог КП с валютой и семантикой, составляющие итога, курсы с датами — канонический JSON | дедупликация содержимого расчёта; идентичность наблюдения — `calculation_revision` (R01-04) |
 | `release_candidate.content_hash` | `manifest_sha256` | согласование (I02) |
+| `search_run.scope_hash` | `evidence_scope.content_hash` (или хэш временного снимка режима `working`) + отсортированные `allowed_source_unit_ids` после фильтра прав | закрепление области прогона поиска, аудит (ADR-008 §3) |
+| `search_run.query_sha256` | текст запроса после нормализации версии `query_normalization_version` | журнал поиска, кеш вектора запроса |
+| `embedding_cache.text_sha256` | текст после шаблона входа `embedding_input_version` | ключ кеша эмбеддингов вместе с моделью, отпечатком и размерностью (ADR-012 §9) |
 | манифест кандидата | `mode`, базы актуальности, ID и хэши входов (ревизия расчёта и хэш её содержимого, `evidence_scope` и его хэш, прогоны проверок, решения, версии шаблонов) и файлы (`path`, `sha256`, `size`, `audience`) | выпуск, размещение, отправка |
 
 Канонический JSON: ключи по алфавиту, числа — десятичные строки, UTF-8 без BOM, без пробелов. Алгоритм фиксируется в `packages/core` на этапе 12 с тестом на стабильность.

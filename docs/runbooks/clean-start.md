@@ -5,7 +5,7 @@
 ## Требования
 
 - Node.js 24 LTS (проверено на 24.14.1), npm 11.
-- PostgreSQL ≥ 16 в `PATH` (`initdb`, `pg_ctl`, `psql`); проверено на 18.3.
+- PostgreSQL ≥ 17 в `PATH` (`initdb`, `pg_ctl`, `psql`); проверено на 18.3. Нижняя граница 17 — из-за провайдера локали `builtin` (ADR-002 §1, AR05-01).
 
 ## Шаги
 

@@ -2,7 +2,7 @@
 // области прогона поиска. Клиент не передаёт ID единиц сам — их выводит сервер из этапа или снимка.
 import { evidenceScopeContentHash, sourceSetContentHash, type IScopeUnit } from '@kontur/core';
 import { contentTenderIds, type IAccessContext } from './access.ts';
-import type { Queryable } from './pool.ts';
+import { inTransaction, type Queryable } from './pool.ts';
 
 export interface IScopeRevisionItem {
   document_revision_id: string;
@@ -124,30 +124,36 @@ export const planEvidenceScope = async (
 };
 
 // Одинаковый состав этапа — та же строка (data-model §4.3): повтор возвращает существующий снимок.
+// Снимок и весь его состав пишутся в одной транзакции, единицы — одной командой (миграция 0010, R05-01):
+// БД сверяет полноту и хэш после команды и при COMMIT, а после фиксации единицу в снимок не вставить.
+// Параллельное создание того же состава ждёт на уникальности (stage_id, content_hash) и возвращает
+// зафиксированный снимок; частично заполненный снимок другим транзакциям не виден.
 export const createEvidenceScope = async (
   db: Queryable,
   s: { stageId: string; tenderId: string; sourceSetRevisionId: string; inputVersion: number; contentHash: string; createdBy: string; units: IScopeUnit[] },
-): Promise<{ id: string; created: boolean }> => {
-  const r = await db.query<{ id: string }>(
-    `INSERT INTO evidence_scope (stage_id, tender_id, source_set_revision_id, input_version, content_hash, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT (stage_id, content_hash) DO NOTHING RETURNING id`,
-    [s.stageId, s.tenderId, s.sourceSetRevisionId, s.inputVersion, s.contentHash, s.createdBy],
-  );
-  if (r.rows[0]) {
-    const id = r.rows[0].id;
-    for (const u of s.units) {
-      await db.query(
+): Promise<{ id: string; created: boolean }> =>
+  inTransaction(db, async (tx) => {
+    const r = await tx.query<{ id: string }>(
+      `INSERT INTO evidence_scope (stage_id, tender_id, source_set_revision_id, input_version, content_hash, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (stage_id, content_hash) DO NOTHING RETURNING id`,
+      [s.stageId, s.tenderId, s.sourceSetRevisionId, s.inputVersion, s.contentHash, s.createdBy],
+    );
+    const id = r.rows[0]?.id;
+    if (!id) {
+      const existing = await tx.query<{ id: string }>('SELECT id FROM evidence_scope WHERE stage_id = $1 AND content_hash = $2', [s.stageId, s.contentHash]);
+      return { id: existing.rows[0]!.id, created: false };
+    }
+    if (s.units.length > 0) {
+      await tx.query(
         `INSERT INTO evidence_scope_item (scope_id, tender_id, unit_type, document_revision_id, recognition_run_id, inclusion_reason)
-         VALUES ($1, $2, $3, $4, $5, 'source_set_included')`,
-        [id, s.tenderId, u.unitType, u.documentRevisionId, u.recognitionRunId],
+         SELECT $1, $2, u.unit_type, u.document_revision_id, u.recognition_run_id, 'source_set_included'
+           FROM unnest($3::text[], $4::uuid[], $5::uuid[]) AS u(unit_type, document_revision_id, recognition_run_id)`,
+        [id, s.tenderId, s.units.map((u) => u.unitType), s.units.map((u) => u.documentRevisionId), s.units.map((u) => u.recognitionRunId)],
       );
     }
     return { id, created: true };
-  }
-  const existing = await db.query<{ id: string }>('SELECT id FROM evidence_scope WHERE stage_id = $1 AND content_hash = $2', [s.stageId, s.contentHash]);
-  return { id: existing.rows[0]!.id, created: false };
-};
+  });
 
 export const getEvidenceScope = async (db: Queryable, ctx: IAccessContext, id: string): Promise<IEvidenceScopeRow | null> => {
   const r = await db.query<IEvidenceScopeRow>('SELECT * FROM evidence_scope WHERE id = $1 AND tender_id = ANY($2::uuid[])', [id, contentTenderIds(ctx)]);

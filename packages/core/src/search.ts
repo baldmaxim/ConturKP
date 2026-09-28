@@ -293,7 +293,8 @@ const byKey = (a: string[], b: string[]): number => {
 };
 
 // Хэш снимка области (data-model §5): хэш состава ревизии набора + отсортированные типизированные
-// единицы. Одинаковый состав этапа даёт тот же хэш и ту же строку снимка.
+// единицы. Одинаковый состав этапа даёт тот же хэш и ту же строку снимка. БД пересчитывает хэш по
+// фактическому составу той же формулой (evidence_scope_composition_hash, миграция 0010): менять вместе.
 export const evidenceScopeContentHash = (sourceSetHash: string, units: readonly IScopeUnit[]): string => {
   const rows = units.map((u) => [u.unitType, u.documentRevisionId, u.recognitionRunId ?? '', '', '']).sort(byKey);
   return sha256Hex(`kontur.evidence_scope.v1\n${sourceSetHash}\n${JSON.stringify(rows)}`);

@@ -18,20 +18,29 @@
 - Статусы подтверждены: `TenderHubReader` — `VERIFIED_FIXTURE`, `TenderHubRevisionReader` — `BLOCKED_EXTERNAL` (X-01), прямой транспорт — `NOT_IMPLEMENTED`. Повышать `TenderHubReader` до `VERIFIED_LIVE` до U-04 запрещено.
 - X-01, Q-01, Q-05, U-04 остаются открытыми. Этап 06a не начинается до Review 06-1.
 
-**Что передаётся на Review 06-1 после U-04** (владелец вручную задаёт `TENDERHUB_URL`, `TENDERHUB_API_KEY` и uuid разрешённого тендера; ключ не передаётся ревьюеру и не попадает в Git и журналы), и откуда это берётся в текущем сценарии `npm run tenderhub:live-smoke -- --tender <uuid>`:
+**Что передаётся на Review 06-1 после U-04** (владелец вручную задаёт `TENDERHUB_URL`, `TENDERHUB_API_KEY` и uuid разрешённого тендера; ключ не передаётся ревьюеру и не попадает в Git и журналы), и где это в журнале `artifacts/stage-06/live-smoke.log` сценария `npm run tenderhub:live-smoke -- --tender <uuid>` после дополнения (ниже):
 
-| № | Требование ревью | Источник в журнале `artifacts/stage-06/live-smoke.log` | Полнота в текущем сценарии |
+| № | Требование ревью | Где в журнале | Полнота |
 |---|---|---|---|
-| 1 | журнал без секрета и коммерческих данных | весь журнал: коды, счётчики, имена полей, SHA-256; ключ проверяется на отсутствие перед записью | полная |
-| 2 | origin и версия API без ключа | «адрес и ключ заданы» (origin), «OpenAPI развёрнутой сборки получена» (SHA-256 и `info.version`) | полная |
-| 3 | uuid тендера (можно замаскировать) | строка «тендер для проверки» — uuid целиком | маскируется вручную |
-| 4 | проверка пагинации | «выгрузка тендера» (число страниц, позиций, строк) и «сверка до/после и между маршрутами» (дубли, наборы позиций, счётчики) | при тендере до 200 позиций страница одна — курсор живьём не проверяется |
-| 5 | поведение with-costs / no-cache | запрос всегда с `Cache-Control: no-cache`; в журнале статус, размер и SHA-256 ответа | заголовки кэша ответа не записываются |
-| 6 | HTTP-коды и формат ошибок | статус каждого ответа; при отказе — класс и причина адаптера | тело RFC 7807 в журнал не попадает |
-| 7 | расхождения с контрактом от 2026-09-02 | маршруты в OpenAPI, документированные поля в ответах, поля ответов в OpenAPI | полная |
-| 8 | только GET | клиент имеет только метод GET; отметка в шапке журнала | счётчика запросов по методам нет |
-| 9 | итоговый статус интеграции | итог журнала PASS/FAIL; статус записывается в `docs/integrations/status.md` после ревью журнала | вручную |
+| 1 | журнал без секрета и коммерческих данных | раздел 10 `log_redaction`: строки, совпавшие с ключом или значениями тендера, скрываются; сырые ответы не пишутся | полная |
+| 2 | origin и версия API без ключа | `tenderhub_url`, `api_contract` (OpenAPI, `info.version`, SHA-256 спецификации), `api_version_headers` | полная |
+| 3 | uuid тендера (можно замаскировать) | `tender_id` — маскирован, как и все uuid журнала | полная |
+| 4 | проверка пагинации | раздел 3: `positions_pages`, `positions_next_cursor`, `cursor_followed`, `cursor_repeated`, `positions_unique_ids`, `positions_duplicates`, `pagination_multi_page`, `pagination_probe` | полная; при одной рабочей странице — `NOT_OBSERVED` и пробный обход малыми страницами |
+| 5 | поведение with-costs / no-cache | раздел 4: `with_costs_no_cache_sent`, `with_costs_cache_headers`, статус, число элементов, сверка набора позиций и общих полей | полная |
+| 6 | HTTP-коды и формат ошибок | раздел 2 (`request` — статусы по маршрутам) и раздел 9 (`http_status`: content-type, имена полей RFC 7807, машинный `code`) | полная |
+| 7 | расхождения с контрактом от 2026-09-02 | раздел 9: `diff` — маршрут, ожидание, фактический статус или класс схемы, тип расхождения | полная |
+| 8 | только GET | раздел 2: `non_GET_requests`, методы и маршруты всех запросов | полная |
+| 9 | итоговый статус интеграции | `integration_status` (кандидат) и итог журнала; запись в `docs/integrations/status.md` — после ревью журнала | скрипт статус не меняет |
 | 10 | новый HEAD/ZIP/SHA | только если live-smoke потребует изменения кода | — |
+
+### Дополнение live-smoke перед U-04
+
+Решение владельца по итогам ревью 06-pre-1: расширить `tenderhub:live-smoke` до получения ключа, чтобы один живой запуск собрал доказательства для Review 06-1 без повторного доступа к TenderHub. Изменение ограничено диагностикой; `TenderHubReader`, `PortalCaptureStrategy`, БД, миграция 0011, API портала, интерфейс, семантика `provisional`, X-01/Q-01/Q-05 и статус интеграции не менялись.
+
+- Файлы: `scripts/tenderhub-live-smoke.ts` (сценарий); новые `scripts/tenderhub-live-smoke-observe.ts` (наблюдение транспорта через штатную опцию `fetchImpl`, маскирование uuid и курсоров, скрытие строк со значениями тендера) и `scripts/tenderhub-live-smoke-report.ts` (разделы журнала 1–9); в поддельный сервер `scripts/tenderhub-fake.ts` добавлены две тестовые возможности — повтор курсора и произвольное тело ответа; `tests/tenderhubLiveSmoke.test.ts`.
+- Согласованность в журнале — вердикты рабочей `PortalCaptureStrategy`, своей трактовки у сценария нет. Пробный обход малыми страницами — только диагностика курсора, когда рабочая выгрузка уместилась в одну страницу; `pagination_multi_page` при этом остаётся `NOT_OBSERVED`.
+- Проверено на поддельном сервере (15 тестов): обычный тендер на одну страницу, несколько страниц, расхождение positions и with-costs, строка BOQ без позиции, повтор курсора, изменение шапки во время выгрузки, отсутствующее необязательное поле, неожиданная форма ответа, 403 и 401, маскирование и скрытие строк журнала, отсутствие запросов не-GET, NOT_RUN без настройки.
+- Блокирующих дефектов production-кода не обнаружено; в этом коммите production-код не исправлялся. Наблюдение для ревьюера (отдельно): повтор id строки в `boq-items-full` при совпадающих счётчиках (строка продублирована, другая строка той же позиции пропала) стратегия не отлавливает. Такое содержимое отклонит БД — уникальность (`content_id`, `external_item_id`), код 23505. Обработчик относит к `content_rejected_by_db` только 23514 и 55000, поэтому выгрузка будет повторена и завершится `failed` с причиной `internal`. Ложной ревизии нет. Сценарий считает дубли строк BOQ отдельно (`boq_duplicates`).
 
 ## Результат для пользователя
 
@@ -63,7 +72,7 @@
 | API | `apps/server/src/routes/calculations.ts`, `calculationMappers.ts`, `app.ts` | `GET/PUT /stages/{id}/calculation-source`, `POST/GET /stages/{id}/calculation-captures`, `GET /calculation-captures/{id}`, `GET /stages/{id}/calculation-revisions`, `GET /calculation-revisions/{id}`, `…/positions`, `…/lines`, `GET/POST …/lineage`; аудит, `Idempotency-Key`, `If-Match`, правила ошибок |
 | Контракты и конфигурация | `packages/contracts/src/index.ts`, `packages/config/src/index.ts`, `.env.example` | схемы запросов и курсоров; `TENDERHUB_URL` (https или loopback), `TENDERHUB_API_KEY` (секрет), `TENDERHUB_TIMEOUT_SECONDS`, `TENDERHUB_RATE_LIMIT_PER_MINUTE`, `TENDERHUB_MAX_RESPONSE_MB`, `TENDERHUB_CAPTURE_ATTEMPTS`; в `.env.example` — только имена |
 | Интерфейс | `apps/web/src/pages/calculation/`, `api/calculationEndpoints.ts`, `api/calculationTypes.ts`, `utils/calculationLabels.ts`, правки `StagePage.tsx`, `Icon.tsx` | вкладка «Расчёт»: связь этапа, выгрузки и их состояния с причинами, ревизии, блокировка X-01, недоступность Q-05, закрытие у источника «недоступно до X-01», позиции и строки с догрузкой страниц |
-| Скрипты | `scripts/tenderhub-fake.ts`, `tenderhub-fake-data.ts`, `tenderhub-live-smoke.ts`, правка `smoke.mjs`, `package.json` | поддельный TenderHub по контракту (сырые лексемы, gzip, курсор, отказы, живая спецификация); сценарий live-smoke для U-04; шаги этапа 06 в smoke |
+| Скрипты | `scripts/tenderhub-fake.ts`, `tenderhub-fake-data.ts`, `tenderhub-live-smoke.ts` (+ `tenderhub-live-smoke-observe.ts`, `tenderhub-live-smoke-report.ts` — дополнение перед U-04), правка `smoke.mjs`, `package.json` | поддельный TenderHub по контракту (сырые лексемы, gzip, курсор, отказы, живая спецификация); сценарий live-smoke для U-04; шаги этапа 06 в smoke |
 | Проверки | `tests/calculationCapture.test.ts`, `calculationFailures.test.ts`, `calculationSchema.test.ts`, `calculationCore.test.ts`, `calculationMigration.test.ts`, `tenderhubAdapter.test.ts`, `tenderhubLiveSmoke.test.ts`, `calculationFixtures.ts`; правки `tests/helpers.ts`, `tests/core.test.ts`; `artifacts/stage-06/ui-check.mjs` | 62 новых теста в 7 файлах; ui-check этапа |
 
 Документы: ADR-004 (строка приоритета), ADR-005, ADR-006, ADR-007 — разделы «Реализация (этап 06)»; `data-model.md` §4.2, §4.5, §5; `state-machines.md` §6, §11.1; `contracts/adapters.md` §2, §9; `contracts/portal-api.md` §2.2, §2.5; `integrations/status.md`; `architecture/unknowns.md` §5; `requirements-traceability.md` (I01, I10, I13, I14, I17, I18, I19, F06); `runbooks/clean-start.md`.

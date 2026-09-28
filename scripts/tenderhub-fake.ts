@@ -23,7 +23,9 @@ export type FakeFault =
   | { kind: 'status'; status: number; code?: string; detail?: string }
   | { kind: 'drop' }
   | { kind: 'html' }
-  | { kind: 'delay'; ms: number };
+  | { kind: 'delay'; ms: number }
+  // Произвольное тело ответа: неожиданная форма схемы при HTTP 200 (или заданном статусе).
+  | { kind: 'json'; body: string; status?: number };
 
 export interface IFakeTenderHub {
   url: string;
@@ -37,6 +39,8 @@ export interface IFakeTenderHub {
   allowedTenders: string[] | null;
   // Поля, которых нет в живой спецификации OpenAPI (сверка сборки с документацией, R-06).
   specOmitFields: string[];
+  // Повтор курсора: страница возвращает тот же next_cursor, с которым её запросили (зацикленная пагинация).
+  repeatCursor: boolean;
   // Вызывается перед ответом: тест меняет данные посреди выгрузки или назначает отказ.
   beforeResponse: ((route: string, req: IFakeRequest, callNo: number) => FakeFault | void) | null;
   close: () => Promise<void>;
@@ -146,6 +150,7 @@ export const startFakeTenderHub = async (o: { apiKey: string }): Promise<IFakeTe
     scope: 'tenders:read',
     allowedTenders: null,
     specOmitFields: [],
+    repeatCursor: false,
     beforeResponse: null,
   };
   let callNo = 0;
@@ -194,6 +199,10 @@ export const startFakeTenderHub = async (o: { apiKey: string }): Promise<IFakeTe
       }
       if (fault?.kind === 'html') {
         send(req, res, 200, '<html><body>Bad Gateway</body></html>', 'text/html');
+        return;
+      }
+      if (fault?.kind === 'json') {
+        send(req, res, fault.status ?? 200, fault.body);
         return;
       }
       if (fault?.kind === 'delay') await new Promise((w) => setTimeout(w, fault.ms));
@@ -246,7 +255,13 @@ export const startFakeTenderHub = async (o: { apiKey: string }): Promise<IFakeTe
           return ua < ub ? 1 : ua > ub ? -1 : String(a.id) < String(b.id) ? 1 : -1;
         });
         const page = ordered.slice(offset, offset + limit).map((p) => pick(p, COSTS_ONLY));
-        const next = offset + limit < ordered.length ? Buffer.from(String(offset + limit), 'utf8').toString('base64url') : undefined;
+        const incoming = url.searchParams.get('cursor');
+        const next =
+          state.repeatCursor && incoming
+            ? incoming
+            : offset + limit < ordered.length
+              ? Buffer.from(String(offset + limit), 'utf8').toString('base64url')
+              : undefined;
         send(req, res, 200, toJson({ data: page, next_cursor: next }));
         return;
       }

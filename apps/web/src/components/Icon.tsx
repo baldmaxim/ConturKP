@@ -279,6 +279,12 @@ const ICONS = {
       <path d="m16 16-1.9-1.9" />
     </>
   ),
+  search: (
+    <>
+      <path d="m21 21-4.34-4.34" />
+      <circle cx="11" cy="11" r="8" />
+    </>
+  ),
   'server-off': (
     <>
       <path d="M7 2h13a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-5" />

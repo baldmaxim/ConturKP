@@ -173,8 +173,12 @@ export const EvidenceViewer: FC = () => {
         {fragment.pageStatus === 'missing' ? (
           <Notice tone="warning">Страница не распознана — фрагментов по ней нет, открывайте оригинал целиком.</Notice>
         ) : null}
-        {!fragment.bboxNorm ? (
+        {!fragment.bboxNorm && fragment.pageIndex !== null ? (
           <Notice tone="info">У фрагмента нет координат — показана вся страница оригинала без выделения.</Notice>
+        ) : null}
+        {/* R04-19: у фрагмента без страницы выбрать участок нечем — это состояние, а не загрузка. */}
+        {fragment.pageIndex === null ? (
+          <Notice tone="info">Фрагмент не привязан к странице; откройте оригинал целиком.</Notice>
         ) : null}
         {render?.spaceMatches === false ? (
           <Notice tone="warning">
@@ -188,7 +192,7 @@ export const EvidenceViewer: FC = () => {
           </Notice>
         ) : null}
         {drawError ? <Notice tone="danger">{`Страница не отрисована: ${drawError}`}</Notice> : null}
-        {fragment.contentUrl ? (
+        {fragment.contentUrl && fragment.pageIndex !== null ? (
           <div className={styles.stage}>
             {/*
               Холст пересоздаётся вместе с ключом отрисовки: пиксели прежней страницы не могут

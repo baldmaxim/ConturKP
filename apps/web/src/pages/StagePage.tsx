@@ -11,6 +11,7 @@ import { useUploadQueue } from '../hooks/useUploadQueue';
 import form from '../styles/form.module.css';
 import { DocumentsTab } from './sources/DocumentsTab';
 import { ImportBatchList } from './sources/ImportBatchList';
+import { SearchTab } from './search/SearchTab';
 import { InputEventsLog } from './sources/InputEventsLog';
 import { SourceSetTab } from './sources/SourceSetTab';
 import { UploadPanel } from './sources/UploadPanel';
@@ -22,6 +23,7 @@ const TABS: ITab[] = [
   { id: 'imports', label: 'Импорт', icon: 'upload' },
   { id: 'documents', label: 'Документы', icon: 'files' },
   { id: 'sources', label: 'Состав источников', icon: 'list-checks' },
+  { id: 'search', label: 'Поиск', icon: 'search' },
 ];
 
 export const StagePage: FC = () => {
@@ -88,6 +90,7 @@ export const StagePage: FC = () => {
         ) : null}
         {active === 'documents' ? <DocumentsTab stageId={stage.id} /> : null}
         {active === 'sources' ? <SourceSetTab stageId={stage.id} canWrite={canWriteSources} /> : null}
+        {active === 'search' ? <SearchTab tenderId={stage.tenderId} stageId={stage.id} canWrite={canWriteSources} /> : null}
       </div>
     </>
   );

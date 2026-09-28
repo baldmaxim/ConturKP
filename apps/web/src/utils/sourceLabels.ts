@@ -271,3 +271,24 @@ export const plural = (n: number, forms: [string, string, string]): string => {
   }
   return forms[2];
 };
+
+// Поиск (этап 05): ветки и причины деградации смысловой ветки (ADR-012 §17).
+export const SEARCH_BRANCH_LABELS: Record<string, string> = {
+  exact: 'точное совпадение',
+  fts: 'полнотекстовый',
+  vector: 'смысловой',
+};
+
+export const SEMANTIC_REASON_LABELS: Record<string, string> = {
+  index_without_embeddings: 'модель эмбеддингов не подключена — индекс построен без векторов',
+  index_vectors_missing: 'векторы индекса ещё не построены',
+  model_unavailable: 'модель эмбеддингов недоступна',
+  model_fingerprint_mismatch: 'модель эмбеддингов подменена — нужна новая версия индекса',
+  dimension_mismatch: 'модель вернула векторы другой размерности',
+  semantic_timeout: 'смысловая ветка не успела за отведённое время',
+  semantic_failed: 'смысловая ветка завершилась ошибкой',
+  cancelled: 'смысловая ветка отменена',
+};
+
+export const semanticReasonLabel = (code: string | null): string =>
+  code ? (SEMANTIC_REASON_LABELS[code] ?? code) : '';

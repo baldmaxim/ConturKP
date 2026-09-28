@@ -203,6 +203,19 @@
 
 `calculation_revision` неизменна. Изменение в TenderHub после закрытия — новая ревизия; прежняя и всё, что на неё ссылается, сохраняются (A07).
 
+**Реализация (этап 06).**
+
+| Из | В | Событие | Кто | Фактическое поведение |
+|---|---|---|---|---|
+| — | `capturing` | `POST /stages/{id}/calculation-captures` | участник с `calculation.capture` | одной транзакцией под блокировкой строки этапа: выгрузка и задание `calculation.capture` (класс `network`, `dedupe_key = capture:<stage>:<external_tender_id>:manual:<capture_id>`); нет основной связи этапа — `409` `no_calculation_source`; уже есть `capturing` для той же пары — `409` `capture_in_progress` (и частичный уникальный индекс в БД) |
+| — | `capturing` | наступил `submission_deadline`, наблюдённый прошлой выгрузкой (`brief`) | worker (проход планировщика) | `trigger = deadline`, `dedupe_key = …:deadline:<срок>`; ставится один раз, если после срока выгрузок не было и TenderHub настроен. Это сигнал для выгрузки, **не закрытие**: ревизия остаётся `provisional` (ADR-007 §7) |
+| `capturing` | `capturing` | попытка `inconsistent` или повторяемый отказ (429, сеть, 5xx, таймаут) | worker | попытка дописывается в `attempts` с причинами и SHA-256 сырых ответов; ревизия не создаётся; повтор с отсрочкой очереди, всего `TENDERHUB_CAPTURE_ATTEMPTS` попыток |
+| `capturing` | `complete` | попытка согласована | worker, условно по аренде | одной транзакцией: блокировка этапа → `external_ref` → содержимое (найти или создать) → ревизия или идемпотентная связь с последней → событие барьера `calculation_revision_added` (только при новой ревизии) → сверка агрегатов → `complete` |
+| `capturing` | `inconsistent` | все попытки дали `source_changed` | worker (`onTerminalFailure`) | `failure_code = source_changed`; ложной ревизии нет |
+| `capturing` | `failed` | 401, 403, 404, 503 `ENDPOINT_DISABLED`, `CONTRACT_MISMATCH`, исчерпаны повторы, интеграция не настроена (`integration_not_configured`), БД отклонила содержимое (`content_rejected_by_db`), отмена | worker | код и текст причины без секрета; статус интеграции `TenderHubReader` получает `last_error_code` |
+
+События статуса у источника (`calculation_revision_status_event`) — только у `verified`-ревизии: `—` → `closed_at_source`; `closed_at_source` → `reopened_at_source` или `superseded_at_source`; `reopened_at_source` → `closed_at_source` или `superseded_at_source`; после `superseded_at_source` событий нет. Повтор того же статуса подряд не пишется (идемпотентен), переходы проверяет и БД. До X-01 источника этих событий нет: правила закреплены контрактными тестами на фикстурах, продуктового пути, создающего `verified` или событие закрытия, нет (`TenderHubRevisionReader` — `BLOCKED_EXTERNAL`).
+
 ## 7. Требования и покрытие
 
 **`requirement`**
@@ -289,6 +302,8 @@
 | `CRITICAL_FINDINGS_OPEN` | открытые `critical`-замечания | бизнес | да, по каждому замечанию (A45) |
 | `QUESTIONS_UNANSWERED` | неотвеченные обязательные вопросы | бизнес | да |
 | `FIELDS_INCOMPLETE_OR_STALE` | обязательные поля пусты или `stale` | бизнес | да, кроме полей, помеченных шаблоном как обязательные для заказчика |
+
+`CALCULATION_PROVISIONAL` с этапа 06 вычисляет `calculationProductionBlockers(kind)` в `packages/core`: для `provisional` блокер есть всегда, параметра или настройки, которые его снимают, нет. Ответ API ревизии несёт `productionGate` (`allowed: false`, `blockers: ['CALCULATION_PROVISIONAL']`). Команд кандидата, согласования и выпуска до этапов 12–13 нет; они обязаны проверять блокер этой функцией.
 
 Блокеры боевого режима проверяются по `mode` кандидата, а не по списку назначений доставки (R01-05). Окончательная матрица согласуется владельцем (Q-09); структура и классы — часть ядра и от ответа не зависят.
 

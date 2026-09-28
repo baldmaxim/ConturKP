@@ -48,6 +48,38 @@ interface TenderHubRevisionReader {              // проект, X-01
 - Числа читаются без промежуточного `float` (ADR-005 §2). Поля `total_amount` трактуются как себестоимость, `total_commercial_*` — как коммерческая стоимость (`docs/discovery.md` §4.4).
 - Что вид цены, НДС и состав итога требуют подтверждения — Q-05; адаптер сохраняет всё доступное и не выводит недостающее.
 
+### Реализация (этап 06)
+
+Пакет `packages/adapters/src/tenderhub/`, версия контракта адаптера `TENDERHUB_CONTRACT_VERSION = 'th-api-2026-09-02/adapter-1'` (документация API от 2026-09-02, OpenAPI `archive.yaml` 1.0.0). Один доменный адаптер, транспорт подменяемый (D-016):
+
+```ts
+interface ITenderHubSource {                     // факт; реализация — TenderHubApiSource
+  readonly transport: 'api';                     // второй транспорт ('db') встанет рядом той же формой
+  brief(search: string): Promise<IRead<ISourceBrief[]>>;
+  overview(tenderId: string): Promise<IRead<ISourceOverview>>;
+  positions(tenderId: string): Promise<IRead<ISourcePositionPaged[]>>;          // все страницы курсора
+  positionsWithCosts(tenderId: string): Promise<IRead<ISourcePositionCosts[]>>; // всегда Cache-Control: no-cache
+  boqItems(tenderId: string): Promise<IRead<ISourceBoqItem[]>>;
+  missingFields(): Record<string, number>;      // документированные поля, которых не было в ответах (R-06)
+}
+interface IRead<T> { value: T; raws: IRawResponse[] }   // raws — тело после распаковки gzip, путь, статус, Date
+runPortalCapture(source, externalTenderId): Promise<IPortalCaptureResult>;  // PortalCaptureStrategy
+interface ITenderHubRevisionReader { … }         // проект X-01: только интерфейс, реализации нет
+```
+
+Уточнения против эскиза этапа 01:
+
+- **Транспорт `TenderHubHttpClient`.** Только `GET`; ключ — заголовок `X-API-Key`, заголовок `Authorization` не отправляется никогда (ключ в Bearer уходит в JWT-ветку TenderHub и даёт 401); `Accept-Encoding: gzip`; редирект — ошибка, а не следование (ключ не уходит на другой адрес); базовый адрес — `https` либо `http` только на loopback, без учётных данных и параметров. Собственный скользящий лимит `TENDERHUB_RATE_LIMIT_PER_MINUTE` (по умолчанию 100 при лимите ключа 120); на `429` Retry-After у TenderHub нет — запрос ждёт окно, после двух ожиданий — `RATE_LIMITED`. Размер распакованного ответа ограничен `TENDERHUB_MAX_RESPONSE_MB`, таймаут — `TENDERHUB_TIMEOUT_SECONDS` (серверный таймаут TenderHub — 5 мин).
+- **Классы ошибок** (`ITenderHubError`: `code`, машинная причина `reason`, `retryable`; без секретов и данных ответа): 401 `invalid API key` → `AUTH_FAILED`/`auth_failed`; 401 `invalid or expired token` → `AUTH_FAILED`/`auth_header_rejected` (ключ не дошёл до TenderHub: прокси или сборка); 403 `API_KEY_SCOPE_DENIED` → `FORBIDDEN`/`forbidden_scope`; 403 `API_KEY_TENDER_DENIED` → `FORBIDDEN`/`forbidden_tender`; 404 → `NOT_FOUND`; 429 → `RATE_LIMITED`; 503 `ENDPOINT_DISABLED` → `UNAVAILABLE`/`endpoint_disabled` без повтора («не обходить»); прочие 5xx, обрыв и сбой сети → `UNAVAILABLE` с повтором; таймаут → `TIMEOUT_UNKNOWN_OUTCOME` с повтором; HTML вместо JSON, неизвестная валюта, чужой тендер в строке, зацикленный курсор, отсутствие обязательного поля → `CONTRACT_MISMATCH` без повтора. Повторяются только 429, сеть, 5xx и таймаут: чтение побочных эффектов не имеет, поэтому сверка внешнего состояния перед повтором (§1 п. 3) сводится к новой выгрузке целиком.
+- **Числа.** Тело разбирается `JSON.parse` с доступом к исходному тексту числа (`context.source`, Node ≥ 21): значение не проходит через `float64`. Лексема приводится к канонической десятичной форме (`trim_scale` PostgreSQL), исходная лексема сохраняется в `raw_lexemes` (ADR-005 §2).
+- **Пагинация.** `positions` читается с `limit=200` до пустого `next_cursor`; повтор курсора или больше 1000 страниц — `CONTRACT_MISMATCH`. Одна страница полным расчётом не считается.
+- **`PortalCaptureStrategy` (`runPortalCapture`).** Порядок: `overview` → `brief` (поиск по `tender_number`: версия и `submission_deadline` есть только там) → все страницы `positions` → `positions/with-costs` (`no-cache`) → `boq-items-full` → повторный `overview`. Выгрузка `inconsistent`, если: признаки шапки до и после различаются (`cached_grand_total`, курсы, `position_count`, `boq_item_count`, `updated_at`); число позиций или строк расходится между маршрутами и шапкой; позиция встретилась на страницах дважды; наборы позиций постраничного маршрута и `with-costs` различаются; общие поля позиции различаются между маршрутами; `items_count` позиции не равен числу её строк; строка ссылается на позицию вне выгрузки; у строки или позиции `updated_at` не раньше начала выгрузки по часам источника (заголовок `Date`). Причины пишутся в попытку выгрузки; ревизия из `inconsistent` не создаётся.
+- **`updated_at` шапки.** TenderHub отдаёт `COALESCE(updated_at, NOW())`: у тендера без собственного `updated_at` значение равно текущему времени источника и различается в двух чтениях. Если оба значения совпадают с заголовком `Date` своего ответа (±2 с), признак исключается из сравнения и это пишется в отчёт (`updatedAtIsSourceNow`); остальные признаки сверяются как обычно.
+- **Нормализация.** Позиция = строка `with-costs` плюс поля постраничного маршрута (`is_section`, `section_number`, `position_name`, `cost_category_name`). `is_section` хранится и показывается как заголовок раздела, работой не считается; `cost_category_name` позиции — «самая частая категория строк», строкам не присваивается (категория строки — своя, из `boq-items-full`); `manual_volume`/`manual_note` хранятся как значения источника с семантикой «не подтверждена». Итог КП, правило итога, страхование, снижение и перераспределение не выводятся (Q-05): `kp_total` пуст, `kp_total_semantics = { status: 'rule_not_set', question: 'Q-05', unavailableComponents: [...] }`.
+- **`ITenderHubRevisionReader`** (`revisionReader.ts`) — только интерфейс проекта X-01. Реализации нет, статус `BLOCKED_EXTERNAL`; `verified`-ревизия и события статуса у источника проверяются контрактными тестами на фикстурах доменной функцией `recordSourceRevision`/`recordRevisionStatus`, путь из продукта к ним отсутствует.
+- **Live-smoke (U-04).** `scripts/tenderhub-live-smoke.ts` (`npm run tenderhub:live-smoke -- --tender <uuid>`): тот же адаптер и та же стратегия выгрузки без БД портала; сверка живой спецификации `GET /api/v1/archive/openapi.yaml` (маршруты адаптера описаны, поля ответов найдены в спецификации) и документированных полей в ответах сборки (R-06); журнал — только коды, счётчики, имена полей и SHA-256. Сценарий проверен на поддельном сервере (`tests/tenderhubLiveSmoke.test.ts`); живым прогоном это не является — до U-04 `NOT_RUN`.
+- **Прямое чтение БД TenderHub** (второй транспорт D-016) на этапе 06 не реализовано: доступ read-only владельцем не подтверждён. Отсутствие транспорта дефектом не является; `transport` у выгрузки хранится (`api`).
+
 ## 3. RDWeb (распознавание)
 
 Факт (`docs/discovery.md` §7.1): экспорт — PDF, `_results.md`, `_results.html`, `_blocks.json` (`schema_version` 1, `coordinate_space: normalized_page_top_left`, страницы с `rotation`, блоки с `block_id`, `page_index`, `page_label`, `block_type` ∈ {text, image, stamp}, `coords_norm`, `crop_url`).
@@ -231,8 +263,8 @@ interface ModelGateway {                         // проект; провайд
 
 | Адаптер | Статус | Что нужно для следующего шага |
 |---|---|---|
-| `TenderHubReader` | NOT_IMPLEMENTED | ключ `tenders:read` и разрешённый тендер (U-04) |
-| `TenderHubRevisionReader` | BLOCKED_EXTERNAL | X-01 |
+| `TenderHubReader` (`TenderHubApiSource` + `PortalCaptureStrategy`) | VERIFIED_FIXTURE (этап 06) | contract-тесты против поддельного HTTP-сервера TenderHub (`scripts/tenderhub-fake.ts`, `tests/tenderhubAdapter.test.ts`, `tests/calculation*.test.ts`); live-smoke — после ключа `tenders:read` и разрешённого тендера (U-04) |
+| `TenderHubRevisionReader` | BLOCKED_EXTERNAL | X-01; на этапе 06 — только интерфейс проекта и фикстурные тесты доменной модели |
 | `RdwebExportImporter` | VERIFIED_FIXTURE (этап 04) | разрешённый live-smoke на настоящем экспорте (`scripts/rdweb-inspect.ts`) |
 | `RdwebApiClient` | BLOCKED_EXTERNAL | X-05 |
 | `ModelGatewayEmbeddings` | VERIFIED_FIXTURE (этап 05) | `OpenAiCompatibleEmbeddings` проверен контрактными тестами против поддельного HTTP-сервера (`tests/embeddings.test.ts`), `FakeEmbeddings` — в тестах конвейера; живой прогон с моделью — `NOT_RUN` до целевого ПК |

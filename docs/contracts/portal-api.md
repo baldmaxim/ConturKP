@@ -55,7 +55,7 @@
 | `PUT /tenders/{id}/members/{userId}`, `DELETE …` | `admin.tender` | IM (ETag тендера) | назначения; не более двух инженеров; роль назначения требует той же глобальной роли |
 | `GET /tenders/{id}/stages`, `POST /tenders/{id}/stages` | `tender.read` / `stage.manage` | IK | этапы; создаёт руководитель тендера (этап 02) |
 | `GET /stages/{id}`, `PATCH /stages/{id}` | `tender.read` / `stage.write` | IM | название и срок подачи этапа (этап 02) |
-| `PUT /stages/{id}/calculation-source` | `admin.tender` | IM | связь с версией тендера TenderHub (Q-03) |
+| `GET /stages/{id}/calculation-source`, `PUT …` | `tender.read` / `admin.tender` (участник тендера) | IM | связь этапа с тендером TenderHub (Q-03), этап 06 — см. §2.5 |
 
 ### 2.3. Источники и набор источников
 
@@ -97,11 +97,19 @@
 
 | Метод и путь | Право | Ключи | Назначение |
 |---|---|---|---|
-| `POST /stages/{id}/calculation-captures` | `calculation.capture` | IK | запрос выгрузки из TenderHub |
-| `GET /calculation-captures/{id}` | `tender.read` | — | статус и результат сверки до/после |
-| `GET /calculation-revisions/{id}` | `tender.read` | — | шапка ревизии, вид (`provisional`/`verified`), итог, курсы |
-| `GET /calculation-revisions/{id}/positions`, `…/lines` | `tender.read` | — | позиции и строки (пагинация) |
-| `POST /calculation-revisions/{id}/lineage` | `calculation.capture` | IM | подтверждение сопоставления позиций между ревизиями |
+| `GET /stages/{id}/calculation-source` | `tender.read` | — | связи этапа: `primary`, `references[]`, `version` и `ETag: "<stageId>:<version>"` (сумма `row_version` связей), `integration[]` — статусы компонентов TenderHub (`TenderHubReader`, `TenderHubRevisionReader` с `blockedBy: 'X-01'`) без секретов (этап 06) |
+| `PUT /stages/{id}/calculation-source` | `admin.tender` и назначение на тендер | IM | тело `{ externalTenderId: uuid, externalVersion?: int \| null }`; задаёт основную связь, прежняя основная с другим тендером TenderHub становится `reference`; этап в архиве — `409`. Ответ — как у `GET` (этап 06) |
+| `POST /stages/{id}/calculation-captures` | `calculation.capture` | IK | тело `{}`; `202` — выгрузка `capturing` и задание worker; `409 STATE_CONFLICT` с `current.reason`: `no_calculation_source`, `capture_in_progress` (+ `captureId`), этап в архиве. Сервер в TenderHub не ходит (этап 06) |
+| `GET /stages/{id}/calculation-captures` | `tender.read` | — | последние 50 выгрузок этапа, новые сверху (этап 06) |
+| `GET /calculation-captures/{id}` | `tender.read` | — | статус (`capturing`/`complete`/`inconsistent`/`failed`), `trigger`, `transport`, журнал `attempts` (исход, причины расхождения, SHA-256 сырых ответов), `consistency` (признаки до/после, счётчики, сверка агрегатов с допуском), `sourceObserved`, `rawBundleSha256`, `contractVersion`, `revisionId`, `failure { code, detail }` (этап 06) |
+| `GET /stages/{id}/calculation-revisions` | `tender.read` | — | ревизии этапа, новые сверху (этап 06) |
+| `GET /calculation-revisions/{id}` | `tender.read` | — | `seq`, `kind` (`provisional`/`verified`), `externalTenderId`, `externalVersion`, `externalRevisionRef`, `supersedesRevisionId`, `contentHash`, `counts`, `source` (номер, срок подачи, `grandTotal` — объект денег `cached_grand_total` с `currency: UNKNOWN`, курсы), `kpTotal { value: null, rule: null, semantics: { status: 'rule_not_set', question: 'Q-05', … } }`, `productionGate { mode: 'production', allowed, blockers }` (`CALCULATION_PROVISIONAL` у `provisional`), `sourceStatus[]` и `closureAvailable` (только `verified`, X-01), `aggregates`, `raw { bundleSha256, contractVersion }` (этап 06) |
+| `GET /calculation-revisions/{id}/positions?cursor=&limit=` | `tender.read` | — | позиции в порядке (`position_number`, внешний ID), `limit` ≤ 500; у позиции `isSection`, `isAdditional`, `manualVolume { value, note, semantics: 'unconfirmed' }`, `dominantCostCategory`, суммы объектами денег, `rawLexemes`, число строк (этап 06) |
+| `GET /calculation-revisions/{id}/lines?positionId=&cursor=&limit=` | `tender.read` | — | строки ревизии или одной позиции, `limit` ≤ 500; `unitRate` в валюте строки источника, остальные суммы с `currency: UNKNOWN`; `parentWorkExternalItemId` у комплексной строки материала (этап 06) |
+| `GET /calculation-revisions/{id}/lineage` | `tender.read` | — | записи сопоставления позиций в эту ревизию, `version` и `ETag: "<revisionId>:<число записей>"` (этап 06) |
+| `POST /calculation-revisions/{id}/lineage` | `calculation.capture` | IM | тело `{ fromRevisionId, links: [{ fromPositionId, toPositionId, status: 'confirmed' \| 'rejected' }] }` (1–500); решение человека, `method = manual`, только дописывание; ревизия-источник — другая ревизия того же тендера, иначе `400`; позиции проверяет БД. Автоматического сопоставления на этапе 06 нет (этап 10) |
+
+Суммы — объект денег ADR-005 §4; `amount` — каноническая десятичная строка без потери точности, исходная лексема источника — в `rawLexemes`. Валюта сумм TenderHub, кроме цены единицы строки, источником не подтверждена (`UNKNOWN`), НДС — `unknown` (Q-05). Курсоры выдаёт сервер и проверяет их форму до обращения к БД (`400 VALIDATION_FAILED`); ответы страниц содержат `hasMore` и `nextCursor`.
 
 ### 2.6. Коммуникации и переговоры
 

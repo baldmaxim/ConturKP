@@ -18,7 +18,7 @@ dist/assets/workbox-window.prod.es5-Bd17z0YL.js      5.65 kB │ gzip:   2.20 kB
 dist/assets/pdf-CKZdGKSa.js                        409.76 kB │ gzip: 121.72 kB
 dist/assets/index-_PGbk3h7.js                      440.84 kB │ gzip: 131.40 kB
 
-✓ built in 337ms
+✓ built in 378ms
 
 PWA v1.3.0
 mode      generateSW

@@ -1,4 +1,4 @@
-# ui-check — 2026-09-28T09:57:43.032Z, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker
+# ui-check — 2026-09-28T11:41:40.117Z, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker
 PASS  server + worker готовы
 PASS  вход инженера
 PASS  оригинал, экспорт RDWeb и замороженный состав этапа

@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { crc32 } from 'node:zlib';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
+import { buildRdwebExport } from '../tests/rdweb.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const ADMIN = process.env.KONTUR_TEST_ADMIN_URL ?? 'postgresql://postgres@127.0.0.1:55432/postgres';
@@ -277,6 +278,62 @@ try {
     return c?.current && docs.items.some((d) => d.title === 'Договор.pdf') ? c : null;
   }, 45_000);
   record('наблюдаемая папка: файл импортирован worker, канал актуален', ch.status === 201 && Boolean(scanned));
+
+  // ---- Этап 05: индекс и поиск на реальных процессах (модель эмбеддингов не настроена)
+  const octet = { 'Content-Type': 'application/octet-stream' };
+  const json = { 'Content-Type': 'application/json' };
+  const idem = () => ({ 'Idempotency-Key': `smoke-${randomBytes(6).toString('hex')}` });
+  const fx = buildRdwebExport({ docName: 'ТЗ-smoke', pages: 2 });
+  const upPdf = await api(`/stages/${stageId}/imports?name=${encodeURIComponent('ТЗ-smoke.pdf')}`, { method: 'POST', headers: { ...octet, ...idem() }, body: fx.pdf });
+  const pdfBatch = await upPdf.json();
+  const pdfDone = await waitFor(async () => {
+    const b = await (await api(`/imports/${pdfBatch.id}`)).json();
+    return b.status === 'completed' ? b : null;
+  }, 30_000);
+  const revisionId = pdfDone?.items?.[0]?.documentRevisionId;
+  const rec = await api(`/document-revisions/${revisionId}/recognition-imports?name=export.zip`, { method: 'POST', headers: { ...octet, ...idem() }, body: fx.zip });
+  const recBody = await rec.json();
+  const runDone = await waitFor(async () => {
+    const r = await (await api(`/recognition-runs/${recBody.id}`)).json();
+    return r.status === 'complete' ? r : null;
+  }, 30_000);
+  record('этап 05: экспорт RDWeb принят и разобран worker', rec.status === 202 && Boolean(runDone));
+  const draft = await api(`/stages/${stageId}/source-set-revisions`, { method: 'POST', headers: { ...json, ...idem() }, body: '{}' });
+  const draftBody = await draft.json();
+  const itemsPut = await api(`/source-set-revisions/${draftBody.id}/items`, {
+    method: 'PUT',
+    headers: { ...json, 'If-Match': draft.headers.get('etag') },
+    body: JSON.stringify({ items: [{ documentRevisionId: revisionId, inclusion: 'included' }] }),
+  });
+  const frozen = await api(`/source-set-revisions/${draftBody.id}/freeze`, { method: 'POST', headers: { ...json, 'If-Match': itemsPut.headers.get('etag'), ...idem() }, body: '{}' });
+  record('этап 05: состав этапа заморожен', itemsPut.status === 200 && frozen.status === 200);
+  const search = (body) => api('/search', { method: 'POST', headers: json, body: JSON.stringify(body) });
+  const working = { kind: 'tender', tenderId: demo.id, mode: 'working', stageId };
+  // Индекс строит worker (проход обслуживания и пачки index.build): поиск повторяется до активной версии.
+  const found = await waitFor(async () => {
+    const r = await search({ context: working, query: 'ФИКС-АР', limit: 5 });
+    if (r.status !== 200) return null;
+    const b = await r.json();
+    return b.fused?.items?.length ? b : null;
+  }, 60_000);
+  record(
+    'этап 05: worker построил индекс, шифр штампа найден точной веткой',
+    Boolean(found) && found.fused.items[0].matchedVia.includes('exact') && found.fused.items[0].fragmentKind === 'stamp_block',
+    found ? `версия индекса ${found.index.seq}, единиц в области ${found.scope.units}` : 'нет результата',
+  );
+  record('этап 05: без модели смысловая ветка честно недоступна с причиной', found?.status === 'degraded' && found.semantic.reason === 'index_without_embeddings');
+  const described = await (await search({ context: working, query: 'насос задвижка фильтр', limit: 5 })).json();
+  record(
+    'этап 05: описание модели не находится; пустой итог — «не найдено в области»',
+    described.fused?.items?.length === 0 && /^не найдено в области/.test(described.emptyMessage ?? ''),
+    described.emptyMessage ?? '',
+  );
+  const scopeRes = await api(`/stages/${stageId}/evidence-scopes`, { method: 'POST', headers: { ...json, ...idem() }, body: '{}' });
+  const scope = await scopeRes.json();
+  const review = await (await search({ context: { kind: 'tender', tenderId: demo.id, mode: 'review', evidenceScopeId: scope.id }, query: 'ФИКС-АР', limit: 5 })).json();
+  record('этап 05: снимок области зафиксирован, поиск по снимку', scopeRes.status === 201 && review.fused?.items?.length > 0 && review.context?.mode === 'review');
+  const reread = await api(`/search-runs/${found?.searchRunId}`);
+  record('этап 05: прогон поиска перечитывается тем же итогом', reread.status === 200 && JSON.stringify((await reread.json()).fused) === JSON.stringify(found?.fused));
 
   await stopProc(server);
   server = startProc('server', 'apps/server/src/main.ts');

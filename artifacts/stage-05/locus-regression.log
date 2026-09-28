@@ -1,0 +1,11 @@
+регрессия Locus (stage05, ранжирование r1, итог по {exact, fts}): случаев 9, оснований 14
+pv2-exact-contractor: найдено 1/1, первый релевантный — 1
+pv2-amount-balchug-price: найдено 1/1, первый релевантный — 3
+pv2-amount-retention-trap: найдено 2/2, первый релевантный — 1
+pv2-multi-condition-termination: найдено 1/1, первый релевантный — 1
+pv2-broad-overview: найдено 3/4, первый релевантный — 2
+pv2-multi-doc-end-date: найдено 2/2, первый релевантный — 2
+pv2-wrong-project-warranty: найдено 1/1, первый релевантный — 2
+pv2-citation-penalty: найдено 1/1, первый релевантный — 1
+pv2-ocr-suspension-date: найдено 1/1, первый релевантный — 1
+Recall@5 = 0.929 (13/14); MRR = 0.759; утечка = 0; точность цитаты = 1.000

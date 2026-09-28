@@ -73,8 +73,9 @@
 | `POST /stages/{id}/source-set-revisions` | `source.write` | IK | новая `draft`-ревизия рабочего набора этапа от последней (набор создаётся при первом обращении; вместо `POST /source-sets/{id}/revisions` этапа 01 — набора до первого обращения ещё нет) |
 | `PUT /source-set-revisions/{id}/items` | `source.write` | IM | состав `draft`-ревизии |
 | `POST /source-set-revisions/{id}/freeze` | `source.write` | IM, IK | заморозка состава и `content_hash` (этап 04). Охранное условие: у каждой включённой редакции есть прогон распознавания `complete` или `partial`. Иначе `409 STATE_CONFLICT` с `current.blocking[]` (`documentRevisionId`, `documentTitle`, `revisionSeq`, `reason` ∈ `no_recognition`/`recognition_in_progress`/`recognition_failed`/`recognition_cancelled`). Событий барьера заморозка не порождает |
-| `POST /stages/{id}/evidence-scopes` | `source.write` | IK | фиксация снимка области доказательств: редакции с выбранными прогонами, письма, редакции транскрипций (R01-01) |
-| `GET /evidence-scopes/{id}` | `tender.read` | — | состав снимка по типам и `content_hash`; письма из недоступных ящиков показываются только счётчиком без содержимого |
+| `POST /stages/{id}/evidence-scopes` | `source.write` | IK | фиксация снимка области доказательств (R01-01; этап 05): из замороженной ревизии набора этапа (по умолчанию последней, либо `sourceSetRevisionId`) с выбранным для каждой включённой редакции хвостом истории распознавания. `201` — новый снимок; `200` с `reused: true` — тот же состав уже зафиксирован; `409 STATE_CONFLICT` с `current.reason = no_frozen_source_set` — замороженной ревизии нет. Письма и редакции транскрипций добавит этап 07 |
+| `GET /stages/{id}/evidence-scopes` | `tender.read` | — | снимки этапа, новые сверху, с числом единиц (этап 05) |
+| `GET /evidence-scopes/{id}` | `tender.read` | — | состав снимка по типам и `content_hash`; письма из недоступных ящиков показываются только счётчиком без содержимого (этап 07) |
 | `GET /stages/{id}/input-events` | `tender.read` | — | события барьера актуальности и решения по ним |
 
 ### 2.4. Распознавание, доказательства, поиск

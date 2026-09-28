@@ -48,6 +48,14 @@ curl http://127.0.0.1:3200/api/v1/ready   # 200 и ready=true: БД, схема,
 - Наблюдаемая папка: задайте `INTAKE_ROOTS` (корни через «;»), администратор создаёт канал на вкладке тендера «Каналы поступления». Папка синхронизации Яндекс Диска или подключённая сетевая папка — это `origin` канала. Файл импортируется, когда не меняется `INTAKE_STABILITY_SECONDS`; удаление из папки ничего не удаляет в портале.
 - Хранилище (`STORAGE_ROOT`) не должно лежать внутри наблюдаемой папки и наоборот — такой канал не сканируется (`overlaps_storage`).
 
+## Поиск (этап 05)
+
+- В той же PostgreSQL нужно расширение **pgvector ≥ 0.8** (`vector`) и `pg_trgm`; их создаёт `npm run db:setup` суперпользователем. На Windows pgvector ставится отдельно (сборка под версию PostgreSQL); без него `db:setup` отказывает с внятной причиной. Альтернатива для разработки — контейнер: `docker run -d --name kontur-pg -p 127.0.0.1:55432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_INITDB_ARGS="--locale=C -E UTF8" -v kontur-pg-data:/var/lib/postgresql pgvector/pgvector:pg18 -c timezone=UTC` (так проверялся этап 05 на Linux).
+- База разработки, созданная до этапа 05, имеет провайдер локали libc `C`: `db:setup` откажет, её нужно пересоздать (данные разработки).
+- Индекс строит `worker`: при запуске он создаёт версию индекса и индексирует завершённые прогоны распознавания; поиск доступен на вкладке «Поиск» этапа после активации версии. Состояние — `npm run search:index -- status`, новая версия — `npm run search:index -- rebuild`.
+- Модель эмбеддингов необязательна: без неё (`EMBEDDING_PROVIDER=none`) работают точный и полнотекстовый поиск, смысловой честно недоступен. Локальный сервер модели с OpenAI-совместимым `/v1/embeddings` (loopback или LAN): `EMBEDDING_PROVIDER=openai_compatible`, `EMBEDDING_BASE_URL`, `EMBEDDING_MODEL`, `EMBEDDING_MODEL_REVISION`; для моделей E5 — `EMBEDDING_INPUT_TEMPLATE=e5`. Смена модели или ревизии — новая версия индекса, её создаёт worker сам.
+- Проверка интерфейса этапа: `node artifacts/stage-05/ui-check.mjs` — нужен Chromium (`CHROME_PATH` или `EDGE_PATH`); на Ubuntu 23.10+ без песочницы: `CHROME_NO_SANDBOX=1`.
+
 ## Доступ из LAN/VPN
 
 Без TLS сервер отказывается слушать не-loopback адрес (`config:check` покажет ошибку). Для LAN задайте `HTTP_HOST`, `TLS_CERT_FILE`, `TLS_KEY_FILE` и `ALLOWED_ORIGINS=https://<имя>`. Выпуск сертификата и сетевое имя — U-02. LocalAI остаётся внутренним сервисом: портал не проксирует его наружу, адрес и токен — только в окружении worker/server.
@@ -58,7 +66,7 @@ curl http://127.0.0.1:3200/api/v1/ready   # 200 и ready=true: БД, схема,
 npm run pg:start              # если кластер остановлен
 npm test                      # vitest: отдельная база kontur_kp_test_* на каждый файл
 npm run typecheck
-npm run smoke                 # реальные процессы; нужен npm run build; итог — artifacts/stage-02/smoke.log
+SMOKE_STAGE=stage-05 npm run smoke   # реальные процессы; нужен npm run build; итог — artifacts/<SMOKE_STAGE>/smoke.log
 ```
 
 Тестовый кластер другой машины задаётся `KONTUR_TEST_ADMIN_URL` (суперпользователь). Раннер миграций в режиме `test` отказывается работать с базой без `test` в имени.

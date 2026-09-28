@@ -17,6 +17,7 @@ import { importsRouter } from './routes/imports.ts';
 import { intakeRouter } from './routes/intake.ts';
 import { recognitionRouter } from './routes/recognition.ts';
 import { searchRouter } from './routes/search.ts';
+import { calculationsRouter } from './routes/calculations.ts';
 import { sourceSetsRouter } from './routes/sourceSets.ts';
 import { stagesRouter } from './routes/stages.ts';
 import { tendersRouter } from './routes/tenders.ts';
@@ -57,6 +58,7 @@ export const createApp = (deps: IAppDeps): express.Express => {
   api.use(sourceSetsRouter(pool));
   api.use(evidenceScopesRouter(pool));
   api.use(searchRouter(pool, config, clock));
+  api.use(calculationsRouter(pool, config));
   api.use((_req: Request, _res: Response, next: NextFunction) => next(new HttpError(404, 'NOT_FOUND', 'Маршрут не найден')));
   app.use('/api/v1', api);
   app.use('/api', (_req: Request, _res: Response, next: NextFunction) => next(new HttpError(404, 'NOT_FOUND', 'Маршрут не найден')));

@@ -16,10 +16,18 @@ const roles = (...r: Role[]) => new Set<Role>(r);
 
 describe('возможности', () => {
   it('инженер-участник: чтение и правка этапа, без управления и журнала', () => {
-    expect(tenderCapabilities(roles('engineer'), 'engineer')).toEqual(['tender.read', 'stage.write', 'source.write']);
+    expect(tenderCapabilities(roles('engineer'), 'engineer')).toEqual(['tender.read', 'stage.write', 'source.write', 'calculation.capture']);
   });
   it('руководитель-участник: управление этапами и журнал', () => {
-    expect(tenderCapabilities(roles('manager'), 'manager')).toEqual(['tender.read', 'stage.write', 'source.write', 'stage.manage', 'hold.resolve', 'audit.read']);
+    expect(tenderCapabilities(roles('manager'), 'manager')).toEqual([
+      'tender.read',
+      'stage.write',
+      'source.write',
+      'calculation.capture',
+      'stage.manage',
+      'hold.resolve',
+      'audit.read',
+    ]);
   });
   it('назначение без соответствующей глобальной роли не действует', () => {
     expect(tenderCapabilities(roles('engineer'), 'manager')).toEqual([]);

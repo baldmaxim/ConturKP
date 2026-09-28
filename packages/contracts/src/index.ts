@@ -257,6 +257,57 @@ export interface IAuditEvent {
   details: Record<string, unknown>;
 }
 
+// ---------------------------------------------------------------- Расчёт TenderHub (этап 06, portal-api §2.5)
+
+// Связь этапа с тендером TenderHub (Q-03): id строки tenders TenderHub — каждая версия отдельной строкой.
+export const PutCalculationSourceRequest = z
+  .object({
+    externalTenderId: z.uuid(),
+    externalVersion: z.number().int().min(0).max(1_000_000).nullable().optional(),
+  })
+  .strict();
+
+export const CreateCalculationCaptureRequest = z.object({}).strict();
+
+const UUID_TEXT = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+
+// Курсоры выдаёт сервер; проверка строгая, чтобы похожая, но недопустимая строка не дошла до SQL (R04-16).
+export const CalculationPositionsQuery = z.object({
+  cursor: z
+    .string()
+    .regex(new RegExp(`^-?\\d{1,40}(?:\\.\\d{1,40})?:${UUID_TEXT}$`))
+    .optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+});
+
+export const CalculationLinesQuery = z.object({
+  positionId: z.uuid().optional(),
+  cursor: z
+    .string()
+    .regex(new RegExp(`^${UUID_TEXT}:-?\\d{1,10}:${UUID_TEXT}$`))
+    .optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(200),
+});
+
+// Решения человека по сопоставлению позиций между ревизиями (append-only; этап 10 разбирает экономику).
+export const AppendLineageRequest = z
+  .object({
+    fromRevisionId: z.uuid(),
+    links: z
+      .array(
+        z
+          .object({
+            fromPositionId: z.uuid(),
+            toPositionId: z.uuid(),
+            status: z.enum(['confirmed', 'rejected']),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(500),
+  })
+  .strict();
+
 export type ErrorCode =
   | 'UNAUTHENTICATED'
   | 'FORBIDDEN'

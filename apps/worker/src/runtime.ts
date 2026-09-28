@@ -7,12 +7,14 @@ import {
   claimJob,
   confirmCancel,
   dueChannels,
+  dueDeadlineCaptures,
   enqueueJob,
   failJob,
   heartbeatJob,
   lockOwnedJob,
   markScanStarted,
   recoverExpiredJobs,
+  requestCapture,
   requeueJob,
   succeedJob,
   withTransaction,
@@ -136,6 +138,34 @@ export class WorkerRuntime {
       });
     }
     return due.length;
+  }
+
+  // Срок подачи из TenderHub наступил — выгрузка расчёта (ADR-007 §7): сигнал, а не закрытие. Ставится
+  // один раз на срок; ревизия остаётся provisional. Без настроенного TenderHub не планируется.
+  async scheduleCalculationCaptures(): Promise<number> {
+    const th = this.o.config.tenderhub;
+    if (!th.baseUrl || !th.apiKey) return 0;
+    let scheduled = 0;
+    for (const d of await dueDeadlineCaptures(this.o.pool)) {
+      try {
+        await withTransaction(this.o.pool, async (client) => {
+          await requestCapture(client, {
+            stageId: d.stage_id,
+            tenderId: d.tender_id,
+            source: { id: d.source_id, external_tender_id: d.external_tender_id },
+            trigger: 'deadline',
+            requestedBy: null,
+            deadlineBasis: d.deadline,
+            maxAttempts: th.captureAttempts,
+          });
+        });
+        scheduled += 1;
+      } catch (err) {
+        // Параллельная выгрузка того же этапа уже идёт (уникальность) — следующий проход решит сам.
+        this.log(`выгрузка по сроку для этапа ${d.stage_id} не поставлена: ${err instanceof Error ? err.message : 'unknown'}`);
+      }
+    }
+    return scheduled;
   }
 
   // Захватывает и выполняет одно задание. Возвращает false, если очередь пуста.
@@ -301,6 +331,7 @@ export class WorkerRuntime {
           const recovered = await this.recover();
           if (recovered.length > 0) this.log(`возвращено в очередь после истечения аренды: ${recovered.length}`);
           await this.scheduleScans();
+          await this.scheduleCalculationCaptures();
           await this.maintain();
         }
         const worked = await this.runOnce();

@@ -92,6 +92,8 @@ export const testConfig = (overrides: Partial<IAppConfig> = {}): IAppConfig => (
   },
   embedding: { provider: 'none', baseUrl: null, model: null, revision: 'test', apiKey: null, dim: null, template: 'plain', timeoutMs: 5000, batchSize: 16 },
   search: { semanticDeadlineMs: 60_000, indexBuildUnitsPerBatch: 5, maintenanceIntervalMs: 5000, modelCheckIntervalMs: 60_000 },
+  // TenderHub не настроен: тесты этапа 06 передают адрес поддельного сервера явно.
+  tenderhub: { baseUrl: null, apiKey: null, timeoutMs: 5000, rateLimitPerMinute: 1000, rateLimitWindowMs: 60_000, maxResponseBytes: 64 * 1024 * 1024, captureAttempts: 3 },
   ...overrides,
 });
 

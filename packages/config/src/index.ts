@@ -65,6 +65,22 @@ export interface ISearchConfig {
   modelCheckIntervalMs: number;
 }
 
+// TenderHub (этап 06, ADR-007 §5–8): только чтение официального API по X-API-Key. Ключ живёт
+// только в окружении процесса worker; без адреса или ключа выгрузка честно недоступна (U-04,
+// integration_not_configured), запуск портала из-за необязательной интеграции не останавливается.
+export interface ITenderHubConfig {
+  baseUrl: string | null;
+  apiKey: string | null;
+  timeoutMs: number;
+  // Собственный предел запросов в минуту — ниже лимита ключа у источника (по умолчанию 120).
+  rateLimitPerMinute: number;
+  // Окно лимита источника — минута; в тестах короче, из окружения не задаётся.
+  rateLimitWindowMs: number;
+  maxResponseBytes: number;
+  // Попыток одной выгрузки: изменение данных во время чтения, сеть, 429 после ожидания.
+  captureAttempts: number;
+}
+
 export interface IAppConfig {
   env: KonturEnv;
   databaseUrl: string;
@@ -87,6 +103,7 @@ export interface IAppConfig {
   recognition: IRecognitionLimits;
   embedding: IEmbeddingConfig;
   search: ISearchConfig;
+  tenderhub: ITenderHubConfig;
 }
 
 interface IConfigKey {
@@ -125,8 +142,12 @@ export const CONFIG_KEYS: IConfigKey[] = [
   { name: 'RECOGNITION_MAX_METADATA_TOTAL_MB', secret: false, required: false, purpose: 'лимит суммы metadata-кандидатов архива в памяти, по умолчанию 128' },
   { name: 'RECOGNITION_MAX_PDF_MB', secret: false, required: false, purpose: 'лимит чтения оригинала для подсчёта страниц, по умолчанию 256' },
   { name: 'RECOGNITION_MAX_PAGES', secret: false, required: false, purpose: 'предел числа страниц оригинала для разбора, по умолчанию 10000' },
-  { name: 'TENDERHUB_URL', secret: false, required: false, purpose: 'интеграция TenderHub (этап 06)' },
-  { name: 'TENDERHUB_API_KEY', secret: true, required: false, purpose: 'интеграция TenderHub (этап 06)' },
+  { name: 'TENDERHUB_URL', secret: false, required: false, purpose: 'адрес TenderHub (https; http только loopback), этап 06' },
+  { name: 'TENDERHUB_API_KEY', secret: true, required: false, purpose: 'ключ TenderHub thk_… с областью tenders:read (заголовок X-API-Key), этап 06' },
+  { name: 'TENDERHUB_TIMEOUT_SECONDS', secret: false, required: false, purpose: 'таймаут запроса к TenderHub, по умолчанию 300 (таймаут сервера TenderHub — 5 мин)' },
+  { name: 'TENDERHUB_RATE_LIMIT_PER_MINUTE', secret: false, required: false, purpose: 'собственный лимит запросов в минуту, по умолчанию 100 (у ключа TenderHub — 120)' },
+  { name: 'TENDERHUB_MAX_RESPONSE_MB', secret: false, required: false, purpose: 'предел распакованного ответа TenderHub, по умолчанию 512' },
+  { name: 'TENDERHUB_CAPTURE_ATTEMPTS', secret: false, required: false, purpose: 'попыток одной выгрузки расчёта, по умолчанию 3' },
   { name: 'EMBEDDING_PROVIDER', secret: false, required: false, purpose: 'модель эмбеддингов: none (по умолчанию), openai_compatible, fake (не в production)' },
   { name: 'EMBEDDING_BASE_URL', secret: false, required: false, purpose: 'адрес локального сервера модели (/v1), только loopback или LAN (D-013)' },
   { name: 'EMBEDDING_MODEL', secret: false, required: false, purpose: 'имя модели эмбеддингов на сервере модели' },
@@ -169,6 +190,46 @@ const intFrom = (env: Env, name: string, fallback: number, problems: string[]): 
 };
 
 const PROVIDERS: readonly EmbeddingProviderKind[] = ['none', 'openai_compatible', 'fake'];
+
+// Адрес TenderHub: https, либо http только на loopback (локальный Go BFF). Та же проверка — в адаптере.
+const tenderHubUrlProblem = (raw: string): string | null => {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return 'некорректный адрес';
+  }
+  if (url.username || url.password) return 'учётные данные в адресе недопустимы';
+  if (url.search || url.hash) return 'адрес без параметров запроса и якоря';
+  const host = url.hostname.replace(/^\[|\]$/gu, '').toLowerCase();
+  if (url.protocol === 'https:') return null;
+  if (url.protocol === 'http:' && (host === 'localhost' || host === '::1' || /^127\./u.test(host))) return null;
+  return 'только https (http допустим лишь для loopback)';
+};
+
+const tenderhubFrom = (env: Env, problems: string[]): ITenderHubConfig => {
+  const baseUrl = env.TENDERHUB_URL || null;
+  const apiKey = env.TENDERHUB_API_KEY || null;
+  if (baseUrl) {
+    const problem = tenderHubUrlProblem(baseUrl);
+    if (problem) problems.push(`TENDERHUB_URL: ${problem}`);
+  }
+  return {
+    baseUrl,
+    apiKey,
+    timeoutMs: intFrom(env, 'TENDERHUB_TIMEOUT_SECONDS', 300, problems) * 1000,
+    rateLimitPerMinute: intFrom(env, 'TENDERHUB_RATE_LIMIT_PER_MINUTE', 100, problems),
+    rateLimitWindowMs: 60_000,
+    maxResponseBytes: intFrom(env, 'TENDERHUB_MAX_RESPONSE_MB', 512, problems) * MIB,
+    captureAttempts: intFrom(env, 'TENDERHUB_CAPTURE_ATTEMPTS', 3, problems),
+  };
+};
+
+// Только настройки TenderHub — для live-smoke (U-04) без полной конфигурации процесса.
+export const loadTenderHubConfig = (env: Env = process.env): { tenderhub: ITenderHubConfig; problems: string[] } => {
+  const problems: string[] = [];
+  return { tenderhub: tenderhubFrom(env, problems), problems };
+};
 
 // Та же проверка, что у провайдера (packages/adapters): loopback, частные сети, локальные зоны.
 const isLocalUrl = (raw: string): boolean => {
@@ -288,6 +349,7 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
       maintenanceIntervalMs: 5000,
       modelCheckIntervalMs: 60_000,
     },
+    tenderhub: tenderhubFrom(env, problems),
   };
   for (const root of config.intakeRoots) {
     if (!isAbsolute(root)) problems.push(`INTAKE_ROOTS: «${root}» должен быть абсолютным путём`);

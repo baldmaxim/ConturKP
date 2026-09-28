@@ -5,7 +5,15 @@ export type Role = 'admin' | 'manager' | 'engineer';
 export type MemberRole = 'engineer' | 'manager';
 
 export type GlobalCapability = 'admin.users' | 'admin.tender' | 'admin.audit' | 'admin.intake';
-export type TenderCapability = 'tender.read' | 'stage.write' | 'stage.manage' | 'audit.read' | 'admin.tender' | 'source.write' | 'hold.resolve';
+export type TenderCapability =
+  | 'tender.read'
+  | 'stage.write'
+  | 'stage.manage'
+  | 'audit.read'
+  | 'admin.tender'
+  | 'source.write'
+  | 'hold.resolve'
+  | 'calculation.capture';
 
 export const ROLES: readonly Role[] = ['admin', 'manager', 'engineer'];
 export const MEMBER_ROLES: readonly MemberRole[] = ['engineer', 'manager'];
@@ -26,7 +34,8 @@ export const tenderCapabilities = (
 ): TenderCapability[] => {
   const role = effectiveMemberRole(roles, memberRole);
   const caps: TenderCapability[] = [];
-  if (role) caps.push('tender.read', 'stage.write', 'source.write');
+  // Запрос выгрузки расчёта и решения по сопоставлению позиций — участник тендера (state-machines §6).
+  if (role) caps.push('tender.read', 'stage.write', 'source.write', 'calculation.capture');
   // Решения о неприменимости (элементы импорта, удержания) — только руководитель тендера (ADR-006 §3).
   if (role === 'manager') caps.push('stage.manage', 'hold.resolve');
   if (role === 'manager' || roles.has('admin')) caps.push('audit.read');

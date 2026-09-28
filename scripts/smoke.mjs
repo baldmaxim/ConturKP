@@ -1,5 +1,6 @@
 // Сквозная проверка чистого старта на реальных процессах (этап 02):
 // setup БД → migrate → bootstrap → демо-данные → server + worker → /ready → вход → перезапуск server.
+// Этап 06: выгрузка расчёта worker из поддельного TenderHub (scripts/tenderhub-fake.ts) по ключу-маркеру.
 // База kontur_kp_smoke_test создаётся заново и удаляется в конце. Пароль генерируется и не выводится.
 // Результат: artifacts/stage-02/smoke.log; код 0 только если все шаги PASS.
 import { spawn, spawnSync } from 'node:child_process';
@@ -10,6 +11,7 @@ import { crc32 } from 'node:zlib';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import { buildRdwebExport } from '../tests/rdweb.ts';
+import { PRECISE_RATE, TH, standardTender, startFakeTenderHub } from './tenderhub-fake.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const ADMIN = process.env.KONTUR_TEST_ADMIN_URL ?? 'postgresql://postgres@127.0.0.1:55432/postgres';
@@ -34,6 +36,9 @@ const url = (user) => {
 const INTAKE_ROOT = mkdtempSync(join(tmpdir(), 'kontur-smoke-intake-'));
 const SECRET_MARKER = `smoke-secret-${randomBytes(6).toString('hex')}`;
 const PASSWORD = `pw-${randomBytes(12).toString('hex')}`;
+// Поддельный TenderHub принимает только ключ-маркер: он же проверяется на отсутствие в журналах.
+const hub = await startFakeTenderHub({ apiKey: SECRET_MARKER });
+hub.tenders.set(TH.tender, standardTender());
 const env = {
   ...process.env,
   KONTUR_ENV: 'test',
@@ -44,6 +49,7 @@ const env = {
   HTTP_HOST: '127.0.0.1',
   HTTP_PORT: String(PORT),
   ALLOWED_ORIGINS: BASE,
+  TENDERHUB_URL: hub.url,
   TENDERHUB_API_KEY: SECRET_MARKER,
   INTAKE_ROOTS: INTAKE_ROOT,
   INTAKE_STABILITY_SECONDS: '1',
@@ -335,6 +341,36 @@ try {
   const reread = await api(`/search-runs/${found?.searchRunId}`);
   record('этап 05: прогон поиска перечитывается тем же итогом', reread.status === 200 && JSON.stringify((await reread.json()).fused) === JSON.stringify(found?.fused));
 
+  // ---- Этап 06: выгрузка расчёта TenderHub worker'ом (только чтение, X-API-Key)
+  const srcCur = await api(`/stages/${stageId}/calculation-source`);
+  const link = await api(`/stages/${stageId}/calculation-source`, {
+    method: 'PUT',
+    headers: { ...json, 'If-Match': srcCur.headers.get('etag') },
+    body: JSON.stringify({ externalTenderId: TH.tender, externalVersion: 3 }),
+  });
+  record('этап 06: этап связан с тендером TenderHub', srcCur.status === 200 && link.status === 200, `HTTP ${link.status}`);
+  const capReq = await api(`/stages/${stageId}/calculation-captures`, { method: 'POST', headers: { ...json, ...idem() }, body: '{}' });
+  const cap = await capReq.json();
+  const capDone = await waitFor(async () => {
+    const c = await (await api(`/calculation-captures/${cap.id}`)).json();
+    return c.status !== 'capturing' ? c : null;
+  }, 60_000);
+  record('этап 06: worker выгрузил расчёт — ревизия provisional', capReq.status === 202 && capDone?.status === 'complete', capDone ? `статус ${capDone.status}` : 'нет результата');
+  const revs = await (await api(`/stages/${stageId}/calculation-revisions`)).json();
+  const rev = revs.items?.[0];
+  record(
+    'этап 06: X-01 — боевой выпуск заблокирован CALCULATION_PROVISIONAL, закрытия у источника нет',
+    revs.items?.length === 1 && rev.kind === 'provisional' && rev.productionGate.allowed === false && rev.productionGate.blockers.includes('CALCULATION_PROVISIONAL') && rev.closureAvailable === false,
+  );
+  record('этап 06: Q-05 — итог КП не заполнен, правило не задано', rev?.kpTotal?.value === null && rev.kpTotal.rule === null && rev.kpTotal.semantics?.status === 'rule_not_set');
+  const lines = await (await api(`/calculation-revisions/${rev?.id}/lines?positionId=${TH.p1}`)).json();
+  record('этап 06: цена 21 знака дошла до API без потери точности', lines.items?.some((l) => l.unitRate?.amount === PRECISE_RATE), `строк: ${lines.items?.length}`);
+  record(
+    'этап 06: к TenderHub только GET с X-API-Key, без Authorization',
+    hub.requests.length > 0 && hub.requests.every((q) => q.method === 'GET' && q.apiKey === SECRET_MARKER && q.authorization === undefined),
+    `запросов: ${hub.requests.length}`,
+  );
+
   await stopProc(server);
   server = startProc('server', 'apps/server/src/main.ts');
   ready = await waitReady(30_000);
@@ -351,6 +387,7 @@ try {
   record('исключение сценария', false, err instanceof Error ? err.message : String(err));
 } finally {
   for (const c of children) if (c.exitCode === null) c.kill();
+  await hub.close();
   runNode(['-e', `const pg=require('pg');const c=new pg.Client({connectionString:${JSON.stringify(ADMIN)}});c.connect().then(()=>c.query('DROP DATABASE IF EXISTS ${DB} WITH (FORCE)')).then(()=>c.end())`]);
 }
 

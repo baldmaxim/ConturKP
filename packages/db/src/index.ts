@@ -18,3 +18,6 @@ export * from './searchIndex.ts';
 export * from './searchScope.ts';
 export * from './searchRuns.ts';
 export * from './searchService.ts';
+export * from './calculationCaptures.ts';
+export * from './calculationContent.ts';
+export * from './calculationRevisions.ts';

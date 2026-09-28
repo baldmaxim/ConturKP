@@ -1,4 +1,5 @@
 import type { JobHandler } from '../runtime.ts';
+import { calculationCaptureHandler } from './calculation.ts';
 import { importExpandHandler, importRegisterHandler } from './imports.ts';
 import { intakeScanHandler } from './intake.ts';
 import { recognitionImportHandler } from './recognition.ts';
@@ -13,4 +14,5 @@ export const HANDLERS: Record<string, JobHandler> = {
   'index.embed': indexEmbedHandler,
   'index.purge': indexPurgeHandler,
   'search.semantic': searchSemanticHandler,
+  'calculation.capture': calculationCaptureHandler,
 };

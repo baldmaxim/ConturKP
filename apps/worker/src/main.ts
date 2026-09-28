@@ -4,6 +4,7 @@ import { hostname } from 'node:os';
 import { ConfigError, loadConfig } from '@kontur/config';
 import { beat, checkSchema, createPool } from '@kontur/db';
 import { BlobStore } from '@kontur/storage';
+import { createEmbeddings } from './embeddings.ts';
 import { HANDLERS } from './handlers/index.ts';
 import { WorkerRuntime } from './runtime.ts';
 
@@ -31,10 +32,11 @@ const main = async (): Promise<void> => {
   };
   await tick();
   const timer = setInterval(() => void tick(), config.workerHeartbeatSeconds * 1000);
-  const runtime = new WorkerRuntime({ pool, store, config, handlers: HANDLERS, workerId: processId, log });
+  const embeddings = createEmbeddings(config.embedding);
+  const runtime = new WorkerRuntime({ pool, store, config, handlers: HANDLERS, workerId: processId, log, embeddings });
   const controller = new AbortController();
   const loop = runtime.loop(controller.signal);
-  log(`запущен (схема ${schema.dbVersion}), обработчики: ${Object.keys(HANDLERS).join(', ')}`);
+  log(`запущен (схема ${schema.dbVersion}), обработчики: ${Object.keys(HANDLERS).join(', ')}; модель эмбеддингов: ${embeddings ? `${embeddings.kind} ${embeddings.model}` : 'не настроена'}`);
   const stop = (signal: string): void => {
     log(`остановка по ${signal}`);
     clearInterval(timer);

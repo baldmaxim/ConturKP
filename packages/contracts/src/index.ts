@@ -159,6 +159,35 @@ export const RecognitionFragmentsQuery = z.object({
 // Заморозка состава: тело пустое, решение подтверждается If-Match и ключом идемпотентности.
 export const FreezeSourceSetRequest = z.object({}).strict();
 
+// ---- снимок области и поиск (этап 05)
+
+// Снимок строится из замороженной ревизии набора этапа: по умолчанию — последней (state-machines §5.1).
+export const CreateEvidenceScopeRequest = z.object({ sourceSetRevisionId: z.uuid().optional() }).strict();
+
+// Контекст поиска — расширяемое объединение по виду (ADR-012 §24): tender реализован на этапе 05,
+// contract зарезервирован для этапа 06a. Режимы release и comparison появятся с выпусками.
+export const SearchContext = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('tender'),
+      tenderId: z.uuid(),
+      mode: z.enum(['working', 'review', 'release', 'comparison']),
+      stageId: z.uuid().optional(),
+      evidenceScopeId: z.uuid().optional(),
+      releaseId: z.uuid().optional(),
+    })
+    .strict(),
+  z.object({ kind: z.literal('contract'), contractId: z.uuid() }).strict(),
+]);
+
+export const SearchRequest = z
+  .object({
+    context: SearchContext,
+    query: z.string().trim().min(1).max(500),
+    limit: z.number().int().min(1).max(50).default(10),
+  })
+  .strict();
+
 // ---- ответы
 
 export interface IMe {

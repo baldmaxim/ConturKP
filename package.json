@@ -26,7 +26,8 @@
     "build": "npm run build -w @kontur/web",
     "start:server": "node --env-file-if-exists=.env apps/server/src/main.ts",
     "start:worker": "node --env-file-if-exists=.env apps/worker/src/main.ts",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "search:index": "node --env-file-if-exists=.env scripts/search-index.ts"
   },
   "dependencies": {
     "express": "^5.2.1",

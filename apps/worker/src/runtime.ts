@@ -1,6 +1,7 @@
 // Цикл worker (ADR-004, state-machines §2): захват, heartbeat, условное по токену завершение,
 // повтор с задержкой, recovery истёкших аренд, планирование сканов наблюдаемых папок.
 import { hostname } from 'node:os';
+import type { IModelGatewayEmbeddings } from '@kontur/adapters';
 import type { IAppConfig } from '@kontur/config';
 import {
   claimJob,
@@ -20,6 +21,7 @@ import {
   type PoolClient,
 } from '@kontur/db';
 import type { BlobStore } from '@kontur/storage';
+import { runSearchMaintenance, type IMaintenanceReport } from './maintenance.ts';
 
 export class LeaseLostError extends Error {
   constructor() {
@@ -48,11 +50,15 @@ export interface IJobContext {
   pool: Pool;
   store: BlobStore;
   config: IAppConfig;
+  // Шлюз модели эмбеддингов (ADR-012 §25); null — модель не настроена.
+  embeddings: IModelGatewayEmbeddings | null;
   signal: AbortSignal;
   // Короткая транзакция под действующей арендой: сначала блокировка задания с проверкой токена.
   withLease: <T>(fn: (client: PoolClient) => Promise<T>) => Promise<T>;
   // Доменный результат и перевод задания в succeeded — в одной транзакции (R01-06 п. 2).
-  complete: (fn?: (client: PoolClient) => Promise<void>) => Promise<void>;
+  // then выполняется в той же транзакции после перевода: следующая пачка того же вида
+  // встаёт в очередь без конфликта dedupe_key с самим завершающимся заданием (ADR-004 §7a).
+  complete: (fn?: (client: PoolClient) => Promise<void>, then?: (client: PoolClient) => Promise<void>) => Promise<void>;
   throwIfStopped: () => void;
 }
 
@@ -83,7 +89,12 @@ export interface IWorkerOptions {
   handlers: Record<string, JobHandler>;
   workerId?: string;
   log?: (line: string) => void;
+  embeddings?: IModelGatewayEmbeddings | null;
 }
+
+// Интерактивная полоса (ADR-004 §7a): только смысловые запросы поиска. Worker выполняет задания
+// последовательно, поэтому без отдельной полосы запрос ждал бы окончания любого долгого задания.
+export const INTERACTIVE_KINDS: readonly string[] = ['search.semantic'];
 
 export class WorkerRuntime {
   readonly workerId: string;
@@ -102,6 +113,17 @@ export class WorkerRuntime {
 
   async recover(): Promise<string[]> {
     return recoverExpiredJobs(this.o.pool);
+  }
+
+  private lastModelCheck = 0;
+
+  // Проход обслуживания поиска: просроченные прогоны, модель, версии, задания индексации,
+  // активация и удаление выведенных версий (state-machines §20–21, G05-02).
+  async maintain(o: { checkModel?: boolean } = {}): Promise<IMaintenanceReport> {
+    const due = Date.now() - this.lastModelCheck >= this.o.config.search.modelCheckIntervalMs;
+    const checkModel = o.checkModel ?? due;
+    if (checkModel) this.lastModelCheck = Date.now();
+    return runSearchMaintenance({ pool: this.o.pool, config: this.o.config, embeddings: this.o.embeddings ?? null, log: this.log }, { checkModel });
   }
 
   // Каналы, которым пора сканировать, получают задание (dedupe — одно активное на канал).
@@ -170,12 +192,14 @@ export class WorkerRuntime {
       pool: this.o.pool,
       store: this.o.store,
       config: this.o.config,
+      embeddings: this.o.embeddings ?? null,
       signal: controller.signal,
       withLease,
-      complete: async (fn) => {
+      complete: async (fn, then) => {
         await withLease(async (client) => {
           if (fn) await fn(client);
           if (!(await succeedJob(client, job.id, token))) throw new LeaseLostError();
+          if (then) await then(client);
         });
         completed = true;
       },
@@ -266,21 +290,37 @@ export class WorkerRuntime {
     this.log(`задание ${job.kind} ${job.id}: ошибка ${code} → ${r.ok ? r.status : 'аренда потеряна'}`);
   }
 
-  // Основной цикл процесса worker.
+  // Основной цикл процесса worker: фоновая полоса (все виды заданий) и обслуживание.
   async loop(signal: AbortSignal, pollMs = 500): Promise<void> {
     let lastMaintenance = 0;
+    const interactive = this.laneLoop(signal, INTERACTIVE_KINDS, Math.min(pollMs, 200));
     while (!signal.aborted) {
       try {
-        if (Date.now() - lastMaintenance > 5000) {
+        if (Date.now() - lastMaintenance > this.o.config.search.maintenanceIntervalMs) {
           lastMaintenance = Date.now();
           const recovered = await this.recover();
           if (recovered.length > 0) this.log(`возвращено в очередь после истечения аренды: ${recovered.length}`);
           await this.scheduleScans();
+          await this.maintain();
         }
         const worked = await this.runOnce();
         if (!worked) await new Promise((r) => setTimeout(r, pollMs));
       } catch (err) {
         this.log(`ошибка цикла: ${err instanceof Error ? err.message : 'unknown'}`);
+        await new Promise((r) => setTimeout(r, pollMs));
+      }
+    }
+    await interactive;
+  }
+
+  // Полоса захвата с тем же протоколом аренды, но только перечисленных видов заданий.
+  async laneLoop(signal: AbortSignal, kinds: readonly string[], pollMs: number): Promise<void> {
+    while (!signal.aborted) {
+      try {
+        const worked = await this.runOnce([...kinds]);
+        if (!worked) await new Promise((r) => setTimeout(r, pollMs));
+      } catch (err) {
+        this.log(`ошибка интерактивной полосы: ${err instanceof Error ? err.message : 'unknown'}`);
         await new Promise((r) => setTimeout(r, pollMs));
       }
     }

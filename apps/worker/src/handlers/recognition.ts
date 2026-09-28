@@ -9,6 +9,7 @@ import { classifyMember, groupKeyOf, importRdwebExport, pickMember, type IRdwebA
 import {
   cancelRun,
   emitStageEvents,
+  enqueueLiveIndexBuilds,
   failRun,
   finishRun,
   getRun,
@@ -283,6 +284,8 @@ export const handleRecognitionImport = async (ctx: IJobContext): Promise<void> =
       refId: runId,
       actorUserId: run.created_by,
     });
+    // Новый прогон дочитывается в живые версии индекса поиска той же транзакцией (ADR-012 §5).
+    await enqueueLiveIndexBuilds(client);
   });
 };
 

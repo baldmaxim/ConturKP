@@ -36,6 +36,35 @@ export interface IRecognitionLimits {
   maxPages: number;
 }
 
+// Модель эмбеддингов (ADR-012 §25, D-013): только локальный сервер модели на loopback или в LAN.
+// none — модели нет, версия индекса строится без векторов, смысловая ветка честно недоступна.
+// fake — детерминированный поддельный провайдер для тестов и разработки; в production запрещён.
+export type EmbeddingProviderKind = 'none' | 'openai_compatible' | 'fake';
+
+export interface IEmbeddingConfig {
+  provider: EmbeddingProviderKind;
+  baseUrl: string | null;
+  model: string | null;
+  revision: string;
+  apiKey: string | null;
+  dim: number | null;
+  template: 'plain' | 'e5';
+  timeoutMs: number;
+  batchSize: number;
+}
+
+// Поиск портала (ADR-012 §14–15, ADR-004 §7a).
+export interface ISearchConfig {
+  // Срок смысловой ветки: просроченный прогон становится degraded (semantic_timeout).
+  semanticDeadlineMs: number;
+  // Единиц источника в одной пачке index.build (шаг фоновой полосы ограничен).
+  indexBuildUnitsPerBatch: number;
+  // Проход обслуживания worker: просроченные прогоны, задания индексации, активация, удаление.
+  maintenanceIntervalMs: number;
+  // Проверка доступности модели и пробного вектора (отпечаток).
+  modelCheckIntervalMs: number;
+}
+
 export interface IAppConfig {
   env: KonturEnv;
   databaseUrl: string;
@@ -56,6 +85,8 @@ export interface IAppConfig {
   jobLeaseSeconds: number;
   gpuTakeoverGraceSeconds: number;
   recognition: IRecognitionLimits;
+  embedding: IEmbeddingConfig;
+  search: ISearchConfig;
 }
 
 interface IConfigKey {
@@ -96,8 +127,16 @@ export const CONFIG_KEYS: IConfigKey[] = [
   { name: 'RECOGNITION_MAX_PAGES', secret: false, required: false, purpose: 'предел числа страниц оригинала для разбора, по умолчанию 10000' },
   { name: 'TENDERHUB_URL', secret: false, required: false, purpose: 'интеграция TenderHub (этап 06)' },
   { name: 'TENDERHUB_API_KEY', secret: true, required: false, purpose: 'интеграция TenderHub (этап 06)' },
-  { name: 'LOCALAI_URL', secret: false, required: false, purpose: 'внутренний адрес LocalAI (этап 05); наружу не публикуется' },
-  { name: 'LOCALAI_TOKEN', secret: true, required: false, purpose: 'сервисный доступ к LocalAI (этап 05)' },
+  { name: 'EMBEDDING_PROVIDER', secret: false, required: false, purpose: 'модель эмбеддингов: none (по умолчанию), openai_compatible, fake (не в production)' },
+  { name: 'EMBEDDING_BASE_URL', secret: false, required: false, purpose: 'адрес локального сервера модели (/v1), только loopback или LAN (D-013)' },
+  { name: 'EMBEDDING_MODEL', secret: false, required: false, purpose: 'имя модели эмбеддингов на сервере модели' },
+  { name: 'EMBEDDING_MODEL_REVISION', secret: false, required: false, purpose: 'ревизия весов модели: входит в отпечаток версии индекса' },
+  { name: 'EMBEDDING_API_KEY', secret: true, required: false, purpose: 'ключ сервера модели, если он его требует' },
+  { name: 'EMBEDDING_DIM', secret: false, required: false, purpose: 'ожидаемая размерность векторов (не больше 4000)' },
+  { name: 'EMBEDDING_INPUT_TEMPLATE', secret: false, required: false, purpose: 'шаблон входа модели: plain (по умолчанию) или e5 (query:/passage:)' },
+  { name: 'EMBEDDING_TIMEOUT_SECONDS', secret: false, required: false, purpose: 'таймаут запроса к модели, по умолчанию 30' },
+  { name: 'EMBEDDING_BATCH_SIZE', secret: false, required: false, purpose: 'текстов в одном запросе к модели, по умолчанию 32' },
+  { name: 'SEARCH_SEMANTIC_DEADLINE_SECONDS', secret: false, required: false, purpose: 'срок смысловой ветки поиска, по умолчанию 60' },
   { name: 'MAILHUB_URL', secret: false, required: false, purpose: 'интеграция MailHub (этап 07)' },
   { name: 'MAILHUB_TOKEN', secret: true, required: false, purpose: 'интеграция MailHub (этап 07)' },
   { name: 'YANDEX_DISK_TOKEN', secret: true, required: false, purpose: 'размещение на Яндекс Диске (этап 14)' },
@@ -127,6 +166,44 @@ const intFrom = (env: Env, name: string, fallback: number, problems: string[]): 
     return fallback;
   }
   return n;
+};
+
+const PROVIDERS: readonly EmbeddingProviderKind[] = ['none', 'openai_compatible', 'fake'];
+
+// Та же проверка, что у провайдера (packages/adapters): loopback, частные сети, локальные зоны.
+const isLocalUrl = (raw: string): boolean => {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.username || url.password) return false;
+  const host = url.hostname.replace(/^\[|\]$/gu, '').toLowerCase();
+  if (host === 'localhost' || host === '::1') return true;
+  if ([/^10\./u, /^127\./u, /^192\.168\./u, /^172\.(1[6-9]|2\d|3[01])\./u, /^169\.254\./u].some((re) => re.test(host))) return true;
+  if (/^f[cd][0-9a-f]{2}:/u.test(host) || host.startsWith('fe80:')) return true;
+  if (/^\d+\.\d+\.\d+\.\d+$/u.test(host) || host.includes(':')) return false;
+  return !host.includes('.') || /\.(lan|local|internal|home\.arpa)$/u.test(host);
+};
+
+const embeddingFrom = (env: Env, problems: string[]): IEmbeddingConfig => {
+  const raw = env.EMBEDDING_PROVIDER || 'none';
+  const provider = (PROVIDERS as readonly string[]).includes(raw) ? (raw as EmbeddingProviderKind) : 'none';
+  if (provider !== raw) problems.push('EMBEDDING_PROVIDER должно быть none, openai_compatible или fake');
+  const template = env.EMBEDDING_INPUT_TEMPLATE || 'plain';
+  if (template !== 'plain' && template !== 'e5') problems.push('EMBEDDING_INPUT_TEMPLATE должно быть plain или e5');
+  return {
+    provider,
+    baseUrl: env.EMBEDDING_BASE_URL || null,
+    model: env.EMBEDDING_MODEL || null,
+    revision: env.EMBEDDING_MODEL_REVISION || 'unspecified',
+    apiKey: env.EMBEDDING_API_KEY || null,
+    dim: env.EMBEDDING_DIM ? intFrom(env, 'EMBEDDING_DIM', 0, problems) : null,
+    template: template === 'e5' ? 'e5' : 'plain',
+    timeoutMs: intFrom(env, 'EMBEDDING_TIMEOUT_SECONDS', 30, problems) * 1000,
+    batchSize: intFrom(env, 'EMBEDDING_BATCH_SIZE', 32, problems),
+  };
 };
 
 export const loadConfig = (env: Env = process.env): IAppConfig => {
@@ -204,10 +281,25 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
       maxPdfBytes: intFrom(env, 'RECOGNITION_MAX_PDF_MB', 256, problems) * MIB,
       maxPages: intFrom(env, 'RECOGNITION_MAX_PAGES', 10_000, problems),
     },
+    embedding: embeddingFrom(env, problems),
+    search: {
+      semanticDeadlineMs: intFrom(env, 'SEARCH_SEMANTIC_DEADLINE_SECONDS', 60, problems) * 1000,
+      indexBuildUnitsPerBatch: 5,
+      maintenanceIntervalMs: 5000,
+      modelCheckIntervalMs: 60_000,
+    },
   };
   for (const root of config.intakeRoots) {
     if (!isAbsolute(root)) problems.push(`INTAKE_ROOTS: «${root}» должен быть абсолютным путём`);
   }
+  const e = config.embedding;
+  if (e.provider === 'openai_compatible') {
+    if (!e.baseUrl) problems.push('EMBEDDING_BASE_URL обязателен для EMBEDDING_PROVIDER=openai_compatible');
+    else if (!isLocalUrl(e.baseUrl)) problems.push('EMBEDDING_BASE_URL: только loopback или LAN, облачного пути нет (D-013)');
+    if (!e.model) problems.push('EMBEDDING_MODEL обязателен для EMBEDDING_PROVIDER=openai_compatible');
+  }
+  if (e.provider === 'fake' && config.env === 'production') problems.push('EMBEDDING_PROVIDER=fake в production запрещён: поддельная модель не рабочая');
+  if (e.dim !== null && e.dim > 4000) problems.push('EMBEDDING_DIM не больше 4000 (ADR-012 §6)');
   if (problems.length > 0) throw new ConfigError(problems);
   return config;
 };

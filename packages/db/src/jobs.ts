@@ -39,6 +39,10 @@ export interface IEnqueueInput {
   runAfterMs?: number;
 }
 
+// Приоритет по умолчанию (ADR-004 §7a): импорт, разбор, приём распознавания и сканы каналов — 50,
+// выше фоновой индексации (10) и удаления выведенных версий (0), ниже смыслового запроса (100).
+export const DEFAULT_JOB_PRIORITY = 50;
+
 // Постановка в транзакции доменной команды. При активном задании с тем же dedupe_key новое не создаётся.
 export const enqueueJob = async (db: Queryable, j: IEnqueueInput): Promise<{ id: string; created: boolean }> => {
   const r = await db.query<{ id: string }>(
@@ -51,7 +55,7 @@ export const enqueueJob = async (db: Queryable, j: IEnqueueInput): Promise<{ id:
       j.dedupeKey ?? null,
       JSON.stringify(j.payload ?? {}),
       j.resourceClass ?? 'default',
-      j.priority ?? 0,
+      j.priority ?? DEFAULT_JOB_PRIORITY,
       j.maxAttempts ?? 5,
       j.tenderId ?? null,
       j.runAfterMs ?? 0,

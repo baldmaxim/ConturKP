@@ -14,3 +14,7 @@ export * from './sources.ts';
 export * from './intake.ts';
 export * from './sourceSets.ts';
 export * from './recognition.ts';
+export * from './searchIndex.ts';
+export * from './searchScope.ts';
+export * from './searchRuns.ts';
+export * from './searchService.ts';

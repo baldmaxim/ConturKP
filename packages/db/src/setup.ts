@@ -1,6 +1,7 @@
 // Подготовка кластера: роли и база (ADR-002 §4). Выполняется суперпользователем один раз.
 // Пароли ролей берутся из окружения и никуда не выводятся.
 import pg from 'pg';
+import { checkServerVersion } from './migrate.ts';
 
 export interface IRolePasswords {
   appPassword?: string | undefined;
@@ -36,6 +37,18 @@ const withDatabase = (url: string, database: string): string => {
   return u.toString();
 };
 
+export class SetupError extends Error {}
+
+// Локаль базы (ADR-002 §1, D-015): при libc-локали C приведение регистра кириллицы не
+// выполняется, и русский полнотекстовый поиск ломается тихо — «договор» не находит «Договор».
+// Провайдер builtin не зависит от ОС и версии ICU, поэтому поведение на Windows целевого ПК
+// и в среде ревью совпадает. Кластер при этом может оставаться с --locale=C.
+const CREATE_DATABASE_LOCALE = "LOCALE_PROVIDER builtin BUILTIN_LOCALE 'C.UTF-8' ENCODING 'UTF8' TEMPLATE template0";
+
+// Расширения закрытого списка (ADR-002, ADR-012 §18). Роль приложения и мигратор создать их
+// не могут: pgvector не помечен trusted, поэтому это делает суперпользователь при подготовке базы.
+const EXTENSIONS = ['vector', 'pg_trgm'] as const;
+
 // adminUrl — суперпользователь на служебной базе (обычно postgres).
 export const setupDatabase = async (
   adminUrl: string,
@@ -47,11 +60,20 @@ export const setupDatabase = async (
   await admin.connect();
   let state: 'created' | 'exists' = 'exists';
   try {
+    const version = await checkServerVersion(admin);
+    if (version) throw new SetupError(version);
     await ensureRoles(admin, passwords);
-    const exists = await admin.query('SELECT 1 FROM pg_database WHERE datname = $1', [databaseName]);
+    const exists = await admin.query<{ datlocprovider: string }>('SELECT datlocprovider FROM pg_database WHERE datname = $1', [databaseName]);
     if (exists.rowCount === 0) {
-      await admin.query(`CREATE DATABASE ${dbIdent} OWNER kontur_migrator ENCODING 'UTF8' TEMPLATE template0`);
+      await admin.query(`CREATE DATABASE ${dbIdent} OWNER kontur_migrator ${CREATE_DATABASE_LOCALE}`);
       state = 'created';
+    } else if (exists.rows[0]!.datlocprovider !== 'b') {
+      // Локаль существующей базы не меняется: её выбирают только при создании. Молча
+      // продолжать нельзя — миграция поиска всё равно откажет, но позже и менее понятно.
+      throw new SetupError(
+        `база «${databaseName}» создана до этапа 05 с провайдером локали «${exists.rows[0]!.datlocprovider}», а не builtin: ` +
+          'русский полнотекстовый поиск на ней не приводит регистр кириллицы. Базу нужно пересоздать командой db:setup (ADR-002 §1)',
+      );
     }
   } finally {
     await admin.end();
@@ -64,6 +86,13 @@ export const setupDatabase = async (
     await target.query('REVOKE CREATE ON SCHEMA public FROM PUBLIC');
     await target.query('GRANT USAGE ON SCHEMA public TO kontur_app, kontur_backup');
     await target.query('GRANT USAGE, CREATE ON SCHEMA public TO kontur_migrator');
+    for (const ext of EXTENSIONS) {
+      try {
+        await target.query(`CREATE EXTENSION IF NOT EXISTS ${ext}`);
+      } catch (err) {
+        throw new SetupError(`расширение ${ext} не установлено в PostgreSQL: ${(err as Error).message} (ADR-002, ADR-011)`);
+      }
+    }
   } finally {
     await target.end();
   }

@@ -66,12 +66,24 @@ export interface ISchemaCheck {
   problem: string | null;
 }
 
+// Нижняя граница СУБД (ADR-002 §1, AR05-01): провайдер локали builtin появился в PostgreSQL 17,
+// а на libc-локали C русский полнотекстовый поиск молча не приводит регистр кириллицы.
+export const MIN_SERVER_VERSION_NUM = 170000;
+
+export const checkServerVersion = async (db: Db): Promise<string | null> => {
+  const r = await db.query<{ v: string }>("SELECT current_setting('server_version_num') AS v");
+  const version = Number(r.rows[0]?.v ?? 0);
+  if (version >= MIN_SERVER_VERSION_NUM) return null;
+  return `PostgreSQL ${Math.floor(version / 10000)} ниже 17: нужен провайдер локали builtin (ADR-002 §1)`;
+};
+
 // Сверка схемы БД с файлами: server и worker не стартуют при расхождении, /ready его показывает.
 export const checkSchema = async (db: Db, files: IMigrationFile[] = listMigrations()): Promise<ISchemaCheck> => {
   const applied = await readApplied(db);
   const expectedVersion = files.length;
   const dbVersion = applied.length;
   const problem =
+    (await checkServerVersion(db)) ??
     verifyApplied(applied, files) ??
     (dbVersion !== expectedVersion ? `не применены миграции: ${dbVersion} из ${expectedVersion}` : null);
   return { ok: problem === null, dbVersion, expectedVersion, problem };
@@ -95,6 +107,8 @@ export const migrate = async (client: pg.ClientBase, options: IMigrateOptions = 
   if (options.testMode && !dbName.includes('test')) {
     throw new MigrationError(`тестовый режим: база «${dbName}» не содержит «test» в имени`);
   }
+  const versionProblem = await checkServerVersion(client);
+  if (versionProblem) throw new MigrationError(versionProblem);
   await client.query(LOCK_SQL);
   try {
     await client.query(`

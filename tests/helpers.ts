@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import pg from 'pg';
 import request from 'supertest';
+import type { IModelGatewayEmbeddings } from '../packages/adapters/src/index.ts';
 import type { IAppConfig } from '../packages/config/src/index.ts';
 import { hashPassword, type Role } from '../packages/core/src/index.ts';
 import { createPool, dropDatabase, insertUser, migrate, setupDatabase, type Pool } from '../packages/db/src/index.ts';
@@ -89,6 +90,8 @@ export const testConfig = (overrides: Partial<IAppConfig> = {}): IAppConfig => (
     maxPdfBytes: 16 * 1024 * 1024,
     maxPages: 10_000,
   },
+  embedding: { provider: 'none', baseUrl: null, model: null, revision: 'test', apiKey: null, dim: null, template: 'plain', timeoutMs: 5000, batchSize: 16 },
+  search: { semanticDeadlineMs: 60_000, indexBuildUnitsPerBatch: 5, maintenanceIntervalMs: 5000, modelCheckIntervalMs: 60_000 },
   ...overrides,
 });
 
@@ -104,8 +107,8 @@ export const makeApp = (db: ITestDb, clock = new Clock(), config = testConfig())
   createApp({ config, pool: db.pool, clock: clock.read, logError: () => undefined });
 
 // Worker в том же процессе теста: те же обработчики и хранилище, что у процесса worker.
-export const makeWorker = (db: ITestDb, config: IAppConfig, workerId = 'test-worker'): WorkerRuntime =>
-  new WorkerRuntime({ pool: db.pool, store: new BlobStore(config.storageRoot), config, handlers: HANDLERS, workerId });
+export const makeWorker = (db: ITestDb, config: IAppConfig, workerId = 'test-worker', embeddings: IModelGatewayEmbeddings | null = null): WorkerRuntime =>
+  new WorkerRuntime({ pool: db.pool, store: new BlobStore(config.storageRoot), config, handlers: HANDLERS, workerId, embeddings });
 
 // Выполняет задания, пока очередь не опустеет (ограничение — защита от бесконечного цикла).
 export const drain = async (worker: WorkerRuntime, max = 20_000): Promise<number> => {

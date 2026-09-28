@@ -1,0 +1,22 @@
+{
+  "sources": [
+    {
+      "id": "pv2-stromynka",
+      "title": "ЖК Сокольники, Стромынка",
+      "path": "fixtures/product-v2/stromynka",
+      "sourceType": "contract"
+    },
+    {
+      "id": "pv2-rusakovskaya",
+      "title": "Сокольники Парк, Русаковская",
+      "path": "fixtures/product-v2/rusakovskaya",
+      "sourceType": "contract"
+    },
+    {
+      "id": "pv2-balchug",
+      "title": "Балчуг, Садовническая",
+      "path": "fixtures/product-v2/balchug",
+      "sourceType": "contract"
+    }
+  ]
+}

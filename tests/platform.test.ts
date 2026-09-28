@@ -104,7 +104,7 @@ describe('конфигурация', () => {
     expect(report).not.toContain('th-secret-key-value');
     expect(report).not.toContain('C:/data/kontur');
     expect(configReport(base).find((l) => l.name === 'TENDERHUB_API_KEY')?.state).toBe('задано');
-    expect(configReport(base).find((l) => l.name === 'LOCALAI_TOKEN')?.state).toBe('не задано');
+    expect(configReport(base).find((l) => l.name === 'EMBEDDING_API_KEY')?.state).toBe('не задано');
   });
 
   it('ошибки конфигурации не содержат значений секретов', () => {

@@ -1,0 +1,235 @@
+{
+  "schemaVersion": "product-v2/1",
+  "corpus": "fixtures/product-v2",
+  "cases": [
+    {
+      "id": "pv2-exact-contractor",
+      "class": "exact_fact",
+      "question": "Кто генподрядчик по договору на Стромынке?",
+      "expected": {
+        "status": "verified",
+        "sourceIds": ["pv2-stromynka"],
+        "evidence": [
+          { "sourceId": "pv2-stromynka", "file": "dogovor-15-p.md", "includes": "Генподрядчик: ООО «СтройМонолит»" }
+        ],
+        "answer": { "mustContain": ["СтройМонолит"] }
+      }
+    },
+    {
+      "id": "pv2-amount-balchug-price",
+      "class": "amount_percent_date_period",
+      "question": "Какая цена договора по Балчугу?",
+      "expected": {
+        "status": "verified",
+        "sourceIds": ["pv2-balchug"],
+        "evidence": [
+          { "sourceId": "pv2-balchug", "file": "dogovor-b-44.md", "includes": "180 000 000" }
+        ],
+        "answer": { "mustContain": ["180 000 000"] }
+      }
+    },
+    {
+      "id": "pv2-amount-retention-trap",
+      "class": "amount_percent_date_period",
+      "question": "Какой размер гарантийного удержания и когда его возвращают по договору на Стромынке?",
+      "expected": {
+        "status": "verified",
+        "sourceIds": ["pv2-stromynka"],
+        "evidence": [
+          { "sourceId": "pv2-stromynka", "file": "dogovor-15-p.md", "includes": "гарантийное удержание в размере 3%" },
+          { "sourceId": "pv2-stromynka", "file": "dogovor-15-p.md", "includes": "в течение 30 календарных дней после истечения гарантийного срока" }
+        ],
+        "answer": { "mustContain": ["3%", "30"], "mustNotContain": ["срок 3%"] }
+      }
+    },
+    {
+      "id": "pv2-multi-condition-termination",
+      "class": "multi_condition_clause",
+      "question": "При каких условиях заказчик может расторгнуть договор на Стромынке в одностороннем порядке?",
+      "expected": {
+        "status": "verified",
+        "sourceIds": ["pv2-stromynka"],
+        "evidence": [
+          { "sourceId": "pv2-stromynka", "file": "dogovor-15-p.md", "includes": "просрочку окончания работ более чем на 30 календарных дней" }
+        ],
+        "answer": { "mustContain": ["30", "15"] }
+      }
+    },
+    {
+      "id": "pv2-broad-overview",
+      "class": "broad_overview",
+      "question": "Какие основные условия договора по Стромынке?",
+      "expected": {
+        "status": "verified",
+        "sourceIds": ["pv2-stromynka"],
+        "evidence": [
+          { "sourceId": "pv2-stromynka", "file": "dogovor-15-p.md", "includes": "245 000 000" },
+          { "sourceId": "pv2-stromynka", "file": "dogovor-15-p.md", "includes": "аванс в размере 20%" },
+          { "sourceId": "pv2-stromynka", "file": "dogovor-15-p.md", "includes": "Гарантийный срок на результат работ составляет 5 лет" },
+          { "sourceId": "pv2-stromynka", "file": "dogovor-15-p.md", "includes": "неустойку в размере 0,1%" }
+        ]
+      }
+    },
+    {
+      "id": "pv2-no-answer-insurance",
+      "class": "no_answer",
+      "question": "Какой размер страхового депозита по договору на Стромынке?",
+      "expected": {
+        "status": "insufficient_evidence",
+        "sourceIds": ["pv2-stromynka"],
+        "evidence": [],
+        "answer": { "mustNotContain": ["страховой депозит составляет"] }
+      }
+    },
+    {
+      "id": "pv2-ambiguous-sokolniki",
+      "class": "ambiguous_project",
+      "question": "Какой аванс по Сокольникам?",
+      "expected": {
+        "status": "clarification_required",
+        "clarificationCandidates": ["pv2-stromynka", "pv2-rusakovskaya"],
+        "evidence": []
+      }
+    },
+    {
+      "id": "pv2-follow-up-warranty",
+      "class": "follow_up",
+      "history": [
+        { "question": "Какая цена договора по Балчугу?" }
+      ],
+      "question": "А какой гарантийный срок?",
+      "expected": {
+        "status": "verified",
+        "sourceIds": ["pv2-balchug"],
+        "evidence": [
+          { "sourceId": "pv2-balchug", "file": "dogovor-b-44.md", "includes": "Гарантийный срок на результат работ составляет 3 года" }
+        ],
+        "answer": { "mustContain": ["3 года"] }
+      }
+    },
+    {
+      "id": "pv2-multi-doc-end-date",
+      "class": "multiple_documents",
+      "question": "Какой срок окончания работ по Стромынке с учётом дополнительных соглашений?",
+      "expected": {
+        "status": "verified",
+        "sourceIds": ["pv2-stromynka"],
+        "evidence": [
+          { "sourceId": "pv2-stromynka", "file": "dogovor-15-p.md", "includes": "Окончание выполнения работ: 30.11.2026" },
+          { "sourceId": "pv2-stromynka", "file": "ds-01-k-dogovoru-15-p.md", "includes": "31.03.2027" }
+        ],
+        "answer": { "mustContain": ["31.03.2027"] }
+      }
+    },
+    {
+      "id": "pv2-conflict-total-cost",
+      "class": "conflicting_values",
+      "question": "Какая итоговая стоимость работ по Стромынке по договору и по смете?",
+      "expected": {
+        "status": "verified_with_conflict",
+        "sourceIds": ["pv2-stromynka"],
+        "evidence": [
+          { "sourceId": "pv2-stromynka", "file": "dogovor-15-p.md", "includes": "245 000 000" },
+          { "sourceId": "pv2-stromynka", "file": "smeta-stromynka.md", "sheet": "Сводная", "row": 12, "includes": "244 800 000" }
+        ],
+        "answer": { "mustContain": ["245 000 000", "244 800 000"] }
+      }
+    },
+    {
+      "id": "pv2-amendment-advance",
+      "class": "amendment_supersedes",
+      "question": "Какой сейчас размер аванса по договору на Стромынке?",
+      "expected": {
+        "status": "verified",
+        "sourceIds": ["pv2-stromynka"],
+        "evidence": [
+          { "sourceId": "pv2-stromynka", "file": "ds-01-k-dogovoru-15-p.md", "includes": "аванс в размере 10%" }
+        ],
+        "staleEvidence": [
+          { "sourceId": "pv2-stromynka", "file": "dogovor-15-p.md", "includes": "аванс в размере 20%" }
+        ],
+        "answer": { "mustContain": ["10%"], "mustNotContain": ["аванс составляет 20%"] }
+      }
+    },
+    {
+      "id": "pv2-wrong-project-warranty",
+      "class": "wrong_project_negative",
+      "question": "Какой гарантийный срок по Балчугу?",
+      "expected": {
+        "status": "verified",
+        "sourceIds": ["pv2-balchug"],
+        "evidence": [
+          { "sourceId": "pv2-balchug", "file": "dogovor-b-44.md", "includes": "составляет 3 года" }
+        ],
+        "answer": { "mustContain": ["3 года"], "mustNotContain": ["5 лет"] }
+      }
+    },
+    {
+      "id": "pv2-citation-penalty",
+      "class": "citation_exactness",
+      "question": "Какая неустойка за просрочку окончания работ по Стромынке?",
+      "expected": {
+        "status": "verified",
+        "sourceIds": ["pv2-stromynka"],
+        "evidence": [
+          { "sourceId": "pv2-stromynka", "file": "dogovor-15-p.md", "section": "7. Ответственность сторон", "includes": "0,1% от цены договора за каждый день просрочки" }
+        ],
+        "answer": { "mustContain": ["0,1%", "10%"] }
+      }
+    },
+    {
+      "id": "pv2-spreadsheet-monolith",
+      "class": "spreadsheet_row",
+      "question": "Сколько стоят монолитные железобетонные работы по смете Стромынки?",
+      "expected": {
+        "status": "verified",
+        "sourceIds": ["pv2-stromynka"],
+        "evidence": [
+          { "sourceId": "pv2-stromynka", "file": "smeta-stromynka.md", "sheet": "Сводная", "row": 7, "includes": "98 500 000" }
+        ],
+        "answer": { "mustContain": ["98 500 000"] }
+      }
+    },
+    {
+      "id": "pv2-spreadsheet-concrete-price",
+      "class": "spreadsheet_row",
+      "question": "Какая цена бетона B30 в смете по Стромынке?",
+      "expected": {
+        "status": "verified",
+        "sourceIds": ["pv2-stromynka"],
+        "evidence": [
+          { "sourceId": "pv2-stromynka", "file": "smeta-stromynka.md", "sheet": "Материалы", "row": 4, "includes": "7 450" }
+        ],
+        "answer": { "mustContain": ["7 450"] }
+      }
+    },
+    {
+      "id": "pv2-ocr-suspension-date",
+      "class": "ocr_page",
+      "question": "С какой даты генподрядчик приостановил работы на Стромынке?",
+      "expected": {
+        "status": "verified",
+        "sourceIds": ["pv2-stromynka"],
+        "evidence": [
+          { "sourceId": "pv2-stromynka", "file": "pismo-skan.md", "page": 2, "includes": "с 01.07.2026" }
+        ],
+        "answer": { "mustContain": ["01.07.2026"] }
+      }
+    },
+    {
+      "id": "pv2-all-projects-advance",
+      "class": "all_projects_aggregate",
+      "question": "Какой аванс по всем проектам?",
+      "expected": {
+        "status": "verified",
+        "allSources": true,
+        "evidence": [
+          { "sourceId": "pv2-stromynka", "file": "ds-01-k-dogovoru-15-p.md", "includes": "аванс в размере 10%" },
+          { "sourceId": "pv2-rusakovskaya", "file": "dogovor-7-rs.md", "includes": "аванс в размере 15%" },
+          { "sourceId": "pv2-balchug", "file": "dogovor-b-44.md", "includes": "Аванс составляет 30%" }
+        ],
+        "answer": { "mustContain": ["10%", "15%", "30%"] }
+      }
+    }
+  ]
+}

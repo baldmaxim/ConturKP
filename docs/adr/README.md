@@ -15,3 +15,4 @@ ADR предложены на этапе 01 и приняты вместе с э
 | [ADR-009](ADR-009-model-and-rules.md) | Место модели и программных правил | accepted |
 | [ADR-010](ADR-010-portal-mcp.md) | MCP-сервер портала для Codex и Cursor | accepted |
 | [ADR-011](ADR-011-deployment-backup-restore.md) | Запуск на Windows, миграции, резервное копирование и восстановление | accepted |
+| [ADR-012](ADR-012-portal-search-index.md) | Собственный индекс портала, эмбеддинги и ранжирование | accepted (этап 05, D-013 и D-015) |

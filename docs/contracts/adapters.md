@@ -113,39 +113,35 @@ inspectRdwebBlocks(blocksJson: string): …      // счётчики без те
 
 `RdwebApiClient` на этапе 04 **не реализуется**: объём этапа сужен владельцем до импорта экспортного архива, API RDWeb не подтверждён (Q-02) и остаётся `BLOCKED_EXTERNAL` по X-05.
 
-## 4. LocalAI (индекс и смысловой поиск)
+## 4. Локальная модель (эмбеддинги и переранжирование)
 
-Факт: HTTP API на loopback, общий Bearer-токен, фильтр только по источнику, ID фрагмента из пути и номера чанка (`docs/discovery.md` §5).
+После D-013 внешнего адаптера индекса нет: Locus закрыт, индекс и поиск живут в портале (ADR-012). Наружу обращается только шлюз модели — за векторами и, при необходимости, за переранжированием. Реализация вызывается из worker заданием класса `gpu` (ADR-004, ADR-009 §6).
 
 ```ts
-type SourceUnitRef =                             // единица источника (ADR-008 §1)
-  | { type: 'recognition_run'; id: string; documentRevisionId: string }
-  | { type: 'communication'; id: string }
-  | { type: 'transcript_revision'; id: string };
+interface ModelGatewayEmbeddings {         // портал, локальный провайдер
+  embed(input: {
+    texts: string[];                       // пачка ограниченного размера
+    purpose: 'index' | 'query';
+  }): Promise<AdapterResult<{ vectors: Float32Array[]; model: string; modelVersion: string; dim: number }>>;
 
-interface LocalAiIndex {                         // проект, X-04
-  upsertFragments(input: {
-    tenderId: string;
-    sourceUnit: SourceUnitRef;                   // каждый фрагмент принадлежит ровно одной единице
-    fragments: Array<{ portalFragmentId: string; text: string; page?: number; kind: string }>;
-  }): Promise<AdapterResult<{ indexed: number; indexVersion: string }>>;
-
-  search(input: {
-    tenderId: string;
+  rerank?(input: {                         // необязателен; сервис не заводится до замеров (ADR-012 §16)
     query: string;
-    allowedSourceUnitIds: string[];              // полная область: снимок минус единицы, недоступные пользователю; фильтр до top-k
-    scopeHash: string;                           // для аудита и сверки ответа
-    limit: number;
-  }): Promise<AdapterResult<Array<{ portalFragmentId: string; sourceUnitId: string; score: number }>>>;
+    candidates: Array<{ id: string; text: string }>;
+  }): Promise<AdapterResult<Array<{ id: string; score: number }>>>;
 
-  status(): Promise<AdapterResult<{ available: boolean; indexVersion: string }>>;
+  status(): Promise<AdapterResult<{ available: boolean; model: string; modelVersion: string; dim: number }>>;
 }
 ```
 
-- `allowedSourceUnitIds` строит сервер портала из снимка `evidence_scope` и прав пользователя в момент запроса (ADR-008 §3–4). Разные прогоны распознавания одного PDF — разные единицы, поэтому поздний прогон не попадает в исторический поиск (R01-02).
-- Проверка ответа: для каждого `portalFragmentId` портал по своей БД проверяет, что фрагмент существует, принадлежит указанной единице и единица входит в `allowedSourceUnitIds`. Любое несовпадение — ответ отклоняется целиком и пишется в аудит; отбрасывание отдельных строк после top-k не применяется.
-- До X-04 адаптер возвращает `UNAVAILABLE` для `search`, статус интеграции — `BLOCKED_EXTERNAL`; смысловой поиск в интерфейсе честно помечен недоступным (ADR-008 §9).
-- Портал не использует генерацию ответов LocalAI и `linkedContractId`.
+- Провайдер локальный по умолчанию (ADR-009 §5); удалённый маршрут не реализуется (D-013). Автоматического облачного запасного пути нет.
+- Область поиска строит сервер портала из снимка `evidence_scope` и прав пользователя; шлюз модели её не видит и не может расширить. Тексты передаются как данные, системные инструкции задаёт сервер (I16).
+- Размерность и имя модели пишутся в версию индекса: смена модели даёт новую версию, поскольку прежние векторы несопоставимы (ADR-012 §5).
+- Недоступность модели даёт признак недоступности смысловой ветки с причиной; точный и полнотекстовый поиск продолжают работать, тихого перехода к поиску по всему индексу нет (A42).
+- Недоступность переранжирования сохраняет прежний порядок кандидатов и помечает ответ явным признаком, никогда молча.
+- Для машины без GPU предусмотрен детерминированный поддельный провайдер (псевдовектор от хэша текста): он проверяет конвейер, фильтр области и проверку цитат, но не качество, и так и помечается (U-08).
+
+Контракт `LocalAiIndex` (`upsertFragments` / `search` / `status`) удалён вместе с блокировками X-04 и Q-13: индексация и поиск стали внутренними операциями портала, а не вызовом соседней системы.
+
 
 ## 5. MailHub (переписка)
 
@@ -234,7 +230,7 @@ interface ModelGateway {                         // проект; провайд
 | `TenderHubRevisionReader` | BLOCKED_EXTERNAL | X-01 |
 | `RdwebExportImporter` | VERIFIED_FIXTURE (этап 04) | разрешённый live-smoke на настоящем экспорте (`scripts/rdweb-inspect.ts`) |
 | `RdwebApiClient` | BLOCKED_EXTERNAL | X-05 |
-| `LocalAiIndex` | BLOCKED_EXTERNAL | X-04, ответ владельца LocalAI (Q-13) |
+| `ModelGatewayEmbeddings` | NOT_IMPLEMENTED | этап 05; блокировок нет — X-04 и Q-13 сняты решением D-013 |
 | `MailHubReader` | BLOCKED_EXTERNAL | X-03 |
 | `EmlImporter` | NOT_IMPLEMENTED | реализация этапа 07 |
 | `NegotiationImporter` | NOT_IMPLEMENTED | схема manifest, затем Q-06 |

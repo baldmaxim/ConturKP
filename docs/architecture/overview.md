@@ -20,7 +20,6 @@ flowchart LR
   end
   TH["TenderHub API"]
   RD["RDWeb (экспорт, API — X-05)"]
-  LAI["LocalAI (индекс, поиск — X-04)"]
   MH["MailHub (чтение — X-03)"]
   NEG["Сервис переговоров (Q-06)"]
   YD["Яндекс Диск"]
@@ -37,7 +36,6 @@ flowchart LR
   WRK --> WATCH
   WRK -->|X-API-Key, только чтение| TH
   WRK -->|импорт экспорта| RD
-  WRK -->|фрагменты и поиск по области| LAI
   WRK -->|только чтение| MH
   WRK -->|manifest / API| NEG
   WRK -->|размещение выпуска| YD

@@ -93,10 +93,14 @@ const storeRaws = async (ctx: IJobContext, captureId: string, externalTenderId: 
   return { sha256: m.sha256, responses: stored };
 };
 
-// Отказ, пришедший из БД при фиксации содержимого (сверка полноты и хэша миграции 0011), — неповторяемый.
-const isDbInvariant = (err: unknown): boolean => {
-  const code = (err as { code?: unknown }).code;
-  return code === '23514' || code === '55000';
+// Отказ БД при фиксации содержимого детерминирован — повтор чтения его не исправит: сверка полноты и хэша
+// миграции 0011 (23514, 55000) и нарушение уникальности состава (повтор id позиции или строки, 23505) —
+// только по ограничениям содержимого расчёта; прочие 23505 идут прежним путём (R06-01).
+const CONTENT_UNIQUE_CONSTRAINTS = new Set(['calculation_position_key', 'calculation_line_key']);
+export const isContentRejectedByDb = (err: unknown): boolean => {
+  const e = err as { code?: unknown; constraint?: unknown };
+  if (e.code === '23514' || e.code === '55000') return true;
+  return e.code === '23505' && typeof e.constraint === 'string' && CONTENT_UNIQUE_CONSTRAINTS.has(e.constraint);
 };
 
 // Любой отказ попытки, кроме потери аренды и отмены, попадает в журнал попыток выгрузки. Ошибки
@@ -200,7 +204,7 @@ const runCapture = async (ctx: IJobContext, captureId: string, startedAt: string
       }
     });
   } catch (err) {
-    if (isDbInvariant(err)) throw new PermanentJobError('content_rejected_by_db', `БД отклонила содержимое выгрузки: ${(err as Error).message}`);
+    if (isContentRejectedByDb(err)) throw new PermanentJobError('content_rejected_by_db', `БД отклонила содержимое выгрузки: ${(err as Error).message}`);
     throw err;
   }
 };

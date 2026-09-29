@@ -32,6 +32,7 @@ export interface IConsistencyReason {
     | 'position_changed_between_routes'
     | 'position_items_count_mismatch'
     | 'item_without_position'
+    | 'item_duplicated'
     | 'row_updated_during_capture';
   detail: string;
 }
@@ -294,9 +295,13 @@ export const runPortalCapture = async (source: ITenderHubSource, tenderId: strin
   }
   for (const p of positions.value) if (!costs.has(p.id)) add('position_sets_differ', `позиция ${p.id} есть на страницах, но не в with-costs`);
 
-  // 4. Строки — только известных позиций, и их число сходится с items_count позиции.
+  // 4. Строки — только известных позиций, id не повторяется, и их число сходится с items_count позиции.
+  // Повтор id при прежних счётчиках (A, B, C → A, A, C) счётчики не выдают — проверяется отдельно (R06-01).
   const perPosition = new Map<string, number>();
+  const seenItems = new Set<string>();
   for (const b of boq.value) {
+    if (seenItems.has(b.id)) add('item_duplicated', `строка ${b.id} встретилась в boq-items-full дважды`);
+    seenItems.add(b.id);
     if (!costs.has(b.positionId)) add('item_without_position', `строка ${b.id}: позиции ${b.positionId} нет в выгрузке`);
     perPosition.set(b.positionId, (perPosition.get(b.positionId) ?? 0) + 1);
   }

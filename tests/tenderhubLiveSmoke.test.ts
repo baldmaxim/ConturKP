@@ -159,6 +159,26 @@ describe('live-smoke TenderHub (U-04) — сценарии на поддельн
     expectLine(r.log, 'FAIL', 'consistency', 'inconsistent — причины: item_without_position');
   });
 
+  it('повтор id строки BOQ при прежнем числе строк (R06-01) — вердикт рабочей стратегии item_duplicated, inconsistent, без утечки', async () => {
+    hub.tenders.get(TH.tender)!.items.find((i) => i.id === TH.l2)!.id = TH.l1;
+    const r = await live('boq-duplicate');
+    expect(r.code, r.out).toBe(1);
+    expectLine(r.log, 'INFO', 'boq_lines', '3');
+    expectLine(r.log, 'INFO', 'boq_unique_ids', '2');
+    expectLine(r.log, 'INFO', 'boq_duplicates', '1 — вердикт — duplicate_check в разделе 6');
+    // Счётчики повтор не выдают — его находит только проверка уникальности рабочей стратегии.
+    expectLine(r.log, 'PASS', 'orphan_lines', '0');
+    expectLine(r.log, 'PASS', 'items_count_check', 'PASS');
+    expectLine(r.log, 'PASS', 'boq_count_check', 'PASS');
+    expectLine(r.log, 'FAIL', 'duplicate_check', 'FAIL — item_duplicated');
+    expectLine(r.log, 'FAIL', 'consistency', 'inconsistent — причины: item_duplicated');
+    for (const text of [r.log, r.out]) {
+      expect(text).not.toContain(TH_KEY);
+      for (const v of TENDER_VALUES) expect(text, v).not.toContain(v);
+    }
+    expect(r.log).toMatch(/^Итог: FAIL$/mu);
+  });
+
   it('повтор курсора: адаптер останавливает обход — cursor_repeated = DETECTED, выгрузка FAIL, расхождение схемы по positions', async () => {
     hub.pageSize = 2;
     hub.repeatCursor = true;

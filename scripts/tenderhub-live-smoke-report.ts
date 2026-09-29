@@ -253,7 +253,8 @@ export const boqLines = (i: { calls: readonly ICallObs[]; raws: readonly IRawRes
   out.push(
     ln('INFO', 'boq_lines', lines.length),
     ln('INFO', 'boq_unique_ids', unique),
-    ln(unique === lines.length ? 'PASS' : 'FAIL', 'boq_duplicates', lines.length - unique),
+    // Вердикт о повторе id строки даёт рабочая стратегия (item_duplicated, раздел 6); здесь — только счёт.
+    ln('INFO', 'boq_duplicates', lines.length - unique, 'вердикт — duplicate_check в разделе 6'),
     ln('INFO', 'boq_known_position_refs', refs),
     ln(refs === lines.length ? 'PASS' : 'FAIL', 'orphan_lines', lines.length - refs, 'строки без известной позиции'),
     comparable.length === 0
@@ -279,7 +280,7 @@ export const consistencyLines = (c: IConsistencyReport | null): ILine[] => {
     ),
     check('positions_cross_check', has('positions_count_mismatch', 'position_sets_differ', 'position_changed_between_routes')),
     check('boq_count_check', has('items_count_mismatch')),
-    check('duplicate_check', has('position_duplicated')),
+    check('duplicate_check', has('position_duplicated', 'item_duplicated')),
     c.sourceStart === null ? ln('INFO', 'updated_at_check', 'NOT_AVAILABLE', 'источник не отдал заголовок Date') : check('updated_at_check', has('row_updated_during_capture')),
     ln('INFO', 'capture_counts', `страниц ${c.counts.pages}, позиций ${c.counts.positionsPaged}/${c.counts.positionsWithCosts}, строк ${c.counts.boqItems}`, 'позиции: постранично / with-costs'),
     ln(

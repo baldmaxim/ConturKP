@@ -263,7 +263,7 @@ interface ModelGateway {                         // проект; провайд
 
 | Адаптер | Статус | Что нужно для следующего шага |
 |---|---|---|
-| `TenderHubReader` (`TenderHubApiSource` + `PortalCaptureStrategy`) | VERIFIED_FIXTURE (этап 06) | contract-тесты против поддельного HTTP-сервера TenderHub (`scripts/tenderhub-fake.ts`, `tests/tenderhubAdapter.test.ts`, `tests/calculation*.test.ts`); live-smoke — после ключа `tenders:read` и разрешённого тендера (U-04) |
+| `TenderHubReader` (`TenderHubApiSource` + `PortalCaptureStrategy`) | VERIFIED_LIVE (этап 06, Review 06-1) | contract-тесты против поддельного HTTP-сервера TenderHub (`scripts/tenderhub-fake.ts`, `tests/tenderhubAdapter.test.ts`, `tests/calculation*.test.ts`) и живой прогон 2026-09-29 (`artifacts/stage-06/live-smoke.log`); follow-up — ключ с минимальной областью доступа |
 | `TenderHubRevisionReader` | BLOCKED_EXTERNAL | X-01; на этапе 06 — только интерфейс проекта и фикстурные тесты доменной модели |
 | `RdwebExportImporter` | VERIFIED_FIXTURE (этап 04) | разрешённый live-smoke на настоящем экспорте (`scripts/rdweb-inspect.ts`) |
 | `RdwebApiClient` | BLOCKED_EXTERNAL | X-05 |

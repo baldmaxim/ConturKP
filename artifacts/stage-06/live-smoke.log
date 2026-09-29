@@ -1,0 +1,94 @@
+# tenderhub live-smoke — 2026-09-29T09:39:46.711Z
+# адаптер th-api-2026-09-02/adapter-1; только GET; ключ, данные тендера и сырые ответы не записываются
+## 1. Origin и доступ
+INFO  tenderhub_url = https://tender.su10.ru — TENDERHUB_URL без учётных данных и параметров
+INFO  tender_id = fd1b67c9-…-711d — маскирован
+PASS  auth_x_api_key = PASS — overview: HTTP 200 по заголовку X-API-Key
+PASS  x_api_key_header = 11/11 — ключ — только заголовком X-API-Key, значение не записывается
+PASS  authorization_header_requests = 0 — Bearer не отправляется
+PASS  cookie_header_requests = 0
+INFO  api_contract = OpenAPI 3.1.0, info.version 1.0.0 — /api/v1/archive/openapi.yaml, SHA-256 3b038e3021288884ff27956aee8560a8516181f06a765fb93ee82399c071faa5
+PASS  openapi_paths = 5/5 — маршруты адаптера описаны в спецификации сборки
+INFO  api_version_headers = нет
+## 2. Только GET
+PASS  non_GET_requests = 0 — все запросы — GET; запросов записи нет
+INFO  requests_total = 11
+PASS  accept_gzip_sent = 11/11
+INFO  content_encoding = openapi: без сжатия; overview: gzip; brief: gzip; positions: gzip; positions_with_costs: gzip; boq_items_full: gzip — крупные ответы TenderHub сжимает gzip, мелкие — не обязательно
+INFO  request = spec: GET /api/v1/archive/openapi.yaml ×1 — HTTP 200
+INFO  request = capture: GET /api/v1/tenders/{id}/overview ×2 — HTTP 200
+INFO  request = capture: GET /api/v1/tenders/brief?search=… ×1 — HTTP 200
+INFO  request = capture: GET /api/v1/tenders/{id}/positions?limit=200 ×1 — HTTP 200
+INFO  request = capture: GET /api/v1/tenders/{id}/positions/with-costs ×1 — HTTP 200
+INFO  request = capture: GET /api/v1/tenders/{id}/boq-items-full ×1 — HTTP 200
+INFO  request = probe: GET /api/v1/tenders/{id}/positions?limit=31 ×1 — HTTP 200
+INFO  request = probe: GET /api/v1/tenders/{id}/positions?limit=31&cursor=… ×3 — HTTP 200
+## 3. Выгрузка и пагинация positions
+PASS  capture = completed — ответов 6, 1,1 с; итог сверки — раздел 6
+INFO  positions_pages = 1 — limit=200; строк по страницам: 93
+INFO  positions_next_cursor = нет — next_cursor каждой страницы: хэш-метка или «нет»
+PASS  cursor_followed = PASS — каждая страница запрошена курсором предыдущей
+PASS  cursor_repeated = 0
+INFO  positions_unique_ids = 93 — строк на страницах: 93
+PASS  positions_duplicates = 0
+INFO  pagination_multi_page = NOT_OBSERVED — одна страница при limit=200: многостраничный обход рабочей выгрузкой не наблюдался
+PASS  pagination_probe = PASS — limit=31: страниц 4 (31, 31, 31, 0), курсор #18d3351f → #e3bb8284 → #28031718 → нет; уникальных 93 из 93; повторов курсора 0, дублей 0
+## 4. with-costs / no-cache
+PASS  with_costs_available = PASS — HTTP 200, application/json
+PASS  with_costs_no_cache_sent = PASS — запрос отправлен с Cache-Control: no-cache
+INFO  with_costs_cache_headers = cache-control: private, max-age=60; etag: есть; vary: Accept-Encoding — заголовки кэша в ответе
+INFO  with_costs_items = 93
+PASS  with_costs_ids_match_positions = PASS — только на страницах: 0; только в with-costs: 0
+PASS  common_fields_mismatch = 0 — общие поля позиций совпали
+## 5. BOQ (boq-items-full)
+PASS  boq_available = PASS — HTTP 200, application/json
+INFO  boq_lines = 2363
+INFO  boq_unique_ids = 2363
+INFO  boq_duplicates = 0 — вердикт — duplicate_check в разделе 6
+INFO  boq_known_position_refs = 2363
+PASS  orphan_lines = 0 — строки без известной позиции
+PASS  items_count_check = PASS — поле есть у 93 из 93 позиций; расхождений: 0
+## 6. Согласованность (рабочая PortalCaptureStrategy)
+PASS  before_after_stable = PASS — признаки шапки до и после совпали
+PASS  positions_cross_check = PASS
+PASS  boq_count_check = PASS
+PASS  duplicate_check = PASS
+PASS  updated_at_check = PASS
+INFO  capture_counts = страниц 1, позиций 93/93, строк 2363 — позиции: постранично / with-costs
+PASS  consistency = consistent — контроль рабочей PortalCaptureStrategy
+## 7. Числовой контракт
+PASS  numeric_contract = PASS — числа получены лексемами источника без float и разобраны адаптером этапа 06
+INFO  numeric.brief = числовых полей: 1 — экспонентная запись: нет; не только числом: нет; значащих цифр до 1, знаков после точки до 0
+INFO  numeric.overview = числовых полей: 6 — экспонентная запись: нет; не только числом: нет; значащих цифр до 12, знаков после точки до 2
+INFO  numeric.positions = числовых полей: 6 — экспонентная запись: нет; не только числом: нет; значащих цифр до 17, знаков после точки до 13
+INFO  numeric.positions_with_costs = числовых полей: 18 — экспонентная запись: нет; не только числом: нет; значащих цифр до 17, знаков после точки до 16
+INFO  numeric.boq_items_full = числовых полей: 11 — экспонентная запись: нет; не только числом: нет; значащих цифр до 17, знаков после точки до 18
+INFO  numeric_precision = fixture — 21 значащую цифру доказывает фикстурная регрессия; в живом тендере такое число не требуется
+## 8. Q-05 — только наличие полей
+INFO  q05.cached_grand_total = present — overview; значение не выводится и итогом КП не объявляется
+INFO  q05.components.overview = present 4/4 — есть: cached_grand_total, usd_rate, eur_rate, cny_rate
+INFO  q05.components.positions_with_costs = present 9/9 — есть: base_total, commercial_total, material_cost_total, work_cost_total, total_material, total_works, total_commercial_material, total_commercial_work, markup_percentage
+INFO  q05.components.boq_items_full = present 8/8 — есть: total_amount, total_commercial_material_cost, total_commercial_work_cost, commercial_markup, delivery_amount, delivery_price_type, unit_rate, currency_type
+INFO  q05.insurance = absent — в ответах: нет; в OpenAPI: нет
+INFO  q05.reduction = absent — в ответах: нет; в OpenAPI: нет
+INFO  q05.redistribution = absent — в ответах: нет; в OpenAPI: нет
+INFO  q05.vat = absent — в ответах: нет; в OpenAPI: нет
+INFO  q05.kp_total = не определяется — правило итога КП не задано — Q-05 остаётся OPEN
+## 9. Расхождения с контрактом
+INFO  contract_discrepancies = 3 — каждое — ниже, без содержимого тендера
+INFO  diff = field_undocumented — route overview; ожидалось: поля ответа описаны в OpenAPI сборки; фактически: нет в спецификации: boq_item_count, position_count
+INFO  diff = field_undocumented — route positions_with_costs; ожидалось: поля ответа описаны в OpenAPI сборки; фактически: нет в спецификации: base_total, commercial_total, markup_percentage, material_cost_total, rich_runs, total_commercial_material_per_unit, total_commercial_work_per_unit, work_cost_total
+INFO  diff = field_undocumented — route boq_items_full; ожидалось: поля ответа описаны в OpenAPI сборки; фактически: нет в спецификации: commercial_markup, cost_categories, detail_cost_categories, import_session_id, location, material_names, parent_work, total_commercial_material_cost, total_commercial_work_cost, work_names
+## Ответы
+INFO  response = openapi HTTP 200 — 37,5 КБ, без сжатия, SHA-256 3b038e3021288884ff27956aee8560a8516181f06a765fb93ee82399c071faa5
+INFO  response = overview HTTP 200 — 430 Б, gzip, SHA-256 c2e0a786cb82e92c873fb9895492b71e41e8bf27358be8006cc89e6c8c3c2811
+INFO  response = brief HTTP 200 — 323 Б, gzip, SHA-256 6d18e3acbabd694cb99a190a493f59bb895e576774bf841858d50150642e46bf
+INFO  response = positions HTTP 200 — 71,3 КБ, gzip, SHA-256 7a27e56f8588990ce5ee563b02359d4d8c2b0ffccedde8900bb634e59af2a62d
+INFO  response = positions_with_costs HTTP 200 — 89,2 КБ, gzip, SHA-256 daa1720b2cab14533354c7665835f5bbc167c617206497ac48256d2c7da384d8
+INFO  response = boq_items_full HTTP 200 — 3213,5 КБ, gzip, SHA-256 39c581878161edcac670ba10c0408bba97e31af8af49848f084381539323b0ad
+INFO  response = overview HTTP 200 — 430 Б, gzip, SHA-256 c2e0a786cb82e92c873fb9895492b71e41e8bf27358be8006cc89e6c8c3c2811
+## Статус интеграции
+INFO  integration_status = VERIFIED_FIXTURE → кандидат VERIFIED_LIVE — скрипт статус не меняет: запись — после ревью журнала
+## 10. Безопасность журнала
+PASS  log_redaction = PASS — ключа, значений тендера и сырых ответов нет; uuid маскированы, курсоры — хэш-метками
+Итог: PASS

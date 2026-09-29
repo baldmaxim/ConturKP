@@ -2,9 +2,9 @@
  RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
 
 
- Test Files  45 passed (45)
-      Tests  454 passed (454)
-   Start at  17:40:49
-   Duration  140.27s (tests 92%, import 6%, transform 1%)
+ Test Files  46 passed (46)
+      Tests  461 passed (461)
+   Start at  18:21:24
+   Duration  147.75s (tests 92%, import 6%, transform 1%)
 
 exit=0

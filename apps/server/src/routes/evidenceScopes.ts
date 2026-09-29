@@ -10,6 +10,7 @@ import {
   latestFrozenRevision,
   listEvidenceScopes,
   planEvidenceScope,
+  readableContractIds,
   type Pool,
 } from '@kontur/db';
 import { Router } from 'express';
@@ -57,7 +58,7 @@ export const evidenceScopesRouter = (pool: Pool): Router => {
         const scope = (await getEvidenceScope(client, ctx, created.id))!;
         return {
           status: created.created ? 201 : 200,
-          body: { ...toEvidenceScope(scope, await evidenceScopeItems(client, scope.id)), reused: !created.created },
+          body: { ...toEvidenceScope(scope, await evidenceScopeItems(client, scope.id), new Set(readableContractIds(ctx))), reused: !created.created },
           audit: [
             {
               action: 'evidence.scope.create',
@@ -86,7 +87,7 @@ export const evidenceScopesRouter = (pool: Pool): Router => {
       const id = uuidParam(req, 'id', 'evidence_scope');
       const scope = await getEvidenceScope(pool, ctx, id);
       if (!scope) throw notFound({ entityType: 'evidence_scope', entityId: id });
-      res.json(toEvidenceScope(scope, await evidenceScopeItems(pool, id)));
+      res.json(toEvidenceScope(scope, await evidenceScopeItems(pool, id), new Set(readableContractIds(ctx))));
     }),
   );
 

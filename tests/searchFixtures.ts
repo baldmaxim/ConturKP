@@ -53,18 +53,21 @@ export const uploadDocument = async (db: ITestDb, config: IAppConfig, client: Te
 };
 
 // Прогон распознавания с заданным текстом: новый прогон встаёт за хвостом истории редакции.
+// Владелец прогона — владелец редакции (тендер или договор, D-023): фикстура берёт его из редакции.
 export const seedEvidenceRun = async (pool: Pool, revisionId: string, spec: IRunSpec): Promise<string> => {
-  const rev = await pool.query<{ tender_id: string }>('SELECT tender_id FROM document_revision WHERE id = $1', [revisionId]);
-  const tenderId = rev.rows[0]!.tender_id;
+  const rev = await pool.query<{ tender_id: string | null; contract_id: string | null }>('SELECT tender_id, contract_id FROM document_revision WHERE id = $1', [
+    revisionId,
+  ]);
+  const { tender_id: tenderId, contract_id: contractId } = rev.rows[0]!;
   const artifact = randomBytes(32).toString('hex');
   await pool.query("INSERT INTO blob (sha256, size_bytes, media_type, storage_key) VALUES ($1, 1, 'application/zip', $2)", [artifact, `seed/${artifact}`]);
   const run = await pool.query<{ id: string }>(
-    `INSERT INTO recognition_run (document_revision_id, tender_id, engine, source_artifact_sha256, source_artifact_name, supersedes_run_id)
-     VALUES ($1, $2, 'rdweb_export', $3, 'seed.zip', (SELECT p.id FROM recognition_run p
+    `INSERT INTO recognition_run (document_revision_id, tender_id, contract_id, engine, source_artifact_sha256, source_artifact_name, supersedes_run_id)
+     VALUES ($1, $2, $4, 'rdweb_export', $3, 'seed.zip', (SELECT p.id FROM recognition_run p
        WHERE p.document_revision_id = $1 AND p.status IN ('complete', 'partial')
          AND NOT EXISTS (SELECT 1 FROM recognition_run c WHERE c.supersedes_run_id = p.id AND c.status NOT IN ('failed', 'cancelled'))
        ORDER BY p.created_at DESC LIMIT 1)) RETURNING id`,
-    [revisionId, tenderId, artifact],
+    [revisionId, tenderId, artifact, contractId],
   );
   const runId = run.rows[0]!.id;
   await pool.query("UPDATE recognition_run SET status = 'running', started_at = now(), row_version = row_version + 1 WHERE id = $1", [runId]);
@@ -106,7 +109,7 @@ export const seedEvidenceRun = async (pool: Pool, revisionId: string, spec: IRun
     });
   });
   (spec.unpaged ?? []).forEach((text, i) => fragments.push({ ...base(null, `md:px:${i}:text`, i, text), fragmentKind: 'unknown_block' }));
-  await insertFragments(pool, { runId, tenderId, documentRevisionId: revisionId }, fragments);
+  await insertFragments(pool, { runId, tenderId, contractId, documentRevisionId: revisionId }, fragments);
   const ok = await finishRun(pool, runId, {
     status: 'complete',
     engineSchemaVersion: '1',

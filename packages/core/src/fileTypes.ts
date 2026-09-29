@@ -95,5 +95,29 @@ export const classifyFile = (name: string, head: Buffer, size: number): FileVerd
   return reject('type_not_allowed', ext ? `тип .${ext} не поддерживается` : 'файл без расширения');
 };
 
+// Расширение по типу содержимого — для имени файла при выдаче, когда наблюдаемого имени нет
+// (документы договора происхождений не пишут, D-023): имя документа плюс расширение типа.
+const EXTENSION_OF: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'application/rtf': 'rtf',
+  'image/vnd.dwg': 'dwg',
+  ...Object.fromEntries(Object.entries({ ...ZIP_DOCUMENTS, ...OLE_DOCUMENTS }).map(([ext, type]) => [type, ext])),
+  'text/plain': 'txt',
+  'text/csv': 'csv',
+  'application/xml': 'xml',
+  'text/html': 'html',
+  'message/rfc822': 'eml',
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/tiff': 'tif',
+  'image/bmp': 'bmp',
+};
+
+export const fileNameWithExtension = (title: string, mediaType: string): string => {
+  const ext = EXTENSION_OF[mediaType];
+  if (!ext || extensionOf(title) === ext || (ext === 'jpg' && extensionOf(title) === 'jpeg') || (ext === 'tif' && extensionOf(title) === 'tiff')) return title;
+  return `${title}.${ext}`;
+};
+
 // HTML и изображения выдаются без исполнения активного содержимого (A38): см. заголовки выдачи.
 export const isActiveContentType = (mediaType: string): boolean => mediaType === 'text/html' || mediaType === 'message/rfc822' || mediaType === 'application/xml';

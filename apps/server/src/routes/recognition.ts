@@ -31,7 +31,7 @@ import { requireCtx } from '../http/context.ts';
 import { HttpError, notFound } from '../http/errors.ts';
 import { receiveUpload, uploadName, uploadedBlob } from '../http/upload.ts';
 import { toEvidence, toFragment, toRun, toRunDetail } from '../recognitionMappers.ts';
-import { requireTenderCapById } from './scope.ts';
+import { requireRevisionWrite } from './contractScope.ts';
 
 export const recognitionRouter = (pool: Pool, store: BlobStore, config: IAppConfig): Router => {
   const router = Router();
@@ -49,7 +49,7 @@ export const recognitionRouter = (pool: Pool, store: BlobStore, config: IAppConf
         const id = uuidParam(req, 'id', 'document_revision');
         const rev = await getRevision(pool, ctx, id);
         if (!rev) throw notFound({ entityType: 'document_revision', entityId: id });
-        requireTenderCapById(ctx, rev.tender_id, 'source.write', { entityType: 'document_revision', entityId: id });
+        requireRevisionWrite(ctx, rev, { entityType: 'document_revision', entityId: id });
       },
     }),
     command(pool, {
@@ -61,7 +61,7 @@ export const recognitionRouter = (pool: Pool, store: BlobStore, config: IAppConf
         const id = uuidParam(req, 'id', 'document_revision');
         const rev = await getRevision(client, ctx, id);
         if (!rev) throw notFound({ entityType: 'document_revision', entityId: id });
-        requireTenderCapById(ctx, rev.tender_id, 'source.write', { entityType: 'document_revision', entityId: id });
+        requireRevisionWrite(ctx, rev, { entityType: 'document_revision', entityId: id });
       },
       run: async (client, ctx, req) => {
         const stored = uploadedBlob(req);
@@ -116,7 +116,6 @@ export const recognitionRouter = (pool: Pool, store: BlobStore, config: IAppConf
         const previous = await latestFinishedRun(client, id);
         const runId = await createRun(client, {
           documentRevisionId: id,
-          tenderId: rev.tender_id,
           engine: 'rdweb_export',
           sourceArtifactSha256: stored.sha256,
           sourceArtifactName: name,
@@ -139,7 +138,8 @@ export const recognitionRouter = (pool: Pool, store: BlobStore, config: IAppConf
               entityType: 'recognition_run',
               entityId: runId,
               tenderId: rev.tender_id,
-              details: { documentRevisionId: id, name, sha256: stored.sha256, sizeBytes: stored.sizeBytes, supersedesRunId: previous?.id ?? null },
+              // Имя архива по редакции договора в журнал не пишется: события договора видит журнал администратора (D-022 OD-2).
+              details: { documentRevisionId: id, ...(rev.contract_id ? { contractId: rev.contract_id } : { name }), sha256: stored.sha256, sizeBytes: stored.sizeBytes, supersedesRunId: previous?.id ?? null },
             },
           ],
         };

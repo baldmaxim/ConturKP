@@ -3,7 +3,7 @@
 // Ветка ранжирует чанки и проецирует каждый в один фрагмент его связей по правилам RANKING_VERSION
 // (G05-04): цитата — всегда существующий evidence_fragment.id из связей этого чанка.
 import { EXACT_FOLD_FROM, EXACT_FOLD_TO, FRAGMENTS_PER_CHUNK, fuseRrf, vectorLiteral, type IBranchHit, type SearchBranch } from '@kontur/core';
-import { contentTenderIds, type IAccessContext } from './access.ts';
+import { contentTenderIds, readableContractIds, type IAccessContext } from './access.ts';
 import type { Queryable } from './pool.ts';
 
 // ---------------------------------------------------------------- Ветки
@@ -170,14 +170,28 @@ export const vectorBranch = async (
   return firstPerFragment(ordered, limit).map((x) => ({ fragmentId: x.fragment_id, origin: x.origin, chunkKey: x.chunk_key, score: 1 - x.dist }));
 };
 
+// Владелец контекста прогона (ADR-012 §24): тендер или договор.
+export type SearchOwner = { kind: 'tender'; tenderId: string } | { kind: 'contract'; contractId: string };
+
+export const ownerOfRun = (run: { tender_id: string | null; contract_id: string | null }): SearchOwner =>
+  run.tender_id ? { kind: 'tender', tenderId: run.tender_id } : { kind: 'contract', contractId: run.contract_id! };
+
 // Вторая линия (ADR-012 §13): каждый фрагмент результата сверяется с закреплённой областью по БД.
-export const fragmentsOutsideScope = async (db: Queryable, tenderId: string, fragmentIds: string[], unitIds: string[]): Promise<string[]> => {
+// Фрагмент договора в тендерном прогоне допустим только у договора, связанного с этим тендером,
+// — то же правило держит охранник search_run_result (миграция 0012).
+export const fragmentsOutsideScope = async (db: Queryable, owner: SearchOwner, fragmentIds: string[], unitIds: string[]): Promise<string[]> => {
   if (fragmentIds.length === 0) return [];
   const r = await db.query<{ id: string }>(
     `SELECT x.id FROM unnest($1::uuid[]) AS x(id)
-      WHERE NOT EXISTS (SELECT 1 FROM evidence_fragment f
-                         WHERE f.id = x.id AND f.tender_id = $2 AND f.source_unit_id = ANY ($3::uuid[]))`,
-    [fragmentIds, tenderId, unitIds],
+      WHERE NOT EXISTS (
+        SELECT 1 FROM evidence_fragment f
+         WHERE f.id = x.id AND f.source_unit_id = ANY ($4::uuid[])
+           AND CASE WHEN $2::uuid IS NOT NULL
+                    THEN f.tender_id = $2::uuid
+                      OR (f.contract_id IS NOT NULL AND EXISTS (
+                            SELECT 1 FROM contract_tender l WHERE l.contract_id = f.contract_id AND l.tender_id = $2::uuid))
+                    ELSE f.contract_id = $3::uuid END)`,
+    [fragmentIds, owner.kind === 'tender' ? owner.tenderId : null, owner.kind === 'contract' ? owner.contractId : null, unitIds],
   );
   return r.rows.map((x) => x.id);
 };
@@ -189,8 +203,9 @@ export type SemanticStatus = 'queued' | 'running' | 'complete' | 'unavailable' |
 
 export interface ISearchRunRow {
   id: string;
-  context_kind: 'tender';
-  tender_id: string;
+  context_kind: 'tender' | 'contract';
+  tender_id: string | null;
+  contract_id: string | null;
   stage_id: string | null;
   mode: 'working' | 'review';
   evidence_scope_id: string | null;
@@ -219,7 +234,7 @@ export interface ISearchRunRow {
 }
 
 export interface INewSearchRun {
-  tenderId: string;
+  owner: SearchOwner;
   stageId: string | null;
   mode: 'working' | 'review';
   evidenceScopeId: string | null;
@@ -242,14 +257,14 @@ export interface INewSearchRun {
 // Прогон создаётся pending всегда, даже если итог будет получен в той же транзакции (G05-02).
 export const createSearchRun = async (db: Queryable, r: INewSearchRun): Promise<string> => {
   const q = await db.query<{ id: string }>(
-    `INSERT INTO search_run (context_kind, tender_id, stage_id, mode, evidence_scope_id, requested_by, query_text, query_sha256,
+    `INSERT INTO search_run (context_kind, tender_id, contract_id, stage_id, mode, evidence_scope_id, requested_by, query_text, query_sha256,
                              query_normalization_version, result_limit, scope_hash, allowed_source_unit_ids, scope_counts,
                              index_version_id, ranking_version, embedding_model, embedding_model_fingerprint, semantic_status, deadline_at)
-     VALUES ('tender', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::uuid[], $12::jsonb, $13, $14, $15, $16, $17,
+     VALUES ($19, $1, $20, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::uuid[], $12::jsonb, $13, $14, $15, $16, $17,
              now() + make_interval(secs => $18::double precision / 1000))
      RETURNING id`,
     [
-      r.tenderId,
+      r.owner.kind === 'tender' ? r.owner.tenderId : null,
       r.stageId,
       r.mode,
       r.evidenceScopeId,
@@ -267,6 +282,8 @@ export const createSearchRun = async (db: Queryable, r: INewSearchRun): Promise<
       r.embeddingModelFingerprint,
       r.semanticStatus,
       r.deadlineMs,
+      r.owner.kind,
+      r.owner.kind === 'contract' ? r.owner.contractId : null,
     ],
   );
   return q.rows[0]!.id;
@@ -277,13 +294,13 @@ export const getSearchRun = async (db: Queryable, id: string, lock = false): Pro
   return r.rows[0] ?? null;
 };
 
-// Прогон читает только его автор и только пока тендер ему доступен (ADR-012 §13).
+// Прогон читает только его автор и только пока владелец контекста ему доступен (ADR-012 §13):
+// тендер — участник, договор — contract.read.
 export const getScopedSearchRun = async (db: Queryable, ctx: IAccessContext, id: string): Promise<ISearchRunRow | null> => {
-  const r = await db.query<ISearchRunRow>('SELECT * FROM search_run WHERE id = $1 AND requested_by = $2 AND tender_id = ANY($3::uuid[])', [
-    id,
-    ctx.principal.userId,
-    contentTenderIds(ctx),
-  ]);
+  const r = await db.query<ISearchRunRow>(
+    'SELECT * FROM search_run WHERE id = $1 AND requested_by = $2 AND (tender_id = ANY($3::uuid[]) OR contract_id = ANY($4::uuid[]))',
+    [id, ctx.principal.userId, contentTenderIds(ctx), readableContractIds(ctx)],
+  );
   return r.rows[0] ?? null;
 };
 
@@ -352,7 +369,7 @@ export const finalizeRun = async (db: Queryable, runId: string, o: ITerminalOutc
   if (o.status === 'complete') branches.vector = o.vectorHits ?? [];
   const fused = fuseRrf(branches, run.result_limit);
   const all = [...(o.vectorHits ?? []).map((h) => h.fragmentId), ...fused.map((h) => h.fragmentId)];
-  const outside = await fragmentsOutsideScope(db, run.tender_id, [...new Set(all)], run.allowed_source_unit_ids);
+  const outside = await fragmentsOutsideScope(db, ownerOfRun(run), [...new Set(all)], run.allowed_source_unit_ids);
   if (outside.length > 0) {
     await db.query(
       `UPDATE search_run SET status = 'failed', semantic_status = CASE WHEN semantic_status IN ('queued', 'running') THEN 'failed' ELSE semantic_status END,
@@ -393,6 +410,7 @@ export const recordTimings = async (db: Queryable, runId: string, timings: Recor
 
 export interface IHitDetailRow {
   id: string;
+  contract_id: string | null;
   run_id: string | null;
   document_revision_id: string | null;
   document_id: string | null;
@@ -411,7 +429,7 @@ export interface IHitDetailRow {
 export const hitDetails = async (db: Queryable, fragmentIds: string[]): Promise<Map<string, IHitDetailRow>> => {
   if (fragmentIds.length === 0) return new Map();
   const r = await db.query<IHitDetailRow>(
-    `SELECT f.id, f.run_id, f.document_revision_id, dr.document_id, d.title AS document_title, dr.revision_seq, f.origin,
+    `SELECT f.id, f.contract_id, f.run_id, f.document_revision_id, dr.document_id, d.title AS document_title, dr.revision_seq, f.origin,
             f.fragment_kind, f.page_index, p.page_label, p.sheet_label, f.bbox_norm, f.bbox_space, f.text
        FROM evidence_fragment f
        LEFT JOIN document_revision dr ON dr.id = f.document_revision_id

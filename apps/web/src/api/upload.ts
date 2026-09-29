@@ -3,6 +3,7 @@
 // Один путь для источников этапа и для экспорта распознавания: различаются только адрес
 // и тип ответа.
 import { API_BASE, ApiError, csrfToken, isProblem, notifyUnauthenticated } from './client';
+import type { IContractUploadResult, TContractRole } from './contractTypes';
 import type { IImportBatch, IProblem, IRecognitionRunAccepted } from './types';
 
 export interface IUploadHandle<T> {
@@ -98,6 +99,33 @@ export const uploadRecognitionExport = (
 ): IUploadHandle<IRecognitionRunAccepted> =>
   xhrUpload<IRecognitionRunAccepted>(
     `${API_BASE}/document-revisions/${encodeURIComponent(revisionId)}/recognition-imports?name=${encodeURIComponent(file.name)}`,
+    file,
+    idempotencyKey,
+    onProgress,
+  );
+
+/** Документ договора: основной договор, допсоглашение или приложение (этап 06a). */
+export const uploadContractDocument = (
+  contractId: string,
+  file: File,
+  role: TContractRole,
+  mainDocumentId: string | null,
+  idempotencyKey: string,
+  onProgress: (fraction: number) => void,
+): IUploadHandle<IContractUploadResult> => {
+  const params = new URLSearchParams({ name: file.name, role, ...(mainDocumentId ? { mainDocumentId } : {}) });
+  return xhrUpload<IContractUploadResult>(`${API_BASE}/contracts/${encodeURIComponent(contractId)}/documents?${params.toString()}`, file, idempotencyKey, onProgress);
+};
+
+/** Новая редакция документа договора: прежняя остаётся в истории и в снимках. */
+export const uploadContractRevision = (
+  documentId: string,
+  file: File,
+  idempotencyKey: string,
+  onProgress: (fraction: number) => void,
+): IUploadHandle<IContractUploadResult> =>
+  xhrUpload<IContractUploadResult>(
+    `${API_BASE}/contract-documents/${encodeURIComponent(documentId)}/revisions?name=${encodeURIComponent(file.name)}`,
     file,
     idempotencyKey,
     onProgress,

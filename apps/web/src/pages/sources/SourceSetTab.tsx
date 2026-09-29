@@ -1,6 +1,7 @@
 import { useState, type FC, type ReactNode } from 'react';
 import { describeError, hasCode, stateConflictCurrent } from '../../api/errors';
 import { freezeSourceSet } from '../../api/recognitionEndpoints';
+import { listContractCandidates } from '../../api/contractEndpoints';
 import { createSourceSetDraft, listDocuments, listSourceSets } from '../../api/sourceEndpoints';
 import type { IFreezeBlockingItem, ISourceSetLatestItem, ISourceSetRevision } from '../../api/types';
 import { Badge } from '../../components/Badge';
@@ -38,6 +39,10 @@ const inclusionBadge = (item: ISourceSetLatestItem): ReactNode =>
     <Badge tone="neutral" icon="user-check" label={INCLUSION_LABELS.excluded_not_applicable} />
   );
 
+// Элемент договора без contract.read показывается только как факт (D-022 OD-2).
+const itemTitle = (item: ISourceSetLatestItem): string =>
+  item.documentTitle === null ? 'Документ договора (нет права чтения)' : item.contractId ? `${item.documentTitle} (договор)` : item.documentTitle;
+
 const BLOCKING_REASONS: Record<IFreezeBlockingItem['reason'], string> = {
   no_recognition: 'распознавание не выполнялось',
   recognition_in_progress: 'распознавание ещё идёт',
@@ -66,6 +71,7 @@ export const SourceSetTab: FC<ISourceSetTabProps> = ({ stageId, canWrite }) => {
   const idempotency = useIdempotencyKey();
   const setsRes = useApiResource((signal) => listSourceSets(stageId, signal), stageId);
   const docsRes = useApiResource((signal) => listDocuments(stageId, signal), stageId);
+  const candidatesRes = useApiResource((signal) => listContractCandidates(stageId, signal), `candidates:${stageId}`);
 
   const sets = setsRes.data?.items ?? [];
   const set = sets.find((s) => s.purpose === 'working') ?? sets[0] ?? null;
@@ -150,7 +156,7 @@ export const SourceSetTab: FC<ISourceSetTabProps> = ({ stageId, canWrite }) => {
             <tbody>
               {items.map((item) => (
                 <tr key={item.documentRevisionId}>
-                  <td>{item.documentTitle}</td>
+                  <td>{itemTitle(item)}</td>
                   <td className={`${list.num} ${list.right}`}>{item.revisionSeq}</td>
                   <td>{inclusionBadge(item)}</td>
                   <td>{item.reason ?? <span className={list.muted}>—</span>}</td>
@@ -163,7 +169,7 @@ export const SourceSetTab: FC<ISourceSetTabProps> = ({ stageId, canWrite }) => {
           {items.map((item) => (
             <li key={item.documentRevisionId} className={list.card}>
               <div className={list.cardHead}>
-                <span className={list.cardTitle}>{`${item.documentTitle} · ред. ${item.revisionSeq}`}</span>
+                <span className={list.cardTitle}>{`${itemTitle(item)} · ред. ${item.revisionSeq}`}</span>
                 {inclusionBadge(item)}
               </div>
               {item.reason ? <p className={list.muted}>{item.reason}</p> : null}
@@ -205,6 +211,7 @@ export const SourceSetTab: FC<ISourceSetTabProps> = ({ stageId, canWrite }) => {
           revision={draft}
           items={latest.id === draft.id ? items : []}
           documents={docsRes.data?.items ?? []}
+          candidates={candidatesRes.data?.items ?? []}
           onSaved={() => {
             setEditing(false);
             setsRes.reload();
@@ -213,6 +220,7 @@ export const SourceSetTab: FC<ISourceSetTabProps> = ({ stageId, canWrite }) => {
           onReload={() => {
             setsRes.reload();
             docsRes.reload();
+            candidatesRes.reload();
           }}
         />
       );
@@ -263,7 +271,7 @@ export const SourceSetTab: FC<ISourceSetTabProps> = ({ stageId, canWrite }) => {
           <span>Заморозка требует распознавания включённых редакций. Не готовы:</span>
           <ul>
             {blocking.map((item) => (
-              <li key={item.documentRevisionId}>{`${item.documentTitle} · ред. ${item.revisionSeq} — ${BLOCKING_REASONS[item.reason]}`}</li>
+              <li key={item.documentRevisionId}>{`${item.documentTitle ?? 'Документ договора (нет права чтения)'} · ред. ${item.revisionSeq} — ${BLOCKING_REASONS[item.reason]}`}</li>
             ))}
           </ul>
         </Notice>

@@ -9,7 +9,7 @@ export type TPrincipalKind = 'human' | 'model_via_mcp' | 'integration' | 'system
 export type TAuditOutcome = 'allowed' | 'denied' | 'failed';
 
 /** Глобальные возможности пользователя. */
-export type TGlobalCapability = 'admin.users' | 'admin.tender' | 'admin.audit' | 'admin.intake';
+export type TGlobalCapability = 'admin.users' | 'admin.tender' | 'admin.audit' | 'admin.intake' | 'admin.contract';
 
 /** Возможности пользователя в конкретном тендере. */
 export type TTenderCapability =
@@ -33,6 +33,8 @@ export interface IMe {
   roles: TGlobalRole[];
   capabilities: string[];
   memberships: IMembership[];
+  /** Раздел «Договоры»: администратор договоров, право создавать договоры или выдача по договору. */
+  contractsAvailable: boolean;
 }
 
 export interface ITender {
@@ -314,8 +316,11 @@ export interface ISourceSetRevision {
 
 export interface ISourceSetLatestItem {
   documentRevisionId: string;
-  documentId: string;
-  documentTitle: string;
+  /** Редакция договора в составе этапа (этап 06a); без contract.read — restricted, без названия. */
+  contractId: string | null;
+  restricted: boolean;
+  documentId: string | null;
+  documentTitle: string | null;
   revisionSeq: number;
   inclusion: TInclusion;
   reason: string | null;
@@ -390,186 +395,7 @@ export interface IScanAccepted {
   created: boolean;
 }
 
-// ---- распознавание и доказательства (этап 04)
-
-export type TRecognitionStatus = 'queued' | 'running' | 'complete' | 'partial' | 'failed' | 'cancelled';
-export type TRecognitionPageStatus = 'recognized' | 'missing' | 'failed';
-export type TFragmentOrigin = 'document_text' | 'recognized_text' | 'model_description' | 'negotiation_speech' | 'negotiation_hint' | 'email_body' | 'attachment_text';
-export type TFragmentKind =
-  | 'text_block'
-  | 'image_block'
-  | 'stamp_block'
-  | 'unknown_block'
-  | 'summary'
-  | 'description'
-  | 'entities'
-  | 'verification'
-  | 'unknown_section';
-export type TBboxSpace = 'page_unrotated' | 'page_rotated';
-
-export interface IRecognitionRun {
-  id: string;
-  documentRevisionId: string;
-  documentId: string;
-  tenderId: string;
-  engine: string;
-  engineSchemaVersion: string | null;
-  sourceArtifactSha256: string;
-  sourceArtifactName: string | null;
-  status: TRecognitionStatus;
-  pagesTotal: number | null;
-  pagesRecognized: number;
-  supersedesRunId: string | null;
-  failureCode: string | null;
-  failureDetail: string | null;
-  createdAt: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-  contentUrl: string;
-}
-
-export interface IRecognitionRunAccepted extends IRecognitionRun {
-  /** true — архив уже импортировался: второго прогона той же пары не создаётся. */
-  reused: boolean;
-}
-
-export interface IRecognitionPage {
-  pageIndex: number;
-  pageLabel: string | null;
-  /** Номер листа из штампа: это НЕ номер страницы файла. */
-  sheetLabel: string | null;
-  widthPx: number | null;
-  heightPx: number | null;
-  rotation: number;
-  status: TRecognitionPageStatus;
-}
-
-export interface IRecognitionWarning {
-  code: string;
-  count: number;
-  sample: string;
-}
-
-export interface IRecognitionQuality {
-  documentName?: string | null;
-  coordinateSpace?: string;
-  counts?: Record<string, number>;
-  warnings?: IRecognitionWarning[];
-  archive?: { pdfMember: string | null; extras: string[]; ignored: string[] };
-}
-
-export interface IRecognitionRunDetail extends IRecognitionRun {
-  supersededByRunId: string | null;
-  quality: IRecognitionQuality;
-  missingPages: number[];
-  pages: IRecognitionPage[];
-}
-
-export interface IEvidenceFragment {
-  id: string;
-  runId: string | null;
-  documentRevisionId: string | null;
-  origin: TFragmentOrigin;
-  fragmentKind: TFragmentKind;
-  externalBlockId: string | null;
-  ordinal: number | null;
-  pageIndex: number | null;
-  bboxNorm: number[] | null;
-  bboxSpace: TBboxSpace | null;
-  shapeType: 'rectangle' | 'polygon' | null;
-  polygonNorm: number[] | null;
-  rotation: number | null;
-  text: string;
-  textSha256: string;
-  derivedModelRef: string | null;
-  /** Справочная ссылка экспорта. Портал её не загружает — показывается текстом (A38). */
-  externalCropUrl: string | null;
-  warnings: string[];
-  /** Часть длинного текста блока: доказательство разбито, а не усечено. */
-  partIndex: number;
-  partTotal: number;
-}
-
-export interface IFragmentPage {
-  items: IEvidenceFragment[];
-  nextCursor: string | null;
-}
-
-export interface IEvidenceDetail extends IEvidenceFragment {
-  tenderId: string;
-  documentId: string | null;
-  runStatus: TRecognitionStatus | null;
-  pageLabel: string | null;
-  sheetLabel: string | null;
-  pageWidthPx: number | null;
-  pageHeightPx: number | null;
-  pageStatus: TRecognitionPageStatus | null;
-  contentUrl: string | null;
-}
-
-export interface IFreezeBlockingItem {
-  documentRevisionId: string;
-  documentId: string;
-  documentTitle: string;
-  revisionSeq: number;
-  reason: 'no_recognition' | 'recognition_in_progress' | 'recognition_failed' | 'recognition_cancelled';
-}
-
-// ---- поиск и снимок области (этап 05; portal-api §2.3–2.4)
-
-export type TSearchRunStatus = 'pending' | 'complete' | 'degraded' | 'failed';
-export type TSemanticStatus = 'queued' | 'running' | 'complete' | 'unavailable' | 'failed' | 'timeout' | 'cancelled';
-export type TSearchBranch = 'exact' | 'fts' | 'vector';
-
-export interface ISearchHit {
-  rank: number;
-  fragmentId: string;
-  origin: TFragmentOrigin;
-  matchedVia: TSearchBranch[];
-  score: number;
-  documentId: string | null;
-  documentTitle: string | null;
-  documentRevisionId: string | null;
-  revisionSeq: number | null;
-  recognitionRunId: string | null;
-  fragmentKind: TFragmentKind | null;
-  pageIndex: number | null;
-  pageLabel: string | null;
-  sheetLabel: string | null;
-  text: string;
-  textTruncated: boolean;
-}
-
-export interface ISearchRun {
-  searchRunId: string;
-  status: TSearchRunStatus;
-  context: { kind: 'tender'; tenderId: string; mode: 'working' | 'review'; stageId: string | null; evidenceScopeId: string | null };
-  query: string;
-  scopeHash: string;
-  scope: { units: number; pagesRecognized: number; pagesTotal: number; unitsNotIndexed: number; revisionsWithoutRun: number; excludedByAcl: number };
-  incomplete: boolean;
-  semantic: { status: TSemanticStatus; reason: string | null };
-  index: { versionId: string; seq: number | null; embeddingModel: string | null };
-  rankingVersion: string;
-  branchCounts: Record<TSearchBranch, number>;
-  /** Слияние точной и полнотекстовой веток, пока смысловая не готова. Итогом не является. */
-  lexical: { preliminary: true; items: ISearchHit[] } | null;
-  fused: { items: ISearchHit[] } | null;
-  emptyMessage: string | null;
-  failureCode: string | null;
-  deadlineAt: string;
-  createdAt: string;
-  finishedAt: string | null;
-}
-
-export interface IEvidenceScope {
-  id: string;
-  stageId: string;
-  tenderId: string;
-  sourceSetRevisionId: string;
-  inputVersion: number;
-  contentHash: string;
-  createdAt: string;
-  units: number | null;
-  reused?: boolean;
-}
+// Типы распознавания, доказательств, поиска и снимка области — в recognitionTypes.ts и searchTypes.ts
+// (лимит размера модуля); импорт из этого файла сохраняется.
+export type * from './recognitionTypes';
+export type * from './searchTypes';

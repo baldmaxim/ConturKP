@@ -4,6 +4,7 @@
 import { FreezeSourceSetRequest, PutSourceSetItemsRequest } from '@kontur/contracts';
 import { formatEtag, sourceSetContentHash } from '@kontur/core';
 import {
+  activeLinkedContractIds,
   blockingFreezeItems,
   createDraftRevision,
   emitStageEvents,
@@ -12,7 +13,9 @@ import {
   getSetRevision,
   listSetItems,
   listSetRevisions,
+  readableContractIds,
   replaceSetItems,
+  revisionOwners,
   type IAccessContext,
   type ISourceSetRevisionRow,
   type Pool,
@@ -45,6 +48,10 @@ const loadRevision = async (db: Queryable, ctx: IAccessContext, id: string, lock
   return { rev: r, stage };
 };
 
+// Элемент с редакцией договора виден участнику без contract.read только как факт (D-022 OD-2):
+// ни названия, ни документа, ни идентификатора договора — лишь номер редакции в составе.
+const restrictedOf = (readable: ReadonlySet<string>, contractId: string | null): boolean => contractId !== null && !readable.has(contractId);
+
 export const sourceSetsRouter = (pool: Pool): Router => {
   const router = Router();
 
@@ -52,6 +59,7 @@ export const sourceSetsRouter = (pool: Pool): Router => {
     '/stages/:id/source-sets',
     query(pool, 'source.set.read', 'tender_stage', async (ctx, req, res) => {
       const stage = await loadStage(pool, ctx, uuidParam(req, 'id', 'tender_stage'));
+      const readable = new Set(readableContractIds(ctx));
       const sets = await pool.query<{ id: string; purpose: string }>('SELECT id, purpose FROM source_set WHERE stage_id = $1 ORDER BY purpose', [stage.id]);
       const out = [];
       for (const s of sets.rows) {
@@ -62,14 +70,19 @@ export const sourceSetsRouter = (pool: Pool): Router => {
           purpose: s.purpose,
           revisions: revisions.map(toRevision),
           latestItems: latest
-            ? (await listSetItems(pool, latest.id)).map((i) => ({
-                documentRevisionId: i.document_revision_id,
-                documentId: i.document_id,
-                documentTitle: i.document_title,
-                revisionSeq: i.revision_seq,
-                inclusion: i.inclusion,
-                reason: i.reason,
-              }))
+            ? (await listSetItems(pool, latest.id)).map((i) => {
+                const restricted = restrictedOf(readable, i.contract_id);
+                return {
+                  documentRevisionId: i.document_revision_id,
+                  contractId: restricted ? null : i.contract_id,
+                  restricted,
+                  documentId: restricted ? null : i.document_id,
+                  documentTitle: restricted ? null : i.document_title,
+                  revisionSeq: i.revision_seq,
+                  inclusion: i.inclusion,
+                  reason: i.reason,
+                };
+              })
             : [],
         });
       }
@@ -125,8 +138,32 @@ export const sourceSetsRouter = (pool: Pool): Router => {
         const body = parseBody(PutSourceSetItemsRequest, req.body);
         const ids = body.items.map((i) => i.documentRevisionId);
         if (new Set(ids).size !== ids.length) throw new HttpError(400, 'VALIDATION_FAILED', 'редакция указана дважды');
-        const own = await client.query<{ id: string }>('SELECT id FROM document_revision WHERE id = ANY($1::uuid[]) AND tender_id = $2', [ids, stage.tender_id]);
-        if (own.rows.length !== ids.length) throw new HttpError(400, 'VALIDATION_FAILED', 'редакция не относится к тендеру этапа');
+        // Редакция — своего тендера или договора, действующе связанного с тендером (D-017): связь лишь
+        // предлагает кандидатов. Новый или изменённый элемент договора требует contract.read; прежний
+        // элемент, оставленный как был, — нет: состав этапа ведёт участник тендера.
+        const owners = await revisionOwners(client, ids);
+        const linked = new Set(await activeLinkedContractIds(client, stage.tender_id));
+        const readable = new Set(readableContractIds(ctx));
+        const before = new Map((await listSetItems(client, id)).map((i) => [i.document_revision_id, i]));
+        for (const it of body.items) {
+          const owner = owners.get(it.documentRevisionId);
+          if (owner?.tenderId === stage.tender_id) continue;
+          if (!owner?.contractId || !linked.has(owner.contractId)) {
+            throw new HttpError(400, 'VALIDATION_FAILED', 'редакция не относится к тендеру этапа или связанному с ним договору');
+          }
+          const prev = before.get(it.documentRevisionId);
+          const unchanged = prev !== undefined && prev.inclusion === it.inclusion && (prev.reason ?? null) === (it.reason ?? null);
+          if (!unchanged && !readable.has(owner.contractId)) {
+            // Отказ — без идентификатора договора: журнал тендера видят участники без выдачи по договору.
+            throw new HttpError(403, 'FORBIDDEN', 'нет права contract.read', {}, {
+              tenderId: stage.tender_id,
+              entityType: 'source_set_revision',
+              entityId: id,
+              details: { capability: 'contract.read' },
+            });
+          }
+        }
+        const contractItems = body.items.filter((i) => owners.get(i.documentRevisionId)?.contractId).length;
         for (const it of body.items) {
           if (it.inclusion === 'excluded_not_applicable' && !it.reason) throw new HttpError(400, 'VALIDATION_FAILED', 'исключение требует причины');
         }
@@ -151,6 +188,7 @@ export const sourceSetsRouter = (pool: Pool): Router => {
               details: {
                 included: body.items.filter((i) => i.inclusion === 'included').length,
                 excluded: body.items.filter((i) => i.inclusion === 'excluded_not_applicable').length,
+                contractItems,
               },
             },
           ],
@@ -185,21 +223,40 @@ export const sourceSetsRouter = (pool: Pool): Router => {
         if (included.length === 0) {
           throw new HttpError(409, 'STATE_CONFLICT', 'в составе нет ни одной включённой редакции', {}, target);
         }
+        // Включённая редакция договора замораживается только при действующей связи договора с тендером:
+        // снимок из такой ревизии БД иначе не примет (охранник evidence_scope_item, миграция 0012).
+        const linked = new Set(await activeLinkedContractIds(client, stage.tender_id));
+        const unlinked = included.filter((i) => i.contract_id !== null && !linked.has(i.contract_id));
+        if (unlinked.length > 0) {
+          throw new HttpError(
+            409,
+            'STATE_CONFLICT',
+            'связь договора с тендером в архиве: исключите его редакции из состава или восстановите связь',
+            { current: { reason: 'contract_link_archived', documentRevisionIds: unlinked.map((i) => i.document_revision_id) } },
+            target,
+          );
+        }
         const blocking = await blockingFreezeItems(client, id);
         if (blocking.length > 0) {
+          const readable = new Set(readableContractIds(ctx));
           throw new HttpError(
             409,
             'STATE_CONFLICT',
             'заморозка требует распознавания включённых редакций',
             {
               current: {
-                blocking: blocking.map((b) => ({
-                  documentRevisionId: b.document_revision_id,
-                  documentId: b.document_id,
-                  documentTitle: b.document_title,
-                  revisionSeq: b.revision_seq,
-                  reason: b.reason,
-                })),
+                blocking: blocking.map((b) => {
+                  const restricted = restrictedOf(readable, b.contract_id);
+                  return {
+                    documentRevisionId: b.document_revision_id,
+                    contractId: restricted ? null : b.contract_id,
+                    restricted,
+                    documentId: restricted ? null : b.document_id,
+                    documentTitle: restricted ? null : b.document_title,
+                    revisionSeq: b.revision_seq,
+                    reason: b.reason,
+                  };
+                }),
               },
             },
             target,

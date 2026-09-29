@@ -14,10 +14,12 @@ interface IRevisionListProps {
   revisions: IRevision[];
   latestRevisionId: string | null;
   canWrite: boolean;
+  /** Происхождения есть у редакций тендера; у документа договора их нет (D-023). */
+  showOccurrences?: boolean;
 }
 
 /** Редакции документа (новые сверху) и происхождения каждой редакции. */
-export const RevisionList: FC<IRevisionListProps> = ({ revisions, latestRevisionId, canWrite }) => {
+export const RevisionList: FC<IRevisionListProps> = ({ revisions, latestRevisionId, canWrite, showOccurrences = true }) => {
   if (revisions.length === 0) {
     return <EmptyState icon="file-question-mark" title="Редакций нет" text="У документа пока нет зарегистрированных редакций." />;
   }
@@ -53,6 +55,7 @@ export const RevisionList: FC<IRevisionListProps> = ({ revisions, latestRevision
               <span>Открыть или скачать оригинал</span>
             </a>
           </div>
+          {showOccurrences ? (
           <details className={styles.occurrences}>
             <summary className={styles.summary}>
               <Icon name="chevron-down" size={16} className={styles.chevron} />
@@ -75,6 +78,7 @@ export const RevisionList: FC<IRevisionListProps> = ({ revisions, latestRevision
               </ul>
             )}
           </details>
+          ) : null}
           <RecognitionPanel revisionId={rev.id} canWrite={canWrite} />
         </li>
       ))}

@@ -1,6 +1,6 @@
 // Документы, редакции, выдача оригинала по правам, события барьера этапа (portal-api §2.3).
 import { PatchDocumentRequest } from '@kontur/contracts';
-import { formatEtag } from '@kontur/core';
+import { fileNameWithExtension, formatEtag } from '@kontur/core';
 import {
   getDocument,
   getRevision,
@@ -97,7 +97,8 @@ export const documentsRouter = (pool: Pool, store: BlobStore): Router => {
       const r = await getRevision(pool, ctx, id);
       if (!r) throw notFound({ entityType: 'document_revision', entityId: id });
       const occ = await listOccurrences(pool, [id]);
-      const name = occ.at(-1)?.observed_name ?? `revision-${r.revision_seq}`;
+      // У редакции договора происхождений нет (D-023): имя — название документа с расширением типа.
+      const name = occ.at(-1)?.observed_name ?? (r.contract_id ? fileNameWithExtension(r.document_title, r.media_type) : `revision-${r.revision_seq}`);
       const inline = INLINE_TYPES.has(r.media_type);
       res.setHeader('Content-Type', inline ? r.media_type : 'application/octet-stream');
       res.setHeader('Content-Length', String(r.size_bytes));

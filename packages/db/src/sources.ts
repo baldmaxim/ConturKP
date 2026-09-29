@@ -1,7 +1,7 @@
 // Источники: blob, документы, редакции, происхождения, партии и элементы импорта
 // (data-model §4.3, state-machines §3). Путь — история происхождения, не идентичность.
 import { nameKeyOf } from '@kontur/core';
-import { contentTenderIds, type IAccessContext } from './access.ts';
+import { contentTenderIds, readableContractIds, type IAccessContext } from './access.ts';
 import type { Queryable } from './pool.ts';
 import { emitStageEvents, lockTenderStages } from './stageEvents.ts';
 
@@ -334,7 +334,10 @@ export const updateDocument = async (
 export interface IRevisionRow {
   id: string;
   document_id: string;
-  tender_id: string;
+  // Владелец редакции — ровно один: тендер или договор (D-023).
+  tender_id: string | null;
+  contract_id: string | null;
+  document_title: string;
   blob_sha256: string;
   revision_seq: number;
   supersedes_revision_id: string | null;
@@ -345,17 +348,23 @@ export interface IRevisionRow {
 }
 
 const SELECT_REVISION = `
-  SELECT r.id, r.document_id, r.tender_id, r.blob_sha256, r.revision_seq, r.supersedes_revision_id, r.received_at,
-         r.registered_by, b.size_bytes, b.media_type
-    FROM document_revision r JOIN blob b ON b.sha256 = r.blob_sha256`;
+  SELECT r.id, r.document_id, r.tender_id, r.contract_id, d.title AS document_title, r.blob_sha256, r.revision_seq,
+         r.supersedes_revision_id, r.received_at, r.registered_by, b.size_bytes, b.media_type
+    FROM document_revision r JOIN blob b ON b.sha256 = r.blob_sha256 JOIN document d ON d.id = r.document_id`;
 
 export const listRevisions = async (db: Queryable, documentId: string): Promise<IRevisionRow[]> => {
   const r = await db.query<IRevisionRow>(`${SELECT_REVISION} WHERE r.document_id = $1 ORDER BY r.revision_seq DESC`, [documentId]);
   return r.rows;
 };
 
+// Редакция тендера видна участнику тендера, редакция договора — только с contract.read (D-022 OD-2):
+// включение в снимок тендера права чтения редакции договора не даёт (OD-3).
 export const getRevision = async (db: Queryable, ctx: IAccessContext, id: string): Promise<IRevisionRow | null> => {
-  const r = await db.query<IRevisionRow>(`${SELECT_REVISION} WHERE r.id = $1 AND r.tender_id = ANY($2::uuid[])`, [id, contentTenderIds(ctx)]);
+  const r = await db.query<IRevisionRow>(`${SELECT_REVISION} WHERE r.id = $1 AND (r.tender_id = ANY($2::uuid[]) OR r.contract_id = ANY($3::uuid[]))`, [
+    id,
+    contentTenderIds(ctx),
+    readableContractIds(ctx),
+  ]);
   return r.rows[0] ?? null;
 };
 

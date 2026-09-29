@@ -21,6 +21,8 @@ const toHit = (rank: number, h: { fragmentId: string; origin: string; score: num
   origin: h.origin,
   matchedVia: h.matchedVia,
   score: h.score,
+  // Фрагмент договора (D-023): в тендерном контексте попадает в итог только при contract.read.
+  contractId: d?.contract_id ?? null,
   documentId: d?.document_id ?? null,
   documentTitle: d?.document_title ?? null,
   documentRevisionId: d?.document_revision_id ?? null,
@@ -50,7 +52,14 @@ export const searchRunView = async (db: Queryable, runId: string) => {
   return {
     searchRunId: run.id,
     status: run.status,
-    context: { kind: run.context_kind, tenderId: run.tender_id, mode: run.mode, stageId: run.stage_id, evidenceScopeId: run.evidence_scope_id },
+    context: {
+      kind: run.context_kind,
+      tenderId: run.tender_id,
+      contractId: run.contract_id,
+      mode: run.mode,
+      stageId: run.stage_id,
+      evidenceScopeId: run.evidence_scope_id,
+    },
     query: run.query_text,
     scopeHash: run.scope_hash,
     scope: {
@@ -81,7 +90,9 @@ export const searchRunView = async (db: Queryable, runId: string) => {
   };
 };
 
-export const toEvidenceScope = (s: IEvidenceScopeRow & { units?: number }, items?: IEvidenceScopeItemRow[]) => ({
+// Единица договора в снимке тендера видна участнику только как факт (D-022 OD-3): название, документ, прогон
+// и идентификатор договора — лишь с contract.read по этому договору.
+export const toEvidenceScope = (s: IEvidenceScopeRow & { units?: number }, items?: IEvidenceScopeItemRow[], readableContracts: ReadonlySet<string> = new Set()) => ({
   id: s.id,
   stageId: s.stage_id,
   tenderId: s.tender_id,
@@ -92,17 +103,22 @@ export const toEvidenceScope = (s: IEvidenceScopeRow & { units?: number }, items
   units: s.units ?? items?.length ?? null,
   ...(items
     ? {
-        items: items.map((i) => ({
-          unitType: 'document_recognition',
-          documentRevisionId: i.document_revision_id,
-          documentId: i.document_id,
-          documentTitle: i.document_title,
-          revisionSeq: i.revision_seq,
-          recognitionRunId: i.recognition_run_id,
-          runStatus: i.run_status,
-          pagesTotal: i.pages_total,
-          pagesRecognized: i.pages_recognized,
-        })),
+        items: items.map((i) => {
+          const restricted = i.contract_id !== null && !readableContracts.has(i.contract_id);
+          return {
+            unitType: 'document_recognition',
+            contractId: restricted ? null : i.contract_id,
+            restricted,
+            documentRevisionId: i.document_revision_id,
+            documentId: restricted ? null : i.document_id,
+            documentTitle: restricted ? null : i.document_title,
+            revisionSeq: restricted ? null : i.revision_seq,
+            recognitionRunId: restricted ? null : i.recognition_run_id,
+            runStatus: restricted ? null : i.run_status,
+            pagesTotal: restricted ? null : i.pages_total,
+            pagesRecognized: restricted ? null : i.pages_recognized,
+          };
+        }),
       }
     : {}),
 });

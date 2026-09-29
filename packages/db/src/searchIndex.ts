@@ -191,14 +191,16 @@ export const retiredVersionsToPurge = async (db: Queryable): Promise<string[]> =
 
 export interface IIndexUnitRow {
   id: string;
-  tender_id: string;
+  // Владелец единицы — из строки прогона; составные FK 0009/0012 сверяют его у каждой строки индекса.
+  tender_id: string | null;
+  contract_id: string | null;
   document_revision_id: string;
 }
 
 // Завершённые единицы источника, ещё не проиндексированные версией (в порядке завершения).
 export const unitsMissingInVersion = async (db: Queryable, versionId: string, limit: number): Promise<IIndexUnitRow[]> => {
   const r = await db.query<IIndexUnitRow>(
-    `SELECT r.id, r.tender_id, r.document_revision_id FROM recognition_run r
+    `SELECT r.id, r.tender_id, r.contract_id, r.document_revision_id FROM recognition_run r
       WHERE r.status IN ('complete', 'partial')
         AND NOT EXISTS (SELECT 1 FROM search_index_unit u WHERE u.index_version_id = $1 AND u.source_unit_id = r.id)
       ORDER BY r.finished_at, r.id
@@ -246,9 +248,9 @@ export const indexUnit = async (
   const rows = pages.flatMap((p) => p.chunks.map((c) => ({ pageIndex: p.pageIndex, chunk: c, key: chunkKeyOf(unit.id, p.pageIndex, c.partNo) })));
   if (rows.length > 0) {
     await db.query(
-      `INSERT INTO search_chunk (index_version_id, tender_id, source_unit_type, source_unit_id, document_revision_id,
+      `INSERT INTO search_chunk (index_version_id, tender_id, contract_id, source_unit_type, source_unit_id, document_revision_id,
                                  page_index, part_no, chunk_key, header_text, body_text, text_sha256)
-       SELECT $1, $2, 'recognition_run', $3, $4, x.page_index, x.part_no, x.chunk_key, x.header_text, x.body_text, x.text_sha256
+       SELECT $1, $2, $11, 'recognition_run', $3, $4, x.page_index, x.part_no, x.chunk_key, x.header_text, x.body_text, x.text_sha256
          FROM unnest($5::int[], $6::int[], $7::text[], $8::text[], $9::text[], $10::text[])
               AS x(page_index, part_no, chunk_key, header_text, body_text, text_sha256)
        ON CONFLICT (index_version_id, chunk_key) DO NOTHING`,
@@ -263,6 +265,7 @@ export const indexUnit = async (
         rows.map((r) => r.chunk.headerText),
         rows.map((r) => r.chunk.bodyText),
         rows.map((r) => sha256Hex(chunkText(r.chunk))),
+        unit.contract_id,
       ],
     );
     const ids = await db.query<{ id: string; chunk_key: string }>(
@@ -272,8 +275,8 @@ export const indexUnit = async (
     const idOf = new Map(ids.rows.map((x) => [x.chunk_key, x.id]));
     const links = rows.flatMap((r) => r.chunk.links.map((l) => ({ chunkId: idOf.get(r.key)!, ...l })));
     await db.query(
-      `INSERT INTO search_chunk_fragment (chunk_id, index_version_id, source_unit_id, tender_id, fragment_id, ordinal, role, char_start, char_end)
-       SELECT x.chunk_id, $1, $2, $3, x.fragment_id, x.ordinal, x.role, x.char_start, x.char_end
+      `INSERT INTO search_chunk_fragment (chunk_id, index_version_id, source_unit_id, tender_id, contract_id, fragment_id, ordinal, role, char_start, char_end)
+       SELECT x.chunk_id, $1, $2, $3, $10, x.fragment_id, x.ordinal, x.role, x.char_start, x.char_end
          FROM unnest($4::uuid[], $5::uuid[], $6::int[], $7::text[], $8::int[], $9::int[])
               AS x(chunk_id, fragment_id, ordinal, role, char_start, char_end)
        ON CONFLICT DO NOTHING`,
@@ -287,6 +290,7 @@ export const indexUnit = async (
         links.map((l) => l.role),
         links.map((l) => l.charStart),
         links.map((l) => l.charEnd),
+        unit.contract_id,
       ],
     );
   }
@@ -304,9 +308,9 @@ export const indexUnit = async (
     );
   }
   await db.query(
-    `INSERT INTO search_index_unit (index_version_id, source_unit_type, source_unit_id, tender_id, chunks, fragments_indexed, fragments_skipped)
-     VALUES ($1, 'recognition_run', $2, $3, $4, $5, $6)`,
-    [versionId, unit.id, unit.tender_id, rows.length, indexed.length, skipped.length],
+    `INSERT INTO search_index_unit (index_version_id, source_unit_type, source_unit_id, tender_id, contract_id, chunks, fragments_indexed, fragments_skipped)
+     VALUES ($1, 'recognition_run', $2, $3, $7, $4, $5, $6)`,
+    [versionId, unit.id, unit.tender_id, rows.length, indexed.length, skipped.length, unit.contract_id],
   );
   return { chunks: rows.length, created: true };
 };
@@ -316,14 +320,15 @@ export const indexUnit = async (
 export interface IChunkForVector {
   id: string;
   source_unit_id: string;
-  tender_id: string;
+  tender_id: string | null;
+  contract_id: string | null;
   header_text: string;
   body_text: string;
 }
 
 export const chunksWithoutVectors = async (db: Queryable, versionId: string, limit: number): Promise<IChunkForVector[]> => {
   const r = await db.query<IChunkForVector>(
-    `SELECT c.id, c.source_unit_id, c.tender_id, c.header_text, c.body_text FROM search_chunk c
+    `SELECT c.id, c.source_unit_id, c.tender_id, c.contract_id, c.header_text, c.body_text FROM search_chunk c
       WHERE c.index_version_id = $1 AND NOT EXISTS (SELECT 1 FROM search_chunk_vector v WHERE v.chunk_id = c.id)
       ORDER BY c.id
       LIMIT $2`,
@@ -332,19 +337,16 @@ export const chunksWithoutVectors = async (db: Queryable, versionId: string, lim
   return r.rows;
 };
 
-export const insertChunkVectors = async (
-  db: Queryable,
-  versionId: string,
-  dim: number,
-  rows: { chunkId: string; unitId: string; tenderId: string; vector: number[] }[],
-): Promise<void> => {
+// Единица и владелец вектора берутся из строки чанка (AD-06a-1 §9): вызывающий передаёт только вектор.
+export const insertChunkVectors = async (db: Queryable, versionId: string, dim: number, rows: { chunkId: string; vector: number[] }[]): Promise<void> => {
   if (rows.length === 0) return;
   await db.query(
-    `INSERT INTO search_chunk_vector (chunk_id, index_version_id, source_unit_id, tender_id, dim, embedding)
-     SELECT x.chunk_id, $1, x.unit_id, x.tender_id, $2, x.v::halfvec
-       FROM unnest($3::uuid[], $4::uuid[], $5::uuid[], $6::text[]) AS x(chunk_id, unit_id, tender_id, v)
+    `INSERT INTO search_chunk_vector (chunk_id, index_version_id, source_unit_id, tender_id, contract_id, dim, embedding)
+     SELECT x.chunk_id, $1, c.source_unit_id, c.tender_id, c.contract_id, $2, x.v::halfvec
+       FROM unnest($3::uuid[], $4::text[]) AS x(chunk_id, v)
+       JOIN search_chunk c ON c.id = x.chunk_id AND c.index_version_id = $1
      ON CONFLICT (chunk_id) DO NOTHING`,
-    [versionId, dim, rows.map((r) => r.chunkId), rows.map((r) => r.unitId), rows.map((r) => r.tenderId), rows.map((r) => vectorLiteral(r.vector))],
+    [versionId, dim, rows.map((r) => r.chunkId), rows.map((r) => vectorLiteral(r.vector))],
   );
 };
 

@@ -371,6 +371,84 @@ try {
     `запросов: ${hub.requests.length}`,
   );
 
+  // ---- Этап 06a: договорной контур на реальных процессах — права fail-closed, распознавание, два контекста поиска
+  const owner = await (await api('/me')).json();
+  const creator = await api(`/admin/contract-creators/${owner.id}`, { method: 'PUT', headers: json, body: '{}' });
+  const contractRes = await api('/contracts', { method: 'POST', headers: { ...json, ...idem() }, body: JSON.stringify({ number: 'SMOKE-1', title: 'Договор smoke' }) });
+  const contract = await contractRes.json();
+  record(
+    'этап 06a: contract.create — явной выдачей; создатель получает чтение и ведение',
+    creator.status === 200 && contractRes.status === 201 && contract.capabilities?.join(',') === 'contract.read,contract.manage',
+  );
+  const cfx = buildRdwebExport({ docName: 'Договор-smoke', pages: 1 });
+  const cdoc = await api(`/contracts/${contract.id}/documents?name=${encodeURIComponent('Договор-smoke.pdf')}&role=contract`, {
+    method: 'POST',
+    headers: { ...octet, ...idem() },
+    body: cfx.pdf,
+  });
+  const cdocBody = await cdoc.json();
+  const crec = await api(`/document-revisions/${cdocBody.revisionId}/recognition-imports?name=export.zip`, { method: 'POST', headers: { ...octet, ...idem() }, body: cfx.zip });
+  const crecBody = await crec.json();
+  const crun = await waitFor(async () => {
+    const r = await (await api(`/recognition-runs/${crecBody.id}`)).json();
+    return r.status === 'complete' ? r : null;
+  }, 30_000);
+  record('этап 06a: основной документ договора загружен и распознан worker по экспорту RDWeb', cdoc.status === 201 && crec.status === 202 && Boolean(crun));
+  const cfound = await waitFor(async () => {
+    const r = await search({ context: { kind: 'contract', contractId: contract.id }, query: 'ФИКС-АР', limit: 5 });
+    if (r.status !== 200) return null;
+    const b = await r.json();
+    return b.fused?.items?.length ? b : null;
+  }, 60_000);
+  record(
+    'этап 06a: поиск в контексте договора — только фрагменты договора',
+    Boolean(cfound) && cfound.context.kind === 'contract' && cfound.fused.items.every((h) => h.contractId === contract.id),
+  );
+  const tenderOnly = await (await search({ context: working, query: 'ФИКС-АР', limit: 20 })).json();
+  record('этап 06a: документ договора не попадает в поиск тендера без включения в состав', (tenderOnly.fused?.items ?? []).every((h) => h.contractId === null));
+  const contractEtag = (await api(`/contracts/${contract.id}`)).headers.get('etag');
+  const access = await api(`/contracts/${contract.id}/access/${owner.id}`, {
+    method: 'PUT',
+    headers: { ...json, 'If-Match': contractEtag },
+    body: JSON.stringify({ capabilities: ['contract.read', 'contract.link', 'contract.manage'] }),
+  });
+  const linkRes = await api(`/contracts/${contract.id}/tenders`, { method: 'POST', headers: { ...json, ...idem() }, body: JSON.stringify({ tenderId: demo.id }) });
+  const candidates = await (await api(`/stages/${stageId}/contract-candidates`)).json();
+  record(
+    'этап 06a: связь с тендером подтверждена; единица договора — только кандидат в состав этапа',
+    access.status === 200 && linkRes.status === 201 && candidates.items?.some((c) => c.documentRevisionId === cdocBody.revisionId),
+  );
+  // Вторая сессия: инженер демо-тендера без выдачи по договору.
+  const jar2 = new Map();
+  const login2 = await fetch(`${BASE}/api/v1/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: BASE },
+    body: JSON.stringify({ login: 'demo.eng2', password: PASSWORD }),
+  });
+  for (const c of login2.headers.getSetCookie()) {
+    const [pair] = c.split(';');
+    const i = pair.indexOf('=');
+    jar2.set(pair.slice(0, i), pair.slice(i + 1));
+  }
+  const api2 = (path, init = {}) =>
+    fetch(`${BASE}/api/v1${path}`, {
+      ...init,
+      headers: {
+        Cookie: [...jar2].map(([k, v]) => `${k}=${v}`).join('; '),
+        Origin: BASE,
+        'X-CSRF-Token': decodeURIComponent(jar2.get('kkp_csrf') ?? ''),
+        ...(init.headers ?? {}),
+      },
+    });
+  const hidden = await api2(`/contracts/${contract.id}`);
+  const hiddenSearch = await api2('/search', { method: 'POST', headers: json, body: JSON.stringify({ context: { kind: 'contract', contractId: contract.id }, query: 'ФИКС-АР' }) });
+  const hiddenFile = await api2(`/document-revisions/${cdocBody.revisionId}/content`);
+  const hiddenLinks = await (await api2(`/tenders/${demo.id}/contracts`)).json();
+  record(
+    'этап 06a: пользователь без выдачи — договор, поиск и оригинал 404, связь тендера не названа',
+    login2.status === 200 && hidden.status === 404 && hiddenSearch.status === 404 && hiddenFile.status === 404 && hiddenLinks.items?.length === 0,
+  );
+
   await stopProc(server);
   server = startProc('server', 'apps/server/src/main.ts');
   ready = await waitReady(30_000);

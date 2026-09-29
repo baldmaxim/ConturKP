@@ -208,17 +208,20 @@ export const seedRecognition = async (
       WHERE document_revision_id = $1 AND status IN ('queued', 'running')`,
     [revisionId],
   );
-  const rev = await pool.query<{ tender_id: string }>('SELECT tender_id FROM document_revision WHERE id = $1', [revisionId]);
+  const rev = await pool.query<{ tender_id: string | null; contract_id: string | null }>('SELECT tender_id, contract_id FROM document_revision WHERE id = $1', [
+    revisionId,
+  ]);
   const sha = randomBytes(32).toString('hex');
   await pool.query("INSERT INTO blob (sha256, size_bytes, media_type, storage_key) VALUES ($1, 1, 'application/zip', $2)", [sha, `seed/${sha}`]);
   // Новый прогон встаёт за хвостом истории редакции: второй корень запрещён (R04-12).
+  // Владелец прогона — владелец редакции (тендер или договор, D-023).
   const run = await pool.query<{ id: string }>(
-    `INSERT INTO recognition_run (document_revision_id, tender_id, engine, source_artifact_sha256, source_artifact_name, supersedes_run_id)
-     VALUES ($1, $2, 'rdweb_export', $3, 'seed.zip', (SELECT p.id FROM recognition_run p
+    `INSERT INTO recognition_run (document_revision_id, tender_id, contract_id, engine, source_artifact_sha256, source_artifact_name, supersedes_run_id)
+     VALUES ($1, $2, $4, 'rdweb_export', $3, 'seed.zip', (SELECT p.id FROM recognition_run p
        WHERE p.document_revision_id = $1 AND p.status IN ('complete', 'partial')
          AND NOT EXISTS (SELECT 1 FROM recognition_run c WHERE c.supersedes_run_id = p.id AND c.status NOT IN ('failed', 'cancelled'))
        ORDER BY p.created_at DESC LIMIT 1)) RETURNING id`,
-    [revisionId, rev.rows[0]!.tender_id, sha],
+    [revisionId, rev.rows[0]!.tender_id, sha, rev.rows[0]!.contract_id],
   );
   const id = run.rows[0]!.id;
   if (status === 'queued') return id;

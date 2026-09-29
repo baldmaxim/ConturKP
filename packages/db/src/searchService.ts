@@ -28,6 +28,7 @@ import {
   queryLexemes,
   vectorBranch,
   type FinalizeResult,
+  type SearchOwner,
 } from './searchRuns.ts';
 import { scopeCoverage, type IResolvedScope } from './searchScope.ts';
 
@@ -72,7 +73,9 @@ export const planSemantic = async (db: Queryable, v: ISearchIndexVersionRow, que
 };
 
 export interface ISearchStart {
-  tenderId: string;
+  owner: SearchOwner;
+  // Единицы области, исключённые фильтром прав до ранжирования (ADR-008 §4): только число.
+  excludedByAcl: number;
   stageId: string | null;
   mode: 'working' | 'review';
   evidenceScopeId: string | null;
@@ -100,7 +103,7 @@ export const startSearch = async (db: Queryable, s: ISearchStart): Promise<ISear
   // Пустая область: искать нечем ни одной ветке — прогон завершается сразу, без задания.
   const plan: SemanticPlan = s.scope.unitIds.length === 0 ? { kind: 'empty' } : await planSemantic(db, s.version, query, s.now);
   const runId = await createSearchRun(db, {
-    tenderId: s.tenderId,
+    owner: s.owner,
     stageId: s.stageId,
     mode: s.mode,
     evidenceScopeId: s.evidenceScopeId,
@@ -111,7 +114,7 @@ export const startSearch = async (db: Queryable, s: ISearchStart): Promise<ISear
     resultLimit: s.limit,
     scopeHash: s.scopeHash,
     allowedUnitIds: s.scope.unitIds,
-    scopeCounts: { ...coverage, revisionsWithoutRun: s.scope.revisionsWithoutRun, excludedByAcl: 0 },
+    scopeCounts: { ...coverage, revisionsWithoutRun: s.scope.revisionsWithoutRun, excludedByAcl: s.excludedByAcl },
     indexVersionId: s.version.id,
     rankingVersion: RANKING_VERSION,
     embeddingModel: s.version.embedding_model,
@@ -127,7 +130,7 @@ export const startSearch = async (db: Queryable, s: ISearchStart): Promise<ISear
   const ftsLexemes = retrieval.expanded ? await queryLexemes(db, retrieval.text) : lexemes;
   const fts = await ftsBranch(db, s.version.id, s.scope.unitIds, ftsLexemes, BRANCH_LIMIT, retrieval.expanded);
   const t2 = Date.now();
-  const outside = await fragmentsOutsideScope(db, s.tenderId, [...exact, ...fts].map((h) => h.fragmentId), s.scope.unitIds);
+  const outside = await fragmentsOutsideScope(db, s.owner, [...exact, ...fts].map((h) => h.fragmentId), s.scope.unitIds);
   if (outside.length > 0) {
     await db.query(
       `UPDATE search_run SET status = 'failed', semantic_status = 'failed', failure_code = 'scope_violation', finished_at = now()
@@ -196,7 +199,7 @@ export const enqueueIndexEmbed = (db: Queryable, versionId: string) =>
 export const enqueueIndexPurge = (db: Queryable, versionId: string) =>
   enqueueJob(db, { kind: 'index.purge', dedupeKey: `index-purge:${versionId}`, payload: { versionId }, priority: JOB_PRIORITY.indexPurge });
 
-export const enqueueSemantic = (db: Queryable, runId: string, tenderId: string) =>
+export const enqueueSemantic = (db: Queryable, runId: string, tenderId: string | null) =>
   enqueueJob(db, {
     kind: 'search.semantic',
     dedupeKey: `search:${runId}`,

@@ -268,11 +268,11 @@ describe('прогон поиска: чтение, права, неизменн�
     expect(JSON.stringify(rows[0]!.details)).not.toContain('минераловатный');
   });
 
-  it('режимы release/comparison и вид contract — честный отказ до своих этапов', async () => {
+  it('режимы release/comparison — честный отказ до своих этапов; вид contract (этап 06a) по чужому ID — 404', async () => {
     const release = await post({ context: { kind: 'tender', tenderId: s.tenderA, mode: 'release', releaseId: ids.revTz }, query: 'фасад' });
     expect(release.status).toBe(400);
     const contract = await post({ context: { kind: 'contract', contractId: ids.revTz }, query: 'фасад' });
-    expect(contract.status).toBe(400);
+    expect(contract.status).toBe(404);
   });
 });
 

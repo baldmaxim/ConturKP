@@ -43,6 +43,9 @@ export const SearchRunView: FC<ISearchRunViewProps> = ({ run }) => {
       {scope.unitsNotIndexed > 0 ? (
         <Notice tone="warning">{`Ещё не проиндексировано единиц источника: ${scope.unitsNotIndexed}. Их текст в этот поиск не вошёл.`}</Notice>
       ) : null}
+      {scope.excludedByAcl > 0 ? (
+        <Notice tone="info">{`Исключено по правам единиц источника: ${scope.excludedByAcl}. Их содержимое в поиск не вошло — например, документы договора без права чтения.`}</Notice>
+      ) : null}
       {scope.revisionsWithoutRun > 0 ? (
         <Notice tone="info">{`Редакций без распознавания в области: ${scope.revisionsWithoutRun} — по ним доступен только оригинал.`}</Notice>
       ) : null}

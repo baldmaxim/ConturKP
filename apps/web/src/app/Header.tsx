@@ -22,9 +22,11 @@ export const Header: FC = () => {
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  const showAdmin = can('admin.users') || can('admin.audit');
+  const showAdmin = can('admin.users') || can('admin.audit') || can('admin.contract');
+  const showContracts = me?.contractsAvailable ?? false;
   const path = location.pathname;
   const tendersActive = path === '/' || path.startsWith('/tenders') || path.startsWith('/stages');
+  const contractsActive = path.startsWith('/contracts') || path.startsWith('/contract-documents');
   const adminActive = path.startsWith('/admin');
 
   useEffect(() => {
@@ -65,6 +67,12 @@ export const Header: FC = () => {
         <Icon name="briefcase" />
         <span>Тендеры</span>
       </AppLink>
+      {showContracts ? (
+        <AppLink to="/contracts" className={cx(styles.navLink, contractsActive && styles.active)} aria-current={contractsActive ? 'page' : undefined}>
+          <Icon name="file-signature" />
+          <span>Договоры</span>
+        </AppLink>
+      ) : null}
       {showAdmin ? (
         <AppLink to="/admin" className={cx(styles.navLink, adminActive && styles.active)} aria-current={adminActive ? 'page' : undefined}>
           <Icon name="users" />

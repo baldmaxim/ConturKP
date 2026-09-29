@@ -6,6 +6,7 @@ import { PageHeader } from '../components/PageHeader';
 import { Tabs, tabId, tabPanelId, type ITab } from '../components/Tabs';
 import { useAuth } from '../hooks/useAuth';
 import { AuditLog } from './AuditLog';
+import { ContractCreatorsPanel } from './contracts/ContractCreatorsPanel';
 import { UsersPanel } from './UsersPanel';
 import styles from './TenderPage.module.css';
 
@@ -14,17 +15,21 @@ export const AdminPage: FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const canUsers = can('admin.users');
   const canAudit = can('admin.audit');
+  const canContracts = can('admin.contract');
 
   const tabs = useMemo(() => {
     const result: ITab[] = [];
     if (canUsers) {
       result.push({ id: 'users', label: 'Пользователи', icon: 'users' });
     }
+    if (canContracts) {
+      result.push({ id: 'contracts', label: 'Создание договоров', icon: 'file-signature' });
+    }
     if (canAudit) {
       result.push({ id: 'audit', label: 'Журнал вне тендеров', icon: 'scroll-text' });
     }
     return result;
-  }, [canUsers, canAudit]);
+  }, [canUsers, canAudit, canContracts]);
 
   if (tabs.length === 0) {
     return (
@@ -45,6 +50,7 @@ export const AdminPage: FC = () => {
       <Tabs tabs={tabs} active={active} onChange={(id) => setSearchParams({ tab: id }, { replace: true })} label="Разделы администрирования" />
       <div className={styles.panel} role="tabpanel" id={tabPanelId(active)} aria-labelledby={tabId(active)}>
         {active === 'users' ? <UsersPanel /> : null}
+        {active === 'contracts' ? <ContractCreatorsPanel /> : null}
         {active === 'audit' ? (
           <AuditLog loadPage={listAdminAudit} sourceKey="admin" emptyText="Событий вне тендеров (входы, изменения пользователей) пока нет." />
         ) : null}

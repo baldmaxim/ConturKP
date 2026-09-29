@@ -36,7 +36,7 @@ describe('возможности', () => {
   it('администратор без назначения: только администрирование и журнал, без содержимого', () => {
     expect(tenderCapabilities(roles('admin'), null)).toEqual(['audit.read', 'admin.tender']);
     expect(canSeeTenderCard(roles('admin'), null)).toBe(true);
-    expect(globalCapabilities(roles('admin'))).toEqual(['admin.users', 'admin.tender', 'admin.audit', 'admin.intake']);
+    expect(globalCapabilities(roles('admin'))).toEqual(['admin.users', 'admin.tender', 'admin.audit', 'admin.intake', 'admin.contract']);
     expect(globalCapabilities(roles('manager', 'engineer'))).toEqual([]);
   });
 });

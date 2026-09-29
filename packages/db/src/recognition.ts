@@ -1,7 +1,7 @@
 // Распознавание и доказательства (data-model §4.4, state-machines §4). Прогон — единица
 // источника (ADR-008 §1): фрагменты принадлежат прогону, а не документу, поэтому новая
 // версия OCR не переписывает прежние доказательства (A10).
-import { contentTenderIds, type IAccessContext } from './access.ts';
+import { contentTenderIds, readableContractIds, type IAccessContext } from './access.ts';
 import type { Queryable } from './pool.ts';
 
 export type RecognitionEngine = 'rdweb_export' | 'rdweb_api' | 'text_layer' | 'local_ocr';
@@ -30,7 +30,9 @@ export type BboxSpace = 'page_unrotated' | 'page_rotated';
 export interface IRecognitionRunRow {
   id: string;
   document_revision_id: string;
-  tender_id: string;
+  // Владелец прогона равен владельцу редакции: тендер или договор (D-023).
+  tender_id: string | null;
+  contract_id: string | null;
   document_id: string;
   revision_blob_sha256: string;
   engine: RecognitionEngine;
@@ -61,8 +63,13 @@ export const getRun = async (db: Queryable, id: string, lock = false): Promise<I
   return r.rows[0] ?? null;
 };
 
+// Прогон договора читается только с contract.read (D-022 OD-2, OD-3).
 export const getScopedRun = async (db: Queryable, ctx: IAccessContext, id: string): Promise<IRecognitionRunRow | null> => {
-  const r = await db.query<IRecognitionRunRow>(`${SELECT_RUN} WHERE r.id = $1 AND r.tender_id = ANY($2::uuid[])`, [id, contentTenderIds(ctx)]);
+  const r = await db.query<IRecognitionRunRow>(`${SELECT_RUN} WHERE r.id = $1 AND (r.tender_id = ANY($2::uuid[]) OR r.contract_id = ANY($3::uuid[]))`, [
+    id,
+    contentTenderIds(ctx),
+    readableContractIds(ctx),
+  ]);
   return r.rows[0] ?? null;
 };
 
@@ -125,11 +132,12 @@ export const supersededBy = async (db: Queryable, runId: string): Promise<string
   return r.rows[0]?.id ?? null;
 };
 
+// Владелец прогона выводится из редакции в самой вставке, а не передаётся вызывающим (AD-06a-1 §9);
+// составные FK миграций 0005 и 0012 сверяют его ещё раз.
 export const createRun = async (
   db: Queryable,
   run: {
     documentRevisionId: string;
-    tenderId: string;
     engine: RecognitionEngine;
     sourceArtifactSha256: string;
     sourceArtifactName: string | null;
@@ -138,11 +146,13 @@ export const createRun = async (
   },
 ): Promise<string> => {
   const r = await db.query<{ id: string }>(
-    `INSERT INTO recognition_run (document_revision_id, tender_id, engine, source_artifact_sha256, source_artifact_name, supersedes_run_id, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-    [run.documentRevisionId, run.tenderId, run.engine, run.sourceArtifactSha256, run.sourceArtifactName, run.supersedesRunId, run.createdBy],
+    `INSERT INTO recognition_run (document_revision_id, tender_id, contract_id, engine, source_artifact_sha256, source_artifact_name, supersedes_run_id, created_by)
+     SELECT dr.id, dr.tender_id, dr.contract_id, $2, $3, $4, $5, $6 FROM document_revision dr WHERE dr.id = $1
+     RETURNING id`,
+    [run.documentRevisionId, run.engine, run.sourceArtifactSha256, run.sourceArtifactName, run.supersedesRunId, run.createdBy],
   );
-  return r.rows[0]!.id;
+  if (!r.rows[0]) throw new Error('редакция документа не найдена');
+  return r.rows[0].id;
 };
 
 // queued → running. 0 строк означает, что прогон уже не в queued (повторный захват задания).
@@ -255,7 +265,8 @@ export const listPages = async (db: Queryable, runId: string): Promise<IRecognit
 
 export interface IEvidenceFragmentRow {
   id: string;
-  tender_id: string;
+  tender_id: string | null;
+  contract_id: string | null;
   source_unit_type: string;
   source_unit_id: string;
   run_id: string | null;
@@ -304,13 +315,14 @@ export interface INewFragment {
   partTotal: number;
 }
 
+// Владелец фрагментов — владелец прогона (ref берётся из строки прогона, не из запроса клиента).
 export const insertFragments = async (
   db: Queryable,
-  ref: { runId: string; tenderId: string; documentRevisionId: string },
+  ref: { runId: string; tenderId: string | null; contractId: string | null; documentRevisionId: string },
   fragments: INewFragment[],
 ): Promise<void> => {
   for (const part of chunked(fragments)) {
-    const params: unknown[] = [ref.tenderId, ref.runId, ref.documentRevisionId];
+    const params: unknown[] = [ref.tenderId, ref.runId, ref.documentRevisionId, ref.contractId];
     const values = part
       .map((f) => {
         const i = params.length;
@@ -335,13 +347,13 @@ export const insertFragments = async (
           f.partTotal,
         );
         return (
-          `($1, 'recognition_run', $2, $2, $3, $${i + 1}, $${i + 2}, $${i + 3}, $${i + 4}, $${i + 5}, $${i + 6}, ` +
+          `($1, $4, 'recognition_run', $2, $2, $3, $${i + 1}, $${i + 2}, $${i + 3}, $${i + 4}, $${i + 5}, $${i + 6}, ` +
           `$${i + 7}::numeric[], $${i + 8}, $${i + 9}, $${i + 10}::numeric[], $${i + 11}, $${i + 12}, $${i + 13}, $${i + 14}, $${i + 15}, $${i + 16}::jsonb, $${i + 17}, $${i + 18})`
         );
       })
       .join(', ');
     await db.query(
-      `INSERT INTO evidence_fragment (tender_id, source_unit_type, source_unit_id, run_id, document_revision_id,
+      `INSERT INTO evidence_fragment (tender_id, contract_id, source_unit_type, source_unit_id, run_id, document_revision_id,
          origin, fragment_kind, fragment_key, external_block_id, ordinal, page_index, bbox_norm, bbox_space,
          shape_type, polygon_norm, rotation, text, text_sha256, derived_model_ref, external_crop_url, warnings,
          part_index, part_total)
@@ -416,64 +428,8 @@ export const getScopedFragment = async (db: Queryable, ctx: IAccessContext, id: 
        LEFT JOIN document_revision dr ON dr.id = f.document_revision_id
        LEFT JOIN recognition_run r ON r.id = f.run_id
        LEFT JOIN recognition_page p ON p.run_id = f.run_id AND p.page_index = f.page_index
-      WHERE f.id = $1 AND f.tender_id = ANY($2::uuid[])`,
-    [id, contentTenderIds(ctx)],
+      WHERE f.id = $1 AND (f.tender_id = ANY($2::uuid[]) OR f.contract_id = ANY($3::uuid[]))`,
+    [id, contentTenderIds(ctx), readableContractIds(ctx)],
   );
   return r.rows[0] ?? null;
-};
-
-// Затронутые этапы события recognition_run_completed (state-machines §1.1): активные этапы
-// тендера, где редакция входит в набор источников или ещё не отнесена. Явно исключённая
-// из последней ревизии набора редакция этап не затрагивает.
-export const stagesAffectedByRevision = async (db: Queryable, tenderId: string, revisionId: string): Promise<string[]> => {
-  const r = await db.query<{ id: string }>(
-    `SELECT s.id
-       FROM tender_stage s
-      WHERE s.tender_id = $1 AND s.status = 'active'
-        AND NOT EXISTS (
-          SELECT 1
-            FROM source_set ss
-            JOIN LATERAL (
-              SELECT rr.id FROM source_set_revision rr WHERE rr.source_set_id = ss.id ORDER BY rr.seq DESC LIMIT 1
-            ) last ON true
-            JOIN source_set_item i ON i.source_set_revision_id = last.id
-           WHERE ss.stage_id = s.id AND i.document_revision_id = $2 AND i.inclusion = 'excluded_not_applicable')
-      ORDER BY s.id`,
-    [tenderId, revisionId],
-  );
-  return r.rows.map((x) => x.id);
-};
-
-// Включённые редакции ревизии набора без пригодного распознавания (охранное условие заморозки).
-export interface IBlockingItemRow {
-  document_revision_id: string;
-  document_id: string;
-  document_title: string;
-  revision_seq: number;
-  reason: 'no_recognition' | 'recognition_in_progress' | 'recognition_failed' | 'recognition_cancelled';
-}
-
-export const blockingFreezeItems = async (db: Queryable, revisionId: string): Promise<IBlockingItemRow[]> => {
-  const r = await db.query<IBlockingItemRow>(
-    `SELECT i.document_revision_id, d.id AS document_id, d.title AS document_title, dr.revision_seq,
-            CASE
-              WHEN EXISTS (SELECT 1 FROM recognition_run r WHERE r.document_revision_id = i.document_revision_id
-                            AND r.status IN ('queued', 'running')) THEN 'recognition_in_progress'
-              WHEN EXISTS (SELECT 1 FROM recognition_run r WHERE r.document_revision_id = i.document_revision_id
-                            AND r.status = 'failed') THEN 'recognition_failed'
-              WHEN EXISTS (SELECT 1 FROM recognition_run r WHERE r.document_revision_id = i.document_revision_id
-                            AND r.status = 'cancelled') THEN 'recognition_cancelled'
-              ELSE 'no_recognition'
-            END AS reason
-       FROM source_set_item i
-       JOIN document_revision dr ON dr.id = i.document_revision_id
-       JOIN document d ON d.id = dr.document_id
-      WHERE i.source_set_revision_id = $1
-        AND i.inclusion <> 'excluded_not_applicable'
-        AND NOT EXISTS (SELECT 1 FROM recognition_run r
-                         WHERE r.document_revision_id = i.document_revision_id AND r.status IN ('complete', 'partial'))
-      ORDER BY d.title, dr.revision_seq`,
-    [revisionId],
-  );
-  return r.rows;
 };

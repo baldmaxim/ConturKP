@@ -2,6 +2,7 @@ import { useMemo, useState, type FC } from 'react';
 import { conflictCurrent, describeError, fieldErrorsOf, hasCode } from '../../api/errors';
 import { isSourceSetRevision } from '../../api/guards';
 import { replaceSourceSetItems } from '../../api/sourceEndpoints';
+import type { IContractCandidate } from '../../api/contractTypes';
 import type { IDocument, ISourceSetItemInput, ISourceSetLatestItem, ISourceSetRevision } from '../../api/types';
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
@@ -30,7 +31,13 @@ interface IRow {
   seq: number | null;
   docType: string | null;
   isLatest: boolean;
+  /** Редакция договора (D-017): кандидат из действующе связанного договора или уже включённый элемент. */
+  contractLabel: string | null;
+  /** Без contract.read элемент виден только как факт — решение по нему не меняется. */
+  restricted: boolean;
 }
+
+const RESTRICTED_TITLE = 'Документ договора (нет права чтения)';
 
 const MIN_REASON = 3;
 
@@ -40,7 +47,7 @@ const CHOICES: Array<{ value: TChoice; label: string }> = [
   { value: 'excluded', label: 'Исключить (неприменимо)' },
 ];
 
-const buildRows = (documents: IDocument[], items: ISourceSetLatestItem[]): IRow[] => {
+const buildRows = (documents: IDocument[], items: ISourceSetLatestItem[], candidates: IContractCandidate[]): IRow[] => {
   const byRevision = new Map(items.map((item) => [item.documentRevisionId, item]));
   const rows: IRow[] = [];
   const latestIds = new Set<string>();
@@ -55,12 +62,36 @@ const buildRows = (documents: IDocument[], items: ISourceSetLatestItem[]): IRow[
       seq: byRevision.get(doc.latestRevisionId)?.revisionSeq ?? null,
       docType: doc.docType,
       isLatest: true,
+      contractLabel: null,
+      restricted: false,
+    });
+  }
+  // Кандидаты из договоров — предложение, а не область: включаются только явным решением.
+  for (const c of candidates) {
+    latestIds.add(c.documentRevisionId);
+    rows.push({
+      revisionId: c.documentRevisionId,
+      title: c.documentTitle,
+      seq: c.revisionSeq,
+      docType: null,
+      isLatest: true,
+      contractLabel: `Договор ${c.contractNumber}`,
+      restricted: false,
     });
   }
   // Прежние редакции, уже учтённые в составе, остаются в списке с пометкой «не последняя».
   for (const item of items) {
     if (!latestIds.has(item.documentRevisionId)) {
-      rows.push({ revisionId: item.documentRevisionId, title: item.documentTitle, seq: item.revisionSeq, docType: null, isLatest: false });
+      rows.push({
+        revisionId: item.documentRevisionId,
+        title: item.documentTitle ?? RESTRICTED_TITLE,
+        seq: item.revisionSeq,
+        docType: null,
+        // У элемента договора «последняя ли редакция» из состава не видно — пометки нет.
+        isLatest: item.contractId !== null,
+        contractLabel: item.contractId ? 'Договор' : null,
+        restricted: item.restricted,
+      });
     }
   }
   return rows.sort((a, b) => a.title.localeCompare(b.title, 'ru') || (b.seq ?? 0) - (a.seq ?? 0));
@@ -78,6 +109,7 @@ interface ISourceSetEditorProps {
   revision: ISourceSetRevision;
   items: ISourceSetLatestItem[];
   documents: IDocument[];
+  candidates: IContractCandidate[];
   onSaved: () => void;
   onCancel: () => void;
   /** Перечитать состав после конфликта версий. */
@@ -85,9 +117,9 @@ interface ISourceSetEditorProps {
 }
 
 /** Правка черновика состава: полная замена списка редакций с решением «включить / исключить с причиной». */
-export const SourceSetEditor: FC<ISourceSetEditorProps> = ({ revision, items, documents, onSaved, onCancel, onReload }) => {
+export const SourceSetEditor: FC<ISourceSetEditorProps> = ({ revision, items, documents, candidates, onSaved, onCancel, onReload }) => {
   const toast = useToast();
-  const rows = useMemo(() => buildRows(documents, items), [documents, items]);
+  const rows = useMemo(() => buildRows(documents, items, candidates), [documents, items, candidates]);
   const initial = useMemo(() => initialState(items), [items]);
   const [state, setState] = useState<Record<string, IChoiceState>>(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -106,7 +138,7 @@ export const SourceSetEditor: FC<ISourceSetEditorProps> = ({ revision, items, do
     setState((prev) => {
       const next = { ...prev };
       for (const row of rows) {
-        if (row.isLatest && (next[row.revisionId]?.choice ?? 'none') === 'none') {
+        if (row.isLatest && !row.contractLabel && (next[row.revisionId]?.choice ?? 'none') === 'none') {
           next[row.revisionId] = { choice: 'included', reason: '' };
         }
       }
@@ -202,6 +234,8 @@ export const SourceSetEditor: FC<ISourceSetEditorProps> = ({ revision, items, do
                     </span>
                   </legend>
                   {row.isLatest ? null : <Badge tone="warning" icon="clock-alert" dashed label="Не последняя редакция" />}
+                  {row.contractLabel ? <Badge tone="info" icon="file-signature" label={row.contractLabel} /> : null}
+                  {row.restricted ? <Badge tone="neutral" icon="lock" dashed label="Нет права чтения — решение не меняется" /> : null}
                   <div className={fieldStyles.options}>
                     {CHOICES.map((option) => (
                       <label key={option.value} className={fieldStyles.option}>
@@ -210,7 +244,7 @@ export const SourceSetEditor: FC<ISourceSetEditorProps> = ({ revision, items, do
                           name={`choice-${row.revisionId}`}
                           checked={current.choice === option.value}
                           onChange={() => update(row.revisionId, { choice: option.value })}
-                          disabled={saving}
+                          disabled={saving || row.restricted}
                         />
                         <span>{option.label}</span>
                       </label>

@@ -1,13 +1,15 @@
 // Область поиска (ADR-008 §2–6, state-machines §5.1): снимок области доказательств и развёртывание
 // области прогона поиска. Клиент не передаёт ID единиц сам — их выводит сервер из этапа или снимка.
 import { evidenceScopeContentHash, sourceSetContentHash, type IScopeUnit } from '@kontur/core';
-import { contentTenderIds, type IAccessContext } from './access.ts';
+import { contentTenderIds, readableContractIds, type IAccessContext } from './access.ts';
 import { inTransaction, type Queryable } from './pool.ts';
 
 export interface IScopeRevisionItem {
   document_revision_id: string;
   blob_sha256: string;
   inclusion: 'included' | 'excluded_not_applicable' | 'inherited';
+  // Владелец редакции-договора (D-023); у редакции тендера — null.
+  contract_id: string | null;
   // Хвост истории распознавания редакции: последний завершённый прогон без завершённого потомка.
   run_id: string | null;
 }
@@ -16,7 +18,7 @@ export interface IScopeRevisionItem {
 // (state-machines §5.1: по умолчанию последний complete или partial).
 export const setRevisionItemsWithRuns = async (db: Queryable, setRevisionId: string): Promise<IScopeRevisionItem[]> => {
   const r = await db.query<IScopeRevisionItem>(
-    `SELECT i.document_revision_id, dr.blob_sha256, i.inclusion,
+    `SELECT i.document_revision_id, dr.blob_sha256, i.inclusion, dr.contract_id,
             (SELECT r.id FROM recognition_run r
               WHERE r.document_revision_id = i.document_revision_id AND r.status IN ('complete', 'partial')
                 AND NOT EXISTS (SELECT 1 FROM recognition_run c WHERE c.supersedes_run_id = r.id AND c.status IN ('complete', 'partial'))
@@ -67,16 +69,21 @@ export interface IResolvedScope {
   snapshotHash: string;
   // Единицы источника до фильтра прав.
   unitIds: string[];
+  // Единицы договора → договор (D-022 OD-3): их пропускает только фильтр прав contract.read.
+  contractOf: ReadonlyMap<string, string>;
   // Включённые редакции без прогона — входят в охват как «только оригинал».
   revisionsWithoutRun: number;
 }
+
+const contractUnits = (items: { run_id: string | null; contract_id: string | null }[]): Map<string, string> =>
+  new Map(items.flatMap((i) => (i.run_id && i.contract_id ? [[i.run_id, i.contract_id] as const] : [])));
 
 // Временный снимок режима working (ADR-008 §3): последняя ревизия рабочего набора этапа и хвосты
 // истории распознавания. Хэш считается так же, как хэш сохранённого снимка, поэтому одинаковый
 // состав даёт одинаковый scopeHash.
 export const resolveWorkingScope = async (db: Queryable, stageId: string): Promise<IResolvedScope> => {
   const rev = await latestWorkingRevision(db, stageId);
-  if (!rev) return { snapshotHash: evidenceScopeContentHash('empty', []), unitIds: [], revisionsWithoutRun: 0 };
+  if (!rev) return { snapshotHash: evidenceScopeContentHash('empty', []), unitIds: [], contractOf: new Map(), revisionsWithoutRun: 0 };
   const items = await setRevisionItemsWithRuns(db, rev.id);
   const setHash =
     rev.content_hash ??
@@ -85,6 +92,34 @@ export const resolveWorkingScope = async (db: Queryable, stageId: string): Promi
   return {
     snapshotHash: evidenceScopeContentHash(setHash, units),
     unitIds: units.filter((u) => u.recognitionRunId !== null).map((u) => u.recognitionRunId!),
+    contractOf: contractUnits(items.filter((i) => i.inclusion !== 'excluded_not_applicable')),
+    revisionsWithoutRun: units.filter((u) => u.recognitionRunId === null).length,
+  };
+};
+
+// Область контекста contract (ADR-012 §24): текущий корпус договора — последняя редакция каждого
+// документа (основной договор, допсоглашения, приложения) и хвост её истории распознавания.
+// Отдельного снимка договора нет (T06A-1); хэш временного снимка считается так же, как у этапа.
+export const resolveContractScope = async (db: Queryable, contractId: string): Promise<IResolvedScope> => {
+  const r = await db.query<IScopeRevisionItem>(
+    `SELECT lr.id AS document_revision_id, lr.blob_sha256, 'included' AS inclusion, lr.contract_id,
+            (SELECT r.id FROM recognition_run r
+              WHERE r.document_revision_id = lr.id AND r.status IN ('complete', 'partial')
+                AND NOT EXISTS (SELECT 1 FROM recognition_run c WHERE c.supersedes_run_id = r.id AND c.status IN ('complete', 'partial'))
+              ORDER BY r.created_at DESC LIMIT 1) AS run_id
+       FROM document d
+       JOIN LATERAL (SELECT x.id, x.blob_sha256, x.contract_id FROM document_revision x
+                      WHERE x.document_id = d.id ORDER BY x.revision_seq DESC LIMIT 1) lr ON true
+      WHERE d.contract_id = $1
+      ORDER BY lr.id`,
+    [contractId],
+  );
+  const units = includedUnits(r.rows);
+  const setHash = sourceSetContentHash(r.rows.map((i) => ({ documentRevisionId: i.document_revision_id, blobSha256: i.blob_sha256, inclusion: i.inclusion })));
+  return {
+    snapshotHash: evidenceScopeContentHash(setHash, units),
+    unitIds: units.filter((u) => u.recognitionRunId !== null).map((u) => u.recognitionRunId!),
+    contractOf: contractUnits(r.rows),
     revisionsWithoutRun: units.filter((u) => u.recognitionRunId === null).length,
   };
 };
@@ -106,6 +141,7 @@ export interface IEvidenceScopeItemRow {
   document_revision_id: string;
   recognition_run_id: string | null;
   inclusion_reason: string;
+  contract_id: string | null;
   document_id: string;
   document_title: string;
   revision_seq: number;
@@ -145,10 +181,12 @@ export const createEvidenceScope = async (
       return { id: existing.rows[0]!.id, created: false };
     }
     if (s.units.length > 0) {
+      // Владелец единицы-договора выводится из редакции, а не передаётся (AD-06a-1 §8–9); FK сверяют его.
       await tx.query(
-        `INSERT INTO evidence_scope_item (scope_id, tender_id, unit_type, document_revision_id, recognition_run_id, inclusion_reason)
-         SELECT $1, $2, u.unit_type, u.document_revision_id, u.recognition_run_id, 'source_set_included'
-           FROM unnest($3::text[], $4::uuid[], $5::uuid[]) AS u(unit_type, document_revision_id, recognition_run_id)`,
+        `INSERT INTO evidence_scope_item (scope_id, tender_id, contract_id, unit_type, document_revision_id, recognition_run_id, inclusion_reason)
+         SELECT $1, $2, dr.contract_id, u.unit_type, u.document_revision_id, u.recognition_run_id, 'source_set_included'
+           FROM unnest($3::text[], $4::uuid[], $5::uuid[]) AS u(unit_type, document_revision_id, recognition_run_id)
+           JOIN document_revision dr ON dr.id = u.document_revision_id`,
         [id, s.tenderId, s.units.map((u) => u.unitType), s.units.map((u) => u.documentRevisionId), s.units.map((u) => u.recognitionRunId)],
       );
     }
@@ -171,7 +209,7 @@ export const listEvidenceScopes = async (db: Queryable, stageId: string): Promis
 
 export const evidenceScopeItems = async (db: Queryable, scopeId: string): Promise<IEvidenceScopeItemRow[]> => {
   const r = await db.query<IEvidenceScopeItemRow>(
-    `SELECT i.document_revision_id, i.recognition_run_id, i.inclusion_reason, d.id AS document_id, d.title AS document_title,
+    `SELECT i.document_revision_id, i.recognition_run_id, i.inclusion_reason, i.contract_id, d.id AS document_id, d.title AS document_title,
             dr.revision_seq, r.status AS run_status, r.pages_total, r.pages_recognized
        FROM evidence_scope_item i
        JOIN document_revision dr ON dr.id = i.document_revision_id
@@ -186,23 +224,29 @@ export const evidenceScopeItems = async (db: Queryable, scopeId: string): Promis
 
 // Область режима review — единицы сохранённого снимка (ADR-008 §6): поздние прогоны не входят.
 export const resolveSnapshotScope = async (db: Queryable, scope: IEvidenceScopeRow): Promise<IResolvedScope> => {
-  const items = await db.query<{ recognition_run_id: string | null }>('SELECT recognition_run_id FROM evidence_scope_item WHERE scope_id = $1', [scope.id]);
+  const items = await db.query<{ recognition_run_id: string | null; contract_id: string | null }>(
+    'SELECT recognition_run_id, contract_id FROM evidence_scope_item WHERE scope_id = $1',
+    [scope.id],
+  );
   return {
     snapshotHash: scope.content_hash,
     unitIds: items.rows.filter((i) => i.recognition_run_id !== null).map((i) => i.recognition_run_id!).sort(),
+    contractOf: contractUnits(items.rows.map((i) => ({ run_id: i.recognition_run_id, contract_id: i.contract_id }))),
     revisionsWithoutRun: items.rows.filter((i) => i.recognition_run_id === null).length,
   };
 };
 
 // Права поверх закреплённой области (ADR-008 §4): снимок не даёт вечного разрешения. Возвращает
-// единицы, доступ к которым у пользователя пропал. Для прогонов распознавания доступ — это доступ
-// к тендеру; письма и их ящики (этап 07) добавят сюда проверку mailbox_access.
+// единицы, доступ к которым у пользователя пропал. Прогон тендера — доступ к тендеру; прогон
+// договора — contract.read, даже если единица закреплена в снимке тендера (D-022 OD-3); письма и
+// их ящики (этап 07) добавят сюда проверку mailbox_access.
 export const unitsNotPermitted = async (db: Queryable, ctx: IAccessContext, unitIds: string[]): Promise<string[]> => {
   if (unitIds.length === 0) return [];
   const r = await db.query<{ id: string }>(
     `SELECT u.id FROM unnest($1::uuid[]) AS u(id)
-      WHERE NOT EXISTS (SELECT 1 FROM recognition_run r WHERE r.id = u.id AND r.tender_id = ANY($2::uuid[]))`,
-    [unitIds, contentTenderIds(ctx)],
+      WHERE NOT EXISTS (SELECT 1 FROM recognition_run r
+                         WHERE r.id = u.id AND (r.tender_id = ANY($2::uuid[]) OR r.contract_id = ANY($3::uuid[])))`,
+    [unitIds, contentTenderIds(ctx), readableContractIds(ctx)],
   );
   return r.rows.map((x) => x.id);
 };

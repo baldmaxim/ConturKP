@@ -137,7 +137,7 @@ export const indexEmbedHandler: IJobHandlerSpec = {
           client,
           versionId,
           v.embedding_dim!,
-          chunks.map((c, i) => ({ chunkId: c.id, unitId: c.source_unit_id, tenderId: c.tender_id, vector: cached.get(shas[i]!) ?? fresh.get(shas[i]!)! })),
+          chunks.map((c, i) => ({ chunkId: c.id, vector: cached.get(shas[i]!) ?? fresh.get(shas[i]!)! })),
         );
         await cacheStore(client, key, [...fresh].map(([textSha256, vector]) => ({ textSha256, vector })));
       },

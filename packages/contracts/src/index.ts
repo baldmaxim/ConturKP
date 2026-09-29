@@ -188,6 +188,43 @@ export const SearchRequest = z
   })
   .strict();
 
+// ---- договорной контур (этап 06a; D-017, D-022, D-023)
+
+const DATE_ONLY = z.iso.date();
+
+export const CreateContractRequest = z
+  .object({ number: text(100), title: text(500), counterparty: optionalText(500), signedOn: DATE_ONLY.nullable().optional() })
+  .strict();
+
+export const PatchContractRequest = z
+  .object({ number: text(100).optional(), title: text(500).optional(), counterparty: optionalText(500), signedOn: DATE_ONLY.nullable().optional() })
+  .strict();
+
+// Архив и возврат договора: тело пустое, версия — If-Match.
+export const ContractStatusRequest = z.object({}).strict();
+
+export const CONTRACT_CAPABILITY = z.enum(['contract.read', 'contract.link', 'contract.manage']);
+
+// Полный набор действующих возможностей пользователя по договору: недостающие выдаются, лишние отзываются.
+export const PutContractAccessRequest = z.object({ capabilities: z.array(CONTRACT_CAPABILITY).max(3) }).strict();
+
+export const CreateContractLinkRequest = z.object({ tenderId: z.uuid(), stageId: z.uuid().nullable().optional(), note: optionalText(500) }).strict();
+
+export const PatchContractLinkRequest = z.object({ stageId: z.uuid().nullable().optional(), note: optionalText(500) }).strict();
+
+export const ArchiveContractLinkRequest = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
+
+export const CONTRACT_ROLE = z.enum(['contract', 'addendum', 'appendix']);
+
+// Параметры загрузки документа договора в строке запроса; имя файла — параметр name (как у импорта).
+export const ContractDocumentUploadQuery = z.object({
+  role: CONTRACT_ROLE,
+  mainDocumentId: z.uuid().optional(),
+  title: z.string().trim().min(1).max(500).optional(),
+});
+
+export const PatchContractDocumentRequest = z.object({ title: text(500) }).strict();
+
 // ---- ответы
 
 export interface IMe {
@@ -195,8 +232,11 @@ export interface IMe {
   login: string;
   displayName: string;
   roles: string[];
+  // Глобальные возможности; contract.create — только при действующей выдаче (D-022 OD-2).
   capabilities: string[];
   memberships: { tenderId: string; memberRole: string }[];
+  // Раздел «Договоры» доступен: администратор договоров, выдача contract.create или любая выдача по договору.
+  contractsAvailable: boolean;
 }
 
 export interface IUser {

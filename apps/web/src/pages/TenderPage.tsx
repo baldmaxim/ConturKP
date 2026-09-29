@@ -10,6 +10,7 @@ import { Tabs, tabId, tabPanelId, type ITab } from '../components/Tabs';
 import { useApiResource } from '../hooks/useApiResource';
 import { useAuth } from '../hooks/useAuth';
 import { AuditLog } from './AuditLog';
+import { TenderContractsPanel } from './contracts/TenderContractsPanel';
 import { IntakeChannelsPanel } from './intake/IntakeChannelsPanel';
 import { MembersPanel } from './MembersPanel';
 import { StagesPanel } from './StagesPanel';
@@ -24,6 +25,9 @@ const tabsFor = (tender: ITender, canAdminIntake: boolean): ITab[] => {
   }
   if (caps.includes('tender.read') || canAdminIntake) {
     tabs.push({ id: 'intake', label: 'Каналы поступления', icon: 'inbox' });
+  }
+  if (caps.includes('tender.read')) {
+    tabs.push({ id: 'contracts', label: 'Договоры', icon: 'file-signature' });
   }
   tabs.push({ id: 'card', label: 'Карточка', icon: 'briefcase' });
   tabs.push({ id: 'members', label: 'Участники', icon: 'users' });
@@ -88,6 +92,7 @@ export const TenderPage: FC = () => {
             canDisable={caps.includes('hold.resolve')}
           />
         ) : null}
+        {active === 'contracts' ? <TenderContractsPanel tenderId={tender.id} /> : null}
         {active === 'card' ? <TenderCard tender={tender} onChanged={(next) => setData(next)} /> : null}
         {active === 'members' ? (
           <MembersPanel

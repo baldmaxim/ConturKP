@@ -2,6 +2,9 @@ import { useEffect, type FC } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { watchSystemTheme } from '../hooks/themeStore';
 import { AdminPage } from '../pages/AdminPage';
+import { ContractDocumentPage } from '../pages/contracts/ContractDocumentPage';
+import { ContractPage } from '../pages/contracts/ContractPage';
+import { ContractsPage } from '../pages/contracts/ContractsPage';
 import { DocumentPage } from '../pages/DocumentPage';
 import { EvidenceViewer } from '../pages/evidence/EvidenceViewer';
 import { ImportBatchPage } from '../pages/ImportBatchPage';
@@ -38,6 +41,9 @@ export const App: FC = () => {
             <Route path="imports/:importId" element={<ImportBatchPage />} />
             <Route path="documents/:documentId" element={<DocumentPage />} />
             <Route path="evidence/:fragmentId" element={<EvidenceViewer />} />
+            <Route path="contracts" element={<ContractsPage />} />
+            <Route path="contracts/:contractId" element={<ContractPage />} />
+            <Route path="contract-documents/:documentId" element={<ContractDocumentPage />} />
             <Route path="admin" element={<AdminPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>

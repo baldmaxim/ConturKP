@@ -37,6 +37,7 @@ export const SearchHitCard: FC<ISearchHitCardProps> = ({ hit }) => {
       </p>
       <div className={styles.hitFoot}>
         <Badge tone={origin.tone} icon={origin.icon} dashed={origin.dashed} label={origin.label} />
+        {hit.contractId ? <Badge tone="info" icon="file-signature" label="Документ договора" /> : null}
         <span className={list.muted}>{`Найдено: ${hit.matchedVia.map((b) => SEARCH_BRANCH_LABELS[b] ?? b).join(', ')}`}</span>
         <AppLink className={styles.open} to={`/evidence/${hit.fragmentId}`}>
           Открыть доказательство

@@ -84,3 +84,9 @@ export const moscowInputToIso = (value: string): string | null => {
   const result = new Date(guess);
   return Number.isNaN(result.getTime()) ? null : result.toISOString();
 };
+
+/** Дата без времени (YYYY-MM-DD, например дата подписания договора) — как «01.09.2026», без сдвига пояса. */
+export const formatDateOnly = (value: string | null | undefined): string => {
+  const m = value ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(value) : null;
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : (value ?? '');
+};

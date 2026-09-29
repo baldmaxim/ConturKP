@@ -88,7 +88,7 @@
 | `GET /recognition-runs/{id}/fragments?pageIndex=&cursor=&limit=` | `tender.read` | — | фрагменты прогона постранично; курсор по (`page_index`, `ordinal`, `part_index`, `id`), `limit` ≤ 500 (этап 04). Курсор выдаёт сервер; его четвёртый компонент проверяется как UUID до обращения к БД, поэтому подделанный курсор даёт `400 VALIDATION_FAILED`, а не внутреннюю ошибку (R04-16). У фрагмента есть `partIndex`/`partTotal`: длинный текст блока хранится частями и не усекается (R04-06) |
 | `GET /evidence/{fragmentId}` | `tender.read` | — | фрагмент: текст, происхождение, страница и её номер листа, `bboxNorm` с `bboxSpace`, поворот, `externalCropUrl` (только как текст), `contentUrl` оригинала (этап 04) |
 | `GET /evidence/{fragmentId}/preview` | `tender.read` | — | превью страницы с выделением. На этапе 04 **не реализован и маршрут не зарегистрирован**: превью строит браузер на pdf.js поверх `GET /document-revisions/{id}/content`, серверного рендера PDF в портале нет |
-| `POST /search` | `tender.read` | — | поиск по области с созданием прогона `search_run` (этап 05; ADR-008, ADR-012 §14, `state-machines.md` §21). Вход: `context` — объединение по виду: `{ kind: 'tender', tenderId, mode: 'working' \| 'review' \| 'release', stageId? \| evidenceScopeId? \| releaseId? }`; вид `contract` зарезервирован для этапа 06a (`contractId`, право `contract.read`), режим `comparison` — для этапа 15; `query`, `limit` ≤ 50. Ответ `200`: `searchRunId`, `status` (`pending`/`complete`/`degraded`), `scopeHash`, `scope` (единицы по типам, исключено по правам — только число, страницы распознано из всего, не проиндексировано активной версией), `lexical` — ранги точной и полнотекстовой веток с пометкой `preliminary: true`, `semantic` — `{ status: queued \| complete \| unavailable, reason? }`, `fused` — итог RRF, если прогон уже терминален, иначе `null`. Каждый результат: `fragmentId`, документ, редакция, прогон, страница, координаты, `origin`, `matchedVia`. Пустой итог формулируется как «не найдено в области: N единиц, M страниц распознано из K» (I07) |
+| `POST /search` | `tender.read` (вид `tender`), `contract.read` (вид `contract`) | — | поиск по области с созданием прогона `search_run` (этап 05; ADR-008, ADR-012 §14, `state-machines.md` §21). Вход: `context` — объединение по виду: `{ kind: 'tender', tenderId, mode: 'working' \| 'review' \| 'release', stageId? \| evidenceScopeId? \| releaseId? }`; вид `{ kind: 'contract', contractId }` — этап 06a: право `contract.read`, текущий корпус договора, режим `working`; режим `comparison` — для этапа 15; единицы договоров в тендерном контексте без `contract.read` исключаются до ранжирования и считаются в `scope.excludedByAcl`; `query`, `limit` ≤ 50. Ответ `200`: `searchRunId`, `status` (`pending`/`complete`/`degraded`), `scopeHash`, `scope` (единицы по типам, исключено по правам — только число, страницы распознано из всего, не проиндексировано активной версией), `lexical` — ранги точной и полнотекстовой веток с пометкой `preliminary: true`, `semantic` — `{ status: queued \| complete \| unavailable, reason? }`, `fused` — итог RRF, если прогон уже терминален, иначе `null`. Каждый результат: `fragmentId`, документ, редакция, прогон, страница, координаты, `origin`, `matchedVia`. Пустой итог формулируется как «не найдено в области: N единиц, M страниц распознано из K» (I07) |
 | `GET /search-runs/{id}` | `tender.read`, автор прогона | — | чтение прогона: статус, закреплённые область и версия индекса, ранги веток, итог `fused` (для терминального прогона), причина деградации, тайминги. Прогон `pending` после `deadline_at` терминализуется этим чтением как `degraded` (`semantic_timeout`). Права проверяются заново: нет доступа к тендеру — `404`; закреплённые единицы шире допустимых сейчас — `409 STATE_CONFLICT` с `reason = scope_changed` без результатов. Терминальный прогон неизменен: повторное чтение возвращает те же ранги |
 
 Внешние `crop_url` из экспорта портал не загружает ни при импорте, ни при показе: они хранятся и отдаются как текст (A38, SSRF).
@@ -110,6 +110,34 @@
 | `POST /calculation-revisions/{id}/lineage` | `calculation.capture` | IM | тело `{ fromRevisionId, links: [{ fromPositionId, toPositionId, status: 'confirmed' \| 'rejected' }] }` (1–500); решение человека, `method = manual`, только дописывание; ревизия-источник — другая ревизия того же тендера, иначе `400`; позиции проверяет БД. Автоматического сопоставления на этапе 06 нет (этап 10) |
 
 Суммы — объект денег ADR-005 §4; `amount` — каноническая десятичная строка без потери точности, исходная лексема источника — в `rawLexemes`. Валюта сумм TenderHub, кроме цены единицы строки, источником не подтверждена (`UNKNOWN`), НДС — `unknown` (Q-05). Курсоры выдаёт сервер и проверяет их форму до обращения к БД (`400 VALIDATION_FAILED`); ответы страниц содержат `hasMore` и `nextCursor`.
+
+### 2.5a. Договорной контур (этап 06a; D-017, D-022, D-023)
+
+Невидимый договор — `404`, видимый без нужной возможности — `403`. Возможности договора — строки `contract_access` при роли инженера или руководителя; `admin.contract` (роль `admin`) видит карточки и ведёт строки доступа, содержимого не открывает. Без `contract.read` карточка — только `number`, `title`, `status`, даты, автор и `restricted: true`.
+
+| Метод и путь | Право | Ключи | Назначение |
+|---|---|---|---|
+| `GET /contracts` | выдача по договору или `admin.contract` | — | видимые договоры (`capabilities` — мои возможности, `restricted`), `canCreate`, `isContractAdmin` |
+| `POST /contracts` | `contract.create` | IK | тело `{ number, title, counterparty?, signedOn? }`; `201`, создатель получает `contract.read` и `contract.manage` |
+| `GET /contracts/{id}` | выдача или `admin.contract` | — | карточка и `ETag` |
+| `PATCH /contracts/{id}` | `contract.manage`; `counterparty`, `signedOn` — ещё и `contract.read` | IM | правка карточки |
+| `POST /contracts/{id}/archive`, `POST /contracts/{id}/restore` | `contract.manage` | IM | архив и возврат; физического удаления нет (OD-5) |
+| `GET /contracts/{id}/access` | `admin.contract` | — | действующие выдачи по договору и `contractRowVersion` |
+| `PUT /contracts/{id}/access/{userId}` | `admin.contract` | IM (ETag договора) | тело `{ capabilities: ('contract.read' \| 'contract.link' \| 'contract.manage')[] }` — полный набор: недостающие выдаются, лишние отзываются; пользователю без роли инженера или руководителя — `409` |
+| `GET /admin/contract-creators`, `PUT` и `DELETE /admin/contract-creators/{userId}` | `admin.contract` | — | глобальная выдача и отзыв `contract.create` |
+| `GET /contracts/{id}/tenders` | выдача или `admin.contract` | — | связи договора с тендерами, карточка которых видна пользователю |
+| `POST /contracts/{id}/tenders` | `contract.link` и `source.write` по тендеру | IK | тело `{ tenderId, stageId?, note? }`; `201` — новая связь, `200` — возврат архивной; действующая — `409`; архивный договор — `409` |
+| `PATCH /contract-tender-links/{id}` | `contract.link` и `source.write` | IM | тело `{ stageId?, note? }` |
+| `POST /contract-tender-links/{id}/archive` | `contract.link` и `source.write` | IM | тело `{ reason }`; исторические снимки не меняются |
+| `GET /tenders/{id}/contracts` | `tender.read` | — | связи тендера только с договорами, по которым у пользователя есть выдача |
+| `GET /contracts/{id}/documents` | `contract.read` | — | документы договора: `role` (`contract`/`addendum`/`appendix`), `mainDocumentId`, последняя редакция и статус её распознавания |
+| `POST /contracts/{id}/documents?name=&role=&mainDocumentId=&title=` | `contract.read` и `contract.manage` | IK | тело — файл (`application/octet-stream`); `201` — новый документ, `200` — такое содержимое уже есть (`status: duplicate`); `409` с `current.reason`: `main_document_exists`, `main_document_missing`; архив и ZIP не принимаются |
+| `GET /contract-documents/{id}` | `contract.read` | — | документ и его редакции |
+| `PATCH /contract-documents/{id}` | `contract.manage` | IM | тело `{ title }` |
+| `POST /contract-documents/{id}/revisions?name=` | `contract.read` и `contract.manage` | IK | новая редакция; то же содержимое другим документом — `409 content_in_other_document` |
+| `GET /stages/{id}/contract-candidates` | `tender.read` | — | последние редакции документов договоров, действующе связанных с тендером и читаемых пользователем, — кандидаты в состав этапа |
+
+Редакции договора обслуживают те же пути, что и редакции тендера: `GET /document-revisions/{id}/content`, `…/recognition-runs`, `POST …/recognition-imports` (`contract.manage`), `GET /recognition-runs/{id}`, `GET /evidence/{id}` — всё с `contract.read`. Имя файла при выдаче — название документа с расширением типа (происхождений у договора нет).
 
 ### 2.6. Коммуникации и переговоры
 

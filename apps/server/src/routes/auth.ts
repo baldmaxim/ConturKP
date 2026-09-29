@@ -5,8 +5,10 @@ import type { IAppConfig } from '@kontur/config';
 import { ChangePasswordRequest, LoginRequest, type IMe } from '@kontur/contracts';
 import { burnPasswordCheck, globalCapabilities, hashPassword, needsRehash, verifyPassword } from '@kontur/core';
 import {
+  canCreateContract,
   findCredential,
   getPasswordHash,
+  grantedContractIds,
   loadAccessContext,
   rehashPassword,
   insertSession,
@@ -30,10 +32,11 @@ const toMe = (ctx: IAccessContext): IMe => ({
   login: ctx.principal.login,
   displayName: ctx.principal.displayName,
   roles: [...ctx.roles].sort(),
-  capabilities: globalCapabilities(ctx.roles),
+  capabilities: [...globalCapabilities(ctx.roles), ...(canCreateContract(ctx) ? ['contract.create'] : [])],
   memberships: [...ctx.memberships.entries()]
     .filter(([, role]) => ctx.roles.has(role))
     .map(([tenderId, memberRole]) => ({ tenderId, memberRole })),
+  contractsAvailable: globalCapabilities(ctx.roles).includes('admin.contract') || canCreateContract(ctx) || grantedContractIds(ctx).length > 0,
 });
 
 export const authRouter = (config: IAppConfig, pool: Pool, clock: () => Date): Router => {

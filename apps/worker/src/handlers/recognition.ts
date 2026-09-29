@@ -18,6 +18,7 @@ import {
   insertPages,
   lockTenderStages,
   stagesAffectedByRevision,
+  stagesIncludingRevision,
   startRun,
 } from '@kontur/db';
 import { ArchiveOpenError, readZip } from '../archive.ts';
@@ -244,25 +245,32 @@ export const handleRecognitionImport = async (ctx: IJobContext): Promise<void> =
   const value = result.value;
 
   await ctx.complete(async (client) => {
-    // Порядок блокировок §1.2: сначала этапы тендера, затем строка прогона.
-    const stageIds = await stagesAffectedByRevision(client, run.tender_id, run.document_revision_id);
-    await lockTenderStages(client, run.tender_id, stageIds);
+    // Порядок блокировок §1.2: сначала этапы тендера, затем строка прогона. Редакция договора
+    // затрагивает только этапы, куда её явно включили, — возможно, нескольких тендеров (D-017).
+    const affected = run.tender_id
+      ? [{ tenderId: run.tender_id, stageIds: await stagesAffectedByRevision(client, run.tender_id, run.document_revision_id) }]
+      : await stagesIncludingRevision(client, run.document_revision_id);
+    for (const a of affected) await lockTenderStages(client, a.tenderId, a.stageIds);
     const fresh = await getRun(client, runId, true);
     if (!fresh || fresh.status !== 'running') return;
 
     await insertPages(client, runId, value.pages);
     await insertFragments(
       client,
-      { runId, tenderId: run.tender_id, documentRevisionId: run.document_revision_id },
+      { runId, tenderId: run.tender_id, contractId: run.contract_id, documentRevisionId: run.document_revision_id },
       value.fragments.map((f) => ({ ...f, warnings: f.warnings })),
     );
-    await insertOccurrence(client, {
-      documentRevisionId: run.document_revision_id,
-      tenderId: run.tender_id,
-      sourceKind: 'rdweb_export',
-      locator: `rdweb_export:${runId}/${archive.pdf?.memberPath ?? ''}`,
-      observedName: run.source_artifact_name ?? 'export.zip',
-    });
+    // Происхождение экспорта — у редакции тендера (этап 04); у договора его хранит сам прогон
+    // (source_artifact_sha256 и имя архива): document_occurrence этапом 06a не меняется.
+    if (run.tender_id) {
+      await insertOccurrence(client, {
+        documentRevisionId: run.document_revision_id,
+        tenderId: run.tender_id,
+        sourceKind: 'rdweb_export',
+        locator: `rdweb_export:${runId}/${archive.pdf?.memberPath ?? ''}`,
+        observedName: run.source_artifact_name ?? 'export.zip',
+      });
+    }
     await finishRun(client, runId, {
       status: value.status,
       engineSchemaVersion: value.schemaVersion,
@@ -276,14 +284,16 @@ export const handleRecognitionImport = async (ctx: IJobContext): Promise<void> =
         archive: { pdfMember: archive.pdf?.memberPath ?? null, extras: archive.extras, ignored: archive.ignored },
       },
     });
-    await emitStageEvents(client, {
-      tenderId: run.tender_id,
-      stageIds,
-      eventType: 'recognition_run_completed',
-      refType: 'recognition_run',
-      refId: runId,
-      actorUserId: run.created_by,
-    });
+    for (const a of affected) {
+      await emitStageEvents(client, {
+        tenderId: a.tenderId,
+        stageIds: a.stageIds,
+        eventType: 'recognition_run_completed',
+        refType: 'recognition_run',
+        refId: runId,
+        actorUserId: run.created_by,
+      });
+    }
     // Новый прогон дочитывается в живые версии индекса поиска той же транзакцией (ADR-012 §5).
     await enqueueLiveIndexBuilds(client);
   });

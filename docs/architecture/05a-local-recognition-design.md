@@ -101,7 +101,7 @@
 - Адаптеры — `packages/adapters/src/local/`: безопасный разбор XML без DTD и сущностей, ZIP с пределами распаковки, DOCX, XLSX, CSV, текстовый слой PDF (pdf.js), контракт `LocalOcrEngine` и первый рабочий адаптер на tesseract.js (WASM внутри процесса, модели `rus` и `eng` из npm, без сети).
 - Обработчик worker `recognition.local`: класс `default`, приоритет 5 (ADR-004 §7a–7b); heartbeat и проверка отмены между страницами; страницы и фрагменты пишутся финальной транзакцией, как у RDWeb; событие `recognition_run_completed` и дочитывание живых версий индекса — в той же транзакции.
 - Автоматическая постановка — проход worker раз в интервал обслуживания: редакции DOCX/XLSX/CSV и PDF с политикой `local` без успешного локального прогона и без прогона с текущим отпечатком.
-- Явная команда — `POST /document-revisions/{id}/local-recognitions` с ключом идемпотентности; права — как у приёма RDWeb (`source.write` или `contract.manage`), ответ без содержимого.
+- Явная команда — `POST /document-revisions/{id}/local-recognitions` с ключом идемпотентности; права — как у приёма RDWeb: `source.write` по тендеру; по договору — редакция видна с `contract.read`, команда требует `contract.manage` (так же принимается экспорт RDWeb в 06a); ответ без содержимого.
 - Политика маршрута — `PATCH /documents/{id}` и `PATCH /contract-documents/{id}`, поле `recognitionRoute`.
 
 ## 8. Условие остановки: инварианты 04 и 05

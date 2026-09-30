@@ -14,6 +14,10 @@ const CANCEL_BY_KIND: Record<string, DomainCancel> = {
   'recognition.import': async (client, job) => {
     await cancelRun(client, String(job.payload.runId));
   },
+  // Локальное распознавание (этап 05a) — тот же прогон распознавания и та же доменная отмена.
+  'recognition.local': async (client, job) => {
+    await cancelRun(client, String(job.payload.runId));
+  },
   // Партия импорта страдает тем же: без этого она осталась бы running без задания.
   'import.expand': async (client, job) => {
     await failBatch(client, String(job.payload.batchId), 'cancelled');

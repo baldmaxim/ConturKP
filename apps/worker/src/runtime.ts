@@ -1,28 +1,32 @@
 // Цикл worker (ADR-004, state-machines §2): захват, heartbeat, условное по токену завершение,
 // повтор с задержкой, recovery истёкших аренд, планирование сканов наблюдаемых папок.
 import { hostname } from 'node:os';
-import type { IModelGatewayEmbeddings } from '@kontur/adapters';
+import { describeLocalRecognizer, localSettings, type ILocalOcrEngineFactory, type IModelGatewayEmbeddings, type LocalInputFormat } from '@kontur/adapters';
 import type { IAppConfig } from '@kontur/config';
 import {
+  autoRecognitionCandidates,
   claimJob,
   confirmCancel,
   dueChannels,
   dueDeadlineCaptures,
   enqueueJob,
+  enqueueLocalRecognition,
   failJob,
   heartbeatJob,
   lockOwnedJob,
   markScanStarted,
+  recognizerFingerprint,
   recoverExpiredJobs,
   requestCapture,
   requeueJob,
   succeedJob,
   withTransaction,
+  type FingerprintByFormat,
   type IJobRow,
   type Pool,
   type PoolClient,
 } from '@kontur/db';
-import type { BlobStore } from '@kontur/storage';
+import { localOcrFactory, type BlobStore } from '@kontur/storage';
 import { runSearchMaintenance, type IMaintenanceReport } from './maintenance.ts';
 
 export class LeaseLostError extends Error {
@@ -54,6 +58,8 @@ export interface IJobContext {
   config: IAppConfig;
   // Шлюз модели эмбеддингов (ADR-012 §25); null — модель не настроена.
   embeddings: IModelGatewayEmbeddings | null;
+  // Фабрика локального OCR (этап 05a); null — OCR не настроен (LOCAL_OCR_ENGINE=none).
+  localOcr: ILocalOcrEngineFactory | null;
   signal: AbortSignal;
   // Короткая транзакция под действующей арендой: сначала блокировка задания с проверкой токена.
   withLease: <T>(fn: (client: PoolClient) => Promise<T>) => Promise<T>;
@@ -92,6 +98,8 @@ export interface IWorkerOptions {
   workerId?: string;
   log?: (line: string) => void;
   embeddings?: IModelGatewayEmbeddings | null;
+  // Фабрика OCR для тестов; по умолчанию — по конфигурации (LOCAL_OCR_ENGINE).
+  localOcr?: ILocalOcrEngineFactory | null;
 }
 
 // Интерактивная полоса (ADR-004 §7a): только смысловые запросы поиска. Worker выполняет задания
@@ -103,8 +111,11 @@ export class WorkerRuntime {
   private readonly o: IWorkerOptions;
   private readonly log: (line: string) => void;
 
+  private readonly localOcr: ILocalOcrEngineFactory | null;
+
   constructor(o: IWorkerOptions) {
     this.o = o;
+    this.localOcr = o.localOcr !== undefined ? o.localOcr : localOcrFactory(o.config.localRecognition.ocrEngine);
     this.workerId = o.workerId ?? `worker:${hostname()}:${process.pid}`;
     this.log = o.log ?? (() => undefined);
   }
@@ -168,6 +179,34 @@ export class WorkerRuntime {
     return scheduled;
   }
 
+  // Автоматическая постановка локального распознавания (OD-2): DOCX, XLSX, CSV и PDF с политикой local
+  // без успешного локального прогона и без прогона текущей идентичности. PDF с политикой auto сюда
+  // не попадает никогда — его распознаёт только явная команда (OD-1).
+  async scheduleLocalRecognition(): Promise<number> {
+    const settings = localSettings(this.o.config, this.localOcr);
+    const formats: LocalInputFormat[] = ['pdf', 'docx', 'xlsx', 'csv'];
+    const descriptors = new Map<LocalInputFormat, Awaited<ReturnType<typeof describeLocalRecognizer>>>();
+    const fps: Partial<FingerprintByFormat> = {};
+    for (const f of formats) {
+      const d = await describeLocalRecognizer(f, settings);
+      descriptors.set(f, d);
+      fps[f] = await recognizerFingerprint(this.o.pool, d);
+    }
+    let created = 0;
+    for (const c of await autoRecognitionCandidates(this.o.pool, fps as FingerprintByFormat, this.o.config.localRecognition.autoBatch)) {
+      try {
+        const out = await withTransaction(this.o.pool, (client) =>
+          enqueueLocalRecognition(client, { revisionId: c.revision_id, descriptor: descriptors.get(c.input_format)!, createdBy: null }),
+        );
+        if (out.kind === 'created') created += 1;
+      } catch (err) {
+        // Гонка с приёмом RDWeb или командой пользователя: охранник БД отказал — следующий проход решит сам.
+        this.log(`локальное распознавание редакции ${c.revision_id} не поставлено: ${err instanceof Error ? err.message : 'unknown'}`);
+      }
+    }
+    return created;
+  }
+
   // Захватывает и выполняет одно задание. Возвращает false, если очередь пуста.
   async runOnce(kinds?: string[]): Promise<boolean> {
     const job = await claimJob(this.o.pool, {
@@ -223,6 +262,7 @@ export class WorkerRuntime {
       store: this.o.store,
       config: this.o.config,
       embeddings: this.o.embeddings ?? null,
+      localOcr: this.localOcr,
       signal: controller.signal,
       withLease,
       complete: async (fn, then) => {
@@ -332,6 +372,7 @@ export class WorkerRuntime {
           if (recovered.length > 0) this.log(`возвращено в очередь после истечения аренды: ${recovered.length}`);
           await this.scheduleScans();
           await this.scheduleCalculationCaptures();
+          await this.scheduleLocalRecognition();
           await this.maintain();
         }
         const worked = await this.runOnce();

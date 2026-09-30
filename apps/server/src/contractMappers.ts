@@ -59,6 +59,7 @@ export const toContractDocument = (d: IContractDocumentRow) => ({
   title: d.title,
   role: d.contract_role,
   mainDocumentId: d.main_document_id,
+  recognitionRoute: d.recognition_route,
   revisions: d.revisions,
   latestRevision: {
     id: d.latest_revision_id,

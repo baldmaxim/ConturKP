@@ -31,9 +31,13 @@
     "tenderhub:live-smoke": "node --env-file-if-exists=.env scripts/tenderhub-live-smoke.ts"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^0.1.100",
+    "@tesseract.js-data/eng": "^1.0.0",
+    "@tesseract.js-data/rus": "^1.0.0",
     "express": "^5.2.1",
     "pdfjs-dist": "^5.7.284",
     "pg": "^8.23.0",
+    "tesseract.js": "^7.0.0",
     "yauzl": "^3.4.0",
     "zod": "^4.6.5"
   },

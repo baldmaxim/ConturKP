@@ -16,6 +16,7 @@ export interface IContractDocumentRow {
   title: string;
   contract_role: ContractRole;
   main_document_id: string | null;
+  recognition_route: 'auto' | 'local' | 'rdweb';
   row_version: number;
   created_at: Date;
   updated_at: Date;
@@ -29,7 +30,7 @@ export interface IContractDocumentRow {
 }
 
 const SELECT_DOCUMENT = `
-  SELECT d.id, d.contract_id, d.title, d.contract_role, d.main_document_id, d.row_version, d.created_at, d.updated_at,
+  SELECT d.id, d.contract_id, d.title, d.contract_role, d.main_document_id, d.recognition_route, d.row_version, d.created_at, d.updated_at,
          (SELECT count(*)::int FROM document_revision x WHERE x.document_id = d.id) AS revisions,
          lr.id AS latest_revision_id, lr.revision_seq AS latest_revision_seq, lr.received_at AS latest_received_at,
          b.media_type AS latest_media_type, b.size_bytes AS latest_size_bytes,

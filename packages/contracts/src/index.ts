@@ -66,12 +66,16 @@ export const AuditQuery = z.object({
 
 export const DOC_TYPE = z.enum(['tz', 'pd', 'rd', 'contract', 'boq', 'qa_form', 'letter', 'minutes', 'supplier_quote', 'other']);
 
+// Политика маршрута распознавания PDF (OD-1, D-024): auto — локально только явной командой.
+export const RECOGNITION_ROUTE = z.enum(['auto', 'local', 'rdweb']);
+
 export const PatchDocumentRequest = z
   .object({
     title: text(500).optional(),
     docType: DOC_TYPE.optional(),
     docCode: optionalText(100),
     scopeNote: optionalText(2000),
+    recognitionRoute: RECOGNITION_ROUTE.optional(),
   })
   .strict();
 
@@ -223,7 +227,10 @@ export const ContractDocumentUploadQuery = z.object({
   title: z.string().trim().min(1).max(500).optional(),
 });
 
-export const PatchContractDocumentRequest = z.object({ title: text(500) }).strict();
+export const PatchContractDocumentRequest = z
+  .object({ title: text(500).optional(), recognitionRoute: RECOGNITION_ROUTE.optional() })
+  .strict()
+  .refine((b) => b.title !== undefined || b.recognitionRoute !== undefined, { message: 'нужно title или recognitionRoute' });
 
 // ---- ответы
 

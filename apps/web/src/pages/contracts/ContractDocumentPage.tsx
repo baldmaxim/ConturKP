@@ -1,7 +1,7 @@
 import { useRef, useState, type ChangeEvent, type FC } from 'react';
 import { useParams } from 'react-router-dom';
 import { newUuid } from '../../api/client';
-import { getContract, getContractDocument, renameContractDocument } from '../../api/contractEndpoints';
+import { getContract, getContractDocument, renameContractDocument, setContractDocumentRoute } from '../../api/contractEndpoints';
 import type { IContractDocumentDetail } from '../../api/contractTypes';
 import { describeError, stateConflictCurrent } from '../../api/errors';
 import type { IRevision } from '../../api/types';
@@ -12,10 +12,12 @@ import { ErrorState } from '../../components/ErrorState';
 import { LoadingState } from '../../components/LoadingState';
 import { Notice } from '../../components/Notice';
 import { PageHeader } from '../../components/PageHeader';
+import { SelectField } from '../../components/SelectField';
 import { TextField } from '../../components/TextField';
 import { useApiResource } from '../../hooks/useApiResource';
 import { useToast } from '../../hooks/useToast';
 import { CONTRACT_ROLE_LABELS } from '../../utils/contractLabels';
+import { isPdf, ROUTE_LABELS, ROUTES } from '../../utils/localRecognitionLabels';
 import form from '../../styles/form.module.css';
 import { RevisionList } from '../sources/RevisionList';
 
@@ -48,6 +50,7 @@ export const ContractDocumentPage: FC = () => {
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [routeSaving, setRouteSaving] = useState(false);
 
   if (docRes.loading && !doc) return <LoadingState />;
   if (docRes.error && !doc) return <ErrorState error={docRes.error} onRetry={docRes.reload} notFoundTitle="Документ не найден или нет доступа" />;
@@ -92,6 +95,21 @@ export const ContractDocumentPage: FC = () => {
     }
   };
 
+  const saveRoute = async (value: string): Promise<void> => {
+    const route = ROUTES.find((r) => r === value);
+    if (!route || route === doc.recognitionRoute) return;
+    setRouteSaving(true);
+    try {
+      await setContractDocumentRoute(doc, route);
+      toast.push({ kind: 'success', text: `Маршрут распознавания: ${ROUTE_LABELS[route]}.` });
+      docRes.reload();
+    } catch (e) {
+      toast.push({ kind: 'error', text: describeError(e) });
+    } finally {
+      setRouteSaving(false);
+    }
+  };
+
   return (
     <>
       <PageHeader
@@ -133,6 +151,16 @@ export const ContractDocumentPage: FC = () => {
               </form>
             )}
             {error ? <Notice tone="danger">{error}</Notice> : null}
+            {isPdf(doc.latestRevision.mediaType) ? (
+              <SelectField
+                label="Маршрут распознавания PDF"
+                value={doc.recognitionRoute}
+                options={ROUTES.map((value) => ({ value, label: ROUTE_LABELS[value] }))}
+                onValueChange={(v) => void saveRoute(v)}
+                disabled={routeSaving}
+                hint="«Авто» — локально только командой; «Разрешено локальное» — автоматически; «Только RDWeb» — локально никогда."
+              />
+            ) : null}
           </section>
         ) : null}
         <section className={form.stack} aria-labelledby="contract-doc-revisions">

@@ -94,6 +94,17 @@ export const testConfig = (overrides: Partial<IAppConfig> = {}): IAppConfig => (
   search: { semanticDeadlineMs: 60_000, indexBuildUnitsPerBatch: 5, maintenanceIntervalMs: 5000, modelCheckIntervalMs: 60_000 },
   // TenderHub не настроен: тесты этапа 06 передают адрес поддельного сервера явно.
   tenderhub: { baseUrl: null, apiKey: null, timeoutMs: 5000, rateLimitPerMinute: 1000, rateLimitWindowMs: 60_000, maxResponseBytes: 64 * 1024 * 1024, captureAttempts: 3 },
+  // Локальное распознавание (05a): OCR по умолчанию выключен — тесты с OCR включают его явно.
+  localRecognition: {
+    ocrEngine: 'none',
+    ocrDpi: 200,
+    ocrPageTimeoutMs: 120_000,
+    maxInputBytes: 16 * 1024 * 1024,
+    maxUnzippedBytes: 64 * 1024 * 1024,
+    maxCells: 200_000,
+    maxOcrPages: 20,
+    autoBatch: 20,
+  },
   ...overrides,
 });
 

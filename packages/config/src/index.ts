@@ -81,6 +81,23 @@ export interface ITenderHubConfig {
   captureAttempts: number;
 }
 
+// Локальное распознавание (этап 05a, D-014, D-024). OCR-движок — tesseract.js (WASM внутри worker,
+// модели rus и eng из npm, без сети) или none: тогда страницы PDF без текстового слоя не распознаются
+// и прогон честно получает ocr_unavailable. Пределы — для «очень большого файла» (A38, тест 18).
+export type LocalOcrEngineKind = 'tesseract_js' | 'none';
+
+export interface ILocalRecognitionConfig {
+  ocrEngine: LocalOcrEngineKind;
+  ocrDpi: number;
+  ocrPageTimeoutMs: number;
+  maxInputBytes: number;
+  maxUnzippedBytes: number;
+  maxCells: number;
+  maxOcrPages: number;
+  // Редакций за один автоматический проход worker (OD-2).
+  autoBatch: number;
+}
+
 export interface IAppConfig {
   env: KonturEnv;
   databaseUrl: string;
@@ -104,6 +121,7 @@ export interface IAppConfig {
   embedding: IEmbeddingConfig;
   search: ISearchConfig;
   tenderhub: ITenderHubConfig;
+  localRecognition: ILocalRecognitionConfig;
 }
 
 interface IConfigKey {
@@ -142,6 +160,12 @@ export const CONFIG_KEYS: IConfigKey[] = [
   { name: 'RECOGNITION_MAX_METADATA_TOTAL_MB', secret: false, required: false, purpose: 'лимит суммы metadata-кандидатов архива в памяти, по умолчанию 128' },
   { name: 'RECOGNITION_MAX_PDF_MB', secret: false, required: false, purpose: 'лимит чтения оригинала для подсчёта страниц, по умолчанию 256' },
   { name: 'RECOGNITION_MAX_PAGES', secret: false, required: false, purpose: 'предел числа страниц оригинала для разбора, по умолчанию 10000' },
+  { name: 'LOCAL_OCR_ENGINE', secret: false, required: false, purpose: 'локальный OCR: tesseract_js (по умолчанию, без сети) или none, этап 05a' },
+  { name: 'LOCAL_OCR_DPI', secret: false, required: false, purpose: 'разрешение растра страницы PDF для OCR, по умолчанию 300' },
+  { name: 'LOCAL_OCR_MAX_PAGES', secret: false, required: false, purpose: 'предел страниц PDF, которым нужен OCR, по умолчанию 300' },
+  { name: 'LOCAL_RECOGNITION_MAX_INPUT_MB', secret: false, required: false, purpose: 'предел файла DOCX, XLSX, CSV и PDF для локального распознавания, по умолчанию 64' },
+  { name: 'LOCAL_RECOGNITION_MAX_UNZIPPED_MB', secret: false, required: false, purpose: 'предел распакованного объёма DOCX и XLSX, по умолчанию 256' },
+  { name: 'LOCAL_RECOGNITION_MAX_CELLS', secret: false, required: false, purpose: 'предел ячеек XLSX и CSV, по умолчанию 1000000' },
   { name: 'TENDERHUB_URL', secret: false, required: false, purpose: 'адрес TenderHub (https; http только loopback), этап 06' },
   { name: 'TENDERHUB_API_KEY', secret: true, required: false, purpose: 'ключ TenderHub thk_… с областью tenders:read (заголовок X-API-Key), этап 06' },
   { name: 'TENDERHUB_TIMEOUT_SECONDS', secret: false, required: false, purpose: 'таймаут запроса к TenderHub, по умолчанию 300 (таймаут сервера TenderHub — 5 мин)' },
@@ -164,6 +188,23 @@ export const CONFIG_KEYS: IConfigKey[] = [
   { name: 'SMB_USERNAME', secret: false, required: false, purpose: 'размещение в сетевой папке (этап 14)' },
   { name: 'SMB_PASSWORD', secret: true, required: false, purpose: 'размещение в сетевой папке (этап 14)' },
 ];
+
+const localRecognitionFrom = (env: Env, problems: string[]): ILocalRecognitionConfig => {
+  const engine = env.LOCAL_OCR_ENGINE ?? 'tesseract_js';
+  if (engine !== 'tesseract_js' && engine !== 'none') problems.push(`LOCAL_OCR_ENGINE: «${engine}» — допустимо tesseract_js или none`);
+  const dpi = intFrom(env, 'LOCAL_OCR_DPI', 300, problems);
+  if (dpi < 100 || dpi > 600) problems.push('LOCAL_OCR_DPI: от 100 до 600');
+  return {
+    ocrEngine: engine === 'none' ? 'none' : 'tesseract_js',
+    ocrDpi: dpi,
+    ocrPageTimeoutMs: 180_000,
+    maxInputBytes: intFrom(env, 'LOCAL_RECOGNITION_MAX_INPUT_MB', 64, problems) * MIB,
+    maxUnzippedBytes: intFrom(env, 'LOCAL_RECOGNITION_MAX_UNZIPPED_MB', 256, problems) * MIB,
+    maxCells: intFrom(env, 'LOCAL_RECOGNITION_MAX_CELLS', 1_000_000, problems),
+    maxOcrPages: intFrom(env, 'LOCAL_OCR_MAX_PAGES', 300, problems),
+    autoBatch: 20,
+  };
+};
 
 export class ConfigError extends Error {
   readonly problems: string[];
@@ -350,6 +391,7 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
       modelCheckIntervalMs: 60_000,
     },
     tenderhub: tenderhubFrom(env, problems),
+    localRecognition: localRecognitionFrom(env, problems),
   };
   for (const root of config.intakeRoots) {
     if (!isAbsolute(root)) problems.push(`INTAKE_ROOTS: «${root}» должен быть абсолютным путём`);

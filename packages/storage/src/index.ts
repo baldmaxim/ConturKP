@@ -160,3 +160,4 @@ export class BlobStore {
     return hash.digest('hex') === sha256;
   }
 }
+export * from './ocrModels.ts';

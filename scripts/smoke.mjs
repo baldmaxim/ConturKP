@@ -1,6 +1,7 @@
 // Сквозная проверка чистого старта на реальных процессах (этап 02):
 // setup БД → migrate → bootstrap → демо-данные → server + worker → /ready → вход → перезапуск server.
 // Этап 06: выгрузка расчёта worker из поддельного TenderHub (scripts/tenderhub-fake.ts) по ключу-маркеру.
+// Этап 05a (scripts/smoke-05a.mjs): локальное распознавание DOCX договора автоматически, PDF-скана — OCR по явной команде.
 // База kontur_kp_smoke_test создаётся заново и удаляется в конце. Пароль генерируется и не выводится.
 // Результат: artifacts/stage-02/smoke.log; код 0 только если все шаги PASS.
 import { spawn, spawnSync } from 'node:child_process';
@@ -11,6 +12,7 @@ import { crc32 } from 'node:zlib';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import { buildRdwebExport } from '../tests/rdweb.ts';
+import { smokeLocalRecognition } from './smoke-05a.mjs';
 import { PRECISE_RATE, TH, standardTender, startFakeTenderHub } from './tenderhub-fake.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -448,6 +450,9 @@ try {
     'этап 06a: пользователь без выдачи — договор, поиск и оригинал 404, связь тендера не названа',
     login2.status === 200 && hidden.status === 404 && hiddenSearch.status === 404 && hiddenFile.status === 404 && hiddenLinks.items?.length === 0,
   );
+
+  // ---- Этап 05a: локальное распознавание — scripts/smoke-05a.mjs
+  await smokeLocalRecognition({ root: ROOT, api, search, record, waitFor, sleep, idem, octet, json, contractId: contract.id, mainDocumentId: cdocBody.documentId, stageId });
 
   await stopProc(server);
   server = startProc('server', 'apps/server/src/main.ts');

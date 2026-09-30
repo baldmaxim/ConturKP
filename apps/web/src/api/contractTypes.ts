@@ -82,6 +82,7 @@ export interface IContractDocument {
   title: string;
   role: TContractRole;
   mainDocumentId: string | null;
+  recognitionRoute: 'auto' | 'local' | 'rdweb';
   revisions: number;
   latestRevision: { id: string; seq: number; receivedAt: string; mediaType: string; sizeBytes: number; runStatus: string | null };
   rowVersion: number;

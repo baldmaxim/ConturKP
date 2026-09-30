@@ -144,6 +144,7 @@ export const RECOGNITION_PAGE_STATUS: Record<TRecognitionPageStatus, IBadgeMeta>
   recognized: { label: 'Распознана', icon: 'check', tone: 'success' },
   missing: { label: 'Не распознана', icon: 'file-question-mark', tone: 'warning', dashed: true },
   failed: { label: 'Ошибка страницы', icon: 'circle-x', tone: 'danger' },
+  needs_review: { label: 'Требует проверки', icon: 'file-exclamation-point', tone: 'warning', dashed: true },
 };
 
 export const RECOGNITION_FAILURE_LABELS: Record<string, string> = {

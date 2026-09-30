@@ -79,7 +79,7 @@ export const RevisionList: FC<IRevisionListProps> = ({ revisions, latestRevision
             )}
           </details>
           ) : null}
-          <RecognitionPanel revisionId={rev.id} canWrite={canWrite} />
+          <RecognitionPanel revisionId={rev.id} canWrite={canWrite} mediaType={rev.mediaType} />
         </li>
       ))}
     </ul>

@@ -10,19 +10,17 @@ export interface IScopeRevisionItem {
   inclusion: 'included' | 'excluded_not_applicable' | 'inherited';
   // Владелец редакции-договора (D-023); у редакции тендера — null.
   contract_id: string | null;
-  // Хвост истории распознавания редакции: последний завершённый прогон без завершённого потомка.
+  // Предпочтительный прогон редакции (recognition_preferred_run, AD-05a-3): RDWeb выше локального,
+  // внутри класса — глубже по истории. Для истории только из RDWeb это прежний хвост цепочки.
   run_id: string | null;
 }
 
 // Элементы ревизии набора и выбранный для каждой редакции прогон «на момент чтения»
-// (state-machines §5.1: по умолчанию последний complete или partial).
+// (state-machines §5.1): предпочтительный прогон — правило БД, не время создания (AD-05a-3).
 export const setRevisionItemsWithRuns = async (db: Queryable, setRevisionId: string): Promise<IScopeRevisionItem[]> => {
   const r = await db.query<IScopeRevisionItem>(
     `SELECT i.document_revision_id, dr.blob_sha256, i.inclusion, dr.contract_id,
-            (SELECT r.id FROM recognition_run r
-              WHERE r.document_revision_id = i.document_revision_id AND r.status IN ('complete', 'partial')
-                AND NOT EXISTS (SELECT 1 FROM recognition_run c WHERE c.supersedes_run_id = r.id AND c.status IN ('complete', 'partial'))
-              ORDER BY r.created_at DESC LIMIT 1) AS run_id
+            recognition_preferred_run(i.document_revision_id) AS run_id
        FROM source_set_item i
        JOIN document_revision dr ON dr.id = i.document_revision_id
       WHERE i.source_set_revision_id = $1
@@ -78,8 +76,8 @@ export interface IResolvedScope {
 const contractUnits = (items: { run_id: string | null; contract_id: string | null }[]): Map<string, string> =>
   new Map(items.flatMap((i) => (i.run_id && i.contract_id ? [[i.run_id, i.contract_id] as const] : [])));
 
-// Временный снимок режима working (ADR-008 §3): последняя ревизия рабочего набора этапа и хвосты
-// истории распознавания. Хэш считается так же, как хэш сохранённого снимка, поэтому одинаковый
+// Временный снимок режима working (ADR-008 §3): последняя ревизия рабочего набора этапа и
+// предпочтительные прогоны её редакций. Хэш считается так же, как хэш сохранённого снимка, поэтому одинаковый
 // состав даёт одинаковый scopeHash.
 export const resolveWorkingScope = async (db: Queryable, stageId: string): Promise<IResolvedScope> => {
   const rev = await latestWorkingRevision(db, stageId);
@@ -98,15 +96,12 @@ export const resolveWorkingScope = async (db: Queryable, stageId: string): Promi
 };
 
 // Область контекста contract (ADR-012 §24): текущий корпус договора — последняя редакция каждого
-// документа (основной договор, допсоглашения, приложения) и хвост её истории распознавания.
+// документа (основной договор, допсоглашения, приложения) и её предпочтительный прогон.
 // Отдельного снимка договора нет (T06A-1); хэш временного снимка считается так же, как у этапа.
 export const resolveContractScope = async (db: Queryable, contractId: string): Promise<IResolvedScope> => {
   const r = await db.query<IScopeRevisionItem>(
     `SELECT lr.id AS document_revision_id, lr.blob_sha256, 'included' AS inclusion, lr.contract_id,
-            (SELECT r.id FROM recognition_run r
-              WHERE r.document_revision_id = lr.id AND r.status IN ('complete', 'partial')
-                AND NOT EXISTS (SELECT 1 FROM recognition_run c WHERE c.supersedes_run_id = r.id AND c.status IN ('complete', 'partial'))
-              ORDER BY r.created_at DESC LIMIT 1) AS run_id
+            recognition_preferred_run(lr.id) AS run_id
        FROM document d
        JOIN LATERAL (SELECT x.id, x.blob_sha256, x.contract_id FROM document_revision x
                       WHERE x.document_id = d.id ORDER BY x.revision_seq DESC LIMIT 1) lr ON true
@@ -258,18 +253,31 @@ export interface IScopeCoverage {
   pagesRecognized: number;
   pagesTotal: number;
   unitsNotIndexed: number;
+  // A43: сколько единиц области — локальное распознавание и сколько из них требуют проверки (partial).
+  localUnits: number;
+  localNeedsReview: number;
 }
 
 // Охват области (ADR-008 §11): сколько единиц и страниц распознано и сколько единиц ещё не
 // проиндексировано активной версией. Честная неполнота вместо тихого «ничего нет» (I07, I18).
+// Локальные единицы считаются отдельно: происхождение не подменяется основной обработкой (A43).
 export const scopeCoverage = async (db: Queryable, versionId: string, unitIds: string[]): Promise<IScopeCoverage> => {
-  const r = await db.query<{ pages_recognized: number | null; pages_total: number | null; not_indexed: number }>(
+  const r = await db.query<{ pages_recognized: number | null; pages_total: number | null; not_indexed: number; local_units: number; local_review: number }>(
     `SELECT sum(r.pages_recognized)::int AS pages_recognized, sum(r.pages_total)::int AS pages_total,
             count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM search_index_unit u
-                                                WHERE u.index_version_id = $1 AND u.source_unit_id = r.id))::int AS not_indexed
+                                                WHERE u.index_version_id = $1 AND u.source_unit_id = r.id))::int AS not_indexed,
+            count(*) FILTER (WHERE r.engine = 'local_ocr')::int AS local_units,
+            count(*) FILTER (WHERE r.engine = 'local_ocr' AND r.status = 'partial')::int AS local_review
        FROM recognition_run r WHERE r.id = ANY($2::uuid[])`,
     [versionId, unitIds],
   );
   const row = r.rows[0]!;
-  return { units: unitIds.length, pagesRecognized: row.pages_recognized ?? 0, pagesTotal: row.pages_total ?? 0, unitsNotIndexed: row.not_indexed };
+  return {
+    units: unitIds.length,
+    pagesRecognized: row.pages_recognized ?? 0,
+    pagesTotal: row.pages_total ?? 0,
+    unitsNotIndexed: row.not_indexed,
+    localUnits: row.local_units,
+    localNeedsReview: row.local_review,
+  };
 };

@@ -24,7 +24,7 @@ const cases = (JSON.parse(readFileSync(join(ROOT, 'contracts-core.json'), 'utf8'
 const manifestStatuses = (): Map<string, string> => {
   const out = new Map<string, string>();
   for (const line of readFileSync(MANIFEST, 'utf8').split('\n')) {
-    const m = /^\| \d+ \| `(pv2-[a-z0-9-]+)` \|[^|]*\|[^|]*\| `(stage05|deferred:[0-9a-z]+)` \|/u.exec(line);
+    const m = /^\| \d+ \| `(pv2-[a-z0-9-]+)` \|[^|]*\|[^|]*\| `(stage05a?|deferred:[0-9a-z]+)` \|/u.exec(line);
     if (m) out.set(m[1]!, m[2]!);
   }
   return out;
@@ -70,13 +70,15 @@ beforeAll(async () => {
 afterAll(async () => db.drop());
 
 describe('манифест переноса (AR05-05)', () => {
-  it('17 случаев донора: 9 stage05 и 8 отложенных — каждый ID из корпуса есть в манифесте', () => {
+  it('17 случаев донора: 9 stage05, 3 stage05a и 5 отложенных — каждый ID из корпуса есть в манифесте', () => {
     const statuses = manifestStatuses();
     expect([...statuses.keys()].sort()).toEqual(cases.map((c) => c.id).sort());
     const stage05 = [...statuses.values()].filter((v) => v === 'stage05');
     expect(stage05).toHaveLength(9);
+    // Случаи deferred:05a закрыты этапом 05a (stage05a, tests/searchLocus05a.test.ts); остальные отложены.
+    expect([...statuses.values()].filter((v) => v === 'stage05a')).toHaveLength(3);
     const deferred = [...statuses.values()].filter((v) => v.startsWith('deferred:'));
-    expect(deferred.sort()).toEqual(['deferred:05a', 'deferred:05a', 'deferred:05a', 'deferred:08', 'deferred:08a', 'deferred:08a', 'deferred:16', 'deferred:16']);
+    expect(deferred.sort()).toEqual(['deferred:08', 'deferred:08a', 'deferred:08a', 'deferred:16', 'deferred:16']);
   });
 });
 

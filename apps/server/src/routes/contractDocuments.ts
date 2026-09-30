@@ -12,6 +12,7 @@ import {
   listContractDocuments,
   listRevisions,
   registerContractFile,
+  setDocumentRecognitionRoute,
   updateContractDocumentTitle,
   type ContractRegistration,
   type ContractUploadTarget,
@@ -175,14 +176,19 @@ export const contractDocumentsRouter = (pool: Pool, store: BlobStore, config: IA
         const d = await loadDocument(client, ctx, id);
         requireContractCap(ctx, d.contract_id, 'contract.manage', target(d.contract_id, d.id));
         if (requireIfMatch(req, id) !== d.row_version) throw versionConflict(toContractDocument(d));
-        const { title } = parseBody(PatchContractDocumentRequest, req.body);
-        await updateContractDocumentTitle(client, id, title);
+        const { title, recognitionRoute } = parseBody(PatchContractDocumentRequest, req.body);
+        if (title !== undefined) await updateContractDocumentTitle(client, id, title);
+        if (recognitionRoute !== undefined && recognitionRoute !== d.recognition_route) await setDocumentRecognitionRoute(client, id, recognitionRoute);
         const after = await loadDocument(client, ctx, id);
+        // Название — содержательное поле: в журнал только признак; политика маршрута содержимым не является.
+        const changes: Record<string, unknown> = {};
+        if (title !== undefined) changes.title = { changed: true };
+        if (after.recognition_route !== d.recognition_route) changes.recognitionRoute = { from: d.recognition_route, to: after.recognition_route };
         return {
           status: 200,
           body: toContractDocument(after),
           etag: formatEtag(id, after.row_version),
-          audit: [{ action: 'contract.document.update', entityType: 'document', entityId: id, details: { contractId: d.contract_id, changes: { title: { changed: true } } } }],
+          audit: [{ action: 'contract.document.update', entityType: 'document', entityId: id, details: { contractId: d.contract_id, changes } }],
         };
       },
     }),

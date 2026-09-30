@@ -46,6 +46,11 @@ export const SearchRunView: FC<ISearchRunViewProps> = ({ run }) => {
       {scope.excludedByAcl > 0 ? (
         <Notice tone="info">{`Исключено по правам единиц источника: ${scope.excludedByAcl}. Их содержимое в поиск не вошло — например, документы договора без права чтения.`}</Notice>
       ) : null}
+      {scope.localUnits > 0 ? (
+        <Notice tone={scope.localNeedsReview > 0 ? 'warning' : 'info'}>
+          {`Локальное распознавание в области: ${scope.localUnits} ед.${scope.localNeedsReview > 0 ? `, из них требуют проверки — ${scope.localNeedsReview}` : ''}. Их фрагменты помечены и цитируются без координат.`}
+        </Notice>
+      ) : null}
       {scope.revisionsWithoutRun > 0 ? (
         <Notice tone="info">{`Редакций без распознавания в области: ${scope.revisionsWithoutRun} — по ним доступен только оригинал.`}</Notice>
       ) : null}

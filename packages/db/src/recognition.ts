@@ -6,7 +6,10 @@ import type { Queryable } from './pool.ts';
 
 export type RecognitionEngine = 'rdweb_export' | 'rdweb_api' | 'text_layer' | 'local_ocr';
 export type RecognitionStatus = 'queued' | 'running' | 'complete' | 'partial' | 'failed' | 'cancelled';
-export type RecognitionPageStatus = 'recognized' | 'missing' | 'failed';
+// needs_review — единица прочитана, но не прошла шлюз качества локального распознавания (OD-6, 0014).
+export type RecognitionPageStatus = 'recognized' | 'missing' | 'failed' | 'needs_review';
+// Единица источника (AD-05a-1): физическая страница PDF или логическая единица файла.
+export type RecognitionUnitKind = 'pdf_page' | 'xlsx_sheet' | 'csv_table' | 'docx_body';
 export type FragmentOrigin =
   | 'document_text'
   | 'recognized_text'
@@ -51,11 +54,19 @@ export interface IRecognitionRunRow {
   started_at: Date | null;
   finished_at: Date | null;
   row_version: number;
+  // Идентичность локального прогона (AD-05a-2, 0014); у прогона RDWeb — null.
+  recognizer: Record<string, unknown> | null;
+  recognizer_fingerprint: string | null;
+  recognizer_config_hash: string | null;
+  // Прогон выбирается автоподбором (recognition_preferred_run, AD-05a-3).
+  preferred: boolean;
+  revision_media_type: string;
 }
 
 const SELECT_RUN = `
-  SELECT r.*, dr.document_id, dr.blob_sha256 AS revision_blob_sha256
-    FROM recognition_run r JOIN document_revision dr ON dr.id = r.document_revision_id`;
+  SELECT r.*, dr.document_id, dr.blob_sha256 AS revision_blob_sha256, b.media_type AS revision_media_type,
+         (r.id = recognition_preferred_run(r.document_revision_id)) IS TRUE AS preferred
+    FROM recognition_run r JOIN document_revision dr ON dr.id = r.document_revision_id JOIN blob b ON b.sha256 = dr.blob_sha256`;
 
 export const getRun = async (db: Queryable, id: string, lock = false): Promise<IRecognitionRunRow | null> => {
   if (lock) await db.query('SELECT 1 FROM recognition_run WHERE id = $1 FOR UPDATE', [id]);
@@ -220,6 +231,7 @@ export interface IRecognitionPageRow {
   height_px: number | null;
   rotation: number;
   status: RecognitionPageStatus;
+  unit_kind: RecognitionUnitKind;
 }
 
 export interface INewPage {
@@ -230,6 +242,8 @@ export interface INewPage {
   heightPx: number | null;
   rotation: number;
   status: RecognitionPageStatus;
+  // По умолчанию — страница PDF (прогоны RDWeb).
+  unitKind?: RecognitionUnitKind;
 }
 
 const CHUNK = 100;
@@ -246,12 +260,12 @@ export const insertPages = async (db: Queryable, runId: string, pages: INewPage[
     const values = part
       .map((p) => {
         const i = params.length;
-        params.push(p.pageIndex, p.pageLabel, p.sheetLabel, p.widthPx, p.heightPx, p.rotation, p.status);
-        return `($1, $${i + 1}, $${i + 2}, $${i + 3}, $${i + 4}, $${i + 5}, $${i + 6}, $${i + 7})`;
+        params.push(p.pageIndex, p.pageLabel, p.sheetLabel, p.widthPx, p.heightPx, p.rotation, p.status, p.unitKind ?? 'pdf_page');
+        return `($1, $${i + 1}, $${i + 2}, $${i + 3}, $${i + 4}, $${i + 5}, $${i + 6}, $${i + 7}, $${i + 8})`;
       })
       .join(', ');
     await db.query(
-      `INSERT INTO recognition_page (run_id, page_index, page_label, sheet_label, width_px, height_px, rotation, status)
+      `INSERT INTO recognition_page (run_id, page_index, page_label, sheet_label, width_px, height_px, rotation, status, unit_kind)
        VALUES ${values} ON CONFLICT (run_id, page_index) DO NOTHING`,
       params,
     );
@@ -291,6 +305,8 @@ export interface IEvidenceFragmentRow {
   // Часть длинного текста блока: доказательство не усекается, а разбивается (R04-06).
   part_index: number;
   part_total: number;
+  // Структурный якорь локального фрагмента (AD-05a-1); у фрагмента RDWeb — null.
+  locator: Record<string, unknown> | null;
   created_at: Date;
 }
 
@@ -313,6 +329,7 @@ export interface INewFragment {
   warnings: string[];
   partIndex: number;
   partTotal: number;
+  locator?: Record<string, unknown> | null;
 }
 
 // Владелец фрагментов — владелец прогона (ref берётся из строки прогона, не из запроса клиента).
@@ -345,10 +362,11 @@ export const insertFragments = async (
           JSON.stringify(f.warnings),
           f.partIndex,
           f.partTotal,
+          f.locator ? JSON.stringify(f.locator) : null,
         );
         return (
           `($1, $4, 'recognition_run', $2, $2, $3, $${i + 1}, $${i + 2}, $${i + 3}, $${i + 4}, $${i + 5}, $${i + 6}, ` +
-          `$${i + 7}::numeric[], $${i + 8}, $${i + 9}, $${i + 10}::numeric[], $${i + 11}, $${i + 12}, $${i + 13}, $${i + 14}, $${i + 15}, $${i + 16}::jsonb, $${i + 17}, $${i + 18})`
+          `$${i + 7}::numeric[], $${i + 8}, $${i + 9}, $${i + 10}::numeric[], $${i + 11}, $${i + 12}, $${i + 13}, $${i + 14}, $${i + 15}, $${i + 16}::jsonb, $${i + 17}, $${i + 18}, $${i + 19}::jsonb)`
         );
       })
       .join(', ');
@@ -356,7 +374,7 @@ export const insertFragments = async (
       `INSERT INTO evidence_fragment (tender_id, contract_id, source_unit_type, source_unit_id, run_id, document_revision_id,
          origin, fragment_kind, fragment_key, external_block_id, ordinal, page_index, bbox_norm, bbox_space,
          shape_type, polygon_norm, rotation, text, text_sha256, derived_model_ref, external_crop_url, warnings,
-         part_index, part_total)
+         part_index, part_total, locator)
        VALUES ${values} ON CONFLICT (run_id, fragment_key) DO NOTHING`,
       params,
     );
@@ -418,14 +436,18 @@ export interface IScopedFragmentRow extends IEvidenceFragmentRow {
   page_width_px: number | null;
   page_height_px: number | null;
   page_status: RecognitionPageStatus | null;
+  unit_kind: RecognitionUnitKind | null;
+  run_engine: RecognitionEngine | null;
+  revision_media_type: string | null;
 }
 
 export const getScopedFragment = async (db: Queryable, ctx: IAccessContext, id: string): Promise<IScopedFragmentRow | null> => {
   const r = await db.query<IScopedFragmentRow>(
-    `SELECT f.*, dr.document_id, r.status AS run_status,
-            p.page_label, p.sheet_label, p.width_px AS page_width_px, p.height_px AS page_height_px, p.status AS page_status
+    `SELECT f.*, dr.document_id, r.status AS run_status, r.engine AS run_engine, b.media_type AS revision_media_type,
+            p.page_label, p.sheet_label, p.width_px AS page_width_px, p.height_px AS page_height_px, p.status AS page_status, p.unit_kind
        FROM evidence_fragment f
        LEFT JOIN document_revision dr ON dr.id = f.document_revision_id
+       LEFT JOIN blob b ON b.sha256 = dr.blob_sha256
        LEFT JOIN recognition_run r ON r.id = f.run_id
        LEFT JOIN recognition_page p ON p.run_id = f.run_id AND p.page_index = f.page_index
       WHERE f.id = $1 AND (f.tender_id = ANY($2::uuid[]) OR f.contract_id = ANY($3::uuid[]))`,

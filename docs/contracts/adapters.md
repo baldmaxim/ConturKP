@@ -145,6 +145,43 @@ inspectRdwebBlocks(blocksJson: string): …      // счётчики без те
 
 `RdwebApiClient` на этапе 04 **не реализуется**: объём этапа сужен владельцем до импорта экспортного архива, API RDWeb не подтверждён (Q-02) и остаётся `BLOCKED_EXTERNAL` по X-05.
 
+## 3a. Локальное распознавание (этап 05a)
+
+Решения — D-024 (OD-4, OD-5, OD-7, AD-05a-1, AD-05a-2). Код — `packages/adapters/src/local/*`: как и разбор RDWeb, это чистые функции над байтами оригинала без `fetch`, `node:http/https/net` и `node:fs` (статическая проверка `tests/adapters.test.ts`, A38). Модели OCR читает и раскладывает в локальный каталог `packages/storage` (`ocrModels.ts`).
+
+```ts
+interface LocalOcrEngine {                         // контракт OD-5; доменная модель от движка не зависит
+  recognize(png: Buffer): Promise<{ text: string; blocks: { text: string; confidence: number | null }[];
+                                    confidence: number | null /* 0–100, по словам страницы */; words: number }>;
+  close(): Promise<void>;
+}
+interface LocalOcrEngineFactory {
+  describe(): Promise<{ engineId: string; engineVersion: string; coreVersion: string; oem: string;
+                        engineLanguages: string; models: { lang: string; variant: string; sha256: string }[] }>;
+  create(): Promise<LocalOcrEngine>;
+}
+
+recognizeLocal(input: {
+  bytes: Buffer; format: 'pdf' | 'docx' | 'xlsx' | 'csv';
+  limits: ILocalLimits; ocr: LocalOcrEngineFactory | null; ocrDpi: number; ocrPageTimeoutMs: number;
+  throwIfStopped(): void;                          // отмена и потеря аренды между страницами
+}): Promise<{ units: ILocalUnit[]; fragments: ILocalFragment[]; quality: … }>;   // отказ — LocalRecognitionError(code)
+
+describeLocalRecognizer(format, settings): Promise<{ recognizerId: 'kontur.local'; recognizerVersion: '1';
+  inputFormat; processing: 'structured_parser' | 'native_text' | 'native_text+ocr'; languages: string[]; config }>;
+```
+
+- **Первый рабочий адаптер** — `createTesseractJsFactory`: tesseract.js 7.0.0 (Apache-2.0), WASM-сборка Tesseract в `worker_threads` процесса worker; модели `rus` и `eng` — `@tesseract.js-data/{rus,eng}` 1.0.0, вариант `4.0.0_best_int`, ставятся через npm вместе с приложением и на Windows работают без отдельной установки. Движку передаётся локальный `langPath`, кеш выключен: сети нет ни при установке моделей, ни при распознавании (у донора Locus модели догружались из CDN — здесь это исключено). `LOCAL_OCR_ENGINE=none` отключает OCR: скан тогда даёт единицу `missing` с `ocr_unavailable`.
+- **Описание распознавателя** — идентичность прогона (AD-05a-2): версии pdf.js и движка, SHA-256 моделей, языки (`eng`, `rus`), DPI, числа шлюза качества, правила отображения чисел XLSX (`ru-1`), предел фрагмента. Пути, имена файлов и временные каталоги в описание не входят. Отпечаток и хэш конфигурации считает БД (миграция 0014), клиентское значение не принимается.
+- **PDF (OD-5).** Сначала текстовый слой (pdf.js): страница с ≥ 20 символами и ≥ 3 словами без сломанной кодировки берётся без OCR. Иначе — растр страницы (`@napi-rs/canvas`) при `LOCAL_OCR_DPI` и OCR. Размеры страницы в пикселях — растр при этом DPI; координат у фрагментов нет (D-014).
+- **DOCX** — `word/document.xml` по связям пакета: абзацы и строки таблиц тела, разделы, сноски и концевые сноски; колонтитулы и комментарии не читаются (считаются в `quality`); цель внешней ссылки не открывается, текст ссылки остаётся в абзаце; удалённый текст правок и коды полей не выводятся; `altChunk` — единица `needs_review`.
+- **XLSX** — листы из `workbook.xml` в порядке книги, общие строки, стили для форматов чисел, объединённые ячейки; строка листа — фрагмент с якорем `Лист «…», A7:E7`; формула без сохранённого значения — `needs_review`, формула не вычисляется; пустой лист единицей не становится и считается в `quality`; скрытый лист читается как обычный (скрытие — оформление, не содержание), их число — в `quality.facts`.
+- **CSV** — BOM → строгий UTF-8 → строгий Windows-1251 с проверкой управляющих символов; иначе `encoding_unsupported` без подмены символов. Разделитель — `;`, `,` или табуляция по согласованности числа полей. Запись — фрагмент с якорем записей, столбцов, строки заголовка и физических строк файла.
+- **Безопасность пакета (A38).** XML без DTD и сущностей (`UnsafeXmlError`); ZIP через `yauzl` с пределами числа элементов, распакованного объёма (по фактически прочитанным байтам), коэффициента сжатия; выход за корень, шифрование, повтор имени — `unsafe_package`.
+- **Коды отказа:** `unsupported_format`, `file_corrupt`, `unsafe_package`, `unsupported_structure`, `encoding_unsupported`, `too_large`, `pdf_unreadable`, `ocr_unavailable`, `ocr_failed`, `no_usable_text`; worker добавляет `recognizer_changed`.
+- **Пределы** (`DEFAULT_LOCAL_LIMITS`, настройки `LOCAL_*`): файл 64 МиБ (PDF — прежний предел `RECOGNITION_MAX_PDF_MB`), распакованный объём 256 МиБ, ячеек 1 000 000, страниц PDF — прежний предел этапа 04, страниц с OCR — 300, фрагмент — 20 000 символов (длиннее — детерминированные части `#p1…#pN`, как у RDWeb), общий текст — прежний `maxTotalTextChars`.
+- **Происхождение (OD-7).** Из Locus (`apps/rag-api/src/text.js`, `converters.js`, коммит `33c6bcf`) перенесены нормализация текста и метрики качества (`textQualityReport`, `recognitionNoiseReport`, `ocrPageReport`) без изменения смысла; числа шлюза — свои, по замеру (`docs/stages/05a-report.md`). Разборщики DOCX, XLSX, CSV и PDF — собственные: донор брал `mammoth.extractRawText` (текст без абзацев и таблиц — якорей AD-05a-1 из него не получить), ExcelJS и SheetJS, `iconv-lite`, `pdf-parse` и внешние команды Docling и OCRmyPDF. Здесь нужен контроль над структурой пакета — ради якорей и пределов A38, — а внешних программ вне npm на целевом ПК нет.
+
 ## 4. Локальная модель (эмбеддинги и переранжирование)
 
 После D-013 внешнего адаптера индекса нет: Locus закрыт, индекс и поиск живут в портале (ADR-012). Наружу обращается только шлюз модели — за векторами и, при необходимости, за переранжированием. Реализация вызывается из worker заданием класса `gpu` (ADR-004, ADR-009 §6).
@@ -267,6 +304,7 @@ interface ModelGateway {                         // проект; провайд
 | `TenderHubRevisionReader` | BLOCKED_EXTERNAL | X-01; на этапе 06 — только интерфейс проекта и фикстурные тесты доменной модели |
 | `RdwebExportImporter` | VERIFIED_FIXTURE (этап 04) | разрешённый live-smoke на настоящем экспорте (`scripts/rdweb-inspect.ts`) |
 | `RdwebApiClient` | BLOCKED_EXTERNAL | X-05 |
+| `LocalOcrEngine` (`createTesseractJsFactory`) и разборщики DOCX, XLSX, CSV, PDF | VERIFIED_FIXTURE (этап 05a) | настоящие фикстуры и настоящий OCR tesseract.js в тестах и smoke (`tests/localParsers.test.ts`, `tests/localPdf.test.ts`, `artifacts/stage-05a/smoke.log`); замер на целевом Windows-ПК — `NOT_RUN` |
 | `ModelGatewayEmbeddings` | VERIFIED_FIXTURE (этап 05) | `OpenAiCompatibleEmbeddings` проверен контрактными тестами против поддельного HTTP-сервера (`tests/embeddings.test.ts`), `FakeEmbeddings` — в тестах конвейера; живой прогон с моделью — `NOT_RUN` до целевого ПК |
 | `MailHubReader` | BLOCKED_EXTERNAL | X-03 |
 | `EmlImporter` | NOT_IMPLEMENTED | реализация этапа 07 |

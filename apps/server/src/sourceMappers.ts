@@ -50,6 +50,8 @@ export const toDocument = (d: IDocumentRow) => ({
   docType: d.doc_type,
   docCode: d.doc_code,
   scopeNote: d.scope_note,
+  // Политика маршрута распознавания PDF (OD-1).
+  recognitionRoute: d.recognition_route,
   revisions: d.revisions,
   latestRevisionId: d.latest_revision_id,
   latestReceivedAt: iso(d.latest_received_at),

@@ -1,6 +1,7 @@
 // Представление прогона поиска и снимка области для API (portal-api §2.3–2.4). Предварительный
 // лексический результат помечается preliminary и за итоговый не выдаётся (ADR-012 §14).
 import { emptyScopeMessage, fuseRrf, type IBranchHit } from '@kontur/core';
+import { outcomeOf } from './recognitionMappers.ts';
 import {
   getSearchRun,
   getVersion,
@@ -32,6 +33,11 @@ const toHit = (rank: number, h: { fragmentId: string; origin: string; score: num
   pageIndex: d?.page_index ?? null,
   pageLabel: d?.page_label ?? null,
   sheetLabel: d?.sheet_label ?? null,
+  // A43: движок и итог прогона видны у каждого попадания; у локального — структурный якорь.
+  engine: d?.run_engine ?? null,
+  runOutcome: outcomeOf(d?.run_status),
+  unitKind: d?.unit_kind ?? null,
+  locator: d?.locator ?? null,
   text: d ? d.text.slice(0, SNIPPET_CHARS) : '',
   textTruncated: d ? d.text.length > SNIPPET_CHARS : false,
 });
@@ -69,6 +75,8 @@ export const searchRunView = async (db: Queryable, runId: string) => {
       unitsNotIndexed: counts.unitsNotIndexed ?? 0,
       revisionsWithoutRun: counts.revisionsWithoutRun ?? 0,
       excludedByAcl: counts.excludedByAcl ?? 0,
+      localUnits: counts.localUnits ?? 0,
+      localNeedsReview: counts.localNeedsReview ?? 0,
     },
     incomplete:
       (counts.unitsNotIndexed ?? 0) > 0 ||

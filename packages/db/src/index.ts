@@ -24,3 +24,4 @@ export * from './calculationContent.ts';
 export * from './calculationRevisions.ts';
 export * from './contracts.ts';
 export * from './contractDocuments.ts';
+export * from './localRecognition.ts';

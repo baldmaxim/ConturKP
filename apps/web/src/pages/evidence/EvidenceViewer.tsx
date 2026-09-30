@@ -9,7 +9,8 @@ import { Notice } from '../../components/Notice';
 import { PageHeader } from '../../components/PageHeader';
 import { useApiResource } from '../../hooks/useApiResource';
 import { evidenceOverlay, type IEvidenceOverlay } from '../../utils/bbox';
-import { FRAGMENT_ORIGIN, fragmentKindLabel, recognitionWarningLabel } from '../../utils/sourceLabels';
+import { anchorLabel, engineLabel, isLocalEngine, isPdf, originMeta, RECOGNITION_OUTCOME, UNIT_KIND_LABELS } from '../../utils/localRecognitionLabels';
+import { fragmentKindLabel, recognitionWarningLabel } from '../../utils/sourceLabels';
 import form from '../../styles/form.module.css';
 import list from '../../styles/list.module.css';
 import styles from './EvidenceViewer.module.css';
@@ -22,7 +23,8 @@ type IRender = IEvidenceOverlay;
  * Доказательство: участок локального оригинала PDF с выделением. Страница рисуется в браузере
  * через pdf.js — сервер отдаёт координаты и сам файл, а внешний crop_url из экспорта не
  * загружается никогда (A38). Если координат нет, страница всё равно открывается: отсутствие
- * рамки честнее рамки наугад (A17, I18).
+ * рамки честнее рамки наугад (A17, I18). У фрагмента локального распознавания (этап 05a) координат
+ * нет никогда (D-014): показываются текст и структурный якорь, у PDF — страница без выделения.
  */
 export const EvidenceViewer: FC = () => {
   const { fragmentId = '' } = useParams();
@@ -52,8 +54,11 @@ export const EvidenceViewer: FC = () => {
   const render = drawn && drawn.key === overlayKey ? drawn.render : null;
   const drawError = renderError && renderError.key === overlayKey ? renderError.message : null;
 
+  // Страница рисуется только у оригинала PDF: у DOCX, XLSX, CSV страницы нет (AD-05a-1).
+  const pdfOriginal = fragment ? fragment.mediaType === null || isPdf(fragment.mediaType) : false;
+
   useEffect(() => {
-    if (!fragment?.contentUrl || fragment.pageIndex === null) {
+    if (!fragment?.contentUrl || fragment.pageIndex === null || !pdfOriginal) {
       // Ни страницы, ни ссылки на оригинал: прежний холст и выделение перестают быть текущими.
       setDrawn(null);
       setRenderError(null);
@@ -132,32 +137,47 @@ export const EvidenceViewer: FC = () => {
     return <ErrorState error={res.error} onRetry={res.reload} notFoundTitle="Доказательство не найдено или нет доступа" />;
   }
 
-  const origin = FRAGMENT_ORIGIN[fragment.origin];
+  const origin = originMeta(fragment.origin, fragment.runEngine);
   const pageNo = fragment.pageIndex === null ? null : fragment.pageIndex + 1;
+  const local = isLocalEngine(fragment.runEngine);
+  const anchor = fragment.locator ? anchorLabel(fragment.locator) : null;
+  const outcome = fragment.runOutcome ? RECOGNITION_OUTCOME[fragment.runOutcome] : null;
 
   return (
     <>
       <PageHeader
         title="Доказательство"
-        subtitle={`${fragmentKindLabel(fragment.fragmentKind)}${pageNo ? ` · страница ${pageNo}` : ''}`}
+        subtitle={anchor ?? `${fragmentKindLabel(fragment.fragmentKind)}${pageNo ? ` · страница ${pageNo}` : ''}`}
         back={fragment.documentId ? { to: `/documents/${fragment.documentId}`, label: 'К документу' } : undefined}
       />
       <section className={form.section} aria-label="Текст фрагмента">
         <div className={styles.head}>
           <Badge tone={origin.tone} icon={origin.icon} dashed={origin.dashed} label={origin.label} />
+          {local && outcome ? <Badge tone={outcome.tone} icon={outcome.icon} dashed={outcome.dashed} label={outcome.label} /> : null}
           {fragment.derivedModelRef ? <span className={list.muted}>{`Источник описания: ${fragment.derivedModelRef}`}</span> : null}
         </div>
         <p className={styles.text}>{fragment.text}</p>
-        <dl className={list.meta}>
-          <dt>Страница файла</dt>
-          <dd className={list.num}>{fragment.pageLabel ?? (pageNo ? String(pageNo) : '—')}</dd>
-          <dt>Лист по штампу</dt>
-          <dd className={list.num}>{fragment.sheetLabel ?? '—'}</dd>
-          <dt>Блок экспорта</dt>
-          <dd className={list.mono}>{fragment.externalBlockId ?? '—'}</dd>
-          <dt>Поворот страницы</dt>
-          <dd className={list.num}>{`${fragment.rotation ?? 0}°`}</dd>
-        </dl>
+        {local ? (
+          <dl className={list.meta}>
+            <dt>Место в документе</dt>
+            <dd>{anchor ?? '—'}</dd>
+            <dt>Единица</dt>
+            <dd>{fragment.unitKind ? UNIT_KIND_LABELS[fragment.unitKind] : '—'}</dd>
+            <dt>Движок</dt>
+            <dd>{engineLabel(fragment.runEngine)}</dd>
+          </dl>
+        ) : (
+          <dl className={list.meta}>
+            <dt>Страница файла</dt>
+            <dd className={list.num}>{fragment.pageLabel ?? (pageNo ? String(pageNo) : '—')}</dd>
+            <dt>Лист по штампу</dt>
+            <dd className={list.num}>{fragment.sheetLabel ?? '—'}</dd>
+            <dt>Блок экспорта</dt>
+            <dd className={list.mono}>{fragment.externalBlockId ?? '—'}</dd>
+            <dt>Поворот страницы</dt>
+            <dd className={list.num}>{`${fragment.rotation ?? 0}°`}</dd>
+          </dl>
+        )}
         {fragment.warnings.length > 0 ? (
           <Notice tone="warning">{fragment.warnings.map(recognitionWarningLabel).join('; ')}</Notice>
         ) : null}
@@ -168,12 +188,26 @@ export const EvidenceViewer: FC = () => {
 
       <section className={form.section} aria-label="Участок оригинала">
         {fragment.runStatus === 'partial' ? (
-          <Notice tone="warning">Распознавание документа неполное: часть страниц без фрагментов.</Notice>
+          <Notice tone="warning">
+            {local
+              ? 'Результат локального распознавания требует проверки: часть единиц не прошла шлюз качества.'
+              : 'Распознавание документа неполное: часть страниц без фрагментов.'}
+          </Notice>
+        ) : null}
+        {fragment.pageStatus === 'needs_review' ? (
+          <Notice tone="warning">Эта единица прочитана ниже шлюза качества — сверяйтесь с оригиналом.</Notice>
+        ) : null}
+        {local ? (
+          <Notice tone="info">
+            {pdfOriginal
+              ? 'Координаты недоступны: фрагмент получен локальным распознаванием, рамка не рисуется. Показана вся страница оригинала.'
+              : 'Координаты недоступны: у этого формата нет страниц. Место фрагмента — структурный якорь выше; оригинал открывается целиком.'}
+          </Notice>
         ) : null}
         {fragment.pageStatus === 'missing' ? (
           <Notice tone="warning">Страница не распознана — фрагментов по ней нет, открывайте оригинал целиком.</Notice>
         ) : null}
-        {!fragment.bboxNorm && fragment.pageIndex !== null ? (
+        {!local && !fragment.bboxNorm && fragment.pageIndex !== null ? (
           <Notice tone="info">У фрагмента нет координат — показана вся страница оригинала без выделения.</Notice>
         ) : null}
         {/* R04-19: у фрагмента без страницы выбрать участок нечем — это состояние, а не загрузка. */}
@@ -192,7 +226,7 @@ export const EvidenceViewer: FC = () => {
           </Notice>
         ) : null}
         {drawError ? <Notice tone="danger">{`Страница не отрисована: ${drawError}`}</Notice> : null}
-        {fragment.contentUrl && fragment.pageIndex !== null ? (
+        {fragment.contentUrl && fragment.pageIndex !== null && pdfOriginal ? (
           <div className={styles.stage}>
             {/*
               Холст пересоздаётся вместе с ключом отрисовки: пиксели прежней страницы не могут

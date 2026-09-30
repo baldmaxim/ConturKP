@@ -1,4 +1,4 @@
-import type { TFragmentKind, TFragmentOrigin } from './recognitionTypes';
+import type { TFragmentKind, TFragmentOrigin, TLocalLocator, TRecognitionOutcome, TRecognitionUnitKind } from './recognitionTypes';
 
 // ---- поиск и снимок области (этап 05; portal-api §2.3–2.4)
 
@@ -23,6 +23,11 @@ export interface ISearchHit {
   pageIndex: number | null;
   pageLabel: string | null;
   sheetLabel: string | null;
+  /** A43: движок и итог прогона-источника; у локального — якорь и вид единицы. */
+  engine: string | null;
+  runOutcome: TRecognitionOutcome | null;
+  unitKind: TRecognitionUnitKind | null;
+  locator: TLocalLocator | null;
   text: string;
   textTruncated: boolean;
 }
@@ -40,7 +45,16 @@ export interface ISearchRun {
   };
   query: string;
   scopeHash: string;
-  scope: { units: number; pagesRecognized: number; pagesTotal: number; unitsNotIndexed: number; revisionsWithoutRun: number; excludedByAcl: number };
+  scope: {
+    units: number;
+    pagesRecognized: number;
+    pagesTotal: number;
+    unitsNotIndexed: number;
+    revisionsWithoutRun: number;
+    excludedByAcl: number;
+    localUnits: number;
+    localNeedsReview: number;
+  };
   incomplete: boolean;
   semantic: { status: TSemanticStatus; reason: string | null };
   index: { versionId: string; seq: number | null; embeddingModel: string | null };

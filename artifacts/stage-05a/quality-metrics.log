@@ -1,0 +1,42 @@
+источник	единица	способ	символов	слов	доля букв	доля U+FFFD	доля шума	шумных	уверенность OCR	мс	по шлюзу
+locus/balchug/dogovor-b-44.md	1. Предмет договора	текст-донор	174	18	0.793	0	0	0	—	—	пригоден
+locus/balchug/dogovor-b-44.md	2. Цена договора	текст-донор	98	14	0.643	0	0	0	—	—	пригоден
+locus/balchug/dogovor-b-44.md	3. Аванс	текст-донор	115	14	0.765	0	0	0	—	—	пригоден
+locus/balchug/dogovor-b-44.md	4. Сроки	текст-донор	33	5	0.424	0	0	0	—	—	пригоден
+locus/balchug/dogovor-b-44.md	5. Гарантийный срок	текст-донор	148	16	0.791	0	0	0	—	—	пригоден
+locus/rusakovskaya/dogovor-7-rs.md	1. Предмет договора	текст-донор	192	21	0.786	0	0	0	—	—	пригоден
+locus/rusakovskaya/dogovor-7-rs.md	2. Цена договора	текст-донор	94	14	0.638	0	0	0	—	—	пригоден
+locus/rusakovskaya/dogovor-7-rs.md	3. Аванс	текст-донор	160	18	0.813	0	0	0	—	—	пригоден
+locus/rusakovskaya/dogovor-7-rs.md	4. Сроки	текст-донор	44	6	0.545	0	0	0	—	—	пригоден
+locus/rusakovskaya/dogovor-7-rs.md	5. Гарантийное удержание и гарантийны	текст-донор	218	24	0.775	0	0	0	—	—	пригоден
+locus/stromynka/dogovor-15-p.md	1. Стороны и предмет договора	текст-донор	393	40	0.802	0	0	0	—	—	пригоден
+locus/stromynka/dogovor-15-p.md	2. Цена договора	текст-донор	284	36	0.757	0	0	0	—	—	пригоден
+locus/stromynka/dogovor-15-p.md	3. Аванс и порядок оплаты	текст-донор	372	43	0.798	0	0	0	—	—	пригоден
+locus/stromynka/dogovor-15-p.md	4. Сроки выполнения работ	текст-донор	166	19	0.663	0	0	0	—	—	пригоден
+locus/stromynka/dogovor-15-p.md	5. Гарантийное удержание	текст-донор	384	44	0.802	0	0	0	—	—	пригоден
+locus/stromynka/dogovor-15-p.md	6. Гарантийный срок	текст-донор	256	29	0.785	0	0	0	—	—	пригоден
+locus/stromynka/dogovor-15-p.md	7. Ответственность сторон	текст-донор	302	42	0.768	0	0	0	—	—	пригоден
+locus/stromynka/dogovor-15-p.md	8. Расторжение договора	текст-донор	315	38	0.819	0	0	0	—	—	пригоден
+locus/stromynka/ds-01-k-dogovoru-15-p.md	1. Изменение размера аванса	текст-донор	195	22	0.785	0	0	0	—	—	пригоден
+locus/stromynka/ds-01-k-dogovoru-15-p.md	2. Перенос срока окончания работ	текст-донор	87	11	0.678	0	0	0	—	—	пригоден
+locus/stromynka/ds-01-k-dogovoru-15-p.md	3. Прочие условия	текст-донор	141	16	0.816	0	0	0	—	—	пригоден
+locus/stromynka/pismo-skan.md	OCR page 1	ocr-донор	1265	170	0.716	0	0	0	—	—	пригоден
+locus/stromynka/pismo-skan.md	OCR page 2	ocr-донор	1022	114	0.801	0	0	0	—	—	пригоден
+locus/stromynka/smeta-stromynka.md	Лист: Сводная	текст-донор	642	72	0.41	0	0	0	—	—	пригоден
+locus/stromynka/smeta-stromynka.md	Лист: Материалы	текст-донор	338	38	0.317	0	0.115	3	—	—	пригоден
+05a/blank.pdf	стр. 1	текстовый слой	0	0	0	0	0	0	—	—	text_layer_insufficient
+05a/blank.pdf	стр. 1	OCR 300 dpi	0	0	0	0	0	0	—	809	missing,ocr_empty
+05a/letter-scan-hard.pdf	стр. 1	текстовый слой	0	0	0	0	0	0	—	—	text_layer_insufficient
+05a/letter-scan-hard.pdf	стр. 1	OCR 300 dpi	865	158	0.586	0	0.014	2	32	4496	failed,ocr_unreadable
+05a/letter-scan-soft.pdf	стр. 1	текстовый слой	0	0	0	0	0	0	—	—	text_layer_insufficient
+05a/letter-scan-soft.pdf	стр. 1	OCR 300 dpi	585	78	0.595	0	0.033	2	58	2280	needs_review,low_ocr_confidence
+05a/letter-scan.pdf	стр. 1	текстовый слой	0	0	0	0	0	0	—	—	text_layer_insufficient
+05a/letter-scan.pdf	стр. 1	OCR 300 dpi	488	69	0.656	0	0.038	2	94	1301	recognized
+05a/letter-text.pdf	стр. 1	текстовый слой	480	69	0.667	0	0.038	2	—	—	пригоден
+05a/letter-text.pdf	стр. 1	OCR 300 dpi	488	69	0.656	0	0.038	2	94	1250	recognized
+05a/mixed.pdf	стр. 1	текстовый слой	480	69	0.667	0	0.038	2	—	—	пригоден
+05a/mixed.pdf	стр. 1	OCR 300 dpi	488	69	0.656	0	0.038	2	94	1256	recognized
+05a/mixed.pdf	стр. 2	текстовый слой	0	0	0	0	0	0	—	—	text_layer_insufficient
+05a/mixed.pdf	стр. 2	OCR 300 dpi	488	69	0.656	0	0.038	2	94	1355	recognized
+05a/noise.pdf	стр. 1	текстовый слой	0	0	0	0	0	0	—	—	text_layer_insufficient
+05a/noise.pdf	стр. 1	OCR 300 dpi	4004	934	0.613	0	0	0	25	20153	failed,ocr_unreadable

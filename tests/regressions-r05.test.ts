@@ -190,7 +190,9 @@ describe('R05-01: снимок области создаётся целиком 
       const early = (await insertScope(spec.contentHash)).rows[0]!.id;
       await insertUnits(early, units);
       await c.query('SET CONSTRAINTS ALL IMMEDIATE');
-      await expect(c.query(INSERT_ITEM, [early, spec.tenderId, ids.rev1, ids.run1])).rejects.toThrow(/evidence_scope_item_revision_key|content_hash не соответствует/u);
+      // Этап 05a: в снимок входит только предпочтительный прогон редакции (AD-05a-3, миграция 0014),
+      // поэтому дописывается именно он — иначе раньше печати сработал бы охранник выбора прогона.
+      await expect(c.query(INSERT_ITEM, [early, spec.tenderId, ids.rev1, ids.run1b])).rejects.toThrow(/evidence_scope_item_revision_key|content_hash не соответствует/u);
       await c.query('ROLLBACK');
     } finally {
       await c.end();

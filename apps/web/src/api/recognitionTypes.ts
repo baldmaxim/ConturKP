@@ -1,7 +1,28 @@
 // ---- распознавание и доказательства (этап 04)
 
 export type TRecognitionStatus = 'queued' | 'running' | 'complete' | 'partial' | 'failed' | 'cancelled';
-export type TRecognitionPageStatus = 'recognized' | 'missing' | 'failed';
+// needs_review — единица прочитана, но не прошла шлюз качества локального распознавания (этап 05a, OD-6).
+export type TRecognitionPageStatus = 'recognized' | 'missing' | 'failed' | 'needs_review';
+/** Итог прогона словарём владельца (OD-6): partial показывается как «требует проверки». */
+export type TRecognitionOutcome = 'queued' | 'running' | 'complete' | 'needs_review' | 'failed' | 'cancelled';
+/** Единица источника (AD-05a-1): страница PDF или логическая единица файла без пикселей. */
+export type TRecognitionUnitKind = 'pdf_page' | 'xlsx_sheet' | 'csv_table' | 'docx_body';
+
+/** Структурный якорь локального фрагмента (AD-05a-1). Номера — с единицы. */
+export type TLocalLocator =
+  | { kind: 'pdf_text'; page: number; method: 'native_text' | 'ocr'; block: number }
+  | { kind: 'xlsx_cells'; sheet: string; sheetIndex: number; range: string; rowFrom: number; rowTo: number; colFrom: number; colTo: number; merged?: string[] }
+  | { kind: 'csv_rows'; rowFrom: number; rowTo: number; colFrom: number; colTo: number; headerRow: number | null; lineFrom: number; lineTo: number }
+  | { kind: 'docx_paragraph'; part: 'body' | 'footnotes' | 'endnotes'; block: number; section: number }
+  | { kind: 'docx_table_row'; part: 'body' | 'footnotes' | 'endnotes'; block: number; section: number; table: number; row: number; cellFrom: number; cellTo: number };
+
+export interface ILocalRecognizerInfo {
+  recognizerId: string;
+  recognizerVersion: string;
+  inputFormat: string;
+  processing: string;
+  languages: string[];
+}
 export type TFragmentOrigin = 'document_text' | 'recognized_text' | 'model_description' | 'negotiation_speech' | 'negotiation_hint' | 'email_body' | 'attachment_text';
 export type TFragmentKind =
   | 'text_block'
@@ -34,6 +55,21 @@ export interface IRecognitionRun {
   startedAt: string | null;
   finishedAt: string | null;
   contentUrl: string;
+  outcome: TRecognitionOutcome;
+  /** Прогон выбирается автоподбором снимка и текущей области (AD-05a-3). */
+  preferred: boolean;
+  mediaType: string;
+  /** Локальный прогон: автоматический проход или явная команда; у RDWeb — импорт экспорта. */
+  trigger: 'auto' | 'command' | 'import';
+  recognizer: ILocalRecognizerInfo | null;
+  recognizerFingerprint: string | null;
+  recognizerConfigHash: string | null;
+}
+
+/** Ответ команды локального распознавания: без качества и текста (этап 05a). */
+export interface ILocalRecognitionAccepted {
+  reused: boolean;
+  run: { id: string; documentRevisionId: string; engine: string; status: TRecognitionStatus; outcome: TRecognitionOutcome; createdAt: string };
 }
 
 export interface IRecognitionRunAccepted extends IRecognitionRun {
@@ -50,6 +86,7 @@ export interface IRecognitionPage {
   heightPx: number | null;
   rotation: number;
   status: TRecognitionPageStatus;
+  unitKind: TRecognitionUnitKind;
 }
 
 export interface IRecognitionWarning {
@@ -64,12 +101,18 @@ export interface IRecognitionQuality {
   counts?: Record<string, number>;
   warnings?: IRecognitionWarning[];
   archive?: { pdfMember: string | null; extras: string[]; ignored: string[] };
+  // Локальный прогон (этап 05a): итог, признаки единиц и пропуски — без текста документа.
+  verdict?: 'complete' | 'needs_review' | 'failed';
+  units?: { index: number; kind: TRecognitionUnitKind; status: TRecognitionPageStatus; method: string; issues: string[]; metrics: Record<string, number | null> }[];
+  skipped?: Record<string, number>;
+  facts?: Record<string, string | number | boolean>;
 }
 
 export interface IRecognitionRunDetail extends IRecognitionRun {
   supersededByRunId: string | null;
   quality: IRecognitionQuality;
   missingPages: number[];
+  reviewUnits: number[];
   pages: IRecognitionPage[];
 }
 
@@ -96,6 +139,8 @@ export interface IEvidenceFragment {
   /** Часть длинного текста блока: доказательство разбито, а не усечено. */
   partIndex: number;
   partTotal: number;
+  /** Якорь локального фрагмента; у RDWeb — null. Координат у локального фрагмента нет (D-014). */
+  locator: TLocalLocator | null;
 }
 
 export interface IFragmentPage {
@@ -112,6 +157,10 @@ export interface IEvidenceDetail extends IEvidenceFragment {
   pageWidthPx: number | null;
   pageHeightPx: number | null;
   pageStatus: TRecognitionPageStatus | null;
+  unitKind: TRecognitionUnitKind | null;
+  runEngine: string | null;
+  runOutcome: TRecognitionOutcome | null;
+  mediaType: string | null;
   contentUrl: string | null;
 }
 

@@ -255,6 +255,8 @@ export type TResolveItemInput =
   | { resolution: 'reimported'; resolvedByItemId: string }
   | { resolution: 'not_applicable'; reason: string };
 
+export type TRecognitionRoute = 'auto' | 'local' | 'rdweb';
+
 export interface IDocument {
   id: string;
   tenderId: string;
@@ -262,6 +264,8 @@ export interface IDocument {
   docType: TDocType;
   docCode: string | null;
   scopeNote: string | null;
+  /** Политика маршрута распознавания PDF (OD-1): auto — локально только явной командой. */
+  recognitionRoute: TRecognitionRoute;
   revisions: number;
   latestRevisionId: string | null;
   latestReceivedAt: string | null;
@@ -300,6 +304,7 @@ export interface IDocumentPatch {
   docType?: TDocType;
   docCode?: string | null;
   scopeNote?: string | null;
+  recognitionRoute?: TRecognitionRoute;
 }
 
 export interface ISourceSetRevision {

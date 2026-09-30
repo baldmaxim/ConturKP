@@ -424,14 +424,21 @@ export interface IHitDetailRow {
   bbox_norm: string[] | null;
   bbox_space: string | null;
   text: string;
+  // Маркировка A43: движок и итог прогона-источника, якорь локального фрагмента и вид единицы.
+  run_engine: string | null;
+  run_status: string | null;
+  locator: Record<string, unknown> | null;
+  unit_kind: string | null;
 }
 
 export const hitDetails = async (db: Queryable, fragmentIds: string[]): Promise<Map<string, IHitDetailRow>> => {
   if (fragmentIds.length === 0) return new Map();
   const r = await db.query<IHitDetailRow>(
     `SELECT f.id, f.contract_id, f.run_id, f.document_revision_id, dr.document_id, d.title AS document_title, dr.revision_seq, f.origin,
-            f.fragment_kind, f.page_index, p.page_label, p.sheet_label, f.bbox_norm, f.bbox_space, f.text
+            f.fragment_kind, f.page_index, p.page_label, p.sheet_label, f.bbox_norm, f.bbox_space, f.text,
+            r.engine AS run_engine, r.status AS run_status, f.locator, p.unit_kind
        FROM evidence_fragment f
+       LEFT JOIN recognition_run r ON r.id = f.run_id
        LEFT JOIN document_revision dr ON dr.id = f.document_revision_id
        LEFT JOIN document d ON d.id = dr.document_id
        LEFT JOIN recognition_page p ON p.run_id = f.run_id AND p.page_index = f.page_index

@@ -276,6 +276,7 @@ export interface IDocumentRow {
   doc_type: string;
   doc_code: string | null;
   scope_note: string | null;
+  recognition_route: 'auto' | 'local' | 'rdweb';
   row_version: number;
   created_at: Date;
   updated_at: Date;
@@ -285,7 +286,7 @@ export interface IDocumentRow {
 }
 
 const SELECT_DOCUMENT = `
-  SELECT d.id, d.tender_id, d.title, d.doc_type, d.doc_code, d.scope_note, d.row_version, d.created_at, d.updated_at,
+  SELECT d.id, d.tender_id, d.title, d.doc_type, d.doc_code, d.scope_note, d.recognition_route, d.row_version, d.created_at, d.updated_at,
          count(r.id)::int AS revisions,
          (array_agg(r.id ORDER BY r.revision_seq DESC))[1] AS latest_revision_id,
          max(r.received_at) AS latest_received_at
@@ -311,7 +312,13 @@ export const getDocument = async (db: Queryable, ctx: IAccessContext, id: string
 export const updateDocument = async (
   db: Queryable,
   id: string,
-  p: { title?: string | undefined; docType?: string | undefined; docCode?: string | null | undefined; scopeNote?: string | null | undefined },
+  p: {
+    title?: string | undefined;
+    docType?: string | undefined;
+    docCode?: string | null | undefined;
+    scopeNote?: string | null | undefined;
+    recognitionRoute?: 'auto' | 'local' | 'rdweb' | undefined;
+  },
 ): Promise<void> => {
   await db.query(
     `UPDATE document SET
@@ -319,6 +326,7 @@ export const updateDocument = async (
         doc_type = CASE WHEN $4 THEN $5 ELSE doc_type END,
         doc_code = CASE WHEN $6 THEN $7 ELSE doc_code END,
         scope_note = CASE WHEN $8 THEN $9 ELSE scope_note END,
+        recognition_route = CASE WHEN $10 THEN $11 ELSE recognition_route END,
         updated_at = now(), row_version = row_version + 1
       WHERE id = $1`,
     [
@@ -327,6 +335,7 @@ export const updateDocument = async (
       p.docType !== undefined, p.docType ?? null,
       p.docCode !== undefined, p.docCode ?? null,
       p.scopeNote !== undefined, p.scopeNote ?? null,
+      p.recognitionRoute !== undefined, p.recognitionRoute ?? null,
     ],
   );
 };

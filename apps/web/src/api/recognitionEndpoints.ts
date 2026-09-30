@@ -1,6 +1,14 @@
 // Вызовы API распознавания и доказательств (этап 04, portal-api §2.4).
 import { apiGet, apiPost, etagOf } from './client';
-import type { IEvidenceDetail, IFragmentPage, IListResponse, IRecognitionRun, IRecognitionRunDetail, ISourceSetRevision } from './types';
+import type {
+  IEvidenceDetail,
+  IFragmentPage,
+  IListResponse,
+  ILocalRecognitionAccepted,
+  IRecognitionRun,
+  IRecognitionRunDetail,
+  ISourceSetRevision,
+} from './types';
 
 const enc = encodeURIComponent;
 
@@ -28,6 +36,10 @@ export const listFragments = (
   const suffix = params.size > 0 ? `?${params.toString()}` : '';
   return apiGet<IFragmentPage>(`/recognition-runs/${enc(runId)}/fragments${suffix}`, { signal });
 };
+
+/** Явная команда локального распознавания редакции (этап 05a): повтор той же идентичности — прежний прогон. */
+export const requestLocalRecognition = (revisionId: string, idempotencyKey: string): Promise<ILocalRecognitionAccepted> =>
+  apiPost<ILocalRecognitionAccepted>(`/document-revisions/${enc(revisionId)}/local-recognitions`, { body: {}, idempotencyKey });
 
 export const getEvidence = (fragmentId: string, signal?: AbortSignal): Promise<IEvidenceDetail> =>
   apiGet<IEvidenceDetail>(`/evidence/${enc(fragmentId)}`, { signal });

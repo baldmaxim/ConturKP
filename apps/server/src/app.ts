@@ -1,9 +1,10 @@
 // Сборка HTTP-приложения: API /api/v1 и раздача собранного интерфейса.
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import type { ILocalOcrEngineFactory } from '@kontur/adapters';
 import type { IAppConfig } from '@kontur/config';
 import type { Pool } from '@kontur/db';
-import { BlobStore } from '@kontur/storage';
+import { BlobStore, localOcrFactory } from '@kontur/storage';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { requestIdOf } from './http/context.ts';
 import { HttpError, sendProblem } from './http/errors.ts';
@@ -15,6 +16,7 @@ import { evidenceScopesRouter } from './routes/evidenceScopes.ts';
 import { healthRouter } from './routes/health.ts';
 import { importsRouter } from './routes/imports.ts';
 import { intakeRouter } from './routes/intake.ts';
+import { localRecognitionRouter } from './routes/localRecognition.ts';
 import { recognitionRouter } from './routes/recognition.ts';
 import { searchRouter } from './routes/search.ts';
 import { calculationsRouter } from './routes/calculations.ts';
@@ -31,6 +33,8 @@ export interface IAppDeps {
   clock?: () => Date;
   store?: BlobStore;
   logError?: (message: string, meta: Record<string, unknown>) => void;
+  // Фабрика OCR для тестов; по умолчанию — по конфигурации (LOCAL_OCR_ENGINE).
+  localOcr?: ILocalOcrEngineFactory | null;
 }
 
 export const DEFAULT_WEB_DIST = resolve(import.meta.dirname, '..', '..', 'web', 'dist');
@@ -58,6 +62,7 @@ export const createApp = (deps: IAppDeps): express.Express => {
   api.use(documentsRouter(pool, store));
   api.use(intakeRouter(pool, config, clock));
   api.use(recognitionRouter(pool, store, config));
+  api.use(localRecognitionRouter(pool, config, deps.localOcr !== undefined ? deps.localOcr : localOcrFactory(config.localRecognition.ocrEngine)));
   api.use(sourceSetsRouter(pool));
   api.use(evidenceScopesRouter(pool));
   api.use(contractsRouter(pool));

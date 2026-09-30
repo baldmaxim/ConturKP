@@ -10,13 +10,8 @@ import { Icon } from '../../components/Icon';
 import { LoadingState } from '../../components/LoadingState';
 import { Notice } from '../../components/Notice';
 import { useApiResource } from '../../hooks/useApiResource';
-import {
-  FRAGMENT_ORIGIN,
-  RECOGNITION_PAGE_STATUS,
-  fragmentKindLabel,
-  plural,
-  recognitionWarningLabel,
-} from '../../utils/sourceLabels';
+import { anchorLabel, isLocalEngine, localIssueLabel, originMeta, UNIT_KIND_LABELS } from '../../utils/localRecognitionLabels';
+import { RECOGNITION_PAGE_STATUS, fragmentKindLabel, plural, recognitionWarningLabel } from '../../utils/sourceLabels';
 import list from '../../styles/list.module.css';
 import styles from './RecognitionPanel.module.css';
 
@@ -38,9 +33,18 @@ const pageBadge = (page: IRecognitionPage): ReactNode => {
   return <Badge tone={meta.tone} icon={meta.icon} dashed={meta.dashed} label={meta.label} />;
 };
 
-const originBadge = (fragment: IEvidenceFragment): ReactNode => {
-  const meta = FRAGMENT_ORIGIN[fragment.origin];
+// Происхождение с учётом движка: локальный OCR не выдаётся за RDWeb (A43, I06).
+const originBadge = (fragment: IEvidenceFragment, engine: string): ReactNode => {
+  const meta = originMeta(fragment.origin, engine);
   return <Badge tone={meta.tone} icon={meta.icon} dashed={meta.dashed} label={meta.label} />;
+};
+
+// Подпись единицы: страница PDF — номер и лист штампа; лист книги — имя; CSV и DOCX — вид единицы.
+const unitCaption = (page: IRecognitionPage): string => {
+  if (page.unitKind !== 'pdf_page') {
+    return UNIT_KIND_LABELS[page.unitKind];
+  }
+  return page.sheetLabel ? `лист ${page.sheetLabel}` : page.rotation ? `поворот ${page.rotation}°` : 'страница файла';
 };
 
 /** Страницы прогона и фрагменты выбранной страницы. Текст и описание модели различимы (I06). */
@@ -124,17 +128,32 @@ export const RecognitionRunView: FC<IRecognitionRunViewProps> = ({ runId }) => {
   }
   const run = runRes.data;
   const warnings = run.quality.warnings ?? [];
+  const local = isLocalEngine(run.engine);
+  // Признаки качества единиц локального прогона (OD-6): почему единица требует проверки.
+  const unitIssues = new Map((run.quality.units ?? []).map((u) => [u.index, u.issues]));
+  const reviewUnits = run.reviewUnits ?? [];
+  const missingUnits = run.missingPages.filter((i) => !reviewUnits.includes(i));
 
   return (
     // Ключ показанной страницы виден в DOM: по нему проверяется, что выдача и её отсутствие
     // относятся именно к выбранной странице, в том числе в промежуточных кадрах (R04-15).
     <div className={styles.runView} data-page-key={fragmentsKey}>
-      {run.missingPages.length > 0 ? (
+      {missingUnits.length > 0 ? (
         <Notice tone="warning">
-          {`Не распознаны ${plural(run.missingPages.length, ['страница', 'страницы', 'страниц'])}: ${run.missingPages
+          {`Не распознаны ${plural(missingUnits.length, local ? ['единица', 'единицы', 'единиц'] : ['страница', 'страницы', 'страниц'])}: ${missingUnits
             .map((i) => i + 1)
             .join(', ')}. Фрагментов по ним нет — открывайте оригинал.`}
         </Notice>
+      ) : null}
+      {reviewUnits.length > 0 ? (
+        <Notice tone="warning">
+          {`Требуют проверки: ${reviewUnits
+            .map((i) => `${i + 1} (${(unitIssues.get(i) ?? []).map(localIssueLabel).join(', ') || 'ниже шлюза качества'})`)
+            .join('; ')}. Текст сохранён, но за полное распознавание не считается.`}
+        </Notice>
+      ) : null}
+      {local ? (
+        <p className={list.muted}>Локальное распознавание: у фрагментов нет координат — место в документе показывает структурный якорь.</p>
       ) : null}
 
       <ul className={styles.pages}>
@@ -144,12 +163,10 @@ export const RecognitionRunView: FC<IRecognitionRunViewProps> = ({ runId }) => {
               type="button"
               className={pageIndex === page.pageIndex ? `${styles.page} ${styles.pageActive}` : styles.page}
               onClick={() => selectPage(pageIndex === page.pageIndex ? null : page.pageIndex)}
-              disabled={page.status !== 'recognized'}
+              disabled={page.status !== 'recognized' && page.status !== 'needs_review'}
             >
               <span className={styles.pageNo}>{page.pageLabel ?? String(page.pageIndex + 1)}</span>
-              <span className={list.muted}>
-                {page.sheetLabel ? `лист ${page.sheetLabel}` : page.rotation ? `поворот ${page.rotation}°` : 'страница файла'}
-              </span>
+              <span className={list.muted}>{unitCaption(page)}</span>
               {pageBadge(page)}
             </button>
           </li>
@@ -157,7 +174,7 @@ export const RecognitionRunView: FC<IRecognitionRunViewProps> = ({ runId }) => {
       </ul>
 
       {pageIndex === null ? (
-        <p className={list.muted}>Выберите страницу, чтобы увидеть её фрагменты.</p>
+        <p className={list.muted}>{local ? 'Выберите единицу, чтобы увидеть её фрагменты.' : 'Выберите страницу, чтобы увидеть её фрагменты.'}</p>
       ) : fragmentsRes.loading && !fragmentsRes.data ? (
         <LoadingState />
       ) : fragmentsRes.error ? (
@@ -167,8 +184,8 @@ export const RecognitionRunView: FC<IRecognitionRunViewProps> = ({ runId }) => {
           {fragments.map((fragment) => (
             <li key={fragment.id} className={styles.fragment}>
               <div className={styles.fragmentHead}>
-                {originBadge(fragment)}
-                <span className={list.muted}>{fragmentKindLabel(fragment.fragmentKind)}</span>
+                {originBadge(fragment, run.engine)}
+                <span className={list.muted}>{fragment.locator ? anchorLabel(fragment.locator) : fragmentKindLabel(fragment.fragmentKind)}</span>
                 {fragment.partTotal > 1 && (
                   <span className={list.muted}>
                     часть {fragment.partIndex + 1} из {fragment.partTotal}
@@ -191,7 +208,7 @@ export const RecognitionRunView: FC<IRecognitionRunViewProps> = ({ runId }) => {
               ) : null}
               <AppLink to={`/evidence/${fragment.id}`} className={styles.evidenceLink}>
                 <Icon name="scan-search" size={16} />
-                <span>Открыть участок оригинала</span>
+                <span>{fragment.locator ? 'Открыть доказательство' : 'Открыть участок оригинала'}</span>
               </AppLink>
             </li>
           ))}

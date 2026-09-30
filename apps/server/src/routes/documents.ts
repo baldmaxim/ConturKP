@@ -77,6 +77,7 @@ export const documentsRouter = (pool: Pool, store: BlobStore): Router => {
           ['docType', d.doc_type, after.doc_type],
           ['docCode', d.doc_code, after.doc_code],
           ['scopeNote', d.scope_note, after.scope_note],
+          ['recognitionRoute', d.recognition_route, after.recognition_route],
         ] as const) {
           if (before !== now) changes[k] = { from: before, to: now };
         }

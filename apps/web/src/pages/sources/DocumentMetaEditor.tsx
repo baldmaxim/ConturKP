@@ -2,7 +2,7 @@ import { useState, type FC } from 'react';
 import { conflictCurrent, describeError, fieldErrorsOf, hasCode } from '../../api/errors';
 import { isDocument } from '../../api/guards';
 import { getDocument, updateDocument } from '../../api/sourceEndpoints';
-import type { IDocument, IDocumentPatch, TDocType } from '../../api/types';
+import type { IDocument, IDocumentPatch, TDocType, TRecognitionRoute } from '../../api/types';
 import { Button } from '../../components/Button';
 import { ConflictDialog, type IConflictRow } from '../../components/ConflictDialog';
 import { Notice } from '../../components/Notice';
@@ -12,6 +12,7 @@ import { TextField } from '../../components/TextField';
 import { useToast } from '../../hooks/useToast';
 import { useUnsavedChanges } from '../../hooks/unsavedChanges';
 import { formatDateTime } from '../../utils/datetime';
+import { ROUTE_LABELS, ROUTES } from '../../utils/localRecognitionLabels';
 import { DOC_TYPE_LABELS, DOC_TYPES, docTypeLabel } from '../../utils/sourceLabels';
 import form from '../../styles/form.module.css';
 
@@ -20,6 +21,7 @@ interface IDocForm {
   docType: TDocType;
   docCode: string;
   scopeNote: string;
+  recognitionRoute: TRecognitionRoute;
 }
 
 const toForm = (doc: IDocument): IDocForm => ({
@@ -27,11 +29,13 @@ const toForm = (doc: IDocument): IDocForm => ({
   docType: doc.docType,
   docCode: doc.docCode ?? '',
   scopeNote: doc.scopeNote ?? '',
+  recognitionRoute: doc.recognitionRoute,
 });
 
 const orNull = (value: string): string | null => (value.trim() ? value.trim() : null);
 
 const DOC_TYPE_OPTIONS = DOC_TYPES.map((value) => ({ value, label: DOC_TYPE_LABELS[value] }));
+const ROUTE_OPTIONS = ROUTES.map((value) => ({ value, label: ROUTE_LABELS[value] }));
 
 interface IDocumentMetaEditorProps {
   doc: IDocument;
@@ -64,6 +68,9 @@ export const DocumentMetaEditor: FC<IDocumentMetaEditorProps> = ({ doc, canWrite
     if (orNull(values.scopeNote) !== from.scopeNote) {
       patch.scopeNote = orNull(values.scopeNote);
     }
+    if (values.recognitionRoute !== from.recognitionRoute) {
+      patch.recognitionRoute = values.recognitionRoute;
+    }
     return patch;
   };
 
@@ -74,6 +81,8 @@ export const DocumentMetaEditor: FC<IDocumentMetaEditorProps> = ({ doc, canWrite
   const set = (key: 'title' | 'docCode' | 'scopeNote') => (value: string) => setValues((prev) => ({ ...prev, [key]: value }));
   const setDocType = (value: string): void =>
     setValues((prev) => ({ ...prev, docType: DOC_TYPES.find((type) => type === value) ?? prev.docType }));
+  const setRoute = (value: string): void =>
+    setValues((prev) => ({ ...prev, recognitionRoute: ROUTES.find((r) => r === value) ?? prev.recognitionRoute }));
 
   const startEdit = (): void => {
     setBase(doc);
@@ -136,6 +145,7 @@ export const DocumentMetaEditor: FC<IDocumentMetaEditorProps> = ({ doc, canWrite
         { label: 'Тип', mine: docTypeLabel(values.docType), current: docTypeLabel(conflict.current.docType) },
         { label: 'Шифр', mine: values.docCode.trim(), current: conflict.current.docCode ?? '' },
         { label: 'Область применения', mine: values.scopeNote.trim(), current: conflict.current.scopeNote ?? '' },
+        { label: 'Маршрут распознавания PDF', mine: ROUTE_LABELS[values.recognitionRoute], current: ROUTE_LABELS[conflict.current.recognitionRoute] },
       ]
     : [];
 
@@ -168,6 +178,14 @@ export const DocumentMetaEditor: FC<IDocumentMetaEditorProps> = ({ doc, canWrite
             </div>
             <SelectField label="Тип документа" value={values.docType} options={DOC_TYPE_OPTIONS} onValueChange={setDocType} error={errors.docType} />
             <TextField label="Шифр" value={values.docCode} onValueChange={set('docCode')} error={errors.docCode} maxLength={100} autoComplete="off" />
+            <SelectField
+              label="Маршрут распознавания PDF"
+              value={values.recognitionRoute}
+              options={ROUTE_OPTIONS}
+              onValueChange={setRoute}
+              error={errors.recognitionRoute}
+              hint="Для DOCX, XLSX и CSV не действует: они распознаются локально автоматически."
+            />
             <div className={form.wide}>
               <TextAreaField
                 label="Область применения"
@@ -198,6 +216,8 @@ export const DocumentMetaEditor: FC<IDocumentMetaEditorProps> = ({ doc, canWrite
           <dd className={doc.docCode ? form.mono : form.absent}>{doc.docCode ?? 'не указан'}</dd>
           <dt>Область применения</dt>
           <dd className={doc.scopeNote ? undefined : form.absent}>{doc.scopeNote ?? 'не указана'}</dd>
+          <dt>Маршрут распознавания PDF</dt>
+          <dd>{ROUTE_LABELS[doc.recognitionRoute]}</dd>
           <dt>Редакций</dt>
           <dd className={form.num}>{doc.revisions}</dd>
           <dt>Изменён</dt>

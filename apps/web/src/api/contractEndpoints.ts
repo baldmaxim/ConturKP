@@ -70,6 +70,10 @@ export const getContractDocument = (id: string, signal?: AbortSignal): Promise<I
 export const renameContractDocument = (doc: IContractDocument, title: string): Promise<IContractDocument> =>
   apiPatch<IContractDocument>(`/contract-documents/${enc(doc.id)}`, { body: { title }, ifMatch: etagOf(doc.id, doc.rowVersion) });
 
+/** Политика маршрута распознавания PDF документа договора (этап 05a, OD-1). */
+export const setContractDocumentRoute = (doc: IContractDocument, recognitionRoute: 'auto' | 'local' | 'rdweb'): Promise<IContractDocument> =>
+  apiPatch<IContractDocument>(`/contract-documents/${enc(doc.id)}`, { body: { recognitionRoute }, ifMatch: etagOf(doc.id, doc.rowVersion) });
+
 // Кандидаты из действующе связанных договоров в состав этапа
 export const listContractCandidates = (stageId: string, signal?: AbortSignal): Promise<IListResponse<IContractCandidate>> =>
   apiGet<IListResponse<IContractCandidate>>(`/stages/${enc(stageId)}/contract-candidates`, { signal });

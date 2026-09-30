@@ -1,0 +1,40 @@
+# R05a-01 (Review 05a-2): регрессии на схеме передачи e92486e (миграции 0001–0015, без 0016) — 2026-09-30T12:37:19Z
+# Запуск: 0016 временно убрана из docs/migrations; npx vitest run tests/regressions-r05a.test.ts -t 'размеры страницы PDF в БД'
+# Ожидаемо: матрица движок × статус падает — rdweb_api missing и text_layer missing без размеров принимаются (ok).
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/regressions-r05a.test.ts > R05a-01: размеры страницы PDF в БД > Review 05a-2: страница PDF без размеров допустима только у rdweb_export в статусе missing
+AssertionError: expected { 'rdweb_export missing': 'ok', …(9) } to deeply equal { 'rdweb_export missing': 'ok', …(9) }
+- Expected
++ Received
+  {
+    "local_ocr missing": "23514:guard",
+-   "rdweb_api failed": "23514:guard",
+-   "rdweb_api missing": "23514:guard",
+-   "rdweb_api recognized": "23514:guard",
+-   "rdweb_export failed": "23514:guard",
++   "rdweb_api failed": "23514:recognition_page_unit_shape",
++   "rdweb_api missing": "ok",
++   "rdweb_api recognized": "23514:recognition_page_unit_shape",
++   "rdweb_export failed": "23514:recognition_page_unit_shape",
+    "rdweb_export missing": "ok",
+-   "rdweb_export recognized": "23514:guard",
+-   "text_layer failed": "23514:guard",
+-   "text_layer missing": "23514:guard",
+-   "text_layer recognized": "23514:guard",
++   "rdweb_export recognized": "23514:recognition_page_unit_shape",
++   "text_layer failed": "23514:recognition_page_unit_shape",
++   "text_layer missing": "ok",
++   "text_layer recognized": "23514:recognition_page_unit_shape",
+  }
+ ❯ tests/regressions-r05a.test.ts:134:17
+    132|     got['local_ocr missing'] = await insert(await running('pdf'), 0, '…
+    133|     // На схеме e92486e (0015) здесь «ok» были ещё rdweb_api missing и…
+    134|     expect(got).toEqual({
+       |                 ^
+    135|       'rdweb_export missing': 'ok',
+    136|       'rdweb_export recognized': '23514:guard',
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 passed | 6 skipped (12)
+   Start at  17:37:07
+   Duration  2.92s (tests 57%, transform 27%, import 15%, worker 1%)

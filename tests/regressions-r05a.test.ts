@@ -15,7 +15,7 @@ import { createPool, dropDatabase, listMigrations, migrate, MIGRATIONS_DIR, setu
 import { BlobStore } from '../packages/storage/src/index.ts';
 import { HANDLERS } from '../apps/worker/src/handlers/index.ts';
 import { WorkerRuntime } from '../apps/worker/src/runtime.ts';
-import { ADMIN_URL, buildScenario, createTestDb, createUser, drain, idem, makeApp, makeWorker, seedRecognition, testConfig, type IScenario, type ITestDb } from './helpers.ts';
+import { ADMIN_URL, buildScenario, createTestDb, createUser, drain, idem, makeApp, makeWorker, testConfig, type IScenario, type ITestDb } from './helpers.ts';
 import * as fx from './localFixtures.ts';
 import { descriptorOf, insertLocalRun, newRevision, sqlCode, startRunSql } from './localRecognitionFixtures.ts';
 
@@ -107,17 +107,85 @@ describe('R05a-01: размеры страницы PDF в БД', () => {
     }
   });
 
-  it('CHECK сам по себе: у pdf_page без размеров допустим только missing; охранник закрывает и его', async () => {
-    const rd = await newRevision(db.pool, { tenderId: s.tenderA, format: 'pdf', userId: s.ids.eng1 });
-    const rdRun = await seedRecognition(db.pool, rd.revisionId, 'running');
-    // RDWeb: распознанная и отказавшая страница без размеров — отказ CHECK.
-    expect(await insert(rdRun, 0, 'pdf_page', 'recognized', false)).toBe('23514:recognition_page_unit_shape');
-    expect(await insert(rdRun, 0, 'pdf_page', 'failed', false)).toBe('23514:recognition_page_unit_shape');
-    // Страница оригинала, которой нет в экспорте RDWeb, — missing без размеров, как на этапе 04 (R04-03).
-    expect(await insert(rdRun, 0, 'pdf_page', 'missing', false)).toBe('ok');
-    expect(await insert(rdRun, 1, 'pdf_page', 'recognized', true)).toBe('ok');
-    // needs_review у RDWeb по-прежнему нет (0014).
-    expect(await insert(rdRun, 2, 'pdf_page', 'needs_review', true)).toBe('23514:other');
+  // Выполняющийся прогон заданного нелокального движка прямой записью под ролью приложения: rdweb_api и
+  // text_layer нормативный API сейчас не создаёт, но схема их допускает (Review 05a-2).
+  const runningOf = async (engine: 'rdweb_export' | 'rdweb_api' | 'text_layer') => {
+    const r = await newRevision(db.pool, { tenderId: s.tenderA, format: 'pdf', userId: s.ids.eng1 });
+    const zip = randomBytes(32).toString('hex');
+    await db.pool.query("INSERT INTO blob (sha256, size_bytes, media_type, storage_key) VALUES ($1, 1, 'application/zip', $2)", [zip, `r/${zip}`]);
+    const run = (
+      await db.pool.query<{ id: string }>(
+        'INSERT INTO recognition_run (document_revision_id, tender_id, engine, source_artifact_sha256) VALUES ($1, $2, $3, $4) RETURNING id',
+        [r.revisionId, s.tenderA, engine, zip],
+      )
+    ).rows[0]!.id;
+    await startRunSql(db.pool, run);
+    return run;
+  };
+
+  it('Review 05a-2: страница PDF без размеров допустима только у rdweb_export в статусе missing', async () => {
+    const got: Record<string, string> = {};
+    for (const engine of ['rdweb_export', 'rdweb_api', 'text_layer'] as const) {
+      const run = await runningOf(engine);
+      for (const [i, status] of (['missing', 'recognized', 'failed'] as const).entries()) got[`${engine} ${status}`] = await insert(run, i, 'pdf_page', status, false);
+    }
+    got['local_ocr missing'] = await insert(await running('pdf'), 0, 'pdf_page', 'missing', false);
+    // На схеме e92486e (0015) здесь «ok» были ещё rdweb_api missing и text_layer missing.
+    expect(got).toEqual({
+      'rdweb_export missing': 'ok',
+      'rdweb_export recognized': '23514:guard',
+      'rdweb_export failed': '23514:guard',
+      'rdweb_api missing': '23514:guard',
+      'rdweb_api recognized': '23514:guard',
+      'rdweb_api failed': '23514:guard',
+      'text_layer missing': '23514:guard',
+      'text_layer recognized': '23514:guard',
+      'text_layer failed': '23514:guard',
+      'local_ocr missing': '23514:guard',
+    });
+  });
+
+  it('те же движки с размерами допустимы; needs_review у нелокального движка — по-прежнему отказ', async () => {
+    for (const engine of ['rdweb_export', 'rdweb_api', 'text_layer'] as const) {
+      const run = await runningOf(engine);
+      expect(await insert(run, 0, 'pdf_page', 'missing', true), engine).toBe('ok');
+      expect(await insert(run, 1, 'pdf_page', 'recognized', true), engine).toBe('ok');
+      expect(await insert(run, 2, 'pdf_page', 'failed', true), engine).toBe('ok');
+      expect(await insert(run, 3, 'pdf_page', 'needs_review', true), engine).toBe('23514:other');
+    }
+  });
+
+  it('CHECK остаётся общей второй линией: без охранника pdf_page без размеров — только missing', async () => {
+    const run = await runningOf('rdweb_export');
+    const owner = new pg.Client({ connectionString: db.migratorUrl });
+    await owner.connect();
+    try {
+      await owner.query('BEGIN');
+      await owner.query('ALTER TABLE recognition_page DISABLE TRIGGER recognition_page_unit_guard');
+      const code = (status: string, i: number) =>
+        owner
+          .query('SAVEPOINT p')
+          .then(() =>
+            owner.query("INSERT INTO recognition_page (run_id, page_index, unit_kind, width_px, height_px, rotation, status) VALUES ($1, $2, 'pdf_page', NULL, NULL, 0, $3)", [
+              run,
+              i,
+              status,
+            ]),
+          )
+          .then(
+            () => 'ok',
+            async (e: { code?: string; constraint?: string }) => {
+              await owner.query('ROLLBACK TO SAVEPOINT p');
+              return `${e.code}:${e.constraint}`;
+            },
+          );
+      expect(await code('recognized', 0)).toBe('23514:recognition_page_unit_shape');
+      expect(await code('failed', 0)).toBe('23514:recognition_page_unit_shape');
+      expect(await code('missing', 0)).toBe('ok');
+    } finally {
+      await owner.query('ROLLBACK');
+      await owner.end();
+    }
   });
 
   it('6–7: у логической единицы размеров нет — с размерами отказ, без размеров PASS', async () => {
@@ -225,7 +293,7 @@ describe('R05a-01: штатный конвейер PDF пишет размеры
   });
 });
 
-describe('R05a-01: обновление схемы 0014 → 0015', () => {
+describe('R05a-01: обновление схемы 0014 → 0015 → 0016', () => {
   const dbs: { name: string; pool: Pool }[] = [];
   afterAll(async () => {
     for (const d of dbs) {
@@ -249,14 +317,14 @@ describe('R05a-01: обновление схемы 0014 → 0015', () => {
       await m.end();
     }
   };
-  // База на схеме 0014 с тендером, пользователем и прогоном RDWeb этапа 04: страница 1 распознана,
-  // страницы 2 в экспорте нет — missing без размеров.
-  const at0014 = async (tag: string) => {
-    const name = `kontur_kp_test_r05a01_${tag}_${Date.now().toString(36)}`;
+  // База на схеме upTo (0014 — передача 86c0e15, 0015 — передача e92486e) с тендером, пользователем и
+  // прогоном RDWeb этапа 04: страница 1 распознана, страницы 2 в экспорте нет — missing без размеров.
+  const atSchema = async (upTo: 14 | 15, tag: string) => {
+    const name = `kontur_kp_test_r05a01_${upTo}_${tag}_${Date.now().toString(36)}`;
     await setupDatabase(ADMIN_URL, name);
     const dir = mkdtempSync(join(tmpdir(), 'kontur-r05a01-'));
-    for (const f of readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql') && Number(f.slice(0, 4)) <= 14)) cpSync(join(MIGRATIONS_DIR, f), join(dir, f));
-    expect(await withMigrator(name, (m) => migrate(m, { testMode: true, dir }))).toHaveLength(14);
+    for (const f of readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql') && Number(f.slice(0, 4)) <= upTo)) cpSync(join(MIGRATIONS_DIR, f), join(dir, f));
+    expect(await withMigrator(name, (m) => migrate(m, { testMode: true, dir }))).toHaveLength(upTo);
     const pool = createPool(urlFor(name, 'kontur_app'), 3);
     dbs.push({ name, pool });
     const eng = await createUser(pool, 'eng1', ['engineer'], 'Инженер');
@@ -283,13 +351,28 @@ describe('R05a-01: обновление схемы 0014 → 0015', () => {
     const local = await newRevision(pool, { tenderId: tender, format: 'pdf', route: 'local', userId: eng });
     const localRun = await insertLocalRun(pool, local.revisionId, descriptorOf('pdf'), eng);
     await startRunSql(pool, localRun);
-    return { name, pool, localRun };
+    // Выполняющийся прогон нелокального движка той же схемы — прямой записью (Review 05a-2).
+    const runOf = async (engine: 'rdweb_api' | 'text_layer'): Promise<string> => {
+      const r = await newRevision(pool, { tenderId: tender, format: 'pdf', userId: eng });
+      const z = randomBytes(32).toString('hex');
+      await pool.query("INSERT INTO blob (sha256, size_bytes, media_type, storage_key) VALUES ($1, 10, 'application/zip', $2)", [z, `m/${z}`]);
+      const id = (
+        await pool.query<{ id: string }>(
+          'INSERT INTO recognition_run (document_revision_id, tender_id, engine, source_artifact_sha256) VALUES ($1, $2, $3, $4) RETURNING id',
+          [r.revisionId, tender, engine, z],
+        )
+      ).rows[0]!.id;
+      await startRunSql(pool, id);
+      return id;
+    };
+    return { name, pool, localRun, runOf };
   };
+  const LATEST = listMigrations().at(-1)!.version;
   const version = async (pool: Pool): Promise<number> =>
     (await pool.query<{ v: number }>('SELECT max(version)::int AS v FROM schema_migration')).rows[0]!.v;
 
-  it('данные этапов 04–05a с размерами и RDWeb-страница без размеров переживают 0015; ограничения проверены', async () => {
-    const d = await at0014('ok');
+  it('данные этапов 04–05a с размерами и RDWeb-страница без размеров переживают 0015 и 0016; ограничения проверены', async () => {
+    const d = await atSchema(14, 'ok');
     for (const [i, status] of STATUSES.entries()) {
       await d.pool.query('INSERT INTO recognition_page (run_id, page_index, unit_kind, width_px, height_px, rotation, status) VALUES ($1, $2, $3, 1654, 2339, 0, $4)', [
         d.localRun,
@@ -305,12 +388,12 @@ describe('R05a-01: обновление схемы 0014 → 0015', () => {
       expect(invalid.rows).toEqual([]);
     });
     expect((await d.pool.query<{ n: number }>('SELECT count(*)::int AS n FROM recognition_page')).rows[0]!.n).toBe(pagesBefore);
-    expect(await version(d.pool)).toBe(15);
+    expect(await version(d.pool)).toBe(LATEST);
   });
 
   it('локальная страница PDF без размеров, записанная на 0014, не даёт применить 0015: needs_review — CHECK, missing — проверка миграции', async () => {
     for (const status of ['needs_review', 'missing'] as const) {
-      const d = await at0014(status);
+      const d = await atSchema(14, status);
       await d.pool.query("INSERT INTO recognition_page (run_id, page_index, unit_kind, width_px, height_px, rotation, status) VALUES ($1, 0, 'pdf_page', NULL, NULL, 0, $2)", [
         d.localRun,
         status,
@@ -318,6 +401,29 @@ describe('R05a-01: обновление схемы 0014 → 0015', () => {
       const failure = await withMigrator(d.name, (m) => migrate(m, { testMode: true }).then(() => 'применена', (e: Error) => e.message));
       expect(failure, status).toMatch(status === 'missing' ? /R05a-01/u : /recognition_page_unit_shape/u);
       expect(await version(d.pool)).toBe(14);
+    }
+  });
+
+  it('Review 05a-2: 0015 → 0016 сохраняет исторический rdweb_export missing без размеров', async () => {
+    const d = await atSchema(15, 'rdweb');
+    const kept = "SELECT count(*)::int AS n FROM recognition_page p JOIN recognition_run r ON r.id = p.run_id WHERE r.engine = 'rdweb_export' AND p.status = 'missing' AND p.width_px IS NULL";
+    expect((await d.pool.query<{ n: number }>(kept)).rows[0]!.n).toBe(1);
+    await withMigrator(d.name, async (m) => {
+      expect(await migrate(m, { testMode: true })).toEqual(listMigrations().filter((f) => f.version > 15).map((f) => f.version));
+    });
+    expect((await d.pool.query<{ n: number }>(kept)).rows[0]!.n).toBe(1);
+    expect(await version(d.pool)).toBe(LATEST);
+  });
+
+  it('Review 05a-2: страница text_layer или rdweb_api missing без размеров, записанная на 0015, не даёт применить 0016', async () => {
+    for (const engine of ['text_layer', 'rdweb_api'] as const) {
+      const d = await atSchema(15, engine);
+      const run = await d.runOf(engine);
+      // На 0015 такая строка принималась: CHECK разрешал missing, охранник проверял только local_ocr.
+      await d.pool.query("INSERT INTO recognition_page (run_id, page_index, unit_kind, width_px, height_px, rotation, status) VALUES ($1, 0, 'pdf_page', NULL, NULL, 0, 'missing')", [run]);
+      const failure = await withMigrator(d.name, (m) => migrate(m, { testMode: true }).then(() => 'применена', (e: Error) => e.message));
+      expect(failure, engine).toMatch(/0016.*rdweb_export \+ missing/u);
+      expect(await version(d.pool), engine).toBe(15);
     }
   });
 });

@@ -38,8 +38,11 @@ const TEXT_DOCUMENTS: Record<string, string> = {
   xml: 'application/xml',
   html: 'text/html',
   htm: 'text/html',
-  eml: 'message/rfc822',
 };
+
+// Письмо EML с этапа 07 входит только через импорт в почтовый ящик (D-025, AD-07-3): в общем импорте
+// источников и в документах договора это отказ элемента с пояснением. Принятые ранее файлы не меняются.
+export const EML_REJECT_DETAIL = 'письмо .eml импортируется в почтовый ящик (раздел «Почта»), а не как документ';
 
 const IMAGES: { ext: string[]; magic: number[]; mediaType: string }[] = [
   { ext: ['png'], magic: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], mediaType: 'image/png' },
@@ -88,6 +91,7 @@ export const classifyFile = (name: string, head: Buffer, size: number): FileVerd
       return img.ext.includes(ext) ? { kind: 'document', mediaType: img.mediaType } : reject('type_not_allowed', `изображение с расширением .${ext || '—'}`);
     }
   }
+  if (ext === 'eml') return reject('type_not_allowed', EML_REJECT_DETAIL);
   const text = TEXT_DOCUMENTS[ext];
   if (text) {
     return head.includes(0) ? reject('corrupt', `.${ext} содержит двоичные данные`) : { kind: 'document', mediaType: text };

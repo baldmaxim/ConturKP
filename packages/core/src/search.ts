@@ -280,11 +280,24 @@ export const fuseRrf = (branches: Partial<Record<SearchBranch, readonly IBranchH
 
 // ---------------------------------------------------------------- Хэши области
 
-export interface IScopeUnit {
-  unitType: 'document_recognition';
-  documentRevisionId: string;
-  recognitionRunId: string | null;
-}
+// Типизированная единица снимка (ADR-008 п. 1–2): редакция документа с прогоном (у вложения письма —
+// ещё и письмо, D-025), ревизия письма, редакция транскрипции.
+export type IScopeUnit =
+  | { unitType: 'document_recognition'; documentRevisionId: string; recognitionRunId: string | null; mailMessageId?: string | null }
+  | { unitType: 'mail_message'; mailMessageRevisionId: string; mailMessageId: string }
+  | { unitType: 'transcript_revision'; transcriptRevisionId: string };
+
+// Строка хэша по data-model §5: [вид, редакция, прогон, ревизия письма, редакция транскрипции].
+const scopeUnitRow = (u: IScopeUnit): string[] => {
+  switch (u.unitType) {
+    case 'document_recognition':
+      return [u.unitType, u.documentRevisionId, u.recognitionRunId ?? '', '', ''];
+    case 'mail_message':
+      return [u.unitType, '', '', u.mailMessageRevisionId, ''];
+    case 'transcript_revision':
+      return [u.unitType, '', '', '', u.transcriptRevisionId];
+  }
+};
 
 const byKey = (a: string[], b: string[]): number => {
   const x = a.join('|');
@@ -294,9 +307,9 @@ const byKey = (a: string[], b: string[]): number => {
 
 // Хэш снимка области (data-model §5): хэш состава ревизии набора + отсортированные типизированные
 // единицы. Одинаковый состав этапа даёт тот же хэш и ту же строку снимка. БД пересчитывает хэш по
-// фактическому составу той же формулой (evidence_scope_composition_hash, миграция 0010): менять вместе.
+// фактическому составу той же формулой (evidence_scope_composition_hash, миграции 0010 и 0018): менять вместе.
 export const evidenceScopeContentHash = (sourceSetHash: string, units: readonly IScopeUnit[]): string => {
-  const rows = units.map((u) => [u.unitType, u.documentRevisionId, u.recognitionRunId ?? '', '', '']).sort(byKey);
+  const rows = units.map(scopeUnitRow).sort(byKey);
   return sha256Hex(`kontur.evidence_scope.v1\n${sourceSetHash}\n${JSON.stringify(rows)}`);
 };
 

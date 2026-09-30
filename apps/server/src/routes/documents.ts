@@ -21,10 +21,10 @@ import { loadStage } from './stages.ts';
 
 // Оригинал отдаётся как есть, но без исполнения активного содержимого (A38): песочница CSP без
 // скриптов и сетевых запросов, nosniff; HTML, письма, XML и офисные файлы — только скачиванием.
-const INLINE_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/tiff', 'image/bmp', 'text/plain', 'text/csv']);
-const CONTENT_CSP = "sandbox; default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'";
+export const INLINE_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/tiff', 'image/bmp', 'text/plain', 'text/csv']);
+export const CONTENT_CSP = "sandbox; default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'";
 
-const contentDisposition = (inline: boolean, name: string): string => {
+export const contentDisposition = (inline: boolean, name: string): string => {
   const ascii = name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
   return `${inline ? 'inline' : 'attachment'}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`;
 };
@@ -98,8 +98,10 @@ export const documentsRouter = (pool: Pool, store: BlobStore): Router => {
       const r = await getRevision(pool, ctx, id);
       if (!r) throw notFound({ entityType: 'document_revision', entityId: id });
       const occ = await listOccurrences(pool, [id]);
-      // У редакции договора происхождений нет (D-023): имя — название документа с расширением типа.
-      const name = occ.at(-1)?.observed_name ?? (r.contract_id ? fileNameWithExtension(r.document_title, r.media_type) : `revision-${r.revision_seq}`);
+      // У редакции договора и документа вложения происхождений нет (D-023, D-025): имя — название
+      // документа с расширением типа.
+      const name =
+        occ.at(-1)?.observed_name ?? (r.contract_id || r.mail_message_id ? fileNameWithExtension(r.document_title, r.media_type) : `revision-${r.revision_seq}`);
       const inline = INLINE_TYPES.has(r.media_type);
       res.setHeader('Content-Type', inline ? r.media_type : 'application/octet-stream');
       res.setHeader('Content-Length', String(r.size_bytes));

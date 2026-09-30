@@ -9,7 +9,11 @@ export type StageEventType =
   | 'document_revision_registered'
   | 'source_set_changed'
   | 'recognition_run_completed'
-  | 'calculation_revision_added';
+  | 'calculation_revision_added'
+  // Этап 07: подтверждённая связь письма, редакция транскрипции, ревизии вопросов–ответов.
+  | 'communication_linked'
+  | 'transcript_revision_added'
+  | 'qa_form_added';
 
 const CLASS_OF: Record<StageEventType, 'source' | 'calculation'> = {
   import_accepted: 'source',
@@ -17,6 +21,9 @@ const CLASS_OF: Record<StageEventType, 'source' | 'calculation'> = {
   source_set_changed: 'source',
   recognition_run_completed: 'source',
   calculation_revision_added: 'calculation',
+  communication_linked: 'source',
+  transcript_revision_added: 'source',
+  qa_form_added: 'source',
 };
 
 export interface IStageEventInput {

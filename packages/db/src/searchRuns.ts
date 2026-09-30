@@ -178,7 +178,8 @@ export const ownerOfRun = (run: { tender_id: string | null; contract_id: string 
 
 // Вторая линия (ADR-012 §13): каждый фрагмент результата сверяется с закреплённой областью по БД.
 // Фрагмент договора в тендерном прогоне допустим только у договора, связанного с этим тендером,
-// — то же правило держит охранник search_run_result (миграция 0012).
+// фрагмент письма и вложения — только у письма, у которого есть пара с этим тендером, фрагмент
+// транскрипции — только своего тендера; то же правило держит охранник search_run_result (0012, 0018).
 export const fragmentsOutsideScope = async (db: Queryable, owner: SearchOwner, fragmentIds: string[], unitIds: string[]): Promise<string[]> => {
   if (fragmentIds.length === 0) return [];
   const r = await db.query<{ id: string }>(
@@ -190,6 +191,14 @@ export const fragmentsOutsideScope = async (db: Queryable, owner: SearchOwner, f
                     THEN f.tender_id = $2::uuid
                       OR (f.contract_id IS NOT NULL AND EXISTS (
                             SELECT 1 FROM contract_tender l WHERE l.contract_id = f.contract_id AND l.tender_id = $2::uuid))
+                      OR (f.source_unit_type = 'recognition_run' AND f.tender_id IS NULL AND f.contract_id IS NULL AND EXISTS (
+                            SELECT 1 FROM mail_message_tender l
+                             WHERE l.message_id = document_revision_mail_message(f.document_revision_id) AND l.tender_id = $2::uuid))
+                      OR (f.source_unit_type = 'mail_message_revision' AND EXISTS (
+                            SELECT 1 FROM mail_message_revision mr JOIN mail_message_tender l ON l.message_id = mr.message_id
+                             WHERE mr.id = f.mail_message_revision_id AND l.tender_id = $2::uuid))
+                      OR (f.source_unit_type = 'transcript_revision' AND EXISTS (
+                            SELECT 1 FROM transcript_revision t WHERE t.id = f.transcript_revision_id AND t.tender_id = $2::uuid))
                     ELSE f.contract_id = $3::uuid END)`,
     [fragmentIds, owner.kind === 'tender' ? owner.tenderId : null, owner.kind === 'contract' ? owner.contractId : null, unitIds],
   );
@@ -410,6 +419,7 @@ export const recordTimings = async (db: Queryable, runId: string, timings: Recor
 
 export interface IHitDetailRow {
   id: string;
+  source_unit_type: 'recognition_run' | 'mail_message_revision' | 'transcript_revision';
   contract_id: string | null;
   run_id: string | null;
   document_revision_id: string | null;
@@ -429,19 +439,47 @@ export interface IHitDetailRow {
   run_status: string | null;
   locator: Record<string, unknown> | null;
   unit_kind: string | null;
+  // Почтовая ветка (AD-07-1a): письмо, ящик и шапка ревизии; у фрагмента вложения — письмо вложения.
+  mail_message_id: string | null;
+  mailbox_id: string | null;
+  mail_message_revision_id: string | null;
+  mail_subject: string | null;
+  mail_from: string | null;
+  mail_sent_at: Date | null;
+  attachment_filename: string | null;
+  // Транскрипция: сессия, редакция, говорящий и таймкод сегмента.
+  session_id: string | null;
+  session_title: string | null;
+  transcript_revision_id: string | null;
+  speaker_label: string | null;
+  t_start_ms: number | null;
+  t_end_ms: number | null;
 }
 
 export const hitDetails = async (db: Queryable, fragmentIds: string[]): Promise<Map<string, IHitDetailRow>> => {
   if (fragmentIds.length === 0) return new Map();
   const r = await db.query<IHitDetailRow>(
-    `SELECT f.id, f.contract_id, f.run_id, f.document_revision_id, dr.document_id, d.title AS document_title, dr.revision_seq, f.origin,
-            f.fragment_kind, f.page_index, p.page_label, p.sheet_label, f.bbox_norm, f.bbox_space, f.text,
-            r.engine AS run_engine, r.status AS run_status, f.locator, p.unit_kind
+    `SELECT f.id, f.source_unit_type, f.contract_id, f.run_id, f.document_revision_id, dr.document_id, d.title AS document_title, dr.revision_seq,
+            f.origin, f.fragment_kind, f.page_index, p.page_label, p.sheet_label, f.bbox_norm, f.bbox_space, f.text,
+            r.engine AS run_engine, r.status AS run_status, f.locator, p.unit_kind,
+            coalesce(mr.message_id, amr.message_id) AS mail_message_id, coalesce(m.mailbox_id, am.mailbox_id) AS mailbox_id,
+            coalesce(mr.id, amr.id) AS mail_message_revision_id, coalesce(mr.subject, amr.subject) AS mail_subject,
+            coalesce(mr.from_address, amr.from_address) AS mail_from, coalesce(mr.sent_at, amr.sent_at) AS mail_sent_at,
+            a.filename AS attachment_filename,
+            ns.id AS session_id, ns.title AS session_title, f.transcript_revision_id, ts.speaker_label, ts.t_start_ms, ts.t_end_ms
        FROM evidence_fragment f
        LEFT JOIN recognition_run r ON r.id = f.run_id
        LEFT JOIN document_revision dr ON dr.id = f.document_revision_id
        LEFT JOIN document d ON d.id = dr.document_id
        LEFT JOIN recognition_page p ON p.run_id = f.run_id AND p.page_index = f.page_index
+       LEFT JOIN mail_message_revision mr ON mr.id = f.mail_message_revision_id
+       LEFT JOIN mail_message m ON m.id = mr.message_id
+       LEFT JOIN mail_attachment a ON a.id = d.mail_attachment_id
+       LEFT JOIN mail_message_revision amr ON amr.id = a.revision_id
+       LEFT JOIN mail_message am ON am.id = amr.message_id
+       LEFT JOIN transcript_segment ts ON ts.id = f.transcript_segment_id
+       LEFT JOIN transcript_revision tr ON tr.id = f.transcript_revision_id
+       LEFT JOIN negotiation_session ns ON ns.id = tr.session_id
       WHERE f.id = ANY($1::uuid[])`,
     [fragmentIds],
   );

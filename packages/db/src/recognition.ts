@@ -1,7 +1,7 @@
 // Распознавание и доказательства (data-model §4.4, state-machines §4). Прогон — единица
 // источника (ADR-008 §1): фрагменты принадлежат прогону, а не документу, поэтому новая
 // версия OCR не переписывает прежние доказательства (A10).
-import { contentTenderIds, readableContractIds, type IAccessContext } from './access.ts';
+import { contentTenderIds, readableContractIds, readableMailboxIds, type IAccessContext } from './access.ts';
 import type { Queryable } from './pool.ts';
 
 export type RecognitionEngine = 'rdweb_export' | 'rdweb_api' | 'text_layer' | 'local_ocr';
@@ -74,13 +74,17 @@ export const getRun = async (db: Queryable, id: string, lock = false): Promise<I
   return r.rows[0] ?? null;
 };
 
-// Прогон договора читается только с contract.read (D-022 OD-2, OD-3).
+// Прогон договора читается только с contract.read (D-022 OD-2, OD-3), прогон документа вложения — только
+// с mail.read на ящик письма (D-025).
 export const getScopedRun = async (db: Queryable, ctx: IAccessContext, id: string): Promise<IRecognitionRunRow | null> => {
-  const r = await db.query<IRecognitionRunRow>(`${SELECT_RUN} WHERE r.id = $1 AND (r.tender_id = ANY($2::uuid[]) OR r.contract_id = ANY($3::uuid[]))`, [
-    id,
-    contentTenderIds(ctx),
-    readableContractIds(ctx),
-  ]);
+  const r = await db.query<IRecognitionRunRow>(
+    `${SELECT_RUN}
+      WHERE r.id = $1
+        AND (r.tender_id = ANY($2::uuid[]) OR r.contract_id = ANY($3::uuid[])
+             OR (r.tender_id IS NULL AND r.contract_id IS NULL AND EXISTS (
+                   SELECT 1 FROM mail_message m WHERE m.id = document_revision_mail_message(r.document_revision_id) AND m.mailbox_id = ANY($4::uuid[]))))`,
+    [id, contentTenderIds(ctx), readableContractIds(ctx), readableMailboxIds(ctx)],
+  );
   return r.rows[0] ?? null;
 };
 
@@ -439,19 +443,58 @@ export interface IScopedFragmentRow extends IEvidenceFragmentRow {
   unit_kind: RecognitionUnitKind | null;
   run_engine: RecognitionEngine | null;
   revision_media_type: string | null;
+  // Почтовая ветка и транскрипция (D-025): письмо (у вложения — письмо вложения), ящик, шапка ревизии;
+  // сессия и сегмент транскрипции.
+  source_unit_type: 'recognition_run' | 'mail_message_revision' | 'transcript_revision';
+  mail_message_revision_id: string | null;
+  transcript_revision_id: string | null;
+  transcript_segment_id: string | null;
+  mail_message_id: string | null;
+  mailbox_id: string | null;
+  mail_subject: string | null;
+  mail_from: string | null;
+  mail_sent_at: Date | null;
+  attachment_filename: string | null;
+  session_id: string | null;
+  session_title: string | null;
+  transcript_tender_id: string | null;
+  speaker_label: string | null;
+  segment_kind: 'speech' | 'hint' | null;
+  t_start_ms: number | null;
+  t_end_ms: number | null;
 }
 
+// Цитата: фрагмент тендера — доступ к тендеру; договора — contract.read; письма и документа вложения —
+// mail.read на ящик письма (связь с тендером и снимок права не дают, D-025); транскрипции — доступ к
+// тендеру сессии. Чужой фрагмент не отличается от несуществующего.
 export const getScopedFragment = async (db: Queryable, ctx: IAccessContext, id: string): Promise<IScopedFragmentRow | null> => {
   const r = await db.query<IScopedFragmentRow>(
     `SELECT f.*, dr.document_id, r.status AS run_status, r.engine AS run_engine, b.media_type AS revision_media_type,
-            p.page_label, p.sheet_label, p.width_px AS page_width_px, p.height_px AS page_height_px, p.status AS page_status, p.unit_kind
+            p.page_label, p.sheet_label, p.width_px AS page_width_px, p.height_px AS page_height_px, p.status AS page_status, p.unit_kind,
+            coalesce(mr.message_id, amr.message_id) AS mail_message_id, coalesce(m.mailbox_id, am.mailbox_id) AS mailbox_id,
+            coalesce(mr.subject, amr.subject) AS mail_subject, coalesce(mr.from_address, amr.from_address) AS mail_from,
+            coalesce(mr.sent_at, amr.sent_at) AS mail_sent_at, a.filename AS attachment_filename,
+            ns.id AS session_id, ns.title AS session_title, tr.tender_id AS transcript_tender_id,
+            ts.speaker_label, ts.segment_kind, ts.t_start_ms, ts.t_end_ms
        FROM evidence_fragment f
        LEFT JOIN document_revision dr ON dr.id = f.document_revision_id
+       LEFT JOIN document d ON d.id = dr.document_id
        LEFT JOIN blob b ON b.sha256 = dr.blob_sha256
        LEFT JOIN recognition_run r ON r.id = f.run_id
        LEFT JOIN recognition_page p ON p.run_id = f.run_id AND p.page_index = f.page_index
-      WHERE f.id = $1 AND (f.tender_id = ANY($2::uuid[]) OR f.contract_id = ANY($3::uuid[]))`,
-    [id, contentTenderIds(ctx), readableContractIds(ctx)],
+       LEFT JOIN mail_message_revision mr ON mr.id = f.mail_message_revision_id
+       LEFT JOIN mail_message m ON m.id = mr.message_id
+       LEFT JOIN mail_attachment a ON a.id = d.mail_attachment_id
+       LEFT JOIN mail_message_revision amr ON amr.id = a.revision_id
+       LEFT JOIN mail_message am ON am.id = amr.message_id
+       LEFT JOIN transcript_revision tr ON tr.id = f.transcript_revision_id
+       LEFT JOIN negotiation_session ns ON ns.id = tr.session_id
+       LEFT JOIN transcript_segment ts ON ts.id = f.transcript_segment_id
+      WHERE f.id = $1
+        AND (f.tender_id = ANY($2::uuid[]) OR f.contract_id = ANY($3::uuid[])
+             OR coalesce(m.mailbox_id, am.mailbox_id) = ANY($4::uuid[])
+             OR tr.tender_id = ANY($2::uuid[]))`,
+    [id, contentTenderIds(ctx), readableContractIds(ctx), readableMailboxIds(ctx)],
   );
   return r.rows[0] ?? null;
 };

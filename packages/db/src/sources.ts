@@ -1,7 +1,7 @@
 // Источники: blob, документы, редакции, происхождения, партии и элементы импорта
 // (data-model §4.3, state-machines §3). Путь — история происхождения, не идентичность.
 import { nameKeyOf } from '@kontur/core';
-import { contentTenderIds, readableContractIds, type IAccessContext } from './access.ts';
+import { contentTenderIds, readableContractIds, readableMailboxIds, type IAccessContext } from './access.ts';
 import type { Queryable } from './pool.ts';
 import { emitStageEvents, lockTenderStages } from './stageEvents.ts';
 
@@ -343,9 +343,12 @@ export const updateDocument = async (
 export interface IRevisionRow {
   id: string;
   document_id: string;
-  // Владелец редакции — ровно один: тендер или договор (D-023).
+  // Владелец редакции — ровно один: тендер, договор (D-023) или вложение письма (D-025): тогда у
+  // редакции нет ни тендера, ни договора, а ящик и письмо выводятся через вложение.
   tender_id: string | null;
   contract_id: string | null;
+  mailbox_id: string | null;
+  mail_message_id: string | null;
   document_title: string;
   blob_sha256: string;
   revision_seq: number;
@@ -357,23 +360,26 @@ export interface IRevisionRow {
 }
 
 const SELECT_REVISION = `
-  SELECT r.id, r.document_id, r.tender_id, r.contract_id, d.title AS document_title, r.blob_sha256, r.revision_seq,
-         r.supersedes_revision_id, r.received_at, r.registered_by, b.size_bytes, b.media_type
-    FROM document_revision r JOIN blob b ON b.sha256 = r.blob_sha256 JOIN document d ON d.id = r.document_id`;
+  SELECT r.id, r.document_id, r.tender_id, r.contract_id, mm.mailbox_id, mm.id AS mail_message_id, d.title AS document_title, r.blob_sha256,
+         r.revision_seq, r.supersedes_revision_id, r.received_at, r.registered_by, b.size_bytes, b.media_type
+    FROM document_revision r JOIN blob b ON b.sha256 = r.blob_sha256 JOIN document d ON d.id = r.document_id
+    LEFT JOIN mail_attachment ma ON ma.id = d.mail_attachment_id
+    LEFT JOIN mail_message_revision mr ON mr.id = ma.revision_id
+    LEFT JOIN mail_message mm ON mm.id = mr.message_id`;
 
 export const listRevisions = async (db: Queryable, documentId: string): Promise<IRevisionRow[]> => {
   const r = await db.query<IRevisionRow>(`${SELECT_REVISION} WHERE r.document_id = $1 ORDER BY r.revision_seq DESC`, [documentId]);
   return r.rows;
 };
 
-// Редакция тендера видна участнику тендера, редакция договора — только с contract.read (D-022 OD-2):
-// включение в снимок тендера права чтения редакции договора не даёт (OD-3).
+// Редакция тендера видна участнику тендера, редакция договора — только с contract.read (D-022 OD-2),
+// редакция вложения письма — только с mail.read на ящик письма (D-025): включение в снимок тендера и
+// связь письма с тендером права чтения не дают.
 export const getRevision = async (db: Queryable, ctx: IAccessContext, id: string): Promise<IRevisionRow | null> => {
-  const r = await db.query<IRevisionRow>(`${SELECT_REVISION} WHERE r.id = $1 AND (r.tender_id = ANY($2::uuid[]) OR r.contract_id = ANY($3::uuid[]))`, [
-    id,
-    contentTenderIds(ctx),
-    readableContractIds(ctx),
-  ]);
+  const r = await db.query<IRevisionRow>(
+    `${SELECT_REVISION} WHERE r.id = $1 AND (r.tender_id = ANY($2::uuid[]) OR r.contract_id = ANY($3::uuid[]) OR mm.mailbox_id = ANY($4::uuid[]))`,
+    [id, contentTenderIds(ctx), readableContractIds(ctx), readableMailboxIds(ctx)],
+  );
   return r.rows[0] ?? null;
 };
 

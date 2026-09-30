@@ -14,6 +14,7 @@ import {
   listSetItems,
   listSetRevisions,
   readableContractIds,
+  readableMailboxIds,
   replaceSetItems,
   revisionOwners,
   type IAccessContext,
@@ -49,8 +50,29 @@ const loadRevision = async (db: Queryable, ctx: IAccessContext, id: string, lock
 };
 
 // Элемент с редакцией договора виден участнику без contract.read только как факт (D-022 OD-2):
-// ни названия, ни документа, ни идентификатора договора — лишь номер редакции в составе.
-const restrictedOf = (readable: ReadonlySet<string>, contractId: string | null): boolean => contractId !== null && !readable.has(contractId);
+// ни названия, ни документа, ни идентификатора договора — лишь номер редакции в составе. Так же документ
+// вложения без mail.read на ящик письма (D-025).
+interface IReadable {
+  contracts: ReadonlySet<string>;
+  mailboxes: ReadonlySet<string>;
+}
+
+const readableOf = (ctx: IAccessContext): IReadable => ({ contracts: new Set(readableContractIds(ctx)), mailboxes: new Set(readableMailboxIds(ctx)) });
+
+const restrictedOf = (readable: IReadable, i: { contract_id: string | null; mailbox_id: string | null }): boolean =>
+  (i.contract_id !== null && !readable.contracts.has(i.contract_id)) || (i.mailbox_id !== null && !readable.mailboxes.has(i.mailbox_id));
+
+// Письма, действующе связанные с тендером этапа (связь без этапа или с этим этапом): только их вложения
+// входят в состав и снимок (охранник evidence_scope_item, 0018).
+const stageLinkedMessages = async (db: Queryable, tenderId: string, stageId: string): Promise<Set<string>> =>
+  new Set(
+    (
+      await db.query<{ message_id: string }>(
+        "SELECT message_id FROM mail_message_tender WHERE tender_id = $1 AND status = 'linked' AND (stage_id IS NULL OR stage_id = $2)",
+        [tenderId, stageId],
+      )
+    ).rows.map((x) => x.message_id),
+  );
 
 export const sourceSetsRouter = (pool: Pool): Router => {
   const router = Router();
@@ -59,7 +81,7 @@ export const sourceSetsRouter = (pool: Pool): Router => {
     '/stages/:id/source-sets',
     query(pool, 'source.set.read', 'tender_stage', async (ctx, req, res) => {
       const stage = await loadStage(pool, ctx, uuidParam(req, 'id', 'tender_stage'));
-      const readable = new Set(readableContractIds(ctx));
+      const readable = readableOf(ctx);
       const sets = await pool.query<{ id: string; purpose: string }>('SELECT id, purpose FROM source_set WHERE stage_id = $1 ORDER BY purpose', [stage.id]);
       const out = [];
       for (const s of sets.rows) {
@@ -71,10 +93,11 @@ export const sourceSetsRouter = (pool: Pool): Router => {
           revisions: revisions.map(toRevision),
           latestItems: latest
             ? (await listSetItems(pool, latest.id)).map((i) => {
-                const restricted = restrictedOf(readable, i.contract_id);
+                const restricted = restrictedOf(readable, i);
                 return {
                   documentRevisionId: i.document_revision_id,
                   contractId: restricted ? null : i.contract_id,
+                  mailMessageId: restricted ? null : i.mail_message_id,
                   restricted,
                   documentId: restricted ? null : i.document_id,
                   documentTitle: restricted ? null : i.document_title,
@@ -138,32 +161,39 @@ export const sourceSetsRouter = (pool: Pool): Router => {
         const body = parseBody(PutSourceSetItemsRequest, req.body);
         const ids = body.items.map((i) => i.documentRevisionId);
         if (new Set(ids).size !== ids.length) throw new HttpError(400, 'VALIDATION_FAILED', 'редакция указана дважды');
-        // Редакция — своего тендера или договора, действующе связанного с тендером (D-017): связь лишь
-        // предлагает кандидатов. Новый или изменённый элемент договора требует contract.read; прежний
-        // элемент, оставленный как был, — нет: состав этапа ведёт участник тендера.
+        // Редакция — своего тендера, договора, действующе связанного с тендером (D-017), или документ
+        // вложения письма, действующе связанного с тендером этапа (D-025): связь лишь предлагает кандидатов.
+        // Новый или изменённый элемент договора требует contract.read, вложения — mail.read на ящик письма;
+        // прежний элемент, оставленный как был, — нет: состав этапа ведёт участник тендера.
         const owners = await revisionOwners(client, ids);
         const linked = new Set(await activeLinkedContractIds(client, stage.tender_id));
-        const readable = new Set(readableContractIds(ctx));
+        const linkedMail = await stageLinkedMessages(client, stage.tender_id, stage.id);
+        const readable = readableOf(ctx);
         const before = new Map((await listSetItems(client, id)).map((i) => [i.document_revision_id, i]));
         for (const it of body.items) {
           const owner = owners.get(it.documentRevisionId);
           if (owner?.tenderId === stage.tender_id) continue;
-          if (!owner?.contractId || !linked.has(owner.contractId)) {
-            throw new HttpError(400, 'VALIDATION_FAILED', 'редакция не относится к тендеру этапа или связанному с ним договору');
+          const byContract = owner?.contractId && linked.has(owner.contractId);
+          const byMail = owner?.mailMessageId && linkedMail.has(owner.mailMessageId);
+          if (!byContract && !byMail) {
+            throw new HttpError(400, 'VALIDATION_FAILED', 'редакция не относится к тендеру этапа, связанному с ним договору или связанному письму');
           }
           const prev = before.get(it.documentRevisionId);
           const unchanged = prev !== undefined && prev.inclusion === it.inclusion && (prev.reason ?? null) === (it.reason ?? null);
-          if (!unchanged && !readable.has(owner.contractId)) {
-            // Отказ — без идентификатора договора: журнал тендера видят участники без выдачи по договору.
-            throw new HttpError(403, 'FORBIDDEN', 'нет права contract.read', {}, {
+          const capability = byContract ? 'contract.read' : 'mail.read';
+          const allowed = byContract ? readable.contracts.has(owner!.contractId!) : readable.mailboxes.has(owner!.mailboxId!);
+          if (!unchanged && !allowed) {
+            // Отказ — без идентификатора договора и ящика: журнал тендера видят участники без выдачи.
+            throw new HttpError(403, 'FORBIDDEN', `нет права ${capability}`, {}, {
               tenderId: stage.tender_id,
               entityType: 'source_set_revision',
               entityId: id,
-              details: { capability: 'contract.read' },
+              details: { capability },
             });
           }
         }
         const contractItems = body.items.filter((i) => owners.get(i.documentRevisionId)?.contractId).length;
+        const attachmentItems = body.items.filter((i) => owners.get(i.documentRevisionId)?.mailMessageId).length;
         for (const it of body.items) {
           if (it.inclusion === 'excluded_not_applicable' && !it.reason) throw new HttpError(400, 'VALIDATION_FAILED', 'исключение требует причины');
         }
@@ -189,6 +219,7 @@ export const sourceSetsRouter = (pool: Pool): Router => {
                 included: body.items.filter((i) => i.inclusion === 'included').length,
                 excluded: body.items.filter((i) => i.inclusion === 'excluded_not_applicable').length,
                 contractItems,
+                attachmentItems,
               },
             },
           ],
@@ -227,6 +258,18 @@ export const sourceSetsRouter = (pool: Pool): Router => {
         // снимок из такой ревизии БД иначе не примет (охранник evidence_scope_item, миграция 0012).
         const linked = new Set(await activeLinkedContractIds(client, stage.tender_id));
         const unlinked = included.filter((i) => i.contract_id !== null && !linked.has(i.contract_id));
+        // Так же вложение письма: снимок примет его только при действующей связи письма с тендером этапа.
+        const linkedMail = await stageLinkedMessages(client, stage.tender_id, stage.id);
+        const unlinkedMail = included.filter((i) => i.mail_message_id !== null && !linkedMail.has(i.mail_message_id));
+        if (unlinkedMail.length > 0) {
+          throw new HttpError(
+            409,
+            'STATE_CONFLICT',
+            'связь письма с тендером снята: исключите его вложения из состава или восстановите связь',
+            { current: { reason: 'attachment_link_inactive', documentRevisionIds: unlinkedMail.map((i) => i.document_revision_id) } },
+            target,
+          );
+        }
         if (unlinked.length > 0) {
           throw new HttpError(
             409,
@@ -238,7 +281,7 @@ export const sourceSetsRouter = (pool: Pool): Router => {
         }
         const blocking = await blockingFreezeItems(client, id);
         if (blocking.length > 0) {
-          const readable = new Set(readableContractIds(ctx));
+          const readable = readableOf(ctx);
           throw new HttpError(
             409,
             'STATE_CONFLICT',
@@ -246,7 +289,7 @@ export const sourceSetsRouter = (pool: Pool): Router => {
             {
               current: {
                 blocking: blocking.map((b) => {
-                  const restricted = restrictedOf(readable, b.contract_id);
+                  const restricted = restrictedOf(readable, b);
                   return {
                     documentRevisionId: b.document_revision_id,
                     contractId: restricted ? null : b.contract_id,

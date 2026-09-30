@@ -59,12 +59,15 @@ export interface IBlockingItemRow {
   document_title: string;
   revision_seq: number;
   contract_id: string | null;
+  // Ящик письма документа вложения (D-025): название видно только с mail.read.
+  mailbox_id: string | null;
   reason: 'no_recognition' | 'recognition_in_progress' | 'recognition_failed' | 'recognition_cancelled';
 }
 
 export const blockingFreezeItems = async (db: Queryable, revisionId: string): Promise<IBlockingItemRow[]> => {
   const r = await db.query<IBlockingItemRow>(
     `SELECT i.document_revision_id, d.id AS document_id, d.title AS document_title, dr.revision_seq, dr.contract_id,
+            (SELECT m.mailbox_id FROM mail_message m WHERE m.id = document_revision_mail_message(i.document_revision_id)) AS mailbox_id,
             CASE
               WHEN EXISTS (SELECT 1 FROM recognition_run r WHERE r.document_revision_id = i.document_revision_id
                             AND r.status IN ('queued', 'running')) THEN 'recognition_in_progress'

@@ -4,11 +4,14 @@
 export type Role = 'admin' | 'manager' | 'engineer';
 export type MemberRole = 'engineer' | 'manager';
 
-export type GlobalCapability = 'admin.users' | 'admin.tender' | 'admin.audit' | 'admin.intake' | 'admin.contract';
+export type GlobalCapability = 'admin.users' | 'admin.tender' | 'admin.audit' | 'admin.intake' | 'admin.contract' | 'admin.mailbox';
 // Возможности договора (D-022 OD-2): выдаются явно строками contract_access, не ролью.
 // contract.create — глобальная выдача; остальные — по договору.
 export type ContractCapability = 'contract.read' | 'contract.link' | 'contract.manage';
 export type ContractGrantCapability = 'contract.create' | ContractCapability;
+// Возможности почтового ящика (D-025, OD-07-3): выдаются явно строками mail_access по ящику.
+// Связь письма с тендером права читать не даёт.
+export type MailCapability = 'mail.read' | 'mail.import' | 'mail.link' | 'mail.manage';
 export type TenderCapability =
   | 'tender.read'
   | 'stage.write'
@@ -23,9 +26,10 @@ export const ROLES: readonly Role[] = ['admin', 'manager', 'engineer'];
 export const MEMBER_ROLES: readonly MemberRole[] = ['engineer', 'manager'];
 
 export const globalCapabilities = (roles: ReadonlySet<Role>): GlobalCapability[] =>
-  roles.has('admin') ? ['admin.users', 'admin.tender', 'admin.audit', 'admin.intake', 'admin.contract'] : [];
+  roles.has('admin') ? ['admin.users', 'admin.tender', 'admin.audit', 'admin.intake', 'admin.contract', 'admin.mailbox'] : [];
 
 export const CONTRACT_CAPABILITIES: readonly ContractCapability[] = ['contract.read', 'contract.link', 'contract.manage'];
+export const MAIL_CAPABILITIES: readonly MailCapability[] = ['mail.read', 'mail.import', 'mail.link', 'mail.manage'];
 
 // Создатель получает доступ к созданному договору (OD-2): чтение и ведение — документы, метаданные,
 // архив. Подтверждение связи с тендером — отдельное право contract.link, только явной выдачей (fail-closed).
@@ -40,6 +44,14 @@ export const effectiveContractCapabilities = (
   roles: ReadonlySet<Role>,
   granted: ReadonlySet<ContractCapability> | undefined,
 ): ContractCapability[] => (hasContentRole(roles) && granted ? CONTRACT_CAPABILITIES.filter((c) => granted.has(c)) : []);
+
+// Выдача по ящику действует, как и по договору, только при роли инженера или руководителя:
+// администратор ведёт ящики и выдачи (admin.mailbox), но содержимого писем без своей выдачи и
+// содержательной роли не видит (OD-07-3).
+export const effectiveMailCapabilities = (
+  roles: ReadonlySet<Role>,
+  granted: ReadonlySet<MailCapability> | undefined,
+): MailCapability[] => (hasContentRole(roles) && granted ? MAIL_CAPABILITIES.filter((c) => granted.has(c)) : []);
 
 // Назначение действует, только пока у пользователя есть соответствующая глобальная роль:
 // снятие роли сразу лишает прав по тендеру без правки назначений.

@@ -98,6 +98,13 @@ export interface ILocalRecognitionConfig {
   autoBatch: number;
 }
 
+// Почта (этап 07, D-025): предел файла EML и одного вложения. Вложение сверх предела — отказ вложения
+// (метаданные и хэш без байтов), письмо сверх предела — детерминированный отказ разбора.
+export interface IMailConfig {
+  maxEmlBytes: number;
+  maxAttachmentBytes: number;
+}
+
 export interface IAppConfig {
   env: KonturEnv;
   databaseUrl: string;
@@ -122,6 +129,7 @@ export interface IAppConfig {
   search: ISearchConfig;
   tenderhub: ITenderHubConfig;
   localRecognition: ILocalRecognitionConfig;
+  mail: IMailConfig;
 }
 
 interface IConfigKey {
@@ -166,6 +174,8 @@ export const CONFIG_KEYS: IConfigKey[] = [
   { name: 'LOCAL_RECOGNITION_MAX_INPUT_MB', secret: false, required: false, purpose: 'предел файла DOCX, XLSX, CSV и PDF для локального распознавания, по умолчанию 64' },
   { name: 'LOCAL_RECOGNITION_MAX_UNZIPPED_MB', secret: false, required: false, purpose: 'предел распакованного объёма DOCX и XLSX, по умолчанию 256' },
   { name: 'LOCAL_RECOGNITION_MAX_CELLS', secret: false, required: false, purpose: 'предел ячеек XLSX и CSV, по умолчанию 1000000' },
+  { name: 'MAIL_MAX_EML_MB', secret: false, required: false, purpose: 'предел файла письма EML, МиБ, по умолчанию 50' },
+  { name: 'MAIL_MAX_ATTACHMENT_MB', secret: false, required: false, purpose: 'предел одного вложения письма, МиБ, по умолчанию 25' },
   { name: 'TENDERHUB_URL', secret: false, required: false, purpose: 'адрес TenderHub (https; http только loopback), этап 06' },
   { name: 'TENDERHUB_API_KEY', secret: true, required: false, purpose: 'ключ TenderHub thk_… с областью tenders:read (заголовок X-API-Key), этап 06' },
   { name: 'TENDERHUB_TIMEOUT_SECONDS', secret: false, required: false, purpose: 'таймаут запроса к TenderHub, по умолчанию 300 (таймаут сервера TenderHub — 5 мин)' },
@@ -392,6 +402,10 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
     },
     tenderhub: tenderhubFrom(env, problems),
     localRecognition: localRecognitionFrom(env, problems),
+    mail: {
+      maxEmlBytes: intFrom(env, 'MAIL_MAX_EML_MB', 50, problems) * MIB,
+      maxAttachmentBytes: intFrom(env, 'MAIL_MAX_ATTACHMENT_MB', 25, problems) * MIB,
+    },
   };
   for (const root of config.intakeRoots) {
     if (!isAbsolute(root)) problems.push(`INTAKE_ROOTS: «${root}» должен быть абсолютным путём`);

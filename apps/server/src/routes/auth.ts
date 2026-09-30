@@ -9,6 +9,7 @@ import {
   findCredential,
   getPasswordHash,
   grantedContractIds,
+  mailCaps,
   loadAccessContext,
   rehashPassword,
   insertSession,
@@ -37,6 +38,7 @@ const toMe = (ctx: IAccessContext): IMe => ({
     .filter(([, role]) => ctx.roles.has(role))
     .map(([tenderId, memberRole]) => ({ tenderId, memberRole })),
   contractsAvailable: globalCapabilities(ctx.roles).includes('admin.contract') || canCreateContract(ctx) || grantedContractIds(ctx).length > 0,
+  mailAvailable: globalCapabilities(ctx.roles).includes('admin.mailbox') || [...ctx.mailGrants.keys()].some((id) => mailCaps(ctx, id).length > 0),
 });
 
 export const authRouter = (config: IAppConfig, pool: Pool, clock: () => Date): Router => {

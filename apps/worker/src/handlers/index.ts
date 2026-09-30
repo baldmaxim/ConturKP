@@ -3,6 +3,7 @@ import { calculationCaptureHandler } from './calculation.ts';
 import { importExpandHandler, importRegisterHandler } from './imports.ts';
 import { intakeScanHandler } from './intake.ts';
 import { localRecognitionHandler } from './localRecognition.ts';
+import { mailImportHandler } from './mail.ts';
 import { recognitionImportHandler } from './recognition.ts';
 import { indexBuildHandler, indexEmbedHandler, indexPurgeHandler, searchSemanticHandler } from './search.ts';
 
@@ -17,4 +18,5 @@ export const HANDLERS: Record<string, JobHandler> = {
   'index.purge': indexPurgeHandler,
   'search.semantic': searchSemanticHandler,
   'calculation.capture': calculationCaptureHandler,
+  'mail.import': mailImportHandler,
 };

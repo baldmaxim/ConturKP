@@ -48,7 +48,7 @@ const connect = async (url: string): Promise<pg.Client> => {
 // План снимка по последней замороженной ревизии этапа — то же, что строит команда POST /evidence-scopes.
 const scopeSpec = async (stageId: string) => {
   const base = (await latestFrozenRevision(db.pool, stageId))!;
-  const plan = await planEvidenceScope(db.pool, { id: base.id, content_hash: base.content_hash! });
+  const plan = await planEvidenceScope(db.pool, { id: base.id, content_hash: base.content_hash! }, { tenderId: s.tenderA, stageId });
   return {
     stageId,
     tenderId: s.tenderA,
@@ -153,7 +153,7 @@ describe('R05-01: снимок области создаётся целиком 
     // Новый состав этапа A1 (после прогона R1b и без редакции 6 — она не в основе): хэш ещё не занят.
     const spec = await scopeSpec(s.stageA);
     expect(spec.contentHash).not.toBe((await scopeState(ids.scope!)).contentHash);
-    const units = spec.units;
+    const units = spec.units.filter((u) => u.unitType === 'document_recognition');
     const c = await connect(db.appUrl);
     const insertScope = (hash: string) =>
       c.query<{ id: string }>(

@@ -109,4 +109,30 @@ export const toEvidence = (f: IScopedFragmentRow) => ({
   runOutcome: outcomeOf(f.run_status),
   mediaType: f.revision_media_type,
   contentUrl: f.document_revision_id ? contentUrlOf(f.document_revision_id) : null,
+  // Источник цитаты (D-025): документ, письмо (у вложения — и письмо вложения) или транскрипция.
+  sourceKind: f.source_unit_type,
+  mail: f.mail_message_id
+    ? {
+        messageId: f.mail_message_id,
+        mailboxId: f.mailbox_id,
+        revisionId: f.mail_message_revision_id,
+        subject: f.mail_subject,
+        from: f.mail_from,
+        sentAt: f.mail_sent_at?.toISOString() ?? null,
+        attachmentFilename: f.attachment_filename,
+      }
+    : null,
+  transcript: f.transcript_revision_id
+    ? {
+        tenderId: f.transcript_tender_id,
+        sessionId: f.session_id,
+        sessionTitle: f.session_title,
+        revisionId: f.transcript_revision_id,
+        segmentId: f.transcript_segment_id,
+        speakerLabel: f.speaker_label,
+        segmentKind: f.segment_kind,
+        startMs: f.t_start_ms,
+        endMs: f.t_end_ms,
+      }
+    : null,
 });

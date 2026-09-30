@@ -232,6 +232,37 @@ export const PatchContractDocumentRequest = z
   .strict()
   .refine((b) => b.title !== undefined || b.recognitionRoute !== undefined, { message: 'нужно title или recognitionRoute' });
 
+// ---- почта, вопросы–ответы, переговоры (этап 07, D-025)
+
+export const MAIL_CAPABILITY = z.enum(['mail.read', 'mail.import', 'mail.link', 'mail.manage']);
+export const MAIL_DIRECTION = z.enum(['inbound', 'outbound', 'unknown']);
+
+// Ящик регистрируется явно (OD-07-2): ручной импорт EML или ящик MailHub (автоматизация ждёт X-03).
+export const CreateMailboxRequest = z
+  .object({ system: z.enum(['manual', 'mailhub']), externalAccountId: text(200), displayName: text(200) })
+  .strict();
+
+export const PatchMailboxRequest = z
+  .object({ displayName: text(200).optional(), status: z.enum(['active', 'archived']).optional() })
+  .strict()
+  .refine((b) => b.displayName !== undefined || b.status !== undefined, { message: 'нужно displayName или status' });
+
+export const PutMailAccessRequest = z.object({ capabilities: z.array(MAIL_CAPABILITY).max(4) }).strict();
+
+// Параметры импорта EML в строке запроса; имя файла — параметр name. Связь с тендером при импорте —
+// необязательна и требует mail.link (OD-07-7: связь подтверждает человек).
+export const MailImportQuery = z.object({
+  direction: MAIL_DIRECTION.default('unknown'),
+  folder: z.string().trim().min(1).max(200).optional(),
+  tenderId: z.uuid().optional(),
+  stageId: z.uuid().optional(),
+});
+
+export const CreateMailLinkRequest = z.object({ tenderId: z.uuid(), stageId: z.uuid().nullable().optional() }).strict();
+
+// Импорт manifest вопросов–ответов и переговоров: файл JSON телом запроса, этап — необязателен.
+export const ManifestImportQuery = z.object({ stageId: z.uuid().optional() });
+
 // ---- ответы
 
 export interface IMe {
@@ -244,6 +275,8 @@ export interface IMe {
   memberships: { tenderId: string; memberRole: string }[];
   // Раздел «Договоры» доступен: администратор договоров, выдача contract.create или любая выдача по договору.
   contractsAvailable: boolean;
+  // Раздел «Почта» доступен (этап 07): администратор ящиков или любая действующая выдача по ящику.
+  mailAvailable: boolean;
 }
 
 export interface IUser {

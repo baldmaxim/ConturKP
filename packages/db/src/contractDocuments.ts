@@ -157,10 +157,12 @@ export const contractCandidates = async (db: Queryable, ctx: IAccessContext, ten
 export const revisionOwners = async (
   db: Queryable,
   revisionIds: string[],
-): Promise<Map<string, { tenderId: string | null; contractId: string | null }>> => {
-  const r = await db.query<{ id: string; tender_id: string | null; contract_id: string | null }>(
-    'SELECT id, tender_id, contract_id FROM document_revision WHERE id = ANY($1::uuid[])',
+): Promise<Map<string, { tenderId: string | null; contractId: string | null; mailMessageId: string | null; mailboxId: string | null }>> => {
+  const r = await db.query<{ id: string; tender_id: string | null; contract_id: string | null; mail_message_id: string | null; mailbox_id: string | null }>(
+    `SELECT dr.id, dr.tender_id, dr.contract_id, m.id AS mail_message_id, m.mailbox_id
+       FROM document_revision dr LEFT JOIN mail_message m ON m.id = document_revision_mail_message(dr.id)
+      WHERE dr.id = ANY($1::uuid[])`,
     [revisionIds],
   );
-  return new Map(r.rows.map((x) => [x.id, { tenderId: x.tender_id, contractId: x.contract_id }]));
+  return new Map(r.rows.map((x) => [x.id, { tenderId: x.tender_id, contractId: x.contract_id, mailMessageId: x.mail_message_id, mailboxId: x.mailbox_id }]));
 };

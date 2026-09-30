@@ -23,3 +23,8 @@ export * from './local/docx.ts';
 export * from './local/xlsx.ts';
 export * from './local/csv.ts';
 export * from './local/settings.ts';
+export * from './mail/eml.ts';
+export * from './mail/htmlText.ts';
+export * from './mail/mailBody.ts';
+export * from './mail/identity.ts';
+export * from './mail/manifests.ts';

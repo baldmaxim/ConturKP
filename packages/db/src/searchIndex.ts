@@ -115,15 +115,26 @@ export interface ICompleteness {
   missingVectors: number;
 }
 
+// Единицы источника любого вида, ещё не проиндексированные версией (D-025, AD-07-1a): завершённый прогон
+// распознавания (в том числе документа вложения), ревизия письма, редакция транскрипции.
+const MISSING_UNITS = `
+  SELECT r.id, 'recognition_run' AS source_unit_type, r.tender_id, r.contract_id, r.document_revision_id, r.finished_at AS ready_at
+    FROM recognition_run r
+   WHERE r.status IN ('complete', 'partial')
+     AND NOT EXISTS (SELECT 1 FROM search_index_unit u WHERE u.index_version_id = $1 AND u.source_unit_id = r.id)
+  UNION ALL
+  SELECT m.id, 'mail_message_revision', NULL, NULL, NULL, m.created_at
+    FROM mail_message_revision m
+   WHERE NOT EXISTS (SELECT 1 FROM search_index_unit u WHERE u.index_version_id = $1 AND u.source_unit_id = m.id)
+  UNION ALL
+  SELECT t.id, 'transcript_revision', NULL, NULL, NULL, t.created_at
+    FROM transcript_revision t
+   WHERE NOT EXISTS (SELECT 1 FROM search_index_unit u WHERE u.index_version_id = $1 AND u.source_unit_id = t.id)`;
+
 // Полнота версии: каждая завершённая единица источника проиндексирована, у версии с моделью
 // у каждого чанка есть вектор (G05-01: текстовый фронт завершён и хвост векторов пуст).
 export const versionCompleteness = async (db: Queryable, v: Pick<ISearchIndexVersionRow, 'id' | 'embedding_model'>): Promise<ICompleteness> => {
-  const units = await db.query<{ n: number }>(
-    `SELECT count(*) AS n FROM recognition_run r
-      WHERE r.status IN ('complete', 'partial')
-        AND NOT EXISTS (SELECT 1 FROM search_index_unit u WHERE u.index_version_id = $1 AND u.source_unit_id = r.id)`,
-    [v.id],
-  );
+  const units = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM (${MISSING_UNITS}) x`, [v.id]);
   const vectors = v.embedding_model
     ? await db.query<{ n: number }>(
         `SELECT count(*) AS n FROM search_chunk c
@@ -189,21 +200,24 @@ export const retiredVersionsToPurge = async (db: Queryable): Promise<string[]> =
 
 // ---------------------------------------------------------------- Построение текстового индекса
 
+export type SourceUnitType = 'recognition_run' | 'mail_message_revision' | 'transcript_revision';
+
 export interface IIndexUnitRow {
   id: string;
-  // Владелец единицы — из строки прогона; составные FK 0009/0012 сверяют его у каждой строки индекса.
+  source_unit_type: SourceUnitType;
+  // Владелец единицы-прогона — из строки прогона; составные FK 0009/0012 сверяют его у каждой строки
+  // индекса. У прогона документа вложения, ревизии письма и транскрипции владельца нет (D-025):
+  // единицу называет типизированная колонка, права выводятся через её FK.
   tender_id: string | null;
   contract_id: string | null;
-  document_revision_id: string;
+  document_revision_id: string | null;
 }
 
-// Завершённые единицы источника, ещё не проиндексированные версией (в порядке завершения).
+// Завершённые единицы источника, ещё не проиндексированные версией (в порядке готовности).
 export const unitsMissingInVersion = async (db: Queryable, versionId: string, limit: number): Promise<IIndexUnitRow[]> => {
   const r = await db.query<IIndexUnitRow>(
-    `SELECT r.id, r.tender_id, r.contract_id, r.document_revision_id FROM recognition_run r
-      WHERE r.status IN ('complete', 'partial')
-        AND NOT EXISTS (SELECT 1 FROM search_index_unit u WHERE u.index_version_id = $1 AND u.source_unit_id = r.id)
-      ORDER BY r.finished_at, r.id
+    `SELECT id, source_unit_type, tender_id, contract_id, document_revision_id FROM (${MISSING_UNITS}) x
+      ORDER BY ready_at, id
       LIMIT $2`,
     [versionId, limit],
   );
@@ -218,12 +232,13 @@ export interface IIndexFragmentRow {
   page_index: number | null;
 }
 
-export const fragmentsForIndex = async (db: Queryable, runId: string): Promise<IIndexFragmentRow[]> => {
+// Фрагменты единицы любого вида: source_unit_id у фрагмента прогона равен run_id (0018).
+export const fragmentsForIndex = async (db: Queryable, unitId: string): Promise<IIndexFragmentRow[]> => {
   const r = await db.query<IIndexFragmentRow>(
     `SELECT id, origin, fragment_kind, text, page_index FROM evidence_fragment
-      WHERE run_id = $1
+      WHERE source_unit_id = $1
       ORDER BY page_index NULLS LAST, coalesce(ordinal, -1), part_index, id`,
-    [runId],
+    [unitId],
   );
   return r.rows;
 };
@@ -249,8 +264,10 @@ export const indexUnit = async (
   if (rows.length > 0) {
     await db.query(
       `INSERT INTO search_chunk (index_version_id, tender_id, contract_id, source_unit_type, source_unit_id, document_revision_id,
-                                 page_index, part_no, chunk_key, header_text, body_text, text_sha256)
-       SELECT $1, $2, $11, 'recognition_run', $3, $4, x.page_index, x.part_no, x.chunk_key, x.header_text, x.body_text, x.text_sha256
+                                 mail_message_revision_id, transcript_revision_id, page_index, part_no, chunk_key, header_text, body_text, text_sha256)
+       SELECT $1, $2, $11, $12, $3, $4, CASE WHEN $12 = 'mail_message_revision' THEN $3::uuid END,
+              CASE WHEN $12 = 'transcript_revision' THEN $3::uuid END,
+              x.page_index, x.part_no, x.chunk_key, x.header_text, x.body_text, x.text_sha256
          FROM unnest($5::int[], $6::int[], $7::text[], $8::text[], $9::text[], $10::text[])
               AS x(page_index, part_no, chunk_key, header_text, body_text, text_sha256)
        ON CONFLICT (index_version_id, chunk_key) DO NOTHING`,
@@ -266,6 +283,7 @@ export const indexUnit = async (
         rows.map((r) => r.chunk.bodyText),
         rows.map((r) => sha256Hex(chunkText(r.chunk))),
         unit.contract_id,
+        unit.source_unit_type,
       ],
     );
     const ids = await db.query<{ id: string; chunk_key: string }>(
@@ -300,7 +318,7 @@ export const indexUnit = async (
   ];
   if (states.length > 0) {
     await db.query(
-      `INSERT INTO fragment_index_state (index_version_id, index_system, fragment_id, run_id, status, skip_reason)
+      `INSERT INTO fragment_index_state (index_version_id, index_system, fragment_id, source_unit_id, status, skip_reason)
        SELECT $1, 'portal_fts', x.fragment_id, $2, x.status, x.skip_reason
          FROM unnest($3::uuid[], $4::text[], $5::text[]) AS x(fragment_id, status, skip_reason)
        ON CONFLICT DO NOTHING`,
@@ -308,9 +326,10 @@ export const indexUnit = async (
     );
   }
   await db.query(
-    `INSERT INTO search_index_unit (index_version_id, source_unit_type, source_unit_id, tender_id, contract_id, chunks, fragments_indexed, fragments_skipped)
-     VALUES ($1, 'recognition_run', $2, $3, $7, $4, $5, $6)`,
-    [versionId, unit.id, unit.tender_id, rows.length, indexed.length, skipped.length, unit.contract_id],
+    `INSERT INTO search_index_unit (index_version_id, source_unit_type, source_unit_id, tender_id, contract_id, chunks, fragments_indexed, fragments_skipped,
+                                    mail_message_revision_id, transcript_revision_id)
+     VALUES ($1, $8, $2, $3, $7, $4, $5, $6, CASE WHEN $8 = 'mail_message_revision' THEN $2::uuid END, CASE WHEN $8 = 'transcript_revision' THEN $2::uuid END)`,
+    [versionId, unit.id, unit.tender_id, rows.length, indexed.length, skipped.length, unit.contract_id, unit.source_unit_type],
   );
   return { chunks: rows.length, created: true };
 };

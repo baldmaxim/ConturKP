@@ -38,6 +38,29 @@ const toHit = (rank: number, h: { fragmentId: string; origin: string; score: num
   runOutcome: outcomeOf(d?.run_status),
   unitKind: d?.unit_kind ?? null,
   locator: d?.locator ?? null,
+  // Вид источника (AD-07-1a): документ, письмо или транскрипция; шапка письма — и у фрагмента вложения.
+  sourceKind: d?.source_unit_type ?? null,
+  mail: d?.mail_message_id
+    ? {
+        messageId: d.mail_message_id,
+        mailboxId: d.mailbox_id,
+        revisionId: d.mail_message_revision_id,
+        subject: d.mail_subject,
+        from: d.mail_from,
+        sentAt: d.mail_sent_at?.toISOString() ?? null,
+        attachmentFilename: d.attachment_filename,
+      }
+    : null,
+  transcript: d?.transcript_revision_id
+    ? {
+        sessionId: d.session_id,
+        sessionTitle: d.session_title,
+        revisionId: d.transcript_revision_id,
+        speakerLabel: d.speaker_label,
+        startMs: d.t_start_ms,
+        endMs: d.t_end_ms,
+      }
+    : null,
   text: d ? d.text.slice(0, SNIPPET_CHARS) : '',
   textTruncated: d ? d.text.length > SNIPPET_CHARS : false,
 });
@@ -77,6 +100,8 @@ export const searchRunView = async (db: Queryable, runId: string) => {
       excludedByAcl: counts.excludedByAcl ?? 0,
       localUnits: counts.localUnits ?? 0,
       localNeedsReview: counts.localNeedsReview ?? 0,
+      mailUnits: counts.mailUnits ?? 0,
+      transcriptUnits: counts.transcriptUnits ?? 0,
     },
     incomplete:
       (counts.unitsNotIndexed ?? 0) > 0 ||
@@ -99,8 +124,14 @@ export const searchRunView = async (db: Queryable, runId: string) => {
 };
 
 // Единица договора в снимке тендера видна участнику только как факт (D-022 OD-3): название, документ, прогон
-// и идентификатор договора — лишь с contract.read по этому договору.
-export const toEvidenceScope = (s: IEvidenceScopeRow & { units?: number }, items?: IEvidenceScopeItemRow[], readableContracts: ReadonlySet<string> = new Set()) => ({
+// и идентификатор договора — лишь с contract.read по этому договору. Так же письмо и вложение (D-025):
+// шапка письма, документ вложения и прогон — лишь с mail.read на ящик письма; снимок права не даёт.
+export const toEvidenceScope = (
+  s: IEvidenceScopeRow & { units?: number },
+  items?: IEvidenceScopeItemRow[],
+  readableContracts: ReadonlySet<string> = new Set(),
+  readableMailboxes: ReadonlySet<string> = new Set(),
+) => ({
   id: s.id,
   stageId: s.stage_id,
   tenderId: s.tender_id,
@@ -112,12 +143,13 @@ export const toEvidenceScope = (s: IEvidenceScopeRow & { units?: number }, items
   ...(items
     ? {
         items: items.map((i) => {
-          const restricted = i.contract_id !== null && !readableContracts.has(i.contract_id);
+          const restricted =
+            (i.contract_id !== null && !readableContracts.has(i.contract_id)) || (i.mailbox_id !== null && !readableMailboxes.has(i.mailbox_id));
           return {
-            unitType: 'document_recognition',
+            unitType: i.unit_type,
             contractId: restricted ? null : i.contract_id,
             restricted,
-            documentRevisionId: i.document_revision_id,
+            documentRevisionId: restricted && i.unit_type !== 'document_recognition' ? null : i.document_revision_id,
             documentId: restricted ? null : i.document_id,
             documentTitle: restricted ? null : i.document_title,
             revisionSeq: restricted ? null : i.revision_seq,
@@ -125,6 +157,15 @@ export const toEvidenceScope = (s: IEvidenceScopeRow & { units?: number }, items
             runStatus: restricted ? null : i.run_status,
             pagesTotal: restricted ? null : i.pages_total,
             pagesRecognized: restricted ? null : i.pages_recognized,
+            mailMessageId: restricted ? null : i.mail_message_id,
+            mailMessageRevisionId: restricted ? null : i.mail_message_revision_id,
+            mailRevisionSeq: restricted ? null : i.mail_revision_seq,
+            mailSubject: restricted ? null : i.mail_subject,
+            mailSentAt: restricted ? null : (i.mail_sent_at?.toISOString() ?? null),
+            transcriptRevisionId: i.transcript_revision_id,
+            transcriptSeq: i.transcript_seq,
+            sessionId: i.session_id,
+            sessionTitle: i.session_title,
           };
         }),
       }

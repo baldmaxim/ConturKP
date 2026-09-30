@@ -1,7 +1,7 @@
 // Контекст доступа (ADR-006 §6): каждый репозиторий данных тендера принимает его первым
 // аргументом, поэтому запрос без контекста не компилируется. Контекст читается из БД
 // на каждый запрос: снятие роли или назначения действует сразу.
-import { effectiveContractCapabilities, hasContentRole, type ContractCapability, type MemberRole, type Role } from '@kontur/core';
+import { effectiveContractCapabilities, effectiveMailCapabilities, hasContentRole, type ContractCapability, type MailCapability, type MemberRole, type Role } from '@kontur/core';
 import type { Queryable } from './pool.ts';
 
 export interface IPrincipal {
@@ -20,6 +20,9 @@ export interface IAccessContext {
   // Сами по себе права не дают: действуют только при роли инженера или руководителя (contractCaps).
   readonly contractGrants: ReadonlyMap<string, ReadonlySet<ContractCapability>>;
   readonly contractCreateGranted: boolean;
+  // Действующие выдачи по почтовым ящикам (D-025, OD-07-3): как у договора — только при роли инженера
+  // или руководителя (mailCaps). Связь письма с тендером права читать не даёт.
+  readonly mailGrants: ReadonlyMap<string, ReadonlySet<MailCapability>>;
   readonly requestId: string;
 }
 
@@ -54,6 +57,16 @@ export const loadAccessContext = async (
     'SELECT contract_id, capability FROM contract_access WHERE user_id = $1 AND revoked_at IS NULL',
     [userId],
   );
+  const mg = await db.query<{ mailbox_id: string; capability: MailCapability }>(
+    'SELECT mailbox_id, capability FROM mail_access WHERE user_id = $1 AND revoked_at IS NULL',
+    [userId],
+  );
+  const mailGrants = new Map<string, Set<MailCapability>>();
+  for (const r of mg.rows) {
+    const set = mailGrants.get(r.mailbox_id) ?? new Set<MailCapability>();
+    set.add(r.capability);
+    mailGrants.set(r.mailbox_id, set);
+  }
   const grants = new Map<string, Set<ContractCapability>>();
   for (const r of g.rows) {
     if (r.contract_id === null) continue;
@@ -67,6 +80,7 @@ export const loadAccessContext = async (
     memberships: new Map(m.rows.map((r) => [r.tender_id, r.member_role])),
     contractGrants: grants,
     contractCreateGranted: g.rows.some((r) => r.contract_id === null && r.capability === 'contract.create'),
+    mailGrants,
     requestId,
   };
 };
@@ -92,3 +106,16 @@ export const readableContractIds = (ctx: IAccessContext): string[] =>
 // Договоры, карточка которых пользователю видна (любая действующая выдача).
 export const grantedContractIds = (ctx: IAccessContext): string[] =>
   [...ctx.contractGrants.keys()].filter((id) => contractCaps(ctx, id).length > 0);
+
+// Действующие возможности пользователя по ящику: выдача и роль инженера или руководителя.
+export const mailCaps = (ctx: IAccessContext, mailboxId: string): MailCapability[] =>
+  effectiveMailCapabilities(ctx.roles, ctx.mailGrants.get(mailboxId));
+
+// Ящики, письма которых пользователь читает сейчас (mail.read). Связь с тендером и включение письма
+// в снимок права не дают: чтение письма всегда проверяется по этому списку (D-025).
+export const readableMailboxIds = (ctx: IAccessContext): string[] =>
+  [...ctx.mailGrants.keys()].filter((id) => mailCaps(ctx, id).includes('mail.read'));
+
+// Ящики, в которых у пользователя есть заданная возможность.
+export const mailboxIdsWith = (ctx: IAccessContext, cap: MailCapability): string[] =>
+  [...ctx.mailGrants.keys()].filter((id) => mailCaps(ctx, id).includes(cap));

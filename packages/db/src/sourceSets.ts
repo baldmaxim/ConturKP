@@ -27,6 +27,9 @@ export interface ISourceSetItemRow {
   revision_seq: number;
   // Редакция договора в составе этапа (D-017): включается только из действующе связанного договора.
   contract_id: string | null;
+  // Документ вложения (D-025): письмо вложения и его ящик — для проверки связи и mail.read.
+  mail_message_id: string | null;
+  mailbox_id: string | null;
 }
 
 export const ensureWorkingSet = async (db: Queryable, stageId: string): Promise<string> => {
@@ -75,10 +78,13 @@ export const createDraftRevision = async (db: Queryable, setId: string, userId: 
 export const listSetItems = async (db: Queryable, revisionId: string): Promise<ISourceSetItemRow[]> => {
   const r = await db.query<ISourceSetItemRow>(
     `SELECT i.document_revision_id, i.inclusion, i.reason, i.decided_by, dr.blob_sha256,
-            d.id AS document_id, d.title AS document_title, dr.revision_seq, dr.contract_id
+            d.id AS document_id, d.title AS document_title, dr.revision_seq, dr.contract_id, am.id AS mail_message_id, am.mailbox_id
        FROM source_set_item i
        JOIN document_revision dr ON dr.id = i.document_revision_id
        JOIN document d ON d.id = dr.document_id
+       LEFT JOIN mail_attachment a ON a.id = d.mail_attachment_id
+       LEFT JOIN mail_message_revision amr ON amr.id = a.revision_id
+       LEFT JOIN mail_message am ON am.id = amr.message_id
       WHERE i.source_set_revision_id = $1
       ORDER BY d.title, dr.revision_seq`,
     [revisionId],

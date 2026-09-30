@@ -11,6 +11,7 @@ import {
   listEvidenceScopes,
   planEvidenceScope,
   readableContractIds,
+  readableMailboxIds,
   type Pool,
 } from '@kontur/db';
 import { Router } from 'express';
@@ -45,7 +46,17 @@ export const evidenceScopesRouter = (pool: Pool): Router => {
         if (!base || !base.content_hash) {
           throw new HttpError(409, 'STATE_CONFLICT', 'у этапа нет замороженной ревизии набора источников', { current: { reason: 'no_frozen_source_set' } }, target);
         }
-        const plan = await planEvidenceScope(client, { id: base.id, content_hash: base.content_hash });
+        const plan = await planEvidenceScope(client, { id: base.id, content_hash: base.content_hash }, { tenderId: stage.tender_id, stageId: stage.id });
+        // Вложение письма, связь которого снята, снимок не пропустит (охранник единицы, D-025): явный отказ.
+        if (plan.unlinkedAttachments.length > 0) {
+          throw new HttpError(
+            409,
+            'STATE_CONFLICT',
+            'в наборе есть вложения писем без действующей связи с тендером; исключите их из набора',
+            { current: { reason: 'attachment_link_inactive', documentRevisionIds: plan.unlinkedAttachments } },
+            target,
+          );
+        }
         const created = await createEvidenceScope(client, {
           stageId: stage.id,
           tenderId: stage.tender_id,
@@ -58,7 +69,7 @@ export const evidenceScopesRouter = (pool: Pool): Router => {
         const scope = (await getEvidenceScope(client, ctx, created.id))!;
         return {
           status: created.created ? 201 : 200,
-          body: { ...toEvidenceScope(scope, await evidenceScopeItems(client, scope.id), new Set(readableContractIds(ctx))), reused: !created.created },
+          body: { ...toEvidenceScope(scope, await evidenceScopeItems(client, scope.id), new Set(readableContractIds(ctx)), new Set(readableMailboxIds(ctx))), reused: !created.created },
           audit: [
             {
               action: 'evidence.scope.create',
@@ -87,7 +98,7 @@ export const evidenceScopesRouter = (pool: Pool): Router => {
       const id = uuidParam(req, 'id', 'evidence_scope');
       const scope = await getEvidenceScope(pool, ctx, id);
       if (!scope) throw notFound({ entityType: 'evidence_scope', entityId: id });
-      res.json(toEvidenceScope(scope, await evidenceScopeItems(pool, id), new Set(readableContractIds(ctx))));
+      res.json(toEvidenceScope(scope, await evidenceScopeItems(pool, id), new Set(readableContractIds(ctx)), new Set(readableMailboxIds(ctx))));
     }),
   );
 

@@ -75,12 +75,16 @@ const searchContext = async (db: PoolClient, ctx: IAccessContext, req: Request):
 // Фильтр прав поверх области до ранжирования (ADR-008 §4–5, D-022 OD-3): единица договора в тендерном
 // контексте ищется, только если она в области (составе этапа или снимке) И у пользователя есть
 // contract.read. В рабочем составе договор ещё и должен быть связан с тендером действующей связью;
-// исторический снимок остаётся воспроизводимым и после архива связи. Исключённые — только числом.
+// исторический снимок остаётся воспроизводимым и после архива связи. Почтовая единица (ревизия письма,
+// прогон документа вложения) — только при mail.read на ящик письма и действующей связи письма с тендером
+// контекста в любом режиме (AD-07-1a, условия 2–4). Исключённые — только числом.
 const permittedScope = async (db: PoolClient, ctx: IAccessContext, t: ISearchContext, scope: IResolvedScope): Promise<{ scope: IResolvedScope; excluded: number }> => {
-  if (t.owner.kind === 'contract' || scope.contractOf.size === 0) return { scope, excluded: 0 };
+  if (t.owner.kind === 'contract' || (scope.contractOf.size === 0 && scope.mailOf.size === 0)) return { scope, excluded: 0 };
   const readable = new Set(readableContractIds(ctx));
   const linked = t.mode === 'working' ? new Set(await activeLinkedContractIds(db, t.owner.tenderId)) : null;
+  const mailLost = new Set(scope.mailOf.size === 0 ? [] : await unitsNotPermitted(db, ctx, [...scope.mailOf.keys()], t.owner.tenderId, t.mode));
   const unitIds = scope.unitIds.filter((u) => {
+    if (mailLost.has(u)) return false;
     const contractId = scope.contractOf.get(u);
     return contractId === undefined || (readable.has(contractId) && (linked === null || linked.has(contractId)));
   });
@@ -114,8 +118,8 @@ export const searchRouter = (pool: Pool, config: IAppConfig, clock: () => Date):
             : t.mode === 'working'
               ? await resolveWorkingScope(client, t.stageId!)
               : await resolveSnapshotScope(client, (await getEvidenceScope(client, ctx, t.evidenceScopeId!))!);
-        // Фильтр прав поверх области (ADR-008 §4): прогоны тендера — доступ к тендеру, проверенный выше;
-        // прогоны договора — contract.read; письма и их ящики (этап 07) добавят сюда исключение единиц.
+        // Фильтр прав поверх области (ADR-008 §4): прогоны тендера и транскрипции — доступ к тендеру,
+        // проверенный выше; прогоны договора — contract.read; письма и вложения — mail.read и связь (D-025).
         const { scope, excluded } = await permittedScope(client, ctx, t, resolved);
         const scopeHash = searchScopeHash(scope.snapshotHash, scope.unitIds);
         const started = await startSearch(client, {
@@ -174,9 +178,10 @@ export const searchRouter = (pool: Pool, config: IAppConfig, clock: () => Date):
       if (run.status === 'pending' && run.deadline_at.getTime() < clock().getTime()) {
         await withTransaction(pool, (c) => degradeIfExpired(c, id));
       }
-      // Права поверх закреплённой области проверяются при каждом чтении (ADR-008 §4, D-022 OD-3): единица
-      // договора, право contract.read на которую отозвано после поиска, — отказ, результат не проецируется.
-      const lost = await unitsNotPermitted(pool, ctx, run.allowed_source_unit_ids);
+      // Права поверх закреплённой области проверяются при каждом чтении (ADR-008 §4, D-022 OD-3, AD-07-1a):
+      // единица договора без contract.read, письмо или вложение без mail.read или без связи с тендером — отказ,
+      // результат не проецируется; переиндексация для этого не нужна.
+      const lost = await unitsNotPermitted(pool, ctx, run.allowed_source_unit_ids, run.tender_id, run.mode);
       if (lost.length > 0) {
         throw new HttpError(409, 'STATE_CONFLICT', 'права на часть области поиска отозваны; выполните поиск заново', { current: { reason: 'scope_changed' } }, { tenderId: run.tender_id, entityId: id });
       }

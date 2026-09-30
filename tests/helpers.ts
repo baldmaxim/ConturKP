@@ -105,6 +105,7 @@ export const testConfig = (overrides: Partial<IAppConfig> = {}): IAppConfig => (
     maxOcrPages: 20,
     autoBatch: 20,
   },
+  mail: { maxEmlBytes: 50 * 1024 * 1024, maxAttachmentBytes: 25 * 1024 * 1024 },
   ...overrides,
 });
 

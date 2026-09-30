@@ -25,3 +25,8 @@ export * from './calculationRevisions.ts';
 export * from './contracts.ts';
 export * from './contractDocuments.ts';
 export * from './localRecognition.ts';
+export * from './mailboxes.ts';
+export * from './mailMessages.ts';
+export * from './mailLinks.ts';
+export * from './qa.ts';
+export * from './negotiations.ts';

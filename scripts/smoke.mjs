@@ -2,6 +2,7 @@
 // setup БД → migrate → bootstrap → демо-данные → server + worker → /ready → вход → перезапуск server.
 // Этап 06: выгрузка расчёта worker из поддельного TenderHub (scripts/tenderhub-fake.ts) по ключу-маркеру.
 // Этап 05a (scripts/smoke-05a.mjs): локальное распознавание DOCX договора автоматически, PDF-скана — OCR по явной команде.
+// Этап 07 (scripts/smoke-07.mjs): ящик, импорт EML, вложение, связь, поиск письма, вопросы–ответы, переговоры, права.
 // База kontur_kp_smoke_test создаётся заново и удаляется в конце. Пароль генерируется и не выводится.
 // Результат: artifacts/stage-02/smoke.log; код 0 только если все шаги PASS.
 import { spawn, spawnSync } from 'node:child_process';
@@ -13,6 +14,7 @@ import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import { buildRdwebExport } from '../tests/rdweb.ts';
 import { smokeLocalRecognition } from './smoke-05a.mjs';
+import { smokeMail } from './smoke-07.mjs';
 import { PRECISE_RATE, TH, standardTender, startFakeTenderHub } from './tenderhub-fake.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -453,6 +455,10 @@ try {
 
   // ---- Этап 05a: локальное распознавание — scripts/smoke-05a.mjs
   await smokeLocalRecognition({ root: ROOT, api, search, record, waitFor, sleep, idem, octet, json, contractId: contract.id, mainDocumentId: cdocBody.documentId, stageId });
+
+  // ---- Этап 07: почта, вопросы–ответы, переговоры — scripts/smoke-07.mjs
+  const meId = (await (await api('/me')).json()).id;
+  await smokeMail({ api, api2, search, record, waitFor, idem, octet, json, tenderId: demo.id, stageId, meId });
 
   await stopProc(server);
   server = startProc('server', 'apps/server/src/main.ts');

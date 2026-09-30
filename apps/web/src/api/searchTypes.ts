@@ -1,4 +1,4 @@
-import type { TFragmentKind, TFragmentOrigin, TLocalLocator, TRecognitionOutcome, TRecognitionUnitKind } from './recognitionTypes';
+import type { IEvidenceMail, IEvidenceTranscript, TFragmentKind, TFragmentOrigin, TLocalLocator, TRecognitionOutcome, TRecognitionUnitKind, TSourceKind } from './recognitionTypes';
 
 // ---- поиск и снимок области (этап 05; portal-api §2.3–2.4)
 
@@ -28,6 +28,10 @@ export interface ISearchHit {
   runOutcome: TRecognitionOutcome | null;
   unitKind: TRecognitionUnitKind | null;
   locator: TLocalLocator | null;
+  /** Этап 07: источник попадания и его шапка (письмо или транскрипция). */
+  sourceKind: TSourceKind | null;
+  mail: IEvidenceMail | null;
+  transcript: IEvidenceTranscript | null;
   text: string;
   textTruncated: boolean;
 }
@@ -54,6 +58,8 @@ export interface ISearchRun {
     excludedByAcl: number;
     localUnits: number;
     localNeedsReview: number;
+    mailUnits: number;
+    transcriptUnits: number;
   };
   incomplete: boolean;
   semantic: { status: TSemanticStatus; reason: string | null };

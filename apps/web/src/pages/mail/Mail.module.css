@@ -1,0 +1,104 @@
+/* Почтовый раздел (этап 07): карточки видны на любой ширине, от 768 px — сеткой. Тело письма — блоки;
+   цитата прежней переписки отделена чертой и приглушена, чтобы старый ответ не читался как новый. */
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.headLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.block {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
+
+.quoted {
+  margin: 0;
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
+
+.quoteLabel {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-size: 0.8125rem;
+}
+
+.segment {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--surface);
+}
+
+.hint {
+  border-style: dashed;
+  background: transparent;
+}
+
+.segmentHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.875rem;
+}
+
+.fileInput {
+  display: none;
+}
+
+.address {
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 768px) {
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  }
+
+  .segment {
+    grid-template-columns: 9rem 1fr;
+    align-items: start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .segment {
+    transition: none;
+  }
+}

@@ -174,8 +174,9 @@ ALTER TABLE evidence_fragment
 ALTER TABLE evidence_fragment
   ADD CONSTRAINT evidence_fragment_source_unit_type_check
     CHECK (source_unit_type IN ('recognition_run', 'mail_message_revision', 'transcript_revision')),
-  -- Ровно один источник по виду: колонка источника равна source_unit_id, остальные пусты; владелец
-  -- тендер или договор — только у ветки прогона (у прогона вложения — никакого, охранник ниже).
+  -- Ровно один источник по виду: колонка источника равна source_unit_id, остальные пусты. Владелец:
+  -- у прогона — тендер или договор (у прогона вложения — никакого, охранник ниже); у реплики переговоров —
+  -- тендер редакции транскрипции (ветка тендера, И-07-7, FK ниже); у письма — никакого (AD-07-1a).
   ADD CONSTRAINT evidence_fragment_source_shape CHECK (
     CASE source_unit_type
       WHEN 'recognition_run' THEN
@@ -189,10 +190,12 @@ ALTER TABLE evidence_fragment
         AND origin = 'email_body'
       WHEN 'transcript_revision' THEN
         transcript_revision_id IS NOT NULL AND source_unit_id = transcript_revision_id AND transcript_segment_id IS NOT NULL
-        AND num_nonnulls(run_id, document_revision_id, tender_id, contract_id, mail_message_revision_id) = 0
+        AND tender_id IS NOT NULL AND contract_id IS NULL
+        AND num_nonnulls(run_id, document_revision_id, mail_message_revision_id) = 0
         AND origin IN ('negotiation_speech', 'negotiation_hint')
     END),
-  ADD CONSTRAINT evidence_fragment_transcript_fk FOREIGN KEY (transcript_revision_id) REFERENCES transcript_revision (id),
+  -- Тендер реплики — тендер её редакции транскрипции: составной FK, клиент владельца не выбирает.
+  ADD CONSTRAINT evidence_fragment_transcript_fk FOREIGN KEY (transcript_revision_id, tender_id) REFERENCES transcript_revision (id, tender_id),
   ADD CONSTRAINT evidence_fragment_segment_fk
     FOREIGN KEY (transcript_segment_id, transcript_revision_id) REFERENCES transcript_segment (id, revision_id),
   -- Цели FK индекса без владельца; ключ фрагмента уникален в своей единице для любого вида.

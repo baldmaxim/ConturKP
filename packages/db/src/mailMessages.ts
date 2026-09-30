@@ -143,7 +143,8 @@ export const persistMailRevision = async (db: Queryable, m: IMailRevisionInput):
       m.source,
       m.sourceItemId,
       bodyText.length > 0 ? sha256Hex(bodyText) : null,
-      JSON.stringify(m.warnings),
+      // И-07-2: изменённая копия с той же идентичностью — новая ревизия с пометкой расхождения.
+      JSON.stringify(last.rows[0] ? [...m.warnings, 'identity_content_changed'] : m.warnings),
       last.rows[0]?.id ?? null,
       m.importedBy,
     ],

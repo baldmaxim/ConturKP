@@ -73,7 +73,7 @@
 | `POST /stages/{id}/source-set-revisions` | `source.write` | IK | новая `draft`-ревизия рабочего набора этапа от последней (набор создаётся при первом обращении; вместо `POST /source-sets/{id}/revisions` этапа 01 — набора до первого обращения ещё нет) |
 | `PUT /source-set-revisions/{id}/items` | `source.write` | IM | состав `draft`-ревизии |
 | `POST /source-set-revisions/{id}/freeze` | `source.write` | IM, IK | заморозка состава и `content_hash` (этап 04). Охранное условие: у каждой включённой редакции есть прогон распознавания `complete` или `partial`. Иначе `409 STATE_CONFLICT` с `current.blocking[]` (`documentRevisionId`, `documentTitle`, `revisionSeq`, `reason` ∈ `no_recognition`/`recognition_in_progress`/`recognition_failed`/`recognition_cancelled`). Событий барьера заморозка не порождает |
-| `POST /stages/{id}/evidence-scopes` | `source.write` | IK | фиксация снимка области доказательств (R01-01; этап 05): из замороженной ревизии набора этапа (по умолчанию последней, либо `sourceSetRevisionId`) с выбранным для каждой включённой редакции предпочтительным прогоном (`recognition_preferred_run`, с этапа 05a: успешный RDWeb выше локального). `201` — новый снимок; `200` с `reused: true` — тот же состав уже зафиксирован; `409 STATE_CONFLICT` с `current.reason = no_frozen_source_set` — замороженной ревизии нет. Письма и редакции транскрипций добавит этап 07 |
+| `POST /stages/{id}/evidence-scopes` | `source.write` | IK | фиксация снимка области доказательств (R01-01; этап 05): из замороженной ревизии набора этапа (по умолчанию последней, либо `sourceSetRevisionId`) с выбранным для каждой включённой редакции предпочтительным прогоном (`recognition_preferred_run`, с этапа 05a: успешный RDWeb выше локального). `201` — новый снимок; `200` с `reused: true` — тот же состав уже зафиксирован; `409 STATE_CONFLICT` с `current.reason = no_frozen_source_set` — замороженной ревизии нет. С этапа 07 в снимок входят письма с действующей связью с тендером и этапом — последней ревизией, и транскрипции тендера — последней редакцией |
 | `GET /stages/{id}/evidence-scopes` | `tender.read` | — | снимки этапа, новые сверху, с числом единиц (этап 05) |
 | `GET /evidence-scopes/{id}` | `tender.read` | — | состав снимка по типам и `content_hash`; письма из недоступных ящиков показываются только счётчиком без содержимого (этап 07) |
 | `GET /stages/{id}/input-events` | `tender.read` | — | события барьера актуальности и решения по ним |
@@ -142,13 +142,29 @@
 
 ### 2.6. Коммуникации и переговоры
 
+Этап 07 (D-025). Ящик — контекст доступа: письма, тему, адреса, тело, вложения, фрагменты и цитаты видит только пользователь с `mail.read` на ящик (выдача строкой `mail_access` при роли инженера или руководителя); связь письма с тендером и включение в снимок права читать не дают. Невидимый ящик или письмо — `404`, видимый ящик без нужной возможности — `403`. Администратор ящиков (`admin.mailbox`) ведёт ящики и выдачи и видит только служебные сведения. События связи и импорта пишутся в журнал без темы, тела, адресов и имени файла; связь — без `tender_id` (тендер — в деталях).
+
 | Метод и путь | Право | Ключи | Назначение |
 |---|---|---|---|
-| `POST /communications/imports` | `source.write` | IK | импорт EML или выгрузки MailHub |
-| `GET /tenders/{id}/communications`, `GET /communications/{id}` | `tender.read` + доступ к ящику | — | письма, цепочка, вложения |
-| `POST /communications/{id}/tender-links` | `source.write` | IM, IK | подтверждение или отклонение связи с тендером |
-| `POST /qa-forms/imports`, `GET /qa-forms/{id}` | `source.write` / `tender.read` | IK | формы вопрос–ответ |
-| `POST /negotiations/imports`, `GET /negotiation-sessions/{id}` | `source.write` / `tender.read` | IK | сессии, редакции транскрипции, сегменты (речь и подсказки раздельно) |
+| `GET /mailboxes` | выдача по ящику или `admin.mailbox` | — | ящики (`capabilities` — мои возможности), `isMailboxAdmin`, `integrations` — состояние MailHub (`BLOCKED_EXTERNAL`, X-03) и сервиса переговоров (`BLOCKED_EXTERNAL`, Q-06) |
+| `POST /mailboxes` | `admin.mailbox` | IK | тело `{ system: 'manual' \| 'mailhub', externalAccountId, displayName }`; `201`; тот же адрес — `409 mailbox_exists` |
+| `GET /mailboxes/{id}`, `PATCH /mailboxes/{id}` | выдача или `admin.mailbox` / `admin.mailbox` или `mail.manage` | IM | служебная карточка; тело `{ displayName?, status? }` — архив без удаления |
+| `GET /mailboxes/{id}/access`, `PUT /mailboxes/{id}/access/{userId}` | `admin.mailbox` | IM (ETag ящика) | тело `{ capabilities: ('mail.read' \| 'mail.import' \| 'mail.link' \| 'mail.manage')[] }` — полный набор; пользователю без роли инженера или руководителя — `409` |
+| `GET /mailboxes/{id}/messages` | `mail.read` | — | письма ящика с последней ревизией |
+| `POST /mailboxes/{id}/imports?name=&direction=&folder=&tenderId=&stageId=` | `mail.import`; связь — ещё `mail.link` и `source.write` по тендеру | IK | тело — файл `.eml` (`application/octet-stream`); `202` и запись импорта `queued`, разбирает worker (`mail.import`); архивный ящик — `409`; не письмо — `400` |
+| `GET /mailboxes/{id}/imports`, `GET /mail-imports/{id}` | `mail.read` или `mail.import` (свой импорт — всегда) | — | исход: `done` (письмо, ревизия, `createdRevision`) или `failed` (`mail_empty`, `mail_malformed`, `mail_too_large`) |
+| `GET /mail-messages/{id}` | `mail.read` | — | текущая ревизия (шапка, тело по блокам с признаком `quoted`, вложения со статусом распознавания), `revisionList`, `siblings` — копии коммуникации только в читаемых ящиках, `tenderLinks` — связи с видимыми тендерами, `candidates` — с `mail.link` |
+| `GET /mail-message-revisions/{id}` | `mail.read` | — | прежняя ревизия письма целиком |
+| `POST /mail-messages/{id}/tender-links` | `mail.read`, `mail.link`, `source.write` по тендеру | IK | тело `{ tenderId, stageId? }`; `201` — новая связь, `200` — возврат снятой или смена этапа, действующая — `409`; событие барьера `communication_linked` |
+| `POST /mail-messages/{id}/tender-links/{tenderId}/unlink` | то же | IK | статус `unlinked`; письмо, ревизии и снимки не меняются |
+| `GET /tenders/{id}/mail-messages` | `tender.read` | — | письма с действующей связью только из читаемых ящиков; остальные не показываются и не считаются |
+| `GET /mail-attachments/{id}/content` | `mail.read` | — | байты принятого вложения; тип — по содержимому; отклонённое — `409` |
+| `POST /tenders/{id}/qa-imports?name=&stageId=` | `source.write` | IK | manifest `kontur.qa.v1`; `201` — импорт (`newRevisions`), `200` с `reused` — тот же файл подряд; ошибка формата — `400` |
+| `GET /tenders/{id}/qa-threads`, `GET /qa-threads/{id}` | `tender.read` | — | треды; вопросы треда (`questions`) с текущей ревизией и историей |
+| `POST /tenders/{id}/negotiation-imports?name=&stageId=` | `source.write` | IK | manifest `kontur.negotiation.v1`; `createdRevision: false` — транскрипция не изменилась |
+| `GET /tenders/{id}/negotiation-sessions`, `GET /negotiation-sessions/{id}?revisionId=` | `tender.read` | — | сессии; участники, редакции и сегменты (`speech` / `hint` раздельно) |
+
+Письма и транскрипции участвуют в общих путях: `POST /search` (почтовая единица — только при `mail.read`, доступе к тендеру и связи письма с тендером: в `working` — действующей, в `review` — зафиксированной снимком; исключённые — числом `excludedByAcl`), `GET /search-runs/{id}` (отзыв `mail.read` или снятие связи для рабочего прогона — `409 scope_changed`), `GET /evidence/{id}` (`sourceKind`, `mail`, `transcript`), `POST /stages/{id}/evidence-scopes` (письма с действующей связью и транскрипции тендера входят сами; вложение — только включённое в состав этапа, при снятой связи — `409 attachment_link_inactive`), `PUT /source-set-revisions/{id}/items` (вложение — только письма, связанного с тендером этапа, новый элемент — с `mail.read`). Документ вложения распознаётся путём 05a: `POST /document-revisions/{id}/local-recognitions` требует `mail.import` на ящик письма. `.eml` в `POST /stages/{id}/imports` — отказ элемента `type_not_allowed` с пояснением (AD-07-3).
 
 ### 2.7. Требования, проверки, решения
 

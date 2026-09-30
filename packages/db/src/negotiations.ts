@@ -105,11 +105,12 @@ export const importNegotiationManifest = async (
     ],
   );
   const idOf = new Map(segRows.rows.map((x) => [x.segment_no, x.id]));
-  // Фрагмент на сегмент: речь — доказательство, подсказка — отдельный вид без индексации (I06).
+  // Фрагмент на сегмент: речь — доказательство, подсказка — отдельный вид без индексации (I06). Владелец —
+  // тендер редакции (ветка тендера, И-07-7; составной FK сверяет его).
   await db.query(
-    `INSERT INTO evidence_fragment (source_unit_type, source_unit_id, transcript_revision_id, transcript_segment_id, origin, fragment_kind,
+    `INSERT INTO evidence_fragment (source_unit_type, source_unit_id, transcript_revision_id, transcript_segment_id, tender_id, origin, fragment_kind,
                                     fragment_key, ordinal, text, text_sha256, part_index, part_total, locator)
-     SELECT 'transcript_revision', $1, $1, x.segment_id, x.origin, 'text_block', 's' || x.no, x.no, x.text, x.text_sha256, 0, 1,
+     SELECT 'transcript_revision', $1, $1, x.segment_id, $9, x.origin, 'text_block', 's' || x.no, x.no, x.text, x.text_sha256, 0, 1,
             jsonb_build_object('kind', 'transcript_segment', 'segment', x.no, 'startMs', x.start_ms, 'endMs', x.end_ms)
        FROM unnest($2::uuid[], $3::int[], $4::text[], $5::text[], $6::text[], $7::int[], $8::int[])
             AS x(segment_id, no, origin, text, text_sha256, start_ms, end_ms)`,
@@ -122,6 +123,7 @@ export const importNegotiationManifest = async (
       segs.map((x) => sha256Hex(x.text)),
       segs.map((x) => x.startMs),
       segs.map((x) => x.endMs),
+      n.tenderId,
     ],
   );
   await emitStageEvents(db, {

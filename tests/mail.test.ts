@@ -100,7 +100,7 @@ describe('импорт EML', () => {
     expect(att[0]).toMatchObject({ filename: 'объёмы.csv', status: 'registered', sizeBytes: CSV.length });
     const doc = await db.pool.query('SELECT tender_id, contract_id, mail_attachment_id FROM document WHERE id = $1', [att[0].documentId]);
     expect(doc.rows[0]).toMatchObject({ tender_id: null, contract_id: null, mail_attachment_id: att[0].id });
-    const content = await s.eng1.get(att[0].contentUrl.replace('/api', ''));
+    const content = await s.eng1.get(att[0].contentUrl.replace('/api/v1', ''));
     expect(content.status).toBe(200);
     expect(content.headers['x-content-sha256']).toBe(att[0].sha256);
   });
@@ -119,6 +119,9 @@ describe('импорт EML', () => {
     expect(r.revisionId).not.toBe(firstRevision);
     const m = await s.eng1.get(`/mail-messages/${messageId}`);
     expect(m.body.revisionList.map((x: { seq: number }) => x.seq)).toEqual([2, 1]);
+    // И-07-2: новая ревизия той же идентичности помечена расхождением; первая — нет.
+    expect(m.body.revisionList[0].warnings).toContain('identity_content_changed');
+    expect(m.body.revisionList[1].warnings).not.toContain('identity_content_changed');
     expect(m.body.current.body.map((b: { text: string }) => b.text).join('\n')).toContain('B30');
     const old = await s.eng1.get(`/mail-message-revisions/${firstRevision}`);
     expect(old.status).toBe(200);
@@ -307,5 +310,44 @@ describe('переговоры (Q-06, файловый импорт)', () => {
   it('участник другого тендера сессию не видит', async () => {
     const id = (await s.eng1.get(`/tenders/${s.tenderA}/negotiation-sessions`)).body.items[0].id;
     expect((await s.eng3.get(`/negotiation-sessions/${id}`)).status).toBe(404);
+  });
+});
+
+describe('проверки промпта этапа 07', () => {
+  it('одна тема у писем разных тендеров: связь — по письму, в каждом тендере только его письмо', async () => {
+    const a = await importEml(s.eng1, worker, box, eml({ messageId: 'same-subj-a@x.test', subject: 'Разъяснения по документации', text: 'Письмо про тендер A.' }));
+    const b = await importEml(s.eng1, worker, box, eml({ messageId: 'same-subj-b@x.test', subject: 'Разъяснения по документации', text: 'Письмо про тендер B.' }));
+    await setMailAccess(s.admin, box, s.ids.manager, ['mail.read', 'mail.link']);
+    await linkMail(s.manager, a.messageId!, s.tenderA);
+    await linkMail(s.manager, b.messageId!, s.tenderB);
+    const inA = (await s.manager.get(`/tenders/${s.tenderA}/mail-messages`)).body.items.map((x: { id: string }) => x.id);
+    const inB = (await s.manager.get(`/tenders/${s.tenderB}/mail-messages`)).body.items.map((x: { id: string }) => x.id);
+    expect(inA).toContain(a.messageId);
+    expect(inA).not.toContain(b.messageId);
+    expect(inB).toContain(b.messageId);
+    expect(inB).not.toContain(a.messageId);
+    // Одинаковая тема без кода тендера кандидатов связи не даёт.
+    const card = await s.eng1.get(`/mail-messages/${a.messageId}`);
+    expect(card.body.candidates).toEqual([]);
+    await setMailAccess(s.admin, box, s.ids.manager, ['mail.read']);
+  });
+
+  it('общая цепочка на несколько тем: письма одной цепочки связываются с тендерами по отдельности', async () => {
+    const root = await importEml(s.eng1, worker, box, eml({ messageId: 'thread-root@x.test', subject: 'Вопросы по объектам', text: 'Два вопроса: по тендеру A-1 и по тендеру B-1.' }));
+    const reply = await importEml(
+      s.eng1,
+      worker,
+      box,
+      eml({ messageId: 'thread-reply@x.test', subject: 'Re: Вопросы по объектам', text: 'Ответ по A-1: бетон B30.', inReplyTo: 'thread-root@x.test', references: '<thread-root@x.test>' }),
+    );
+    const card = await s.eng1.get(`/mail-messages/${reply.messageId}`);
+    expect(card.body.current).toMatchObject({ inReplyTo: 'thread-root@x.test', references: ['thread-root@x.test'] });
+    // Цепочка не объединяет письма: у ответа своя коммуникация и свои связи.
+    expect(card.body.communicationId).not.toBe((await s.eng1.get(`/mail-messages/${root.messageId}`)).body.communicationId);
+    expect(card.body.candidates.map((c: { tenderCode: string }) => c.tenderCode)).toEqual(['A-1']);
+    const rootCard = await s.eng1.get(`/mail-messages/${root.messageId}`);
+    expect(rootCard.body.candidates.map((c: { tenderCode: string }) => c.tenderCode)).toEqual(['A-1']);
+    await linkMail(s.eng1, reply.messageId!, s.tenderA);
+    expect((await s.eng1.get(`/mail-messages/${root.messageId}`)).body.tenderLinks).toEqual([]);
   });
 });

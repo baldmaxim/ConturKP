@@ -35,6 +35,8 @@ export interface IMe {
   memberships: IMembership[];
   /** Раздел «Договоры»: администратор договоров, право создавать договоры или выдача по договору. */
   contractsAvailable: boolean;
+  /** Раздел «Почта»: администратор ящиков или выдача по ящику (этап 07). */
+  mailAvailable: boolean;
 }
 
 export interface ITender {

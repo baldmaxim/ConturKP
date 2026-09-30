@@ -14,7 +14,35 @@ export type TLocalLocator =
   | { kind: 'xlsx_cells'; sheet: string; sheetIndex: number; range: string; rowFrom: number; rowTo: number; colFrom: number; colTo: number; merged?: string[] }
   | { kind: 'csv_rows'; rowFrom: number; rowTo: number; colFrom: number; colTo: number; headerRow: number | null; lineFrom: number; lineTo: number }
   | { kind: 'docx_paragraph'; part: 'body' | 'footnotes' | 'endnotes'; block: number; section: number }
-  | { kind: 'docx_table_row'; part: 'body' | 'footnotes' | 'endnotes'; block: number; section: number; table: number; row: number; cellFrom: number; cellTo: number };
+  | { kind: 'docx_table_row'; part: 'body' | 'footnotes' | 'endnotes'; block: number; section: number; table: number; row: number; cellFrom: number; cellTo: number }
+  | { kind: 'mail_body'; block: number; quoted: boolean }
+  | { kind: 'transcript_segment'; segment: number; startMs: number; endMs: number };
+
+/** Источник доказательства (этап 07): прогон документа, ревизия письма или редакция транскрипции. */
+export type TSourceKind = 'recognition_run' | 'mail_message_revision' | 'transcript_revision';
+
+/** Письмо фрагмента: у фрагмента вложения — письмо вложения. Видно только с mail.read. */
+export interface IEvidenceMail {
+  messageId: string;
+  mailboxId: string | null;
+  revisionId: string | null;
+  subject: string | null;
+  from: string | null;
+  sentAt: string | null;
+  attachmentFilename: string | null;
+}
+
+export interface IEvidenceTranscript {
+  tenderId?: string | null;
+  sessionId: string | null;
+  sessionTitle: string | null;
+  revisionId: string;
+  segmentId?: string | null;
+  speakerLabel: string | null;
+  segmentKind?: 'speech' | 'hint' | null;
+  startMs: number | null;
+  endMs: number | null;
+}
 
 export interface ILocalRecognizerInfo {
   recognizerId: string;
@@ -162,6 +190,9 @@ export interface IEvidenceDetail extends IEvidenceFragment {
   runOutcome: TRecognitionOutcome | null;
   mediaType: string | null;
   contentUrl: string | null;
+  sourceKind: TSourceKind;
+  mail: IEvidenceMail | null;
+  transcript: IEvidenceTranscript | null;
 }
 
 export interface IFreezeBlockingItem {

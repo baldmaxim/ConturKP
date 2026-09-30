@@ -1,0 +1,11 @@
+# npx vitest run --maxWorkers=1 --fileParallelism=false — 2026-09-30, Node v24.14.1, PostgreSQL 18.6 + pgvector (kontur-pg)
+
+ RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
+
+
+ Test Files  60 passed (60)
+      Tests  636 passed (636)
+   Start at  20:55:26
+   Duration  215.38s (tests 92%, import 7%, transform 1%)
+
+EXIT=0

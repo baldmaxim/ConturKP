@@ -4,6 +4,7 @@
 // и тип ответа.
 import { API_BASE, ApiError, csrfToken, isProblem, notifyUnauthenticated } from './client';
 import type { IContractUploadResult, TContractRole } from './contractTypes';
+import type { IMailImport, INegotiationImportResult, IQaImportResult, TMailDirection } from './mailTypes';
 import type { IImportBatch, IProblem, IRecognitionRunAccepted } from './types';
 
 export interface IUploadHandle<T> {
@@ -130,3 +131,34 @@ export const uploadContractRevision = (
     idempotencyKey,
     onProgress,
   );
+
+/** Письмо EML в ящик (этап 07): разбирает worker; связь с тендером при импорте — по желанию и с mail.link. */
+export const uploadEml = (
+  mailboxId: string,
+  file: File,
+  o: { direction: TMailDirection; folder: string | null; tenderId: string | null; stageId: string | null },
+  idempotencyKey: string,
+  onProgress: (fraction: number) => void,
+): IUploadHandle<IMailImport> => {
+  const params = new URLSearchParams({
+    name: file.name,
+    direction: o.direction,
+    ...(o.folder ? { folder: o.folder } : {}),
+    ...(o.tenderId ? { tenderId: o.tenderId } : {}),
+    ...(o.stageId ? { stageId: o.stageId } : {}),
+  });
+  return xhrUpload<IMailImport>(`${API_BASE}/mailboxes/${encodeURIComponent(mailboxId)}/imports?${params.toString()}`, file, idempotencyKey, onProgress);
+};
+
+/** Manifest вопросов–ответов (kontur.qa.v1) или переговоров (kontur.negotiation.v1) в тендер. */
+export const uploadManifest = <K extends 'qa' | 'negotiation'>(
+  tenderId: string,
+  kind: K,
+  file: File,
+  stageId: string | null,
+  idempotencyKey: string,
+  onProgress: (fraction: number) => void,
+): IUploadHandle<K extends 'qa' ? IQaImportResult : INegotiationImportResult> => {
+  const params = new URLSearchParams({ name: file.name, ...(stageId ? { stageId } : {}) });
+  return xhrUpload(`${API_BASE}/tenders/${encodeURIComponent(tenderId)}/${kind}-imports?${params.toString()}`, file, idempotencyKey, onProgress);
+};

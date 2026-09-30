@@ -1,6 +1,7 @@
 // Подписи локального распознавания (этап 05a, D-024): движок, итог прогона словарём владельца (OD-6),
 // вид единицы и структурный якорь (AD-05a-1), признаки качества, причины отказа, политика маршрута PDF.
 import type { TFragmentOrigin, TLocalLocator, TRecognitionOutcome, TRecognitionRoute, TRecognitionUnitKind } from '../api/types';
+import { formatTimecode } from './mailLabels';
 import { FRAGMENT_ORIGIN, recognitionFailureLabel, type IBadgeMeta } from './sourceLabels';
 
 export const ENGINE_LABELS: Record<string, string> = {
@@ -60,6 +61,10 @@ export const anchorLabel = (l: TLocalLocator): string => {
       return `${PART_LABELS[l.part] ?? ''}абзац ${l.block}, раздел ${l.section}`.replace(/^а/u, 'А');
     case 'docx_table_row':
       return `${PART_LABELS[l.part] ?? ''}таблица ${l.table}, строка ${l.row}`.replace(/^т/u, 'Т');
+    case 'mail_body':
+      return `Блок ${l.block} текста письма${l.quoted ? ' · цитата прежней переписки' : ''}`;
+    case 'transcript_segment':
+      return `Сегмент ${l.segment} · ${formatTimecode(l.startMs)}–${formatTimecode(l.endMs)}`;
   }
 };
 

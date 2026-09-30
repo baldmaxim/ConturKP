@@ -160,6 +160,31 @@ describe('фрагмент доказательства', () => {
   });
 });
 
+describe('реплика переговоров — ветка тендера (И-07-7)', () => {
+  it('тендер фрагмента реплики — тендер редакции транскрипции: чужой тендер и фрагмент без тендера — отказ', async () => {
+    const result = await inRollback(async (c) => {
+      const blob = await newBlob();
+      const imp = (await c.query<{ id: string }>("INSERT INTO negotiation_import (tender_id, seq, manifest_blob_sha256, format_version, imported_by) VALUES ($1, 1, $2, 'kontur.negotiation.v1', $3) RETURNING id", [s.tenderA, blob, s.ids.eng1])).rows[0]!.id;
+      const session = (await c.query<{ id: string }>("INSERT INTO negotiation_session (tender_id, external_session_id, started_at, source, created_by) VALUES ($1, 'S', now(), 'manifest_import', $2) RETURNING id", [s.tenderA, s.ids.eng1])).rows[0]!.id;
+      const rev = (await c.query<{ id: string }>("INSERT INTO transcript_revision (session_id, tender_id, seq, source_revision, content_sha256, import_id) VALUES ($1, $2, 1, 'r1', $3, $4) RETURNING id", [session, s.tenderA, 'c'.repeat(64), imp])).rows[0]!.id;
+      const seg = (await c.query<{ id: string }>("INSERT INTO transcript_segment (revision_id, tender_id, segment_no, speaker_label, t_start_ms, t_end_ms, segment_kind, text) VALUES ($1, $2, 1, 'S1', 0, 1, 'speech', 'речь') RETURNING id", [rev, s.tenderA])).rows[0]!.id;
+      const frag = (tender: string | null) => {
+        const names = ['source_unit_type', 'source_unit_id', 'transcript_revision_id', 'transcript_segment_id', 'tender_id', 'origin', 'fragment_kind', 'fragment_key', 'text', 'text_sha256', 'locator'];
+        const values = ['transcript_revision', rev, rev, seg, tender, 'negotiation_speech', 'text_block', `s${randomUUID()}`, 'речь', 'a'.repeat(64), JSON.stringify({ kind: 'transcript_segment', segment: 1, startMs: 0, endMs: 1 })];
+        return code(c.query(`INSERT INTO evidence_fragment (${names.join(', ')}) VALUES (${names.map((_, i) => `$${i + 1}`).join(', ')})`, values));
+      };
+      const out: string[] = [];
+      for (const t of [s.tenderB, null, s.tenderA]) {
+        await c.query('SAVEPOINT f');
+        out.push(await frag(t));
+        await c.query('ROLLBACK TO f');
+      }
+      return out;
+    });
+    expect(result).toEqual(['23503', '23514', 'ok']);
+  });
+});
+
 describe('вложение и его документ (матрица B)', () => {
   it('7. вложение — одной ревизии письма; перепривязать или дописать к готовой ревизии нельзя', async () => {
     expect(await asOwner((c) => code(c.query('UPDATE mail_attachment SET revision_id = revision_id WHERE id = $1', [attachmentId])))).toBe('55000');

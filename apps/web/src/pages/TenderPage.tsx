@@ -10,6 +10,9 @@ import { Tabs, tabId, tabPanelId, type ITab } from '../components/Tabs';
 import { useApiResource } from '../hooks/useApiResource';
 import { useAuth } from '../hooks/useAuth';
 import { AuditLog } from './AuditLog';
+import { TenderMailPanel } from './communications/TenderMailPanel';
+import { TenderNegotiationsPanel } from './communications/TenderNegotiationsPanel';
+import { TenderQaPanel } from './communications/TenderQaPanel';
 import { TenderContractsPanel } from './contracts/TenderContractsPanel';
 import { IntakeChannelsPanel } from './intake/IntakeChannelsPanel';
 import { MembersPanel } from './MembersPanel';
@@ -28,6 +31,9 @@ const tabsFor = (tender: ITender, canAdminIntake: boolean): ITab[] => {
   }
   if (caps.includes('tender.read')) {
     tabs.push({ id: 'contracts', label: 'Договоры', icon: 'file-signature' });
+    tabs.push({ id: 'mail', label: 'Переписка', icon: 'mail' });
+    tabs.push({ id: 'qa', label: 'Вопросы и ответы', icon: 'message-square' });
+    tabs.push({ id: 'negotiations', label: 'Переговоры', icon: 'mic' });
   }
   tabs.push({ id: 'card', label: 'Карточка', icon: 'briefcase' });
   tabs.push({ id: 'members', label: 'Участники', icon: 'users' });
@@ -93,6 +99,9 @@ export const TenderPage: FC = () => {
           />
         ) : null}
         {active === 'contracts' ? <TenderContractsPanel tenderId={tender.id} /> : null}
+        {active === 'mail' ? <TenderMailPanel tenderId={tender.id} /> : null}
+        {active === 'qa' ? <TenderQaPanel tenderId={tender.id} canImport={caps.includes('source.write')} /> : null}
+        {active === 'negotiations' ? <TenderNegotiationsPanel tenderId={tender.id} canImport={caps.includes('source.write')} /> : null}
         {active === 'card' ? <TenderCard tender={tender} onChanged={(next) => setData(next)} /> : null}
         {active === 'members' ? (
           <MembersPanel

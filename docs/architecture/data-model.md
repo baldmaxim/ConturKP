@@ -140,17 +140,27 @@ erDiagram
 
 ### 3.4. Коммуникации и переговоры
 
+Этап 07 (D-025): ящик — контекст доступа; письмо — копия в одном ящике; коммуникация группирует копии, доступа не давая; связь с тендером — отдельная бизнес-связь.
+
 ```mermaid
 erDiagram
-  MAILBOX ||--o{ MAILBOX_ACCESS : "доступ"
-  COMMUNICATION ||--o{ COMMUNICATION_OCCURRENCE : "копии в ящиках"
-  MAILBOX ||--o{ COMMUNICATION_OCCURRENCE : "ящик"
-  COMMUNICATION ||--o{ COMMUNICATION_ATTACHMENT : "вложения"
-  COMMUNICATION ||--o{ COMMUNICATION_TENDER_LINK : "связи"
-  QA_FORM ||--o{ QA_ITEM : "вопросы"
+  MAILBOX ||--o{ MAIL_ACCESS : "выдачи"
+  MAILBOX ||--o{ MAIL_MESSAGE : "копии"
+  MAIL_COMMUNICATION ||--o{ MAIL_MESSAGE : "группирует"
+  MAIL_MESSAGE ||--|{ MAIL_MESSAGE_REVISION : "ревизии"
+  MAIL_MESSAGE_REVISION ||--o{ MAIL_ATTACHMENT : "вложения"
+  MAIL_ATTACHMENT ||--o| DOCUMENT : "документ вложения"
+  MAIL_MESSAGE_REVISION ||--o{ EVIDENCE_FRAGMENT : "текст письма"
+  MAIL_MESSAGE ||--o{ MAIL_MESSAGE_TENDER : "связи"
+  TENDER ||--o{ MAIL_MESSAGE_TENDER : "связи"
+  MAILBOX ||--o{ MAIL_IMPORT : "импорт EML"
+  QA_THREAD ||--o{ QA_ITEM : "вопросы"
+  QA_ITEM ||--|{ QA_ITEM_REVISION : "ревизии"
+  QA_IMPORT ||--o{ QA_ITEM_REVISION : "источник"
   NEGOTIATION_SESSION ||--o{ NEGOTIATION_PARTICIPANT : "участники"
-  NEGOTIATION_SESSION ||--o{ TRANSCRIPT_REVISION : "редакции"
+  NEGOTIATION_SESSION ||--|{ TRANSCRIPT_REVISION : "редакции"
   TRANSCRIPT_REVISION ||--o{ TRANSCRIPT_SEGMENT : "сегменты"
+  TRANSCRIPT_SEGMENT ||--|| EVIDENCE_FRAGMENT : "реплика"
 ```
 
 ## 4. Каталог таблиц
@@ -166,8 +176,8 @@ erDiagram
 | `tender_member` | mutable | `tender_id`, `user_id`, `member_role` (`engineer`/`manager`), `assigned_by`, `assigned_at`, `removed_at`, `removed_by` | активных инженеров на тендер не больше двух (проверка в транзакции назначения и триггер под блокировкой тендера); только активный `human` с той же глобальной ролью; строки не удаляются — снятие через `removed_at` |
 | `session` | mutable | `token_hash`, `user_id`, `csrf_hash`, `expires_at`, `revoked_at`, `revoke_reason`, `last_seen_at` | хранится хэш, не токен |
 | `api_token` | mutable | `user_id`, `client_kind` (`mcp_codex`/`mcp_cursor`/`other`), `token_hash`, `scopes` (`read`, `propose`), `expires_at`, `revoked_at` | нет областей `approve`/`release`/`send`/`admin` на уровне схемы (CHECK) |
-| `mailbox` | mutable | `system` (`mailhub`), `external_account_id`, `address` | (`system`, `external_account_id`) уникальны |
-| `mailbox_access` | mutable | `mailbox_id`, `user_id`, `source` (`manual`/`mailhub_sync`), `granted_by`, `revoked_at` | один активный доступ на пару |
+| `mailbox` | mutable | `system` (`manual`/`mailhub`), `external_account_id`, `display_name`, `status` (`active`/`archived`), `created_by`, `row_version` | (`system`, `external_account_id`) уникальны; удаления нет — архив; система, внешний ID и автор неизменны (охранник) |
+| `mail_access` | history | `mailbox_id`, `user_id`, `capability` (`mail.read`/`mail.import`/`mail.link`/`mail.manage`), `granted_by`, `granted_at`, `revoked_by`, `revoked_at` | одна действующая строка на тройку (частичный уникальный индекс); меняется только отметка отзыва; выдача действует при роли инженера или руководителя (`packages/core`), ведёт `admin.mailbox` (D-025, OD-07-3) |
 
 ### 4.2. Тендеры
 
@@ -195,7 +205,7 @@ erDiagram
 | `source_set_revision` | frozen-after | `source_set_id`, `seq`, `status` (`draft`/`frozen`), `base_revision_id`, `frozen_at`, `frozen_by`, `content_hash` | после `frozen` состав и хэш не меняются |
 | `source_set_item` | frozen-after | `source_set_revision_id`, `document_revision_id`, `inclusion` (`included`/`excluded_not_applicable`/`inherited`), `decided_by`, `reason` | (`source_set_revision_id`, `document_revision_id`) уникальны; меняется только пока ревизия `draft` |
 | `evidence_scope` | immutable | `stage_id`, `tender_id`, `source_set_revision_id`, `input_version` (для аудита), `content_hash`, `created_by`, `created_at`, `created_xact` | снимок области доказательств (R01-01), реализован на этапе 05 (миграция 0009): основа — замороженная ревизия набора этого этапа (триггер); создаётся до начала проверки и больше не меняется; одинаковый состав даёт тот же `content_hash` и ту же строку (уникальность (`stage_id`, `content_hash`)). Номер версии снимка актуальность не подтверждает: покрытие событий проверяется по составу (`state-machines.md` §1.1). Состав фиксируется транзакцией создания (миграция 0010, R05-01): `created_xact` (`xid8`) и `created_at` ставит триггер — номер и время начала этой транзакции; при `COMMIT` отложенная проверка сверяет полноту и `content_hash` с фактическим составом, неполный или несогласованный снимок не фиксируется |
-| `evidence_scope_item` | immutable | `scope_id`, `unit_type` (`document_recognition`/`communication`/`transcript_revision`; этап 05 — только `document_recognition`, письма и транскрипции добавляет этап 07), `document_revision_id`, `recognition_run_id` (для `document_recognition`; `null` явно означает «только оригинал без распознавания»), `communication_id`, `transcript_revision_id`, `inclusion_reason` | типизированные ссылки; каждая единица источника входит в снимок не более одного раза. Вставка — только в транзакции, создавшей снимок (печать `created_xact` и `created_at`), в любой другой — отказ `55000` и для владельца таблиц (миграция 0010, R05-01). Весь состав пишется одной командой: после каждой команды вставки БД сверяет полноту (каждая включённая редакция основы — единица снимка) и хэш состава с `content_hash` снимка |
+| `evidence_scope_item` | immutable | `scope_id`, `unit_type` (`document_recognition`/`mail_message`/`transcript_revision`; письма и транскрипции — с этапа 07, §4.15), `document_revision_id`, `recognition_run_id` (для `document_recognition`; `null` явно означает «только оригинал без распознавания»), `communication_id`, `transcript_revision_id`, `inclusion_reason` | типизированные ссылки; каждая единица источника входит в снимок не более одного раза. Вставка — только в транзакции, создавшей снимок (печать `created_xact` и `created_at`), в любой другой — отказ `55000` и для владельца таблиц (миграция 0010, R05-01). Весь состав пишется одной командой: после каждой команды вставки БД сверяет полноту (каждая включённая редакция основы — единица снимка) и хэш состава с `content_hash` снимка |
 
 
 Владелец документа и редакции — ровно один: тендер (`tender_id`) или договор (`contract_id`), этап 06a (D-023, §4.14). Для редакций договора `document_occurrence` не пишется: провенанс загрузки — в журнале аудита, экспорта RDWeb — в самом прогоне.
@@ -206,7 +216,7 @@ erDiagram
 |---|---|---|---|
 | `recognition_run` | frozen-after | `document_revision_id`, `tender_id`, `engine` (`rdweb_export`/`rdweb_api`/`text_layer`/`local_ocr`), `engine_schema_version`, `source_artifact_sha256`, `source_artifact_name`, `status` (`queued`/`running`/`complete`/`partial`/`failed`/`cancelled`), `pages_total`, `pages_recognized`, `quality`, `failure_code`, `failure_detail`, `supersedes_run_id`, `row_version`; с этапа 05a — `recognizer`, `recognizer_fingerprint`, `recognizer_config_hash` | после финального статуса неизменна; новый OCR — новая строка (A10). Пара (`document_revision_id`, `source_artifact_sha256`) уникальна среди прогонов, не завершившихся отказом или отменой: один архив — один прогон, после `failed` и `cancelled` повтор разрешён. `complete` невозможен, пока `pages_recognized < pages_total` (CHECK, I18); переход в `complete`/`partial` дополнительно сверяет счётчики с фактическими строками `recognition_page` (триггер, R04-04) |
 | `recognition_page` | immutable | `run_id`, `page_index`, `page_label`, `sheet_label`, `width_px`, `height_px`, `rotation`, `status` (`recognized`/`missing`/`failed`; с этапа 05a — `needs_review`), `unit_kind` (`pdf_page`/`xlsx_sheet`/`csv_table`/`docx_body`, этап 05a) | (`run_id`, `page_index`) уникальны; вставка только в выполняющийся прогон (триггер, R04-04) |
-| `evidence_fragment` | immutable | `tender_id`, `source_unit_type` (`recognition_run`/`communication`/`transcript_revision`), `source_unit_id`, `run_id` или `transcript_segment_id` или `communication_id`, `document_revision_id`, `origin` (см. ниже), `fragment_kind`, `fragment_key`, `external_block_id`, `ordinal`, `page_index`, `bbox_norm numeric[4]`, `bbox_space`, `shape_type`, `polygon_norm`, `rotation`, `text`, `text_sha256`, `derived_model_ref`, `external_crop_url`, `warnings`, `part_index`, `part_total`; с этапа 05a — `locator` (структурный якорь локального фрагмента) | ID портала стабилен; текст не редактируется; единица источника — основа фильтра области (ADR-008). Вставка только в выполняющийся прогон (триггер, R04-04). Составной FK (`run_id`, `document_revision_id`, `tender_id`) на прогон: редакция доказательства — это редакция его прогона (R04-05) |
+| `evidence_fragment` | immutable | `tender_id`, `source_unit_type` (`recognition_run`/`mail_message_revision`/`transcript_revision`; этап 07, §4.15), `source_unit_id`, `run_id` или `mail_message_revision_id` или `transcript_revision_id` + `transcript_segment_id`, `document_revision_id`, `origin` (см. ниже), `fragment_kind`, `fragment_key`, `external_block_id`, `ordinal`, `page_index`, `bbox_norm numeric[4]`, `bbox_space`, `shape_type`, `polygon_norm`, `rotation`, `text`, `text_sha256`, `derived_model_ref`, `external_crop_url`, `warnings`, `part_index`, `part_total`; с этапа 05a — `locator` (структурный якорь локального фрагмента) | ID портала стабилен; текст не редактируется; единица источника — основа фильтра области (ADR-008). Вставка только в выполняющийся прогон (триггер, R04-04). Составной FK (`run_id`, `document_revision_id`, `tender_id`) на прогон: редакция доказательства — это редакция его прогона (R04-05) |
 | `fragment_index_state` | derived | описана в §4.13 | **не создана на этапе 04**: до этапа 05 у неё нет ни писателя, ни читателя — заводится вместе с индексацией |
 
 #### Реализация (этап 04)
@@ -281,18 +291,25 @@ CHECK 0014 требовал размеры у `pdf_page` только в ста�
 
 ### 4.6. Коммуникации и переговоры
 
+Этап 07 (D-025; миграция `0017`). Состав ревизии письма (вложения, фрагменты тела) и редакции транскрипции (сегменты, фрагменты) пишет только транзакция её создания (`created_xact`, как у снимка 0010); история ревизий линейна и сериализуется advisory-блокировкой (роль приложения не блокирует строки неизменяемых таблиц — образец 0008).
+
 | Таблица | Класс | Ключевые колонки | Ограничения |
 |---|---|---|---|
-| `communication` | immutable | `kind` (`email`), `message_id_header`, `dedupe_key`, `subject`, `sent_at`, `direction` (`inbound`/`outbound`/`unknown`), `from_address`, `participants`, `in_reply_to`, `references`, `body_origin_sha256` | `dedupe_key` уникален: одно логическое письмо (A34) |
-| `communication_occurrence` | append-only | `communication_id`, `mailbox_id`, `external_item_id`, `folder`, `source` (`mailhub_api`/`eml_import`), `observed_at` | видимость письма — через доступ к ящику хотя бы одного вхождения (A35) |
-| `communication_attachment` | immutable | `communication_id`, `blob_sha256`, `filename`, `external_attachment_id`, `document_revision_id` | доступ как у письма |
-| `communication_tender_link` | append-only | `communication_id`, `tender_id`, `stage_id`, `status` (`suggested`/`confirmed`/`rejected`), `decided_by` | автоматическая связь только `suggested` |
-| `qa_form` | immutable | `tender_id`, `document_revision_id`, `form_revision_label` | новая редакция формы — новая строка |
-| `qa_item` | immutable | `qa_form_id`, `question_no`, `question_fragment_id`, `answer_fragment_id`, `answer_state` (`empty`/`answered`/`replaced`), `replaces_item_id` | (`qa_form_id`, `question_no`) уникальны |
-| `negotiation_session` | immutable | `tender_id`, `external_session_id`, `started_at`, `source` (`manifest_import`/`service_api`), `audio_ref`, `audio_sha256` | — |
-| `negotiation_participant` | immutable | `session_id`, `speaker_label`, `name`, `side` (`customer`/`contractor`/`unknown`) | — |
-| `transcript_revision` | immutable | `session_id`, `seq`, `source_artifact_sha256`, `supersedes_revision_id` | исправление транскрипции — новая редакция |
-| `transcript_segment` | immutable | `revision_id`, `segment_no`, `speaker_label`, `t_start_ms`, `t_end_ms`, `segment_kind` (`speech`/`hint`), `text` | подсказка — отдельный вид, не речь (A03) |
+| `mail_communication` | immutable | `group_key` (нормализованный Message-ID) | `group_key` уникален, если задан; письмо без Message-ID — своя коммуникация (И-07-1) |
+| `mail_message` | immutable | `mailbox_id`, `communication_id`, `identity_kind` (`source_id`/`message_id`/`raw_sha256`), `identity_value`, `created_by` | (`mailbox_id`, `identity_kind`, `identity_value`) уникальны: копия в ровно одном ящике (AD-07-3); Message-ID глобальным ключом не является |
+| `mail_message_revision` | immutable | `message_id`, `seq`, `raw_blob_sha256`, `message_id_header`, `subject`, `sent_at`, `from_address`, `participants`, `direction` (`inbound`/`outbound`/`unknown`), `folder`, `in_reply_to`, `reference_ids`, `source` (`eml_import`/`mailhub_api`), `source_item_id`, `body_text_sha256`, `parse_warnings`, `supersedes_revision_id`, `created_xact` | (`message_id`, `raw_blob_sha256`) уникальны — побайтный повтор идемпотентен; новая ревизия встаёт за последней (охранник) |
+| `mail_attachment` | immutable | `revision_id`, `ordinal`, `filename`, `mime_type` (заявленный), `size_bytes`, `sha256`, `disposition`, `content_id`, `status` (`registered`/`rejected`), `reject_reason` (`type_not_allowed`/`size_limit`/`corrupt`), `blob_sha256` | `blob_sha256` только у принятого и равен `sha256`; одинаковый blob у двух писем — две строки (доступ не объединяется) |
+| `mail_import` | mutable | `mailbox_id`, `raw_blob_sha256`, `file_name`, `direction`, `folder`, `link_tender_id`, `link_stage_id`, `status` (`queued`/`done`/`failed`), `failure_code`, `failure_detail`, `message_id`, `revision_id`, `created_revision`, `imported_by` | `queued → done | failed`, исход неизменен; параметры импорта неизменны |
+| `mail_message_tender` | mutable | `message_id`, `tender_id`, `stage_id` (того же тендера), `status` (`linked`/`unlinked`), `linked_by`, `linked_at`, `updated_by`, `row_version` | пара уникальна — одна строка на всю историю; удаления нет, снятие — `unlinked`; письмо и тендер пары неизменны; цель FK снимка |
+| `qa_import` | immutable | `tender_id`, `seq`, `manifest_blob_sha256`, `format_version` (`kontur.qa.v1`) | (`tender_id`, `seq`) уникальны; повтор файла подряд — прежний импорт (приложение под блокировкой) |
+| `qa_thread` | immutable | `tender_id`, `stage_id`, `external_ref`, `title` | (`tender_id`, `external_ref`) уникальны |
+| `qa_item` | immutable | `thread_id`, `tender_id`, `item_no` | (`thread_id`, `item_no`) уникальны — устойчивый номер |
+| `qa_item_revision` | immutable | `item_id`, `seq`, `question`, `answer`, `status` (`open`/`answered`/`withdrawn`), `asked_at`, `answered_at`, `external_ref`, `import_id`, `content_sha256`, `supersedes_revision_id` | ответ — ровно у `answered`; новая ревизия только при изменении содержания относительно последней; A → B → A — третья ревизия |
+| `negotiation_import` | immutable | `tender_id`, `seq`, `manifest_blob_sha256`, `format_version` (`kontur.negotiation.v1`) | как у `qa_import` |
+| `negotiation_session` | immutable | `tender_id`, `stage_id`, `external_session_id`, `title`, `started_at`, `audio_ref`, `audio_sha256`, `source` (`manifest_import`/`service_api`) | (`tender_id`, `external_session_id`) уникальны; аудио — ссылка и хэш |
+| `negotiation_participant` | immutable | `session_id`, `speaker_label`, `name`, `side` (`customer`/`contractor`/`unknown`) | (`session_id`, `speaker_label`) уникальны |
+| `transcript_revision` | immutable | `session_id`, `tender_id`, `seq`, `source_revision`, `content_sha256`, `import_id`, `supersedes_revision_id`, `created_xact` | исправление — новая редакция за последней; то же содержание подряд новой редакции не даёт |
+| `transcript_segment` | immutable | `revision_id`, `tender_id`, `segment_no`, `speaker_label`, `t_start_ms`, `t_end_ms`, `segment_kind` (`speech`/`hint`), `text` | подсказка — отдельный вид, не речь (A03); у каждого сегмента — фрагмент доказательства своего происхождения |
 
 ### 4.7. Требования, проверки, решения
 
@@ -390,7 +407,7 @@ CHECK 0014 требовал размеры у `pdf_page` только в ста�
 | `search_chunk_fragment` | derived | `chunk_id`, `index_version_id`, `source_unit_id`, `tender_id`, `fragment_id`, `ordinal`, `char_start`, `char_end` | составной FK (`chunk_id`, `index_version_id`, `source_unit_id`, `tender_id`) на чанк и (`fragment_id`, `source_unit_id`, `tender_id`) на `evidence_fragment` — фрагмент чужой единицы или тендера непредставим (ADR-012 §3; уникальность (`id`, `source_unit_id`, `tender_id`) у `evidence_fragment` добавляет миграция этапа 05); (`chunk_id`, `ordinal`) уникальны |
 | `search_chunk_vector` | derived | `chunk_id` (PK), `index_version_id`, `source_unit_id`, `tender_id`, `dim`, `embedding` (`halfvec` без модификатора, `STORAGE PLAIN`) | составной FK (`chunk_id`, `index_version_id`, `source_unit_id`, `tender_id`) на чанк; FK (`index_version_id`, `dim`) на `search_index_version (id, embedding_dim)`; `CHECK (vector_dims(embedding) = dim)`. Единица и тендер повторены здесь, чтобы фильтр области стоял в `WHERE` векторной ветки без чтения текстов чанков. ANN-индекса нет намеренно (ADR-012 §7). Исключается из дампа по данным |
 | `embedding_cache` | derived | PK (`text_sha256`, `purpose` (`index`/`query`), `embedding_model`, `embedding_model_fingerprint`, `embedding_input_version`, `dim`), `embedding` (`halfvec`, `STORAGE PLAIN`), `created_at`, `last_used_at` | `CHECK (vector_dims(embedding) = dim)`; вектор берётся только при совпадении всего ключа с версией индекса (ADR-012 §9). Исключается из дампа по данным |
-| `fragment_index_state` | derived | `index_version_id`, `index_system` (`portal_fts`/`portal_vector`), `fragment_id`, `run_id`, `status` (`indexed`/`skipped`/`failed`), `skip_reason` (`origin_not_evidence`/`empty_text`), `indexed_at` | PK (`index_version_id`, `index_system`, `fragment_id`); `skipped` ⇔ причина. На этапе 05 ведётся система `portal_fts`: полнота векторов считается по чанкам. Значение `localai` не заводится: индекс стал внутренним (D-013) |
+| `fragment_index_state` | derived | `index_version_id`, `index_system` (`portal_fts`/`portal_vector`), `fragment_id`, `source_unit_id` (до этапа 07 — `run_id`), `status` (`indexed`/`skipped`/`failed`), `skip_reason` (`origin_not_evidence`/`empty_text`), `indexed_at` | PK (`index_version_id`, `index_system`, `fragment_id`); `skipped` ⇔ причина. На этапе 05 ведётся система `portal_fts`: полнота векторов считается по чанкам. Значение `localai` не заводится: индекс стал внутренним (D-013) |
 | `search_index_unit` | derived | `index_version_id`, `source_unit_type`, `source_unit_id`, `tender_id`, `chunks`, `fragments_indexed`, `fragments_skipped`, `indexed_at` | PK (`index_version_id`, `source_unit_id`); единица индексируется версией целиком одной транзакцией — отметка есть основа проверки полноты при активации и охвата «не проиндексировано» в результате поиска (этап 05) |
 | `search_run` | frozen-after | `context_kind` (`tender`; `contract` — этап 06a, §4.14), `contract_id`, `tender_id`, `stage_id`, `evidence_scope_id`, `mode` (`working`/`review`; `release` — с выпусками этапа 13, `comparison` — этап 15), `requested_by`, `principal_id`, `principal_kind`, `on_behalf_of_user_id`, `query_text`, `query_sha256`, `query_normalization_version`, `result_limit`, `scope_hash`, `allowed_source_unit_ids uuid[]`, `scope_counts` (единицы по типам, исключено по правам, страницы распознано из всего, не проиндексировано активной версией), `index_version_id`, `ranking_version`, `embedding_model`, `embedding_model_fingerprint`, `status` (`pending`/`complete`/`degraded`/`failed`), `semantic_status` (`queued`/`running`/`complete`/`unavailable`/`failed`/`timeout`/`cancelled`), `semantic_reason`, `job_id`, `deadline_at`, `timings`, `failure_code`, `finished_at` | закреплённые поля (контекст, запрос, область, версия, ранжирование) не меняются с момента создания; после терминального статуса строка неизменна (триггер); `pending` возможен только при `semantic_status` `queued`/`running`; `context_kind = 'tender'` требует `tender_id`; вид `contract` этап 06a добавил расширением `CHECK` и колонкой `contract_id` без изменения статусов (ADR-012 §24, §4.14). Прогон читает только его автор (тот же пользователь или токен от его имени) |
 | `search_run_result` | immutable | `run_id`, `branch` (`exact`/`fts`/`vector`/`fused`), `rank`, `fragment_id`, `origin`, `score`, `matched_via` (для `fused`: ветки, нашедшие фрагмент), `chunk_key` | (`run_id`, `branch`, `rank`) уникальны; FK на `evidence_fragment`, а не на чанк — цитата переживает удаление версии индекса; вставка только в прогон `pending` (охранник блокирует строку прогона); `fused` пишется только при терминализации по зафиксированному набору веток (ADR-012 §14) |
@@ -416,13 +433,24 @@ CHECK 0014 требовал размеры у `pdf_page` только в ста�
 
 Отдельного снимка договора нет (T06A-1): исторический поиск и проверки опираются на `document_revision_id`, зафиксированный в `evidence_scope_item`.
 
+### 4.15. Почтовая ветка цепочки доказательств (этап 07; D-025, AD-07-1a, AD-07-2a)
+
+Матрицы миграции — `docs/architecture/07-mail-model-design.md` §11–12; миграция `0018`.
+
+- `document.mail_attachment_id` — третья ветка владельца: `CHECK (num_nonnulls(tender_id, contract_id, mail_attachment_id) = 1)`, уникальна (у вложения ровно один документ); документом становится только принятое вложение; у документа вложения одна редакция — байты самого вложения, без тендера и договора.
+- `document_revision`, `recognition_run`, `search_index_unit`, `search_chunk`, `search_chunk_fragment`, `search_chunk_vector`: `CHECK (num_nonnulls(tender_id, contract_id) <= 1)` и охранник вставки «без владельца ⇔ документ вложения»; строки тендера и договора по-прежнему сверяют составные FK 0012. Прогон вложения — общий путь 05a.
+- `evidence_fragment`: вид источника `source_unit_type` — `recognition_run` (прогон редакции), `mail_message_revision` (текст письма: `mail_message_revision_id`, происхождение `email_body`) или `transcript_revision` (`transcript_revision_id`, `transcript_segment_id`, `negotiation_speech` / `negotiation_hint`); `source_unit_id` равен колонке источника, остальные пусты (CHECK). Фрагмент письма владельца не имеет: ящик и письмо выводятся через ревизию. Фрагмент реплики переговоров — в ветке тендера: `tender_id` равен тендеру редакции транскрипции (составной FK на `transcript_revision (id, tender_id)`, И-07-7). Якоря `mail_body` (`block`, `quoted`) и `transcript_segment` (`segment`, `startMs`, `endMs`).
+- Индекс: у `search_index_unit` и `search_chunk` — `mail_message_revision_id`, `transcript_revision_id` (FK на собственную единицу); строки индекса письма и транскрипции владельца не хранят — составной FK 0009 (`source_unit_id`, `tender_id`) ведёт на прогон, поэтому тендер единицы транскрипции выводится через её FK; FK без владельца (`chunk_id`, `index_version_id`, `source_unit_id`) и (`fragment_id`, `source_unit_id`) держат чанк внутри одной единицы в любой ветке; `fragment_index_state.run_id` переименован в `source_unit_id`.
+- `evidence_scope_item`: виды `document_recognition`, `mail_message` (`mail_message_revision_id`, `mail_message_id`; FK на ревизию того же письма и на связь (`mail_message_id`, `tender_id`)), `transcript_revision` (FK по тендеру снимка); у единицы вложения — `mail_message_id` письма вложения; `unit_tender_id` — только у документа тендера. В снимок входят: включённые редакции основы, письма с действующей связью с тендером и этапом снимка — последней ревизией, каждая сессия переговоров тендера — последней редакцией (`evidence_scope_verify`).
+- `search_run` / `search_run_result`: охранники принимают ревизию письма и прогон вложения только у письма, имеющего пару с тендером прогона (в `working` — действующую связь и последнюю ревизию), транскрипцию — своего тендера. Права пользователя (`mail.read`) БД не хранит — их проверяет приложение до ранжирования и при чтении прогона и цитаты.
+
 ## 5. Хэши содержимого
 
 | Хэш | Что входит | Где используется |
 |---|---|---|
 | `blob.sha256` | байты файла | идентичность оригинала и файлов выпуска |
 | `source_set_revision.content_hash` | отсортированные (`document_revision_id`, `blob_sha256`, `inclusion`) | закрепление набора источников |
-| `evidence_scope.content_hash` | `source_set_revision.content_hash` + отсортированные типизированные единицы (`unit_type`, ID редакции, ID прогона распознавания, ID письма, ID редакции транскрипции) | закрепление проверенного состава доказательств (R01-01); БД пересчитывает его по фактическому составу и не фиксирует снимок при расхождении (миграция 0010, R05-01) |
+| `evidence_scope.content_hash` | `source_set_revision.content_hash` + отсортированные типизированные единицы (`unit_type`, ID редакции, ID прогона распознавания, ID ревизии письма, ID редакции транскрипции; пустые слоты — пустые строки, поэтому хэш снимков до этапа 07 не меняется) | закрепление проверенного состава доказательств (R01-01); БД пересчитывает его по фактическому составу и не фиксирует снимок при расхождении (миграция 0010, R05-01) |
 | `calculation_content.content_hash` | `normalization_version`, итог источника, курсы, итог КП с валютой и правилом, число позиций и строк, все поля позиций и строк в порядке внешних ID. Этап 06: построчный текст `kontur.calculation_content.v1` (строки `H|…`, `P|…`, `L|…`; числа — `trim_scale(numeric)::text`, текст — JSON-строка) → SHA-256; одинаково считают `packages/core` (`calculationContentText`) и БД (`calculation_content_hash()`); исходные лексемы и порядок ответа хэш не меняют. Семантика итога (`kp_total_semantics`) определяется `normalization_version` и `kp_total_rule` | дедупликация содержимого расчёта; идентичность наблюдения — `calculation_revision` (R01-04) |
 | `release_candidate.content_hash` | `manifest_sha256` | согласование (I02) |
 | `search_run.scope_hash` | `evidence_scope.content_hash` (или хэш временного снимка режима `working`) + отсортированные `allowed_source_unit_ids` после фильтра прав | закрепление области прогона поиска, аудит (ADR-008 §3) |

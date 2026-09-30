@@ -173,9 +173,9 @@ export const FRAGMENT_ORIGIN: Record<TFragmentOrigin, IBadgeMeta> = {
   document_text: { label: 'Текст документа', icon: 'scroll-text', tone: 'neutral' },
   recognized_text: { label: 'Распознанный текст RDWeb', icon: 'scan-search', tone: 'info' },
   model_description: { label: 'Описание модели', icon: 'layers', tone: 'accent', dashed: true },
-  negotiation_speech: { label: 'Реплика переговоров', icon: 'users', tone: 'neutral' },
+  negotiation_speech: { label: 'Реплика переговоров', icon: 'mic', tone: 'neutral' },
   negotiation_hint: { label: 'Подсказка сервиса переговоров', icon: 'info', tone: 'muted', dashed: true },
-  email_body: { label: 'Текст письма', icon: 'inbox', tone: 'neutral' },
+  email_body: { label: 'Текст письма', icon: 'mail', tone: 'neutral' },
   attachment_text: { label: 'Текст вложения', icon: 'files', tone: 'neutral' },
 };
 

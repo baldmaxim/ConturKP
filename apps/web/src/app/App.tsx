@@ -9,6 +9,10 @@ import { DocumentPage } from '../pages/DocumentPage';
 import { EvidenceViewer } from '../pages/evidence/EvidenceViewer';
 import { ImportBatchPage } from '../pages/ImportBatchPage';
 import { LoginPage } from '../pages/LoginPage';
+import { MailboxPage } from '../pages/mail/MailboxPage';
+import { MailMessagePage } from '../pages/mail/MailMessagePage';
+import { MailPage } from '../pages/mail/MailPage';
+import { NegotiationSessionPage } from '../pages/communications/NegotiationSessionPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { StagePage } from '../pages/StagePage';
 import { TenderPage } from '../pages/TenderPage';
@@ -44,6 +48,10 @@ export const App: FC = () => {
             <Route path="contracts" element={<ContractsPage />} />
             <Route path="contracts/:contractId" element={<ContractPage />} />
             <Route path="contract-documents/:documentId" element={<ContractDocumentPage />} />
+            <Route path="mail" element={<MailPage />} />
+            <Route path="mailboxes/:mailboxId" element={<MailboxPage />} />
+            <Route path="mail-messages/:messageId" element={<MailMessagePage />} />
+            <Route path="negotiation-sessions/:sessionId" element={<NegotiationSessionPage />} />
             <Route path="admin" element={<AdminPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>

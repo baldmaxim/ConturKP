@@ -132,7 +132,7 @@ export const toMailAttachment = (a: IMailAttachmentRow) => ({
   documentRevisionId: a.document_revision_id,
   runStatus: a.run_status,
   runEngine: a.run_engine,
-  contentUrl: a.status === 'registered' ? `/api/mail-attachments/${a.id}/content` : null,
+  contentUrl: a.status === 'registered' ? `/api/v1/mail-attachments/${a.id}/content` : null,
 });
 
 export const toMailSibling = (s: IMailSiblingRow) => ({ messageId: s.id, mailboxId: s.mailbox_id, mailboxName: s.mailbox_name, folder: s.folder, direction: s.direction });

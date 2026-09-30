@@ -242,6 +242,21 @@ interface EmlImporter {                          // факт: работает �
 - Отсутствие письма в общей ленте не доказывает отсутствие отправки (A33): отправленные читаются отдельным путём, а при его отсутствии основание регистрируется вручную.
 - Ограничения ACL ящиков сохраняются в портале (ADR-006 §10).
 
+### Реализация (этап 07)
+
+`MailHubReader` не реализован: машинная авторизация и лента изменений MailHub — внешняя доработка X-03 (`BLOCKED_EXTERNAL`, строка `integration_status` `mailhub/MailHubMailboxReader`). Разбора интерфейса MailHub, автоматизации браузера и опроса по cookie человека нет (D-025, OD-07-4).
+
+`EmlImporter` — штатный путь (`packages/adapters/src/mail/`):
+
+- `parseEml(raw, limits)` — postal-mime 4.0.2 (MIT-0): разбор MIME без сети и файловой системы. Результат — нормализованный Message-ID (без угловых скобок), In-Reply-To, References, тема, время отправки в UTC, участники по ролям (`from`, `sender`, `to`, `cc`, `bcc`, `reply_to`), блоки тела и вложения с байтами. Предупреждения (`message_id_missing`, `date_missing`, `date_unparsed`, `body_from_html`) не отказ.
+- HTML-тело только переводится в текст (`htmlToText`): скрипты, стили, изображения и внешние ресурсы отбрасываются, ничего не загружается; `blockquote` становится строками «> ». Команды внутри письма — данные (I16).
+- `splitMailBody` делит тело на блоки-абзацы с признаком `quoted`: строки «>», хвост после разделителя ответа или пересылки («-----Original Message-----», «… написал:», шапка Outlook «От:» + «Отправлено:»). Цитата — отдельный блок, старый ответ не выдаётся за новый.
+- Идентичность письма в ящике (`mailIdentity`): внешний ID источника, иначе Message-ID, иначе SHA-256 исходного файла; ключ коммуникации — Message-ID (`communicationGroupKey`).
+- Отказы детерминированы (`MailParseError`): `empty`, `malformed` (в начале файла нет заголовков RFC 5322), `too_large` (файл, текст или число вложений сверх предела: `MAIL_MAX_EML_MB`, по умолчанию 50 МиБ; вложений — 200). Вложение сверх `MAIL_MAX_ATTACHMENT_MB` (по умолчанию 25 МиБ) — отказ вложения `size_limit` без байтов; тип вложения — по содержимому (`classifyFile`, A38), архив и запрещённый тип — `type_not_allowed`.
+- Разбор выполняет worker (`mail.import`); принятые вложения становятся документами с владельцем-вложением и распознаются движком 05a (AD-07-2a).
+
+Статус: `VERIFIED_FIXTURE` — синтетические EML в тестах (`tests/mailAdapters.test.ts`, `tests/mail*.test.ts`) и smoke (`artifacts/stage-07/smoke.log`); реальный пример — ручной импорт настоящего EML владельцем (OD-07-4).
+
 ## 6. Сервис переговоров
 
 Проект (Q-06). До ответа владельца поддерживается импорт manifest.
@@ -261,6 +276,16 @@ interface NegotiationImporter {                  // проект
 ```
 
 Подсказка участнику и реплика — разные `kind`; подсказка не становится позицией заказчика (I08, A03).
+
+### Реализация (этап 07)
+
+API сервиса переговоров не подтверждён (Q-06, `BLOCKED_EXTERNAL`, строка `integration_status` `negotiations/NegotiationServiceClient`). Штатный путь — manifest формата портала, версионированный (`packages/adapters/src/mail/manifests.ts`):
+
+- `kontur.negotiation.v1`: `session { externalId, title, startedAt, audio { ref, sha256 } }`, `participants [{ speakerLabel, name, side }]`, `transcript { revision, segments [{ no, speakerLabel, startMs, endMs, kind: speech | hint, text }] }`. Номера сегментов и метки говорящих уникальны, у сегмента известный говорящий, конец не раньше начала. Аудио — только ссылка и хэш: запись портал не хранит.
+- `kontur.qa.v1` (вопросы–ответы, OD-07-6): `threads [{ externalRef, title, items [{ no, question, answer, status: open | answered | withdrawn, askedAt, answeredAt, externalRef }] }]`; ответ есть ровно у `answered`, номера вопросов в треде уникальны.
+- Неизвестная версия формата — `format_unsupported`, нарушение схемы — `manifest_invalid` (`ManifestError`); импорт отклоняется без записи.
+
+Статус: `VERIFIED_FIXTURE` по синтетическим manifest (`tests/mailAdapters.test.ts`, `tests/mail.test.ts`, smoke); автоматизация — `BLOCKED_EXTERNAL` до Q-06.
 
 ## 7. Назначения размещения
 
@@ -307,7 +332,7 @@ interface ModelGateway {                         // проект; провайд
 | `LocalOcrEngine` (`createTesseractJsFactory`) и разборщики DOCX, XLSX, CSV, PDF | VERIFIED_FIXTURE (этап 05a) | настоящие фикстуры и настоящий OCR tesseract.js в тестах и smoke (`tests/localParsers.test.ts`, `tests/localPdf.test.ts`, `artifacts/stage-05a/smoke.log`); замер на целевом Windows-ПК — `NOT_RUN` |
 | `ModelGatewayEmbeddings` | VERIFIED_FIXTURE (этап 05) | `OpenAiCompatibleEmbeddings` проверен контрактными тестами против поддельного HTTP-сервера (`tests/embeddings.test.ts`), `FakeEmbeddings` — в тестах конвейера; живой прогон с моделью — `NOT_RUN` до целевого ПК |
 | `MailHubReader` | BLOCKED_EXTERNAL | X-03 |
-| `EmlImporter` | NOT_IMPLEMENTED | реализация этапа 07 |
-| `NegotiationImporter` | NOT_IMPLEMENTED | схема manifest, затем Q-06 |
+| `EmlImporter` (`parseEml`) | VERIFIED_FIXTURE (этап 07) | синтетические EML в тестах и smoke; реальный пример — ручной импорт настоящего EML владельцем (OD-07-4) |
+| `NegotiationImporter` (manifest `kontur.negotiation.v1`) и вопросы–ответы (`kontur.qa.v1`) | VERIFIED_FIXTURE (этап 07) | автоматизация — Q-06 (`BLOCKED_EXTERNAL`) |
 | `YandexDiskTarget`, `SmbTarget` | NOT_IMPLEMENTED | тестовые корни и учётные данные (Q-10) |
 | `ModelGateway` | NOT_IMPLEMENTED | выбор провайдера на этапе 08 |

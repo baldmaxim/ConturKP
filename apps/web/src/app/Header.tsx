@@ -24,10 +24,12 @@ export const Header: FC = () => {
 
   const showAdmin = can('admin.users') || can('admin.audit') || can('admin.contract');
   const showContracts = me?.contractsAvailable ?? false;
+  const showMail = me?.mailAvailable ?? false;
   const path = location.pathname;
   const tendersActive = path === '/' || path.startsWith('/tenders') || path.startsWith('/stages');
   const contractsActive = path.startsWith('/contracts') || path.startsWith('/contract-documents');
   const adminActive = path.startsWith('/admin');
+  const mailActive = path.startsWith('/mail') || path.startsWith('/mailboxes');
 
   useEffect(() => {
     setMenuOpen(false);
@@ -71,6 +73,12 @@ export const Header: FC = () => {
         <AppLink to="/contracts" className={cx(styles.navLink, contractsActive && styles.active)} aria-current={contractsActive ? 'page' : undefined}>
           <Icon name="file-signature" />
           <span>Договоры</span>
+        </AppLink>
+      ) : null}
+      {showMail ? (
+        <AppLink to="/mail" className={cx(styles.navLink, mailActive && styles.active)} aria-current={mailActive ? 'page' : undefined}>
+          <Icon name="mail" />
+          <span>Почта</span>
         </AppLink>
       ) : null}
       {showAdmin ? (

@@ -13,6 +13,7 @@ import { anchorLabel, engineLabel, isLocalEngine, isPdf, originMeta, RECOGNITION
 import { fragmentKindLabel, recognitionWarningLabel } from '../../utils/sourceLabels';
 import form from '../../styles/form.module.css';
 import list from '../../styles/list.module.css';
+import { EvidenceSource } from './EvidenceSource';
 import styles from './EvidenceViewer.module.css';
 
 const MAX_WIDTH = 1400;
@@ -138,6 +139,25 @@ export const EvidenceViewer: FC = () => {
   }
 
   const origin = originMeta(fragment.origin, fragment.runEngine);
+  // Письмо и транскрипция (этап 07): оригинала-страницы нет — текст, якорь и шапка источника.
+  const communication = fragment.sourceKind === 'mail_message_revision' || fragment.sourceKind === 'transcript_revision';
+  if (communication) {
+    return (
+      <>
+        <PageHeader title="Доказательство" subtitle={fragment.locator ? anchorLabel(fragment.locator) : fragmentKindLabel(fragment.fragmentKind)} />
+        <section className={form.section} aria-label="Текст фрагмента">
+          <div className={styles.head}>
+            <Badge tone={origin.tone} icon={origin.icon} dashed={origin.dashed} label={origin.label} />
+            {fragment.locator?.kind === 'mail_body' && fragment.locator.quoted ? (
+              <Badge tone="warning" icon="info" dashed label="Цитата прежней переписки" />
+            ) : null}
+          </div>
+          <p className={styles.text}>{fragment.text}</p>
+          <EvidenceSource fragment={fragment} />
+        </section>
+      </>
+    );
+  }
   const pageNo = fragment.pageIndex === null ? null : fragment.pageIndex + 1;
   const local = isLocalEngine(fragment.runEngine);
   const anchor = fragment.locator ? anchorLabel(fragment.locator) : null;
@@ -184,6 +204,7 @@ export const EvidenceViewer: FC = () => {
         {fragment.externalCropUrl ? (
           <p className={styles.crop}>{`Ссылка экспорта (портал её не загружает): ${fragment.externalCropUrl}`}</p>
         ) : null}
+        <EvidenceSource fragment={fragment} />
       </section>
 
       <section className={form.section} aria-label="Участок оригинала">

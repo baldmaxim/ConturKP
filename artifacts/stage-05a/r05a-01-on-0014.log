@@ -1,0 +1,42 @@
+# R05a-01: регрессии на схеме передачи 86c0e15 (миграции 0001–0014, без 0015) — 2026-09-30T11:10:48Z
+# Запуск: 0015 временно убрана из docs/migrations; npx vitest run tests/regressions-r05a.test.ts -t 'размеры страницы PDF в БД'
+# Ожидаемо: тесты 1–4 и «CHECK сам по себе» падают — страница PDF без размеров в статусах needs_review, missing, failed принимается.
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/regressions-r05a.test.ts > R05a-01: размеры страницы PDF в БД > 1–4: страница PDF локального прогона без размеров — отказ при любом статусе
+AssertionError: expected { …(4) } to deeply equal { recognized: '23514:guard', …(3) }
+- Expected
++ Received
+  {
+-   "failed": "23514:guard",
+-   "missing": "23514:guard",
+-   "needs_review": "23514:guard",
+-   "recognized": "23514:guard",
++   "failed": "ok",
++   "missing": "ok",
++   "needs_review": "ok",
++   "recognized": "23514:recognition_page_unit_shape",
+  }
+ ❯ tests/regressions-r05a.test.ts:100:17
+     98|     const got: Record<string, string> = {};
+     99|     for (const [i, status] of STATUSES.entries()) got[status] = await …
+    100|     expect(got).toEqual({ recognized: '23514:guard', needs_review: '23…
+       |                 ^
+    101|   });
+    102|
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+ FAIL  tests/regressions-r05a.test.ts > R05a-01: размеры страницы PDF в БД > CHECK сам по себе: у pdf_page без размеров допустим только missing; охранник закрывает и его
+AssertionError: expected 'ok' to be '23514:recognition_page_unit_shape' // Object.is equality
+Expected: "23514:recognition_page_unit_shape"
+Received: "ok"
+ ❯ tests/regressions-r05a.test.ts:115:65
+    113|     // RDWeb: распознанная и отказавшая страница без размеров — отказ …
+    114|     expect(await insert(rdRun, 0, 'pdf_page', 'recognized', false)).to…
+    115|     expect(await insert(rdRun, 0, 'pdf_page', 'failed', false)).toBe('…
+       |                                                                 ^
+    116|     // Страница оригинала, которой нет в экспорте RDWeb, — missing без…
+    117|     expect(await insert(rdRun, 0, 'pdf_page', 'missing', false)).toBe(…
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+ Test Files  1 failed (1)
+      Tests  2 failed | 2 passed | 4 skipped (8)
+   Start at  16:10:27
+   Duration  2.56s (tests 59%, transform 29%, import 12%)

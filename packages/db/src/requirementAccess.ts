@@ -1,6 +1,6 @@
-// Видимость производного текста этапа 08 (Р-08-5, OD-08-4): формулировка требования, факта, кандидата и
-// результат прогона показываются целиком, только если пользователь может читать все их основания supports
-// по правам источника — те же правила, что у цитаты (getScopedFragment): фрагмент тендера — доступ к тендеру,
+// Видимость производного текста этапа 08 (Р-08-5, OD-08-4, R08-02): формулировка требования, факта, кандидата и
+// результат прогона показываются целиком, только если пользователь может читать все их основания (любой роли,
+// с наследованием — requirementTaint.ts) по правам источника — те же правила, что у цитаты (getScopedFragment): фрагмент тендера — доступ к тендеру,
 // договора — contract.read, письма и вложения — mail.read на ящик, транскрипции и Q&A — доступ к тендеру.
 // Право на реестр само по себе ничего из источника не открывает; отзыв и возврат права действуют сразу.
 import { contentTenderIds, readableContractIds, readableMailboxIds, type IAccessContext } from './access.ts';
@@ -64,22 +64,6 @@ export const linksOf = async (db: Queryable, column: EvidenceOwnerColumn, ownerI
   }
   return out;
 };
-
-export interface IVisibility {
-  // Полный текст: все основания supports читаются.
-  full: boolean;
-  // Есть хотя бы одно основание, которое пользователь читать не может.
-  restricted: boolean;
-  readable: ReadonlySet<string>;
-}
-
-// Решение по набору оснований одного объекта (Р-08-5): закрытое supports скрывает текст; закрытое
-// clarifies и другие роли текст не скрывают, но сами не показываются.
-export const visibilityOf = (links: readonly { fragment_id: string; role: string }[], readable: ReadonlySet<string>): IVisibility => ({
-  full: links.filter((l) => l.role === 'supports').every((l) => readable.has(l.fragment_id)),
-  restricted: links.some((l) => !readable.has(l.fragment_id)),
-  readable,
-});
 
 // Основания владельца пишутся в транзакции его создания (охранник evidence_link).
 export const insertEvidenceLinks = async (

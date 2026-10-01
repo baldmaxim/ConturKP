@@ -83,7 +83,11 @@ export interface ICoverageObjectInput {
   note?: string;
 }
 
-export const recordCoverage = (revisionId: string, input: { state: TCoverageState; reason?: string | null; objects: ICoverageObjectInput[] }, idempotencyKey: string) =>
+export const recordCoverage = (
+  revisionId: string,
+  input: { state: TCoverageState; reason?: string | null; unitMismatchReason?: string | null; objects: ICoverageObjectInput[] },
+  idempotencyKey: string,
+) =>
   apiPost<IRequirementCard>(`/requirement-revisions/${enc(revisionId)}/coverage`, { body: input, idempotencyKey });
 
 export const recordDecision = (requirementId: string, input: { statement: string; rationale: string; supersedesDecisionId?: string | null; evidence?: TRef[] }, idempotencyKey: string) =>

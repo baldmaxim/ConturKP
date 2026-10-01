@@ -33,10 +33,17 @@ export interface IRequirementCandidateRow {
   registry_active: boolean;
   revision_id: string | null;
   requirement_id: string | null;
+  // R08-01: противоречащее основание и конфликт параметров с действующими требованиями реестра.
+  contradicted: boolean;
+  conflicts: { requirementId: string; code: string; parameter: string }[];
 }
 
 const SELECT = `SELECT c.*, t.code AS target_code, (a.registry_id IS NOT NULL) AS registry_active,
-                       v.id AS revision_id, v.requirement_id
+                       v.id AS revision_id, v.requirement_id,
+                       EXISTS (SELECT 1 FROM evidence_link l WHERE l.requirement_candidate_id = c.id AND l.role = 'contradicts') AS contradicted,
+                       (SELECT coalesce(jsonb_agg(jsonb_build_object('requirementId', x.requirement_id, 'code', x.code, 'parameter', x.parameter)
+                                                  ORDER BY x.code, x.parameter), '[]'::jsonb)
+                          FROM requirement_parameter_conflicts(c.registry_id, c.target_requirement_id, c.parameters, c.object_scope) x) AS conflicts
                   FROM requirement_candidate c
                   LEFT JOIN requirement t ON t.id = c.target_requirement_id
                   LEFT JOIN requirement_registry_active a ON a.registry_id = c.registry_id
@@ -135,7 +142,26 @@ export interface IConfirmEdit {
   statement: string;
   parameters: IRequirementParameter[];
   objectScope: IObjectScope;
+  // R08-01: пояснение при конфликте; без конфликта — null.
+  conflictNote: string | null;
 }
+
+// R08-01: конфликт для подтверждения с итоговыми параметрами — противоречащее основание и конфликты параметров.
+export const confirmationConflicts = async (
+  db: Queryable,
+  c: IRequirementCandidateRow,
+  edit: { parameters: IRequirementParameter[]; objectScope: IObjectScope },
+): Promise<{ contradicted: boolean; conflicts: { requirementId: string; code: string; parameter: string }[] }> => {
+  const r = await db.query<{ requirement_id: string; code: string; parameter: string }>(
+    'SELECT requirement_id, code, parameter FROM requirement_parameter_conflicts($1, $2, $3, $4) ORDER BY code, parameter',
+    [c.registry_id, c.target_requirement_id, JSON.stringify(edit.parameters), JSON.stringify(edit.objectScope)],
+  );
+  const contradicts = await db.query('SELECT 1 FROM evidence_link WHERE requirement_candidate_id = $1 AND role = $2', [c.id, 'contradicts']);
+  return {
+    contradicted: (contradicts.rowCount ?? 0) > 0,
+    conflicts: r.rows.map((x) => ({ requirementId: x.requirement_id, code: x.code, parameter: x.parameter })),
+  };
+};
 
 // Подтверждение (инвариант 2): переход кандидата и ревизия требования — одной транзакцией; текст ревизии —
 // текст подтверждающего (по умолчанию — кандидата), исходный остаётся у кандидата (И-08-5).
@@ -184,10 +210,10 @@ export const confirmRequirementCandidate = async (
   }
   await db.query(
     `INSERT INTO requirement_revision (id, requirement_id, tender_id, stage_id, registry_id, seq, supersedes_revision_id, status, change_kind,
-                                       candidate_id, statement, parameters, object_scope, authored_by, confirmed_by, content_sha256)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'confirmed', 'confirmation', $8, $9, $10, $11, $12, $13, repeat('0', 64))`,
+                                       candidate_id, statement, parameters, object_scope, authored_by, confirmed_by, content_sha256, conflict_note)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'confirmed', 'confirmation', $8, $9, $10, $11, $12, $13, repeat('0', 64), $14)`,
     [revisionId, requirementId, c.tender_id, c.stage_id, c.registry_id, seq, previous, c.id, edit.statement, JSON.stringify(edit.parameters),
-     JSON.stringify(edit.objectScope), c.created_by, userId],
+     JSON.stringify(edit.objectScope), c.created_by, userId, edit.conflictNote],
   );
   await copyEvidenceLinks(db, { column: 'requirement_candidate_id', id: c.id }, { column: 'requirement_revision_id', id: revisionId }, c.tender_id, userId);
   if (previous) {

@@ -27,6 +27,8 @@ export interface ICoverageRow {
   origin: 'human' | 'system';
   assessed_by: string | null;
   trigger_calculation_revision_id: string | null;
+  // R08-01: пояснение к несовпадению единиц.
+  unit_mismatch_reason: string | null;
   created_at: Date;
   objects: {
     id: string;
@@ -42,19 +44,23 @@ export interface ICoverageRow {
     match: CoverageMatch | null;
     decision_id: string | null;
     note: string | null;
+    requirement_units: string[] | null;
+    calculation_unit: string | null;
+    unit_status: 'match' | 'mismatch' | 'not_comparable' | null;
   }[];
 }
 
 export const coverageHistory = async (db: Queryable, revisionIds: readonly string[]): Promise<ICoverageRow[]> => {
   if (revisionIds.length === 0) return [];
   const cov = await db.query<Omit<ICoverageRow, 'objects'>>(
-    `SELECT id, requirement_revision_id, seq, state, reason, origin, assessed_by, trigger_calculation_revision_id, created_at
+    `SELECT id, requirement_revision_id, seq, state, reason, origin, assessed_by, trigger_calculation_revision_id, unit_mismatch_reason, created_at
        FROM requirement_coverage WHERE requirement_revision_id = ANY($1::uuid[]) ORDER BY requirement_revision_id, seq`,
     [[...revisionIds]],
   );
   const obj = await db.query<ICoverageRow['objects'][number] & { coverage_id: string }>(
     `SELECT o.id, o.coverage_id, o.object_type, o.fragment_id, o.calculation_revision_id, r.seq AS calculation_revision_seq, r.kind AS calculation_revision_kind,
-            o.external_position_id, o.external_item_id, p.position_name, p.position_number::text AS position_number, o.match, o.decision_id, o.note
+            o.external_position_id, o.external_item_id, p.position_name, p.position_number::text AS position_number, o.match, o.decision_id, o.note,
+            o.requirement_units, o.calculation_unit, o.unit_status
        FROM requirement_coverage_object o
        LEFT JOIN calculation_revision r ON r.id = o.calculation_revision_id
        LEFT JOIN calculation_position p ON p.content_id = r.content_id AND p.external_position_id = o.external_position_id
@@ -64,19 +70,48 @@ export const coverageHistory = async (db: Queryable, revisionIds: readonly strin
   return cov.rows.map((c) => ({ ...c, objects: obj.rows.filter((o) => o.coverage_id === c.id) }));
 };
 
+// R08-01: статус единиц объектов расчёта до записи — той же функцией БД, что и охранник объекта.
+export const coverageUnitStatuses = async (
+  db: Queryable,
+  revisionId: string,
+  objects: readonly ICoverageObjectInput[],
+): Promise<{ index: number; requirementUnits: string[]; calculationUnit: string | null; unitStatus: 'match' | 'mismatch' | 'not_comparable' }[]> => {
+  const out: { index: number; requirementUnits: string[]; calculationUnit: string | null; unitStatus: 'match' | 'mismatch' | 'not_comparable' }[] = [];
+  for (const [index, o] of objects.entries()) {
+    if (o.type !== 'calculation_revision' || !o.calculationRevisionId) continue;
+    const r = await db.query<{ requirement_units: string[]; calculation_unit: string | null; unit_status: 'match' | 'mismatch' | 'not_comparable' }>(
+      'SELECT * FROM coverage_unit_status($1, $2, $3, $4)',
+      [revisionId, o.calculationRevisionId, o.externalPositionId ?? null, o.externalItemId ?? null],
+    );
+    const u = r.rows[0]!;
+    out.push({ index, requirementUnits: u.requirement_units, calculationUnit: u.calculation_unit, unitStatus: u.unit_status });
+  }
+  return out;
+};
+
 // Новая оценка текущей ревизии (requirement.confirm — охранник): номер — следующий по ревизии.
 export const recordCoverage = async (
   db: Queryable,
-  r: { tenderId: string; stageId: string; revisionId: string; state: CoverageState; reason: string | null; objects: ICoverageObjectInput[]; userId: string },
+  r: {
+    tenderId: string;
+    stageId: string;
+    revisionId: string;
+    state: CoverageState;
+    reason: string | null;
+    unitMismatchReason: string | null;
+    objects: ICoverageObjectInput[];
+    userId: string;
+  },
 ): Promise<string> => {
   const last = await db.query<{ id: string; seq: number }>(
     'SELECT id, seq FROM requirement_coverage WHERE requirement_revision_id = $1 ORDER BY seq DESC LIMIT 1',
     [r.revisionId],
   );
   const ins = await db.query<{ id: string }>(
-    `INSERT INTO requirement_coverage (tender_id, stage_id, requirement_revision_id, seq, supersedes_coverage_id, state, reason, origin, assessed_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'human', $8) RETURNING id`,
-    [r.tenderId, r.stageId, r.revisionId, (last.rows[0]?.seq ?? 0) + 1, last.rows[0]?.id ?? null, r.state, r.reason, r.userId],
+    `INSERT INTO requirement_coverage (tender_id, stage_id, requirement_revision_id, seq, supersedes_coverage_id, state, reason, origin, assessed_by,
+                                       unit_mismatch_reason)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'human', $8, $9) RETURNING id`,
+    [r.tenderId, r.stageId, r.revisionId, (last.rows[0]?.seq ?? 0) + 1, last.rows[0]?.id ?? null, r.state, r.reason, r.userId, r.unitMismatchReason],
   );
   const id = ins.rows[0]!.id;
   for (const o of r.objects) {

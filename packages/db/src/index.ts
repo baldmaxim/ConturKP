@@ -39,3 +39,4 @@ export * from './requirements.ts';
 export * from './requirementCoverage.ts';
 export * from './stageRecords.ts';
 export * from './completeness.ts';
+export * from './requirementTaint.ts';

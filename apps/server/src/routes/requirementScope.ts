@@ -2,7 +2,15 @@
 // по роли участника (Р-08-8, первая линия; вторая — has_stage_capability в БД), изменения — только в
 // активном реестре этапа (Р-08-6).
 import type { TenderCapability } from '@kontur/core';
-import { contentTenderIds, getRequirementRegistry, readableFragments, type IAccessContext, type IEvidenceLinkRow, type IRequirementRegistryRow, type Queryable } from '@kontur/db';
+import {
+  contentTenderIds,
+  getRequirementRegistry,
+  type IAccessContext,
+  type IRequirementRegistryRow,
+  type IStageVisibility,
+  type Queryable,
+  type TaintKind,
+} from '@kontur/db';
 import { HttpError, notFound } from '../http/errors.ts';
 import { requireTenderCapById } from './scope.ts';
 import { loadStage } from './stages.ts';
@@ -33,5 +41,10 @@ export const requireActiveRegistry = (active: boolean, target: { tenderId: strin
   }
 };
 
-export const readableOf = (db: Queryable, ctx: IAccessContext, groups: Iterable<readonly IEvidenceLinkRow[]>): Promise<Set<string>> =>
-  readableFragments(db, ctx, [...groups].flatMap((g) => g.map((l) => l.fragment_id)));
+// Команда над объектом этапа 08 требует его видимости по замыканию закрытости (R08-02): нельзя подтверждать,
+// править, оценивать или связывать то, что пользователь не может прочитать целиком.
+export const requireVisible = (vis: IStageVisibility, kind: TaintKind, id: string, target: { tenderId: string; entityType: string; entityId: string }): void => {
+  if (!vis.visible(kind, id)) {
+    throw new HttpError(409, 'STATE_CONFLICT', 'среди оснований объекта есть фрагменты, которые вы не можете читать', { current: { reason: 'restricted_fragments', object: kind, id } }, target);
+  }
+};

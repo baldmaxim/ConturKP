@@ -1,5 +1,5 @@
 import { useState, type FC } from 'react';
-import { describeError } from '../../api/errors';
+import { describeError, stateConflictCurrent } from '../../api/errors';
 import { confirmCandidate, listCandidates, rebaseCandidate, rejectCandidate } from '../../api/requirementEndpoints';
 import type { IFactCandidate, IRequirementCandidate } from '../../api/requirementTypes';
 import { newUuid } from '../../api/client';
@@ -13,7 +13,7 @@ import { Notice } from '../../components/Notice';
 import { TextAreaField } from '../../components/TextAreaField';
 import { useApiResource } from '../../hooks/useApiResource';
 import { useToast } from '../../hooks/useToast';
-import { candidateStatusBadge, originBadge } from '../../utils/requirementLabels';
+import { candidateStatusBadge, checkBadges, conflictList, originBadge } from '../../utils/requirementLabels';
 import { CandidateForm, type ICandidateDraft } from './CandidateForm';
 import { EvidenceLinks } from './EvidenceLinks';
 import styles from './Requirements.module.css';
@@ -25,7 +25,8 @@ const textOf = (c: TCandidate): string | null => (c.kind === 'requirement' ? c.s
 /**
  * Последовательный обход кандидатов (OD-08-7 — полнота отдельно): по одному, вперёд и назад. Подтверждает и
  * отклоняет только пользователь с requirement.confirm / fact.confirm; модель лишь предлагает (граница AI safety).
- * Кандидат прежнего реестра подтверждается только после явного переноса в активный реестр.
+ * Кандидат прежнего реестра подтверждается только после явного переноса в активный реестр. Конфликт с действующим
+ * требованием и противоречащее основание показываются явно; подтверждение — только с пояснением (R08-01).
  */
 export const CandidateQueue: FC<{ registryId: string; caps: string[]; onChanged: () => void }> = ({ registryId, caps, onChanged }) => {
   const [kind, setKind] = useState<'requirement' | 'fact'>('requirement');
@@ -36,6 +37,8 @@ export const CandidateQueue: FC<{ registryId: string; caps: string[]; onChanged:
   const [rejecting, setRejecting] = useState<TCandidate | null>(null);
   const [reason, setReason] = useState('');
   const [edit, setEdit] = useState<string | null>(null);
+  const [note, setNote] = useState('');
+  const [serverConflict, setServerConflict] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
@@ -51,6 +54,15 @@ export const CandidateQueue: FC<{ registryId: string; caps: string[]; onChanged:
   const items = (res.data.items as TCandidate[]).filter((c) => !onlyOpen || c.status === 'proposed');
   const i = Math.min(index, Math.max(items.length - 1, 0));
   const c = items[i];
+  // Конфликт известен из очереди или из ответа сервера на подтверждение (409 requirement_conflict).
+  const conflicted = c?.kind === 'requirement' && (c.conflicts.length > 0 || c.contradicted || serverConflict === c.id);
+  const go = (next: number): void => {
+    setIndex(next);
+    setEdit(null);
+    setNote('');
+    setServerConflict(null);
+    setError(null);
+  };
   const act = async (fn: () => Promise<unknown>, done: string): Promise<void> => {
     setBusy(true);
     setError(null);
@@ -58,8 +70,12 @@ export const CandidateQueue: FC<{ registryId: string; caps: string[]; onChanged:
       await fn();
       toast.push({ kind: 'success', text: done });
       setEdit(null);
+      setNote('');
+      setServerConflict(null);
       refresh();
     } catch (e) {
+      const current = stateConflictCurrent(e) as { reason?: string } | null;
+      if (current?.reason === 'requirement_conflict' && c) setServerConflict(c.id);
       setError(describeError(e));
     } finally {
       setBusy(false);
@@ -92,6 +108,7 @@ export const CandidateQueue: FC<{ registryId: string; caps: string[]; onChanged:
             {originBadge(c.origin)}
             {candidateStatusBadge(c.status)}
             {c.kind === 'requirement' && c.targetCode ? <Badge tone="neutral" icon="pencil" label={`Правка ${c.targetCode}`} /> : null}
+            {c.kind === 'requirement' ? checkBadges(c) : null}
             {c.restricted ? <Badge tone="muted" icon="lock" label="Есть закрытое основание" /> : null}
           </div>
           {c.visible ? <p className={styles.statement}>{textOf(c)}</p> : <p className={styles.restricted}>Текст скрыт: основание из источника, на который у вас нет права.</p>}
@@ -102,15 +119,24 @@ export const CandidateQueue: FC<{ registryId: string; caps: string[]; onChanged:
           {!c.registryActive && c.status === 'proposed' ? (
             <Notice tone="warning">Кандидат прежнего реестра: подтверждение — только после явного переноса в активный реестр.</Notice>
           ) : null}
+          {c.kind === 'requirement' && c.status === 'proposed' && c.conflicts.length > 0 ? (
+            <Notice tone="warning">{`Противоречит действующим требованиям: ${conflictList(c.conflicts)}. Подтверждение — только с пояснением.`}</Notice>
+          ) : null}
+          {c.kind === 'requirement' && c.status === 'proposed' && c.contradicted ? (
+            <Notice tone="warning">Среди оснований есть противоречащее — подтверждение только с пояснением.</Notice>
+          ) : null}
           {edit !== null && c.kind === 'requirement' ? (
             <TextAreaField label="Формулировка при подтверждении" value={edit} onValueChange={setEdit} rows={3} hint="Исходный текст останется у кандидата" />
           ) : null}
+          {conflicted && c.status === 'proposed' && c.registryActive && canConfirm && c.visible ? (
+            <TextAreaField label="Пояснение к конфликту" value={note} onValueChange={setNote} rows={2} required hint="Почему требование подтверждается при конфликте; сохранится в ревизии" />
+          ) : null}
           {error ? <Notice tone="danger">{error}</Notice> : null}
           <div className={styles.actions}>
-            <Button variant="ghost" icon="arrow-left" disabled={i === 0} onClick={() => setIndex(i - 1)}>
+            <Button variant="ghost" icon="arrow-left" disabled={i === 0} onClick={() => go(i - 1)}>
               Назад
             </Button>
-            <Button variant="ghost" icon="chevron-right" disabled={i >= items.length - 1} onClick={() => setIndex(i + 1)}>
+            <Button variant="ghost" icon="chevron-right" disabled={i >= items.length - 1} onClick={() => go(i + 1)}>
               Далее
             </Button>
             {c.status === 'proposed' && c.registryActive && canConfirm && c.visible ? (
@@ -124,7 +150,19 @@ export const CandidateQueue: FC<{ registryId: string; caps: string[]; onChanged:
                   variant="primary"
                   icon="check"
                   loading={busy}
-                  onClick={() => void act(() => confirmCandidate(c.kind, c, edit !== null && c.kind === 'requirement' ? { statement: edit } : {}, newUuid()), 'Подтверждено')}
+                  disabled={conflicted && !note.trim()}
+                  onClick={() =>
+                    void act(
+                      () =>
+                        confirmCandidate(
+                          c.kind,
+                          c,
+                          { ...(edit !== null && c.kind === 'requirement' ? { statement: edit } : {}), ...(conflicted ? { conflictNote: note.trim() } : {}) },
+                          newUuid(),
+                        ),
+                      'Подтверждено',
+                    )
+                  }
                 >
                   Подтвердить
                 </Button>

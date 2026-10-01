@@ -1,7 +1,8 @@
-// Проекции этапа 08 (Р-08-5, OD-08-4): формулировка, параметры, обоснование и значение показываются целиком,
-// только если пользователь читает все основания supports; иначе — безопасная оболочка: ID, код, статус,
-// служебные данные, число оснований по ролям и признак закрытого основания. Текст закрытого основания не
-// выдаётся никогда; цитата открывается только по правам источника (GET /evidence/{id}).
+// Проекции этапа 08 (Р-08-5, OD-08-4, R08-02): формулировка, параметры, обоснование, значение, пояснения и
+// сведения о конфликте показываются целиком, только если объект видим по замыканию закрытости
+// (requirementTaint.ts: все основания любой роли с наследованием читаются); иначе — безопасная оболочка: ID, код,
+// статус, служебные данные, число оснований по ролям и признаки закрытого основания, конфликта и несовпадения
+// единиц. Текст закрытого основания не выдаётся никогда; цитата — только по правам источника (GET /evidence/{id}).
 import type {
   IAnalysisRunRow,
   IAssumptionRow,
@@ -17,7 +18,6 @@ import type {
   IRequirementRow,
   IStageNoteRow,
 } from '@kontur/db';
-import { visibilityOf } from '@kontur/db';
 
 const iso = (d: Date | null | undefined): string | null => (d ? d.toISOString() : null);
 
@@ -37,6 +37,16 @@ export const toEvidenceLinks = (links: readonly IEvidenceLinkRow[], readable: Re
 
 const roleCounts = (links: readonly IEvidenceLinkRow[]): Record<string, number> =>
   links.reduce<Record<string, number>>((acc, l) => ({ ...acc, [l.role]: (acc[l.role] ?? 0) + 1 }), {});
+
+// Конфликт параметров (R08-01): коды требований — служебные данные; имя параметра — производный текст обоих
+// требований, поэтому только если видимы оба.
+export const toConflicts = (
+  conflicts: readonly { requirementId: string; code: string; parameter: string }[],
+  visible: boolean,
+  isVisible: (requirementId: string) => boolean,
+) => conflicts.map((c) => ({ requirementId: c.requirementId, code: c.code, parameter: visible && isVisible(c.requirementId) ? c.parameter : null }));
+
+type ConflictView = ReturnType<typeof toConflicts>;
 
 export const toRegistry = (r: IRequirementRegistryRow) => ({
   id: r.id,
@@ -81,8 +91,8 @@ export const toAnalysisRun = (r: IAnalysisRunRow, resultVisible: boolean) => ({
   finishedAt: iso(r.finished_at),
 });
 
-export const toRequirementCandidate = (c: IRequirementCandidateRow, links: readonly IEvidenceLinkRow[], readable: ReadonlySet<string>) => {
-  const v = visibilityOf(links, readable);
+export const toRequirementCandidate = (c: IRequirementCandidateRow, links: readonly IEvidenceLinkRow[], readable: ReadonlySet<string>, visible: boolean, conflicts: ConflictView) => {
+  const v = { full: visible };
   return {
     id: c.id,
     kind: 'requirement' as const,
@@ -104,8 +114,10 @@ export const toRequirementCandidate = (c: IRequirementCandidateRow, links: reado
     rowVersion: c.row_version,
     requirementId: c.requirement_id,
     visible: v.full,
-    restricted: v.restricted,
+    restricted: !v.full,
     evidenceCounts: roleCounts(links),
+    contradicted: c.contradicted,
+    conflicts,
     statement: v.full ? c.statement : null,
     parameters: v.full ? c.parameters : null,
     objectScope: v.full ? c.object_scope : null,
@@ -115,8 +127,8 @@ export const toRequirementCandidate = (c: IRequirementCandidateRow, links: reado
   };
 };
 
-export const toFactCandidate = (c: IFactCandidateRow, links: readonly IEvidenceLinkRow[], readable: ReadonlySet<string>) => {
-  const v = visibilityOf(links, readable);
+export const toFactCandidate = (c: IFactCandidateRow, links: readonly IEvidenceLinkRow[], readable: ReadonlySet<string>, visible: boolean) => {
+  const v = { full: visible };
   return {
     id: c.id,
     kind: 'fact' as const,
@@ -139,7 +151,7 @@ export const toFactCandidate = (c: IFactCandidateRow, links: readonly IEvidenceL
     rowVersion: c.row_version,
     factId: c.fact_id,
     visible: v.full,
-    restricted: v.restricted,
+    restricted: !v.full,
     evidenceCounts: roleCounts(links),
     displayValue: v.full ? c.display_value : null,
     normalizedValue: v.full ? c.normalized_value : null,
@@ -159,6 +171,10 @@ export const toCoverage = (c: ICoverageRow, visible: boolean) => ({
   assessedBy: c.assessed_by,
   triggerCalculationRevisionId: c.trigger_calculation_revision_id,
   createdAt: iso(c.created_at),
+  visible,
+  // R08-01: несовпадение единиц — признак состояния, виден всегда; пояснение и единицы — производные поля.
+  unitMismatch: c.objects.some((o) => o.unit_status === 'mismatch'),
+  unitMismatchReason: visible ? c.unit_mismatch_reason : null,
   objects: visible
     ? c.objects.map((o) => ({
         id: o.id,
@@ -174,13 +190,16 @@ export const toCoverage = (c: ICoverageRow, visible: boolean) => ({
         match: o.match,
         decisionId: o.decision_id,
         note: o.note,
+        requirementUnits: o.requirement_units,
+        calculationUnit: o.calculation_unit,
+        unitStatus: o.unit_status,
       }))
     : [],
   objectCount: c.objects.length,
 });
 
-export const toRequirementRevision = (r: IRequirementRevisionRow, links: readonly IEvidenceLinkRow[], readable: ReadonlySet<string>) => {
-  const v = visibilityOf(links, readable);
+export const toRequirementRevision = (r: IRequirementRevisionRow, links: readonly IEvidenceLinkRow[], readable: ReadonlySet<string>, visible: boolean) => {
+  const v = { full: visible };
   return {
     id: r.id,
     seq: r.seq,
@@ -196,18 +215,19 @@ export const toRequirementRevision = (r: IRequirementRevisionRow, links: readonl
     confirmedBy: r.confirmed_by,
     createdAt: iso(r.created_at),
     visible: v.full,
-    restricted: v.restricted,
+    restricted: !v.full,
     evidenceCounts: roleCounts(links),
     statement: v.full ? r.statement : null,
     parameters: v.full ? r.parameters : null,
     objectScope: v.full ? r.object_scope : null,
     reason: v.full ? r.reason : null,
+    conflictNote: v.full ? r.conflict_note : null,
     evidence: toEvidenceLinks(links, readable),
   };
 };
 
-export const toRequirement = (q: IRequirementRow, links: readonly IEvidenceLinkRow[], readable: ReadonlySet<string>) => {
-  const v = visibilityOf(links, readable);
+export const toRequirement = (q: IRequirementRow, links: readonly IEvidenceLinkRow[], visible: boolean, conflicts: ConflictView) => {
+  const v = { full: visible };
   return {
     id: q.id,
     code: q.code,
@@ -221,13 +241,17 @@ export const toRequirement = (q: IRequirementRow, links: readonly IEvidenceLinkR
     supersededByRequirementId: q.superseded_by_requirement_id,
     supersededByCode: q.superseded_by_code,
     coverageState: q.coverage_state,
+    coverageUnitMismatch: q.coverage_unit_mismatch,
+    contradicted: q.contradicted,
+    conflicts,
+    conflictNote: v.full ? q.conflict_note : null,
     rowVersion: q.row_version,
     createdAt: iso(q.created_at),
     revisionCreatedAt: iso(q.revision_created_at),
     authoredBy: q.authored_by,
     confirmedBy: q.confirmed_by,
     visible: v.full,
-    restricted: v.restricted,
+    restricted: !v.full,
     evidenceCounts: roleCounts(links),
     statement: v.full ? q.statement : null,
     parameters: v.full ? q.parameters : null,
@@ -235,8 +259,8 @@ export const toRequirement = (q: IRequirementRow, links: readonly IEvidenceLinkR
   };
 };
 
-export const toFact = (f: IFactRow, links: readonly IEvidenceLinkRow[], readable: ReadonlySet<string>) => {
-  const v = visibilityOf(links, readable);
+export const toFact = (f: IFactRow, links: readonly IEvidenceLinkRow[], readable: ReadonlySet<string>, visible: boolean) => {
+  const v = { full: visible };
   return {
     id: f.id,
     factKind: f.fact_kind,
@@ -255,7 +279,7 @@ export const toFact = (f: IFactRow, links: readonly IEvidenceLinkRow[], readable
     authoredBy: f.authored_by,
     confirmedBy: f.confirmed_by,
     visible: v.full,
-    restricted: v.restricted,
+    restricted: !v.full,
     evidenceCounts: roleCounts(links),
     displayValue: v.full ? f.display_value : null,
     normalizedValue: v.full ? f.normalized_value : null,
@@ -264,8 +288,8 @@ export const toFact = (f: IFactRow, links: readonly IEvidenceLinkRow[], readable
   };
 };
 
-export const toDecision = (d: IRequirementDecisionRow, links: readonly IEvidenceLinkRow[], readable: ReadonlySet<string>) => {
-  const v = visibilityOf(links, readable);
+export const toDecision = (d: IRequirementDecisionRow, links: readonly IEvidenceLinkRow[], readable: ReadonlySet<string>, visible: boolean) => {
+  const v = { full: visible };
   return {
     id: d.id,
     requirementId: d.subject_id,
@@ -275,15 +299,15 @@ export const toDecision = (d: IRequirementDecisionRow, links: readonly IEvidence
     decidedBy: d.decided_by,
     decidedAt: iso(d.created_at),
     visible: v.full,
-    restricted: v.restricted,
+    restricted: !v.full,
     statement: v.full ? d.statement : null,
     rationale: v.full ? d.rationale : null,
     evidence: toEvidenceLinks(links, readable),
   };
 };
 
-export const toAssumption = (a: IAssumptionRow, links: readonly IEvidenceLinkRow[], readable: ReadonlySet<string>) => {
-  const v = visibilityOf(links, readable);
+export const toAssumption = (a: IAssumptionRow, links: readonly IEvidenceLinkRow[], readable: ReadonlySet<string>, visible: boolean) => {
+  const v = { full: visible };
   return {
     id: a.id,
     stageId: a.stage_id,
@@ -298,25 +322,27 @@ export const toAssumption = (a: IAssumptionRow, links: readonly IEvidenceLinkRow
     createdAt: iso(a.created_at),
     revisionCreatedAt: iso(a.revision_created_at),
     visible: v.full,
-    restricted: v.restricted,
+    restricted: !v.full,
     statement: v.full ? a.statement : null,
     reason: v.full ? a.reason : null,
     evidence: toEvidenceLinks(links, readable),
   };
 };
 
-export const toCustomerQuestion = (q: ICustomerQuestionRow) => ({
+// Вопрос, связанный с требованием, мог повторить его текст (R08-02): текст и пояснение — по видимости вопроса.
+export const toCustomerQuestion = (q: ICustomerQuestionRow, visible: boolean) => ({
   id: q.id,
   stageId: q.stage_id,
   requirementId: q.requirement_id,
   requirementCode: q.requirement_code,
-  text: q.text,
+  visible,
+  text: visible ? q.text : null,
   status: q.status,
   askedAt: iso(q.asked_at),
   answeredAt: iso(q.answered_at),
   answerQaItemRevisionId: q.answer_qa_item_revision_id,
   answerQaItemNo: q.answer_qa_item_no,
-  answerNote: q.answer_note,
+  answerNote: visible ? q.answer_note : null,
   responsibleUserId: q.responsible_user_id,
   createdBy: q.created_by,
   updatedBy: q.updated_by,

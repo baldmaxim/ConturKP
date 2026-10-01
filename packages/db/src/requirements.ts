@@ -25,7 +25,15 @@ export interface IRequirementRevisionRow {
   authored_by: string;
   confirmed_by: string;
   content_sha256: string;
+  // R08-01: пояснение подтверждения при конфликте требований или противоречащем основании.
+  conflict_note: string | null;
   created_at: Date;
+}
+
+export interface IRequirementConflict {
+  requirementId: string;
+  code: string;
+  parameter: string;
 }
 
 export interface IRequirementRow extends Omit<IRequirementRevisionRow, 'id' | 'created_at'> {
@@ -39,6 +47,11 @@ export interface IRequirementRow extends Omit<IRequirementRevisionRow, 'id' | 'c
   revision_created_at: Date;
   coverage_state: string | null;
   coverage_seq: number | null;
+  // R08-01: в действующей оценке покрытия есть объект с несовпадением единиц.
+  coverage_unit_mismatch: boolean;
+  // R08-01: у текущей ревизии есть основание contradicts; другие действующие требования с конфликтом параметров.
+  contradicted: boolean;
+  conflicts: IRequirementConflict[];
   registry_active: boolean;
 }
 
@@ -49,13 +62,22 @@ const REVISION_SELECT = `SELECT v.*, g.seq AS registry_seq, sq.code AS supersede
 
 const REQUIREMENT_SELECT = `SELECT v.*, g.seq AS registry_seq, sq.code AS superseded_by_code, q.id, q.tender_id, q.stage_id, q.code,
                                    q.current_revision_id, q.row_version, q.created_at, v.created_at AS revision_created_at,
-                                   cv.state AS coverage_state, cv.seq AS coverage_seq, (a.registry_id IS NOT NULL) AS registry_active
+                                   cv.state AS coverage_state, cv.seq AS coverage_seq, (a.registry_id IS NOT NULL) AS registry_active,
+                                   coalesce(cv.unit_mismatch, false) AS coverage_unit_mismatch,
+                                   EXISTS (SELECT 1 FROM evidence_link l WHERE l.requirement_revision_id = v.id AND l.role = 'contradicts') AS contradicted,
+                                   CASE WHEN v.status = 'confirmed' THEN
+                                     (SELECT coalesce(jsonb_agg(jsonb_build_object('requirementId', c.requirement_id, 'code', c.code, 'parameter', c.parameter)
+                                                                ORDER BY c.code, c.parameter), '[]'::jsonb)
+                                        FROM requirement_parameter_conflicts(v.registry_id, q.id, v.parameters, v.object_scope) c)
+                                   ELSE '[]'::jsonb END AS conflicts
                               FROM requirement q
                               JOIN requirement_revision v ON v.id = q.current_revision_id
                               JOIN requirement_registry g ON g.id = v.registry_id
                               LEFT JOIN requirement_registry_active a ON a.registry_id = v.registry_id
                               LEFT JOIN requirement sq ON sq.id = v.superseded_by_requirement_id
-                              LEFT JOIN LATERAL (SELECT c.state, c.seq FROM requirement_coverage c WHERE c.requirement_revision_id = v.id
+                              LEFT JOIN LATERAL (SELECT c.state, c.seq,
+                                                        EXISTS (SELECT 1 FROM requirement_coverage_object o WHERE o.coverage_id = c.id AND o.unit_status = 'mismatch') AS unit_mismatch
+                                                   FROM requirement_coverage c WHERE c.requirement_revision_id = v.id
                                                   ORDER BY c.seq DESC LIMIT 1) cv ON true`;
 
 export const listRequirements = async (db: Queryable, registryId: string): Promise<IRequirementRow[]> =>

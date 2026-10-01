@@ -6,12 +6,13 @@ import { EmptyState } from '../../components/EmptyState';
 import { ErrorState } from '../../components/ErrorState';
 import { LoadingState } from '../../components/LoadingState';
 import { useApiResource } from '../../hooks/useApiResource';
-import { coverageBadge } from '../../utils/requirementLabels';
+import { checkBadges, coverageBadge } from '../../utils/requirementLabels';
 import styles from './Requirements.module.css';
 
 /**
  * Реестр: подтверждённые требования активного реестра. Формулировка из закрытого источника не показывается —
- * только код, статус и пометка о закрытом основании (Р-08-5).
+ * только код, статус и пометка о закрытом основании (Р-08-5, R08-02). Конфликт с другим требованием,
+ * противоречащее основание и несовпадение единиц покрытия видны всегда (R08-01).
  */
 export const RequirementList: FC<{ registryId: string }> = ({ registryId }) => {
   const res = useApiResource((signal) => listRequirements(registryId, signal), `requirements:${registryId}`);
@@ -35,6 +36,7 @@ export const RequirementList: FC<{ registryId: string }> = ({ registryId }) => {
               <Badge tone="success" icon="user-check" label="Подтверждено человеком" />
             )}
             {coverageBadge(r.coverageState)}
+            {checkBadges(r)}
             {r.restricted ? <Badge tone="muted" icon="lock" label="Есть закрытое основание" /> : null}
           </div>
           {r.visible ? (

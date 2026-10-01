@@ -1,6 +1,7 @@
 // Типы ответов этапа 08 (D-026): реестр, прогоны анализа, кандидаты, требования и факты, покрытие, решения,
 // допущения, вопросы заказчику, пометки и полнота. Поля текста — null, если пользователь не читает все
-// основания supports (Р-08-5): тогда показывается безопасная оболочка.
+// основания объекта любой роли с наследованием (Р-08-5, R08-02): тогда показывается безопасная оболочка.
+// Конфликт требований и несовпадение единиц покрытия — R08-01.
 
 export type TEvidenceRole = 'supports' | 'contradicts' | 'clarifies' | 'supersedes_context';
 export type TCandidateStatus = 'proposed' | 'confirmed' | 'rejected' | 'superseded';
@@ -31,6 +32,13 @@ export interface IObjectScope {
   section?: string;
   floor?: string;
   room?: string;
+}
+
+// Конфликт с действующим требованием реестра: имя параметра — null, если одно из требований скрыто.
+export interface IConflict {
+  requirementId: string;
+  code: string;
+  parameter: string | null;
 }
 
 export interface IRegistry {
@@ -112,6 +120,8 @@ export interface IRequirementCandidate extends ICandidateBase {
   statement: string | null;
   parameters: IParameter[] | null;
   objectScope: IObjectScope | null;
+  contradicted: boolean;
+  conflicts: IConflict[];
 }
 
 export interface IFactCandidate extends ICandidateBase {
@@ -135,6 +145,10 @@ export interface IRequirement {
   changeKind: string;
   supersededByCode: string | null;
   coverageState: TCoverageState | null;
+  coverageUnitMismatch: boolean;
+  contradicted: boolean;
+  conflicts: IConflict[];
+  conflictNote: string | null;
   rowVersion: number;
   visible: boolean;
   restricted: boolean;
@@ -159,6 +173,9 @@ export interface ICoverageObject {
   match: 'explicit_line' | 'complex_rate' | null;
   decisionId: string | null;
   note: string | null;
+  requirementUnits: string[] | null;
+  calculationUnit: string | null;
+  unitStatus: 'match' | 'mismatch' | 'not_comparable' | null;
 }
 
 export interface ICoverage {
@@ -169,6 +186,9 @@ export interface ICoverage {
   origin: 'human' | 'system';
   reason: string | null;
   createdAt: string;
+  visible: boolean;
+  unitMismatch: boolean;
+  unitMismatchReason: string | null;
   objects: ICoverageObject[];
   objectCount: number;
 }
@@ -193,6 +213,7 @@ export interface IRequirementRevision {
   createdAt: string;
   visible: boolean;
   statement: string | null;
+  conflictNote: string | null;
   supersededByCode: string | null;
   evidence: IEvidenceLink[];
 }
@@ -214,7 +235,8 @@ export interface ICustomerQuestion {
   id: string;
   requirementId: string | null;
   requirementCode: string | null;
-  text: string;
+  visible: boolean;
+  text: string | null;
   status: 'draft' | 'sent' | 'answered' | 'closed';
   askedAt: string | null;
   answeredAt: string | null;

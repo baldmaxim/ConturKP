@@ -1,6 +1,7 @@
 // Этап 08: видимость производного текста (Р-08-5, OD-08-4) — 7 обязательных тестов, защищённые основания
 // договора и письма, отзыв права, администратор без права на источник, вход модели по правам запустившего.
-// Формулировка видна целиком, только если пользователь читает все основания supports; иначе — оболочка.
+// Формулировка видна целиком, только если пользователь читает все основания любой роли с наследованием (R08-02);
+// иначе — оболочка. Отрицательный тест секрета из clarifies — requirementsTaint.test.ts.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createContract, grantCreator, linkContract, setAccess, uploadMain } from './contractFixtures.ts';
 import { createTestDb, idem, makeWorker, testConfig, type ITestDb } from './helpers.ts';
@@ -105,9 +106,10 @@ describe('видимость формулировки (Р-08-5)', () => {
     expect((await st.s.manager.get(`/evidence/${ids.contractFrag}`)).status).toBe(200);
   });
 
-  it('закрытое clarifies не скрывает формулировку, но само не показывается', async () => {
+  it('закрытое clarifies скрывает формулировку (R08-02); открытое supports читается по правам источника', async () => {
     const r = await view('eng1', ids.rMix);
-    expect(r).toMatchObject({ visible: true, restricted: true, statement: 'Гидроизоляция обмазочная' });
+    expect(r).toMatchObject({ visible: false, restricted: true, statement: null });
+    expect(await view('manager', ids.rMix)).toMatchObject({ visible: true, statement: 'Гидроизоляция обмазочная' });
     const ev = r.revisions[0].evidence as { role: string; text: string | null; restricted: boolean }[];
     expect(ev.find((e) => e.role === 'clarifies')).toMatchObject({ restricted: true, text: null });
     expect(ev.find((e) => e.role === 'supports')).toMatchObject({ restricted: false, text: T.waterproofing });

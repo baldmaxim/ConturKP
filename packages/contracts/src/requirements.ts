@@ -37,7 +37,13 @@ export const CreateRequirementCandidateRequest = z
   .strict();
 
 export const ConfirmRequirementCandidateRequest = z
-  .object({ statement: text(4000).optional(), parameters: z.array(ParameterSchema).max(20).optional(), objectScope: ObjectScopeSchema.optional() })
+  .object({
+    statement: text(4000).optional(),
+    parameters: z.array(ParameterSchema).max(20).optional(),
+    objectScope: ObjectScopeSchema.optional(),
+    // R08-01: пояснение при конфликте с действующим требованием или противоречащем основании.
+    conflictNote: nullableText(1000),
+  })
   .strict();
 
 export const RejectCandidateRequest = z.object({ reason: text(1000) }).strict();
@@ -80,6 +86,8 @@ export const RecordCoverageRequest = z
   .object({
     state: z.enum(['uncovered', 'partial', 'covered', 'not_applicable', 'needs_review']),
     reason: nullableText(2000),
+    // R08-01: пояснение к несовпадению единиц требования и строки расчёта.
+    unitMismatchReason: nullableText(1000),
     objects: z.array(CoverageObject).max(50).default([]),
   })
   .strict();

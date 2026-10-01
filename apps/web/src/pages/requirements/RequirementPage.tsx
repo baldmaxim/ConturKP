@@ -14,7 +14,7 @@ import { PageHeader } from '../../components/PageHeader';
 import { TextAreaField } from '../../components/TextAreaField';
 import { useApiResource } from '../../hooks/useApiResource';
 import { formatDateTime } from '../../utils/datetime';
-import { COVERAGE_LABELS, coverageBadge } from '../../utils/requirementLabels';
+import { checkBadges, conflictList, COVERAGE_LABELS, coverageBadge } from '../../utils/requirementLabels';
 import form from '../../styles/form.module.css';
 import { CoverageForm } from './CoverageForm';
 import { EvidenceLinks } from './EvidenceLinks';
@@ -82,6 +82,7 @@ export const RequirementPage: FC = () => {
           <span className={styles.headLine}>
             {card.status === 'superseded' ? <Badge tone="muted" icon="repeat" label={`Заменено ${card.supersededByCode ?? ''}`.trim()} /> : <Badge tone="success" icon="user-check" label="Подтверждено человеком" />}
             {coverageBadge(card.coverageState)}
+            {checkBadges(card)}
             {!card.registryActive ? <Badge tone="muted" icon="archive" label="Прежний реестр" /> : null}
           </span>
         }
@@ -105,6 +106,11 @@ export const RequirementPage: FC = () => {
           ) : (
             <Notice tone="info" icon="lock">Формулировка скрыта: её основание — договор, письмо или иной источник, на который у вас нет права. Видны только служебные данные.</Notice>
           )}
+          {card.conflicts.length > 0 ? (
+            <Notice tone="warning">{`Конфликт с действующими требованиями: ${conflictList(card.conflicts)}. Требование не считается непротиворечивым, пока конфликт не разрешён решением или заменой.`}</Notice>
+          ) : null}
+          {card.contradicted ? <Notice tone="warning">Среди оснований есть противоречащее (роль «Противоречит»).</Notice> : null}
+          {card.conflictNote ? <p className={styles.muted}>{`Пояснение к конфликту при подтверждении: ${card.conflictNote}`}</p> : null}
           {current ? <EvidenceLinks links={current.evidence} /> : null}
         </section>
         <section className={form.section} aria-label="Ревизии">
@@ -117,6 +123,7 @@ export const RequirementPage: FC = () => {
                   <span className={styles.muted}>{`${CHANGE_LABELS[r.changeKind]} · реестр № ${r.registrySeq} · ${formatDateTime(r.createdAt)} МСК`}</span>
                 </div>
                 {r.visible ? <p className={styles.statement}>{r.statement}</p> : <p className={styles.restricted}>Текст скрыт.</p>}
+                {r.conflictNote ? <p className={styles.muted}>{`Пояснение к конфликту: ${r.conflictNote}`}</p> : null}
               </li>
             ))}
           </ol>
@@ -129,13 +136,16 @@ export const RequirementPage: FC = () => {
               <li key={c.id} className={styles.card}>
                 <div className={styles.headLine}>
                   {coverageBadge(c.state)}
+                  {c.unitMismatch ? <Badge tone="warning" icon="calculator" label="Единица не совпадает с расчётом" /> : null}
                   <span className={styles.muted}>{`${c.origin === 'system' ? 'Система' : 'Человек'} · ${formatDateTime(c.createdAt)} МСК${c.revisionId !== card.currentRevisionId ? ' · прежняя ревизия' : ''}`}</span>
                 </div>
                 {c.reason ? <p className={styles.muted}>{c.reason}</p> : null}
+                {c.unitMismatchReason ? <p className={styles.muted}>{`Пояснение к единицам: ${c.unitMismatchReason}`}</p> : null}
+                {!c.visible && c.objectCount > 0 ? <p className={styles.restricted}>Объекты и причина оценки скрыты.</p> : null}
                 {c.objects.map((o) => (
                   <p key={o.id} className={styles.quote}>
                     {o.type === 'calculation_revision'
-                      ? `Расчёт, ревизия ${o.calculationRevisionSeq ?? ''}${o.calculationRevisionKind === 'provisional' ? ' (предварительная)' : ''}: позиция ${o.positionNumber ?? ''} ${o.positionName ?? ''} — ${o.match === 'complex_rate' ? 'комплексная расценка' : 'строка расчёта'}`
+                      ? `Расчёт, ревизия ${o.calculationRevisionSeq ?? ''}${o.calculationRevisionKind === 'provisional' ? ' (предварительная)' : ''}: позиция ${o.positionNumber ?? ''} ${o.positionName ?? ''} — ${o.match === 'complex_rate' ? 'комплексная расценка' : 'строка расчёта'}${o.unitStatus === 'mismatch' ? ` · единица требования ${(o.requirementUnits ?? []).join(', ')}, в расчёте ${o.calculationUnit ?? '—'}` : ''}`
                       : o.type === 'decision'
                         ? 'Решение по требованию'
                         : o.type === 'evidence_fragment'

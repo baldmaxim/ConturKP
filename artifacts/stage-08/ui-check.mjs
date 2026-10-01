@@ -3,8 +3,9 @@
 // Проверяется: реестр создаётся на снимке через диалог; прогон модели предлагает кандидатов с пометкой
 // «Гипотеза модели»; последовательный обход и подтверждение руководителем; инженер не видит кнопки
 // подтверждения; карточка требования — основания, покрытие, решение; полнота — пакетная отметка и
-// завершение прохода; допущение и вопрос; 390/360 px без горизонтальной прокрутки, тёмная тема 1280 px,
-// нет ошибок консоли и CSP.
+// завершение прохода; допущение и вопрос; R08-01 — конфликт требований (отметка, подтверждение только с
+// пояснением) и несовпадение единиц покрытия (поддельный TenderHub по контракту: пояснение обязательно, признак
+// в истории); 390/360 px без горизонтальной прокрутки, тёмная тема 1280 px, нет ошибок консоли и CSP.
 // Требует: npm run build, PostgreSQL ≥ 17 с pgvector (KONTUR_TEST_ADMIN_URL), Chromium по CHROME_PATH.
 // Запуск: CHROME_NO_SANDBOX=1 node artifacts/stage-08/ui-check.mjs → artifacts/stage-08/ui-check.log.
 // UI_SHOTS=<каталог> — снимки экрана ключевых состояний для просмотра человеком (в Git не входят).
@@ -14,6 +15,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { standardTender, startFakeTenderHub, TH, TH_KEY } from '../../scripts/tenderhub-fake.ts';
 
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const BROWSER =
@@ -42,6 +44,8 @@ const url = (user) => {
   return u.toString();
 };
 const PASSWORD = `pw-${randomBytes(12).toString('hex')}`;
+const hub = await startFakeTenderHub({ apiKey: TH_KEY });
+hub.tenders.set(TH.tender, standardTender());
 const env = {
   ...process.env,
   KONTUR_ENV: 'test',
@@ -51,6 +55,8 @@ const env = {
   STORAGE_ROOT: mkdtempSync(join(tmpdir(), 'kontur-ui08-')),
   MODEL_PROVIDER: 'fake',
   MODEL_REVISION: 'fake-heuristic-v1',
+  TENDERHUB_URL: hub.url,
+  TENDERHUB_API_KEY: TH_KEY,
   HTTP_PORT: String(PORT),
   ALLOWED_ORIGINS: BASE,
 };
@@ -332,6 +338,80 @@ try {
   record('360 px: подписи кнопок не обрезаны, иконки видны', await buttonsFit());
   await shot('360-requirement');
 
+  // ---- R08-01: конфликт требований — явная отметка, подтверждение только с пояснением
+  const regId = (await api(`/stages/${stageId}/requirement-registry`)).body.active.id;
+  const frags = (await api(`/requirement-registries/${regId}/fragments?limit=500`)).body.items;
+  const fragOf = (t) => frags.find((f) => (f.text ?? '').includes(t))?.fragmentId;
+  const propose = (statement, parameters, fragment) =>
+    api(`/requirement-registries/${regId}/requirement-candidates`, {
+      method: 'POST',
+      headers: { ...json, 'Idempotency-Key': key() },
+      body: JSON.stringify({ statement, parameters, evidence: [{ fragmentId: fragment, role: 'supports' }] }),
+    });
+  const first = await propose('Класс бетона плиты — B30', [{ name: 'Класс бетона', value: 'B30' }], fragOf('профнастила'));
+  const firstOk = await api(`/requirement-candidates/${first.body.id}/confirm`, { method: 'POST', headers: { ...json, 'If-Match': first.etag, 'Idempotency-Key': key() }, body: '{}' });
+  const second = await propose('Класс бетона плиты — B40', [{ name: 'Класс бетона', value: 'B40' }], fragOf('клинкерным'));
+  record('API: R-0002 подтверждено, второй кандидат с тем же параметром в очереди', firstOk.status === 200 && second.status === 201, `${firstOk.status}/${second.status}`);
+  await send('Page.navigate', { url: tabUrl });
+  await waitFor(text('Реестр № 1'));
+  await clickButton('Кандидаты');
+  await waitFor(text('Ждёт решения'));
+  for (let i = 0; i < 3 && !(await evaluate(text('Конфликт: R-0002'))); i += 1) await clickButton('Далее');
+  record('кандидат с конфликтом: отметка «Конфликт: R-0002» и предупреждение с параметром', await waitFor(`${text('Конфликт: R-0002')} && ${text('Противоречит действующим требованиям: R-0002 («класс бетона»)')}`));
+  record(
+    'без пояснения кнопка «Подтвердить» недоступна',
+    await evaluate(`[...document.querySelectorAll('button')].some((b) => b.innerText.trim() === 'Подтвердить' && b.disabled)`),
+  );
+  record('нет горизонтальной прокрутки на 360 px (кандидат с конфликтом)', await noHorizontalScroll());
+  await shot('360-candidate-conflict');
+  await fillField('Пояснение к конфликту', 'Класс уточнён письмом заказчика; вопрос направлен');
+  await clickButton('Подтвердить');
+  await waitFor(text('Подтверждено'));
+  await clickButton('Реестр');
+  record(
+    'реестр: конфликт показан у обоих требований',
+    await waitFor(`[...document.querySelectorAll('[title^="Конфликт: "]')].length >= 2 && ${text('R-0003')}`),
+  );
+  await clickLink('R-0003');
+  record(
+    'карточка: конфликт с параметром и пояснение подтверждения',
+    await waitFor(`${text('Конфликт с действующими требованиями: R-0002 («класс бетона»)')} && ${text('Пояснение к конфликту при подтверждении: Класс уточнён письмом заказчика')}`),
+  );
+
+  // ---- R08-01: несовпадение единиц покрытия (поддельный TenderHub, ревизия расчёта этапа)
+  const src = await api(`/stages/${stageId}/calculation-source`);
+  await api(`/stages/${stageId}/calculation-source`, { method: 'PUT', headers: { ...json, 'If-Match': src.etag }, body: JSON.stringify({ externalTenderId: TH.tender, externalVersion: null }) });
+  if ((await api(`/stages/${stageId}/calculation-captures`)).body.items.length === 0) {
+    await api(`/stages/${stageId}/calculation-captures`, { method: 'POST', headers: { ...json, 'Idempotency-Key': key() }, body: '{}' });
+  }
+  const calcId = await poll(async () => (await api(`/stages/${stageId}/calculation-revisions`)).body.items?.[0]?.id ?? null, 60_000);
+  record('ревизия расчёта этапа выгружена', Boolean(calcId));
+  const area = await propose('Утепление стен — 120 м²', [{ name: 'Площадь утепления', value: '120', unit: 'м²' }], fragOf('клинкерным'));
+  const areaOk = await api(`/requirement-candidates/${area.body.id}/confirm`, { method: 'POST', headers: { ...json, 'If-Match': area.etag, 'Idempotency-Key': key() }, body: '{}' });
+  await send('Page.navigate', { url: `${BASE}/requirements/${areaOk.body.requirementId}` });
+  await waitFor(text('Требование R-0004'));
+  await fillField('Состояние покрытия', 'covered');
+  await waitFor(`document.querySelector('option[value="${calcId}"]') !== null`);
+  await fillField('Ревизия расчёта', calcId);
+  await waitFor(`document.querySelector('option[value="${TH.p1}"]') !== null`);
+  await fillField('Позиция', TH.p1);
+  await waitFor(`document.querySelector('option[value="${TH.l2}"]') !== null`);
+  await fillField('Строка', TH.l2);
+  await clickButton('Добавить позицию расчёта');
+  await clickButton('Записать оценку');
+  record(
+    'несовпадение единиц показано явно, оценка без пояснения не записана',
+    await waitFor(`${text('единица требования м2, в расчёте м3')} && ${text('Пояснение к несовпадению единиц')} && ${text('Покрытие ещё не оценивалось')}`),
+  );
+  record('нет горизонтальной прокрутки на 360 px (несовпадение единиц)', await noHorizontalScroll());
+  await shot('360-unit-mismatch');
+  await fillField('Пояснение к несовпадению единиц', 'В расчёте объём утеплителя, площадь пересчитана по толщине 0,1 м');
+  await clickButton('Записать оценку');
+  record(
+    'оценка с пояснением записана, признак «Единица не совпадает с расчётом» в истории',
+    await waitFor(`${text('Пояснение к единицам: В расчёте объём утеплителя')} && [...document.querySelectorAll('[title="Единица не совпадает с расчётом"]')].length >= 2`),
+  );
+
   // ---- Полнота: пакетная отметка и завершение прохода
   await send('Page.navigate', { url: tabUrl });
   await waitFor(text('Реестр № 1'));
@@ -386,6 +466,7 @@ try {
   }
   browser?.kill();
   for (const p of procs) p.kill();
+  await hub.close();
   await sleep(500);
   dropDb();
 }
@@ -394,6 +475,6 @@ const out = join(ROOT, 'artifacts', 'stage-08');
 mkdirSync(out, { recursive: true });
 const summary = `Итог: ${failed ? 'FAIL' : 'PASS'}`;
 const sandbox = process.env.CHROME_NO_SANDBOX === '1' ? ', без песочницы (--no-sandbox, AppArmor)' : '';
-writeFileSync(join(out, 'ui-check.log'), `# ui-check — ${new Date().toISOString()}, Chromium headless (CDP)${sandbox}, реальные server + worker, MODEL_PROVIDER=fake\n${lines.join('\n')}\n${summary}\n`);
+writeFileSync(join(out, 'ui-check.log'), `# ui-check — ${new Date().toISOString()}, Chromium headless (CDP)${sandbox}, реальные server + worker, MODEL_PROVIDER=fake, поддельный TenderHub\n${lines.join('\n')}\n${summary}\n`);
 console.log(summary);
 process.exit(failed ? 1 : 0);

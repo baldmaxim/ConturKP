@@ -67,7 +67,7 @@ export const StageRecordsPanel: FC<{ stageId: string; caps: string[] }> = ({ sta
                 {a.requirementCode ? <span className={styles.code}>{a.requirementCode}</span> : null}
               </div>
               {a.visible ? <p className={styles.statement}>{a.statement}</p> : <p className={styles.restricted}>Текст скрыт: основание из закрытого источника.</p>}
-              {a.status === 'open' && canConfirm ? (
+              {a.status === 'open' && canConfirm && a.visible ? (
                 <div className={styles.actions}>
                   <Button variant="primary" icon="check" onClick={() => void run(() => reviseAssumption(a, { status: 'confirmed' }))}>
                     Подтвердить
@@ -100,9 +100,14 @@ export const StageRecordsPanel: FC<{ stageId: string; caps: string[] }> = ({ sta
                 <Badge tone={q.status === 'answered' ? 'success' : q.status === 'closed' ? 'muted' : 'warning'} icon={q.status === 'answered' ? 'check' : 'message-square'} label={QUESTION_LABELS[q.status]} />
                 {q.askedAt ? <span className={styles.muted}>{`отправлен ${formatDateTime(q.askedAt)} МСК`}</span> : null}
               </div>
-              <p className={styles.statement}>{q.text}</p>
-              {q.answerNote || q.answerQaItemNo ? <p className={styles.quote}>{`Ответ: ${q.answerNote ?? ''}${q.answerQaItemNo ? ` (вопрос–ответ № ${q.answerQaItemNo})` : ''}`}</p> : null}
-              {canCreate && NEXT[q.status] ? (
+              {q.requirementCode ? <span className={styles.code}>{q.requirementCode}</span> : null}
+              {q.visible ? (
+                <p className={styles.statement}>{q.text}</p>
+              ) : (
+                <p className={styles.restricted}>Текст скрыт: вопрос связан с требованием, основание которого вам недоступно.</p>
+              )}
+              {q.visible && (q.answerNote || q.answerQaItemNo) ? <p className={styles.quote}>{`Ответ: ${q.answerNote ?? ''}${q.answerQaItemNo ? ` (вопрос–ответ № ${q.answerQaItemNo})` : ''}`}</p> : null}
+              {canCreate && q.visible && NEXT[q.status] ? (
                 <div className={styles.actions}>
                   {q.status === 'sent' ? (
                     <TextAreaField label="Ответ заказчика" value={text.answer} onValueChange={(v) => setText({ ...text, answer: v })} rows={2} />

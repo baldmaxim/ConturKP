@@ -1,7 +1,7 @@
 // Подписи и бейджи этапа 08 (BRAND.md §4.5–4.6): тип данных различим — гипотеза модели, предложение
 // человека, подтверждение человеком; неполнота — пунктиром; цвет не единственный носитель смысла.
 import type { ReactElement } from 'react';
-import type { TCandidateOrigin, TCandidateStatus, TCoverageState, TEvidenceRole, TFragmentState } from '../api/requirementTypes';
+import type { IConflict, TCandidateOrigin, TCandidateStatus, TCoverageState, TEvidenceRole, TFragmentState } from '../api/requirementTypes';
 import { Badge } from '../components/Badge';
 
 export const ROLE_LABELS: Record<TEvidenceRole, string> = {
@@ -86,3 +86,14 @@ export const fragmentStateBadge = (s: TFragmentState): ReactElement =>
   ) : (
     <Badge tone="warning" icon="hourglass" dashed label={FRAGMENT_STATE_LABELS[s]} />
   );
+
+// Конфликт с действующими требованиями (R08-01): код и, если виден, параметр.
+export const conflictList = (conflicts: readonly IConflict[]): string =>
+  conflicts.map((c) => (c.parameter ? `${c.code} («${c.parameter}»)` : c.code)).join(', ');
+
+// Признаки, которые не дают молча считать требование непротиворечивым, а покрытие — обычным (R08-01).
+export const checkBadges = (r: { contradicted: boolean; conflicts: readonly IConflict[]; coverageUnitMismatch?: boolean }): ReactElement[] => [
+  ...(r.conflicts.length > 0 ? [<Badge key="conflict" tone="danger" icon="file-exclamation-point" label={`Конфликт: ${[...new Set(r.conflicts.map((c) => c.code))].join(', ')}`} />] : []),
+  ...(r.contradicted ? [<Badge key="contradicts" tone="warning" icon="file-exclamation-point" label="Есть противоречащее основание" />] : []),
+  ...(r.coverageUnitMismatch ? [<Badge key="unit" tone="warning" icon="calculator" label="Единица не совпадает с расчётом" />] : []),
+];

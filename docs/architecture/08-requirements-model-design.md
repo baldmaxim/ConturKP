@@ -2,7 +2,7 @@
 
 Документ составлен до миграции по решениям владельца: `docs/reviews/08-owner-decisions.md` (D-026). Ветка `stage-08` создана от принятого `stage-07` `4ad01d553885096071de222373b767ad1682b8c0`.
 
-**Статус.** Миграция **остановлена** по условию решения: формулировки части AD-08-x preflight и нормативных документов расходятся с принятыми решениями, а часть расхождений касается владения, кратности, идентичности ревизий, источника истины, прав и машины состояний. Расхождения — раздел 3 (Р-08-1…Р-08-8), матрица миграции с отметкой готовности каждой таблицы — раздел 5. Код и миграции не писались.
+**Статус.** Первая редакция (разделы 1–11) остановила миграцию на расхождениях Р-08-1…Р-08-8. Владелец разрешил их и OD-08-6 (`docs/reviews/08-arch-decisions-2.md`, дополнение D-026). Разделы 12–17 — соответствие номеров AD, окончательная матрица миграции `0019`, проверка условий остановки и интерпретации; разделы 1–11 сохранены как история решения.
 
 ## 1. Решения и что из них следует для схемы
 
@@ -367,3 +367,153 @@
 5. Приёмочные тесты решения, A05, A06, A44, регрессия 02–07, отчёт с таблицей G1–G13.
 
 Этапы 09+ не начинаются.
+
+## 12. Соответствие номеров AD
+
+Нормативна нумерация preflight (решение «0. Нумерация»). Темы, которые в первом тексте решения шли под номерами AD-08-1…AD-08-7, второго набора AD не образуют и записаны как смысловые решения.
+
+| Preflight | Тема preflight | Смысловое решение владельца | Источник |
+|---|---|---|---|
+| AD-08-1 | прогон извлечения | неизменяемый `analysis_run`; повтор на тех же входах идемпотентен | D-026, «Model run» |
+| AD-08-2 | основание не-фрагмент (Q&A) | Q&A получает собственные фрагменты, без поискового индекса | `08-arch-decisions-2.md`, Р-08-1 |
+| AD-08-3 | область этапа | анализ по конкретному `evidence_scope_id`; один активный реестр на этап с явным указателем; перенос на новый снимок — явной операцией | D-026 «Source scope»; Р-08-6; «Candidate confirmation» |
+| AD-08-4 | механизм видимости | полная формулировка — только при доступе ко всем основаниям `supports`, иначе безопасная оболочка | OD-08-4; Р-08-5 |
+| AD-08-5 | покрытие при новой ревизии расчёта | оценка ревизии требования с историей + типизированные объекты (`evidence_fragment`, `calculation_revision`, `decision`, `manual_confirmation`); `needs_review` | первый текст «AD-08-5»; Р-08-2 |
+| AD-08-6 | решения и барьер | существующая таблица `decision`, строка — неизменяемая версия, замена — `supersedes_decision_id`; новые виды этапа 08; право — `requirement.decide` | первый текст «AD-08-6»; Р-08-3 |
+| AD-08-7 | модель фактов | `fact` → неизменяемые ревизии, `fact_kind` — расширяемый справочник, подтверждение `fact.confirm`; перечень 13 типов у Locus не берётся | первый текст «AD-08-7»; OD-08-3; Р-08-4 |
+| AD-08-8 | контракт шлюза | минимум полей контракта модели, `fake`-провайдер | OD-08-2 |
+| — | идентичность требования | `requirement` → `requirement_revision`, любое содержательное изменение — новая ревизия | первый текст «AD-08-1» |
+| — | кандидат ≠ требование | `requirement_candidate`, `fact_candidate`; подтверждение — только явно человеком | первый текст «AD-08-2»; «Candidate confirmation» |
+| — | основания с ролью | «многие ко многим», роли `supports` / `contradicts` / `clarifies` / `supersedes_context` | первый текст «AD-08-3» |
+| — | права | возможности из существующей модели ролей + централизованная функция БД | OD-08-5; Р-08-8 |
+| OD-08-6 | допущения, вопросы, пометки | три отдельных типа: `assumption`, `customer_question`, `stage_note` | OD-08-6 = ACCEPTED, вариант A |
+
+## 13. Окончательная матрица миграции `0019_requirements.sql`
+
+### 13.1. Ветка доказательств Q&A (Р-08-1) — изменение таблиц этапов 05 и 07
+
+| Объект | Изменение | Образец |
+|---|---|---|
+| `qa_item_revision` | `UNIQUE (id, tender_id)` для составных FK; триггер после вставки создаёт фрагменты вопроса и ответа; существующие ревизии получают фрагменты в миграции | составные ключи 0017 |
+| `evidence_fragment` | колонка `qa_item_revision_id`; `source_unit_type` + `qa_item_revision`; `origin` + `qa_question`, `qa_answer`; ветка CHECK формы: источник — ровно ревизия Q&A, владелец — тендер ревизии; составной FK по тендеру | ветка транскрипции 0018 (И-07-7) |
+| `evidence_scope_item` | `unit_type` + `qa_item_revision`, колонка `qa_item_revision_id`, ветка формы, FK по тендеру; охранник: вопрос тендера снимка, ветка без этапа или этого этапа, последняя ревизия вопроса | единица транскрипции 0018 |
+| `evidence_scope_composition_hash` | строка единицы Q&A — отдельной формы; хэши существующих снимков не меняются | 0018 |
+| `evidence_scope_verify` | полнота: каждый вопрос веток тендера (без этапа или этого этапа) — последней ревизией | 0018 |
+| код | `communicationUnits`, `IScopeUnit`, хэш снимка в `@kontur/core`; единицы Q&A не передаются в прогоны поиска и в индекс; цитата — по доступу к тендеру | — |
+
+Поисковый индекс и таблицы поиска не меняются.
+
+### 13.2. Права (Р-08-8)
+
+| Объект | Содержание |
+|---|---|
+| `tender_capabilities(user, tender) → text[]` | повторяет `tenderCapabilities` из `@kontur/core`: активный человек, глобальная роль, действующее назначение на тендер; совпадение с кодом — тест |
+| `has_tender_capability(user, tender, capability) → boolean` | единственный предикат второй линии для подтверждения, решения, переходов и иных критичных изменений этапа 08 |
+| возможности этапа 08 | инженер: `requirement.read`, `requirement.create`, `analysis.run`, `fact.read`, `fact.create`; руководитель: дополнительно `requirement.confirm`, `requirement.decide`, `requirement.manage`, `fact.confirm`; администратор без назначения — ничего |
+
+### 13.3. Реестр и прогоны
+
+| Таблица | Класс | Ключевые колонки | Ограничения и охранники |
+|---|---|---|---|
+| `requirement_registry` | immutable | `tender_id`, `stage_id`, `evidence_scope_id`, `seq`, `previous_registry_id`, `reason`, `created_by` | снимок того же этапа; `seq` = последний + 1; `previous_registry_id` = текущий активный реестр (первый — без него); создаёт `requirement.manage` |
+| `requirement_registry_active` | mutable (указатель) | `stage_id` (PK), `tender_id`, `registry_id`, `row_version`, `updated_by` | реестр того же этапа; новый указатель — только на реестр, чей `previous_registry_id` = прежний указатель; меняется в той же транзакции, что и создание реестра |
+| `analysis_run` | frozen-after | `registry_id`, `evidence_scope_id`, `task` (`requirement_extraction` / `fact_extraction`), `provider_id`, `model_id`, `model_version`, `prompt_version`, `prompt_sha256`, `inference_config`, `config_sha256`, `output_schema_version`, `input_sha256`, `attempt`, `status` (`queued` / `running` / `completed` / `completed_with_gaps` / `failed`), `failure_code`, `coverage`, `result`, `progress`, `requested_by`, `job_id`, `started_at`, `finished_at` | снимок = снимок реестра; запускающий — `analysis.run`; частичная уникальность ключа повтора (реестр, задача, провайдер, модель, версия, промпт, настройки, вход) для неуспешно-незавершённых; переходы только вперёд; после финала неизменен |
+| `analysis_run_input` | immutable | `run_id`, `fragment_id` | фрагмент входит в снимок прогона и допустимого происхождения; пишется только у прогона в `queued` |
+
+### 13.4. Кандидаты, требования, факты
+
+| Таблица | Класс | Ключевые колонки | Ограничения и охранники |
+|---|---|---|---|
+| `requirement_candidate` | frozen-after (меняется только статус) | `registry_id`, `origin` (`human` / `model` / `rule`), `analysis_run_id`, `candidate_key`, `target_requirement_id`, `rebased_from_candidate_id`, `derived_from_candidate_id`, `statement`, `parameters`, `object_scope`, `rationale`, `confidence`, `status` (`proposed` / `confirmed` / `rejected` / `superseded`), `status_reason`, `decided_by`, `created_by` | модельный и правиловой — с завершённым прогоном того же реестра, `(analysis_run_id, candidate_key)` уникальны; ручной — автор с `requirement.create`; переходы только из `proposed` и только в активном реестре; `confirmed` — `requirement.confirm` и ревизия требования в той же транзакции (отложенная проверка); перенос — новый кандидат в активном реестре, один на (исходный, реестр) |
+| `requirement` | mutable (указатель) | `tender_id`, `stage_id`, `code`, `current_revision_id`, `row_version` | `(stage_id, code)` уникальны; `current_revision_id` NOT NULL, отложенный FK, указывает на последнюю ревизию этого требования |
+| `requirement_revision` | immutable | `requirement_id`, `registry_id`, `seq`, `supersedes_revision_id`, `status` (`confirmed` / `superseded`), `change_kind` (`confirmation` / `carry_over` / `supersede`), `candidate_id`, `carried_from_revision_id`, `statement`, `parameters`, `object_scope`, `superseded_by_requirement_id`, `authored_by`, `confirmed_by`, `reason`, `content_sha256` | линейная история под advisory-блокировкой; только в активном реестре; `confirmation` — кандидат `confirmed` того же реестра и того же требования (новое — `seq = 1`), `requirement.confirm`; `carry_over` — из ревизии предыдущего реестра, все основания `supports` в новом снимке, `requirement.manage`; `supersede` — заменяющее требование того же этапа в активном реестре, `requirement.manage` |
+| `fact_kind` | справочник | `code` (PK), `title`, `value_type`, `normative_source` | заполняется только миграцией; CHECK со списком типов нет |
+| `fact_candidate` | frozen-after | как `requirement_candidate`, плюс `fact_kind`, `display_value`, `normalized_value`, `unit`, `target_fact_id`; без `statement` | подтверждение — `fact.confirm`; ручной — `fact.create` |
+| `fact` | mutable (указатель) | `tender_id`, `stage_id`, `fact_kind`, `current_revision_id`, `row_version` | отложенный FK на последнюю ревизию |
+| `fact_revision` | immutable | `fact_id`, `registry_id`, `seq`, `supersedes_revision_id`, `status`, `change_kind`, `candidate_id`, `display_value`, `normalized_value`, `unit`, `quality`, `authored_by`, `confirmed_by`, `content_sha256` | как у ревизии требования; права — `fact.confirm` |
+| `evidence_link` | immutable | `tender_id`, `fragment_id`, `role` (`supports` / `contradicts` / `clarifies` / `supersedes_context`) и ровно один владелец: `requirement_candidate_id`, `requirement_revision_id`, `fact_candidate_id`, `fact_revision_id`, `decision_id`, `assumption_revision_id` | `num_nonnulls(владельцы) = 1`; фрагмент — в снимке реестра владельца (решение и допущение — активного реестра этапа); у кандидатов и ревизий — хотя бы одно `supports` (отложенно); у фактов основание `supports` — только `document_text`, `recognized_text`, `email_body`, `attachment_text`, `qa_answer` (триггер D-018) |
+
+### 13.5. Покрытие (Р-08-2)
+
+| Таблица | Класс | Ключевые колонки | Ограничения и охранники |
+|---|---|---|---|
+| `requirement_coverage` | immutable (история) | `requirement_revision_id`, `seq`, `supersedes_coverage_id`, `state` (`uncovered` / `partial` / `covered` / `not_applicable` / `needs_review`), `reason`, `origin` (`human` / `system`), `assessed_by`, `trigger_calculation_revision_id` | линейная история на ревизию требования; ревизия — текущая в активном реестре; `covered` / `partial` — хотя бы один объект; `uncovered` — без объектов; `not_applicable` — с причиной; `system` — только `needs_review` |
+| `requirement_coverage_object` | immutable | `coverage_id`, `object_type` (`evidence_fragment` / `calculation_revision` / `decision` / `manual_confirmation`), `fragment_id`, `calculation_revision_id`, `external_position_id`, `external_item_id`, `match` (`explicit_line` / `complex_rate`), `decision_id`, `note` | ровно один объект по типу; ревизия расчёта — того же этапа, позиция и строка — из её содержимого; `complex_rate` — позиция без строки (A05), `explicit_line` — строка этой позиции; решение — вида этапа 08 того же этапа; фрагмент — в снимке реестра; `manual_confirmation` — только с пояснением |
+| триггер `calculation_revision` | после вставки | — | действующая оценка `covered` / `partial` с объектом прежней ревизии расчёта этапа получает запись `needs_review` (`system`) в той же транзакции |
+
+### 13.6. Решения, допущения, вопросы, пометки
+
+| Объект | Класс | Содержание |
+|---|---|---|
+| `decision` (0002) | immutable | `decision_type` + `requirement_decision`; для него: этап обязателен, `subject_type = 'requirement'`, предмет — требование того же этапа, `basis_fragment_ids` пуст (основания — `evidence_link`), замена — того же вида и предмета, у каждого решения не больше одной замены; охранник автора: решения импорта — как в 0002, решения 08 — `requirement.decide`; запись — событие барьера `decision_recorded` |
+| `assumption` | mutable (указатель) | `tender_id`, `stage_id`, `requirement_id`, `current_revision_id`, `row_version` |
+| `assumption_revision` | immutable | `seq`, `supersedes_revision_id`, `statement`, `status` (`open` / `confirmed` / `rejected` / `superseded`), `superseded_by_assumption_id`, `reason`, `authored_by`; создание и правка в `open` — `requirement.create`, подтверждение и отклонение — `requirement.confirm` |
+| `customer_question` | mutable | `text`, `status` (`draft` / `sent` / `answered` / `closed`), `asked_at`, `answered_at`, `answer_qa_item_revision_id`, `answer_note`, `responsible_user_id`, `requirement_id`, `row_version`; текст меняется только в `draft`; `answered` — со ссылкой на ревизию Q&A того же тендера или пояснением; `requirement.create` |
+| `stage_note` | immutable | `text`, `supersedes_note_id`, `created_by`; в полноту, факты, требования и вход модели не попадает; `requirement.create` |
+
+### 13.7. Полнота (Р-08-7)
+
+| Объект | Класс | Содержание |
+|---|---|---|
+| `registry_mark_batch` | immutable | `registry_id`, `selector_kind` (`fragments` / `page` / `document_revision` / `mail_message_revision` / `qa_item_revision` / `transcript_revision`), `selector`, `fragment_count`, `mark`, `marked_by` |
+| `registry_fragment_mark` | immutable (история) | `registry_id`, `fragment_id`, `batch_id`, `mark` (`not_requirement` / `cleared`), `reason`, `marked_by`; действующая — последняя по фрагменту; только активный реестр, допустимый фрагмент его снимка, `requirement.create` |
+| `registry_fragment_state(registry)` | функция | состояние каждого допустимого фрагмента снимка: `covered` (основание кандидата или ревизии требования реестра), `reviewed` (только основание факта), `explicitly_not_requirement` (действующая отметка без связей), `unreviewed` |
+| `registry_completeness(registry)` | функция | `total`, `reviewed` (= `covered` + только факты), `covered`, `explicit_not_requirement`, `unreviewed`, `empty_units`; `total = reviewed + explicit_not_requirement + unreviewed` |
+| `requirement_registry_review` | immutable | запись завершения: `registry_id`, `seq`, счётчики, `empty_units`, `completed_by`, `completed_at`; вставка пересчитывает счётчики функцией и отказывает при `unreviewed > 0`; `requirement.manage` |
+
+Допустимое происхождение фрагмента для полноты и входа модели: `document_text`, `recognized_text`, `email_body`, `attachment_text`, `negotiation_speech`, `qa_question`, `qa_answer`. Не входят `model_description` (I06) и `negotiation_hint`. Единица снимка без допустимых фрагментов показывается отдельно с техническим статусом (`not_recognized` — прогона нет, `no_fragments` — прогон без допустимых фрагментов).
+
+### 13.8. Прочее
+
+| Объект | Изменение |
+|---|---|
+| `integration_status` | строка `model` / `ModelGateway` — `NOT_IMPLEMENTED`; после тестов `fake` — `VERIFIED_FIXTURE` |
+| `job` | вид `analysis.extract` (класс `gpu`, приоритет 20, `dedupe_key = analysis:<run_id>`); CHECK видов у `job` нет |
+| роль `kontur_app` | SELECT, INSERT — на неизменяемые; UPDATE — только на указатели (`requirement`, `fact`, `assumption`, `requirement_registry_active`), `requirement_candidate`, `fact_candidate`, `analysis_run`, `customer_question`; `kontur_backup` — SELECT |
+| удаление | нет ни у одной таблицы этапа (`forbid_mutation`, нет DELETE у роли) |
+
+## 14. Проверка условий остановки
+
+| Условие решения | Что требует матрица | Вывод |
+|---|---|---|
+| фундаментально менять доказательства этапа 05 | четвёртая ветка `evidence_fragment` и единица снимка Q&A — по образцу ветки транскрипции 07 и по прямому решению Р-08-1; модель «ровно один источник по виду», FK, неизменяемость, хэш существующих снимков, индекс и поиск не меняются | не фундаментально — остановки нет |
+| менять ревизии расчёта 06 | только триггер после вставки ревизии, пишущий в таблицу этапа 08; ревизии, содержимое, lineage, `CALCULATION_PROVISIONAL` не меняются | остановки нет |
+| менять владение 06a | основания договора — существующие фрагменты с `contract_id`; владение в требование не копируется; видимость — по `contract.read` при чтении | остановки нет |
+| менять почтовые ACL 07 | основания письма и вложения — существующие фрагменты; видимость — по `mail.read` и связи при чтении | остановки нет |
+
+## 15. Инварианты и тесты решения
+
+Пятнадцать инвариантов раздела 7 сохраняются; механизмы уточнены матрицей 13. Дополнительно к ним — по тексту решения:
+
+- видимость (7 тестов): только открытые основания — текст виден; договор без `contract.read` и письмо без `mail.read` — оболочка; отзыв и возврат права меняют только выдачу; оболочка без производных данных; цитата не открывается через требование;
+- покрытие (9 тестов): один и несколько объектов, `partial`, `covered`, `uncovered`, архивированный или заменённый объект, новая ревизия расчёта, A → B → A, комплексная расценка A05;
+- полнота (10 тестов): фрагмент под требованием, только под фактом, `not_requirement`, `unreviewed`, пакет по странице и по документу, новый фрагмент в новом снимке, старый реестр не меняется, новый реестр — явно, завершение при `unreviewed > 0` невозможно;
+- 26 приёмочных тестов первого решения и A05, A06, A44.
+
+## 16. Интерпретации (окончательные)
+
+| № | Интерпретация |
+|---|---|
+| И-08-1 | Решение снимает расхождения с нормативом: отдельные кандидаты вместо `requirement.status = candidate` и `model_suggestion`; статус — в ревизии; `analysis_run` вместо `review_run`; возможности решения вместо `requirement.write` / `finding.write`. Нормативные документы обновляются вместе с миграцией. |
+| И-08-2 | Вход прогона — допустимые фрагменты снимка, которые запустивший может читать; состав входит в `input_sha256`. |
+| И-08-3 | Повтор прогона идемпотентен для незавершённых и успешных; после `failed` — новая попытка (`attempt`). |
+| И-08-4 | Приоритет `analysis.extract` — 20 (поправка ADR-004 §7a). |
+| И-08-5 | Правка предложения — новый кандидат (`derived_from_candidate_id`), прежний — `superseded`; при подтверждении текст ревизии — текст подтверждающего, исходный остаётся у кандидата. |
+| И-08-6 | Модель в 08 предлагает только кандидаты требований и фактов; предложения связей, покрытия и формулировок решений не реализуются. |
+| И-08-7 | Провайдер `rules` (D-018) зарезервирован: без нормативного перечня типов правил нет; отчёт — «D-018 structural model implemented; closed fact taxonomy unavailable in repository». |
+| И-08-8 | Фрагменты, которые проверяющий читать не может, остаются `unreviewed` для него; завершить проход может только пользователь с доступом ко всем фрагментам. |
+| И-08-9 | `decision_recorded` пишется только для решений 08; требования, кандидаты, факты, покрытие, допущения, вопросы и пометки событий барьера не порождают. |
+| И-08-10 | `fact_kind` на этапе 08: `contract_party`, `contract_price`, `estimate_total` (D-018: «стороны договора», «цена договора», «итог сметы») и `advance_payment` (манифест регрессии, случай 11). Других типов нет. |
+| И-08-11 | Факт из ответа Q&A допустим: ответ заказчика — письменный источник (I08 различает устное и письменное); вопрос участника основанием факта не является. |
+| И-08-12 | «Связан с кандидатом» засчитывается любым кандидатом реестра, включая отклонённого: отклонение — тоже просмотр. |
+| И-08-13 | Оценку покрытия записывает пользователь с `requirement.confirm`: это подтверждение, а не предложение (OD-08-5). |
+| И-08-14 | Перенос реестра: подтверждённое требование, все основания `supports` которого есть в новом снимке, переносится ревизией `carry_over`; остальные — кандидатами (`rebased_from`), если в новом снимке осталось хотя бы одно `supports`; иначе не переносятся и остаются в истории прежнего реестра. Оценки покрытия не переносятся. |
+| И-08-15 | Единица снимка без допустимых фрагментов в счётчики фрагментов не входит и завершение не блокирует; она показывается отдельно в проходе и в записи завершения (`empty_units`). |
+
+## 17. Порядок реализации
+
+1. Миграция `0019` и прямые SQL-тесты инвариантов.
+2. Слой БД: реестр, прогоны, кандидаты, требования, факты, основания, покрытие, решения, допущения, вопросы, пометки, полнота, проекция видимости.
+3. Шлюз модели (`fake`, `openai_compatible`), задание `analysis.extract`.
+4. API (`portal-api.md` §2.7 в редакции этапа 08) и интерфейс.
+5. Тесты решения, A05, A06, A44, регрессия 02–07, smoke, проверка интерфейса, отчёт с таблицей G1–G13.

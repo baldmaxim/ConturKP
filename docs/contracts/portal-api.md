@@ -168,19 +168,34 @@
 
 ### 2.7. Требования, проверки, решения
 
+Этап 08 (D-026). Права — возможности тендера из роли участника (Р-08-8): инженер — `requirement.read`, `requirement.create`, `analysis.run`, `fact.read`, `fact.create`; руководитель — дополнительно `requirement.confirm`, `requirement.decide`, `requirement.manage`, `fact.confirm`. Текст требования, кандидата, факта, решения, допущения и результат прогона выдаются целиком, только если пользователь читает все основания `supports`; иначе — безопасная оболочка: ID, код, статус, служебные данные, число оснований, `restricted: true`, `visible: false` (Р-08-5). Цитата — только `GET /evidence/{id}` по правам источника. Изменения — только в активном реестре этапа (иначе `409 registry_not_active`). Цитировать, подтверждать и отмечать можно только читаемые фрагменты (`409 restricted_fragments`).
+
 | Метод и путь | Право | Ключи | Назначение |
 |---|---|---|---|
-| `GET /stages/{id}/requirements`, `POST /stages/{id}/requirements` | `tender.read` / `requirement.write` | IK | реестр и создание |
-| `POST /requirements/{id}/revisions` | `requirement.write` | IM | новая формулировка с сохранением цитат |
-| `POST /requirements/{id}/transitions` | `requirement.write` | IM | подтверждение, отклонение, замена |
-| `POST /requirements/{id}/coverage-links`, `POST /coverage-links/{id}/transitions` | `requirement.write` | IM, IK | покрытие расчётом |
-| `POST /stages/{id}/review-runs`, `GET /review-runs/{id}` | `review.run` / `tender.read` | IK | запуск проверки на снимке области (создаётся или переиспользуется в той же транзакции) и результаты с охватом |
-| `GET /model-suggestions`, `POST /model-suggestions/{id}/accept`, `…/reject` | `tender.read` / `finding.write` | IM, IK | гипотезы модели; принимает только человек |
-| `GET /stages/{id}/findings`, `POST /findings`, `POST /findings/{id}/transitions` | `tender.read` / `finding.write` | IM, IK | замечания и переходы |
-| `POST /discrepancies/{id}/status-events` | `finding.write` | IK | изменение одной оси статуса с основанием |
-| `POST /decisions` | `finding.write` | IK | решение человека |
-| `POST /questions`, `PATCH /questions/{id}` | `finding.write` | IM, IK | вопросы заказчику |
-| `POST /risk-acceptances` | `risk.accept` | IK | принятие бизнес-риска (только руководитель) |
+| `GET /stages/{id}/requirement-registry` | `requirement.read` | — | активный реестр, история реестров, счётчики полноты, последняя запись завершения, настроена ли модель |
+| `POST /stages/{id}/requirement-registries` | `requirement.manage` | IK | реестр на снимке области; при действующем — переход с переносом (ответ — `carry`); тот же снимок — `409 same_scope` |
+| `GET /requirement-registries/{id}/completeness`, `GET …/fragments?scopeItemId=&state=` | `requirement.read` | — | счётчики (`total = reviewed + explicit_not_requirement + unreviewed`), единицы снимка с техническим статусом, состояния фрагментов (текст — по правам источника) |
+| `POST /requirement-registries/{id}/marks` | `requirement.create` | IK | отметка `not_requirement` (с причиной) или `cleared` по селектору: `fragments`, `page`, `document_revision`, `mail_message_revision`, `qa_item_revision`, `transcript_revision`; ответ — развёрнутые ID |
+| `POST /requirement-registries/{id}/reviews` | `requirement.manage` | IK | завершение прохода полноты; `409 unreviewed` при непросмотренных; `409 restricted_fragments`, если часть фрагментов недоступна |
+| `POST /requirement-registries/{id}/analysis-runs`, `GET …/analysis-runs`, `GET /analysis-runs/{id}` | `analysis.run` / `requirement.read` | IK | прогон модели (`requirement_extraction`, `fact_extraction`) по снимку и читаемым фрагментам; повтор — тот же прогон (`reused`); `409 model_not_configured`; результат виден, если читаются все фрагменты входа |
+| `GET /requirement-registries/{id}/candidates?kind=requirement|fact&status=&runId=` | `requirement.read` / `fact.read` | — | кандидаты |
+| `POST /requirement-registries/{id}/requirement-candidates`, `…/fact-candidates`; `GET /requirement-candidates/{id}`, `/fact-candidates/{id}` | `requirement.create` / `fact.create` | IK | предложение человека (правка — `derivedFromCandidateId`, ревизия требования — `targetRequirementId`) |
+| `POST /requirement-candidates/{id}/confirm`, `/fact-candidates/{id}/confirm` | `requirement.confirm` / `fact.confirm` | IM, IK | подтверждение (формулировку можно уточнить); ответ — ID требования или факта и ревизии |
+| `POST /requirement-candidates/{id}/reject`, `/fact-candidates/{id}/reject` | `requirement.confirm` / `fact.confirm` | IM | отклонение с причиной |
+| `POST /requirement-candidates/{id}/rebase`, `/fact-candidates/{id}/rebase` | `requirement.create` / `fact.create` | IK | явный перенос предложения прежнего реестра в активный |
+| `GET /requirement-registries/{id}/requirements`, `GET /requirements/{id}` | `requirement.read` | — | реестр; карточка с ревизиями, основаниями, историей покрытия, решениями, допущениями и вопросами |
+| `POST /requirements/{id}/supersede`, `POST /facts/{id}/supersede` | `requirement.manage` / `fact.confirm` | IM | замена другим требованием или фактом этапа |
+| `POST /requirement-revisions/{id}/coverage` | `requirement.confirm` | IK | оценка покрытия текущей ревизии: состояние и объекты (`evidence_fragment`, `calculation_revision` с позицией и строкой или `complex_rate`, `decision`, `manual_confirmation`) |
+| `POST /requirements/{id}/decisions` | `requirement.decide` | IK | решение по требованию (замена — `supersedesDecisionId`); событие барьера `decision_recorded` |
+| `GET /requirement-registries/{id}/facts`, `GET /facts/{id}`, `GET /fact-kinds` | `fact.read` | — | факты, ревизии, справочник видов |
+| `GET/POST /stages/{id}/assumptions`, `GET /assumptions/{id}`, `POST /assumptions/{id}/revisions` | `requirement.read` / `requirement.create`; подтверждение и отклонение — `requirement.confirm` | IK, IM | допущения ПД |
+| `GET/POST /stages/{id}/customer-questions`, `PATCH /customer-questions/{id}` | `requirement.read` / `requirement.create` | IK, IM | вопросы заказчику: статусы, ответ — ревизия Q&A или пояснение; отправки нет |
+| `GET/POST /stages/{id}/notes` | `requirement.read` / `requirement.create` | IK | пометки этапа |
+| `POST /stages/{id}/review-runs`, `GET /review-runs/{id}` | `review.run` / `tender.read` | IK | этап 09: запуск проверки на снимке области и результаты с охватом |
+| `GET /model-suggestions`, `POST /model-suggestions/{id}/accept`, `…/reject` | `tender.read` / `finding.write` | IM, IK | этапы 09+: гипотезы модели; принимает только человек |
+| `GET /stages/{id}/findings`, `POST /findings`, `POST /findings/{id}/transitions` | `tender.read` / `finding.write` | IM, IK | этап 09: замечания и переходы |
+| `POST /discrepancies/{id}/status-events` | `finding.write` | IK | этап 09: изменение одной оси статуса с основанием |
+| `POST /risk-acceptances` | `risk.accept` | IK | этап 13: принятие бизнес-риска (только руководитель) |
 
 ### 2.8. Приложения
 

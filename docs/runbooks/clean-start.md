@@ -56,6 +56,12 @@ curl http://127.0.0.1:3200/api/v1/ready   # 200 и ready=true: БД, схема,
 - Модель эмбеддингов необязательна: без неё (`EMBEDDING_PROVIDER=none`) работают точный и полнотекстовый поиск, смысловой честно недоступен. Локальный сервер модели с OpenAI-совместимым `/v1/embeddings` (loopback или LAN): `EMBEDDING_PROVIDER=openai_compatible`, `EMBEDDING_BASE_URL`, `EMBEDDING_MODEL`, `EMBEDDING_MODEL_REVISION`; для моделей E5 — `EMBEDDING_INPUT_TEMPLATE=e5`. Смена модели или ревизии — новая версия индекса, её создаёт worker сам.
 - Проверка интерфейса этапа: `node artifacts/stage-05/ui-check.mjs` — нужен Chromium (`CHROME_PATH` или `EDGE_PATH`); на Ubuntu 23.10+ без песочницы: `CHROME_NO_SANDBOX=1`.
 
+## Требования и модель (этап 08)
+
+- Реестр требований создаёт руководитель тендера на вкладке «Требования» этапа — на зафиксированном снимке области (вкладка «Поиск»). Переход на новый снимок — кнопка «Перенести на новый снимок»: прежний реестр не меняется.
+- Генеративная модель необязательна: без неё (`MODEL_PROVIDER=none`) кандидатов предлагают люди, прогон анализа честно отказывает. Локальный сервер с OpenAI-совместимым `/v1/chat/completions` (loopback или LAN): `MODEL_PROVIDER=openai_compatible`, `MODEL_BASE_URL`, `MODEL_NAME`, `MODEL_REVISION`; при необходимости `MODEL_API_KEY` (только окружение worker), `MODEL_JSON_MODE=json_object`, `MODEL_MAX_INPUT_CHARS`. `MODEL_PROVIDER=fake` — только для разработки и проверок, в production запрещён.
+- Проверка интерфейса этапа: `CHROME_NO_SANDBOX=1 node artifacts/stage-08/ui-check.mjs` (поддельная модель, настоящие `server` + `worker`).
+
 ## Расчёт TenderHub (этап 06)
 
 - Адрес и ключ задаются только в окружении `worker` (`.env` пишет пользователь вручную): `TENDERHUB_URL` (`https://…`; `http` — только loopback) и `TENDERHUB_API_KEY` (ключ `thk_…` с областью «Чтение тендеров и смет», ограниченный разрешёнными тендерами). Ключ уходит только заголовком `X-API-Key`; `config:check` показывает лишь «задано / не задано». Без них выгрузка завершается `failed` с причиной `integration_not_configured`, остальной портал работает.

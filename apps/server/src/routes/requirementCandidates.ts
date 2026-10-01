@@ -210,6 +210,9 @@ export const requirementCandidatesRouter = (pool: Pool): Router => {
           const rowVersion = requireIfMatch(req, id);
           const c = await load(client, ctx, id, CAPS[kind].confirm);
           const target = { tenderId: c.tender_id, entityType, entityId: id };
+          // Сначала версия: конкурентное второе подтверждение получает 412 независимо от того, успел ли первый
+          // зафиксироваться (инвариант 14 — предсказуемый конфликт).
+          if (c.row_version !== rowVersion) throw versionConflict({ status: c.status, rowVersion: c.row_version });
           requireActiveRegistry(c.registry_active, target);
           if (c.status !== 'proposed') throw new HttpError(409, 'STATE_CONFLICT', `кандидат уже в статусе ${c.status}`, { current: { status: c.status } }, target);
           const links = (await linksOf(client, `${kind}_candidate_id`, [id])).get(id) ?? [];
@@ -257,6 +260,7 @@ export const requirementCandidatesRouter = (pool: Pool): Router => {
           const rowVersion = requireIfMatch(req, id);
           const body = parseBody(RejectCandidateRequest, req.body);
           const c = await load(client, ctx, id, CAPS[kind].confirm);
+          if (c.row_version !== rowVersion) throw versionConflict({ status: c.status, rowVersion: c.row_version });
           requireActiveRegistry(c.registry_active, { tenderId: c.tender_id, entityType, entityId: id });
           const ok = kind === 'requirement'
             ? await rejectRequirementCandidate(client, id, rowVersion, ctx.principal.userId, body.reason)

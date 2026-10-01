@@ -2241,9 +2241,10 @@ CREATE TRIGGER requirement_registry_review_no_truncate BEFORE TRUNCATE ON requir
 
 -- ---------------------------------------------------------------- Статус интеграции (OD-08-2)
 
--- Шлюз генеративной модели: в разработке — поддельный провайдер; живой прогон — на целевом ПК (GPU).
+-- Шлюз генеративной модели: контракт проверен поддельным провайдером и поддельным HTTP-сервером (VERIFIED_FIXTURE);
+-- живой прогон — на целевом ПК с GPU (U-01/U-05), до него — NOT_RUN.
 INSERT INTO integration_status (system, component, status, details)
-VALUES ('model', 'ModelGateway', 'NOT_IMPLEMENTED', '{"mode": "fake_provider_until_target_pc"}'::jsonb)
+VALUES ('model', 'ModelGateway', 'VERIFIED_FIXTURE', '{"live": "NOT_RUN", "blockedBy": "U-01"}'::jsonb)
 ON CONFLICT (system, component) DO NOTHING;
 
 -- ---------------------------------------------------------------- Права роли приложения

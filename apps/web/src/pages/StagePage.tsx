@@ -12,6 +12,7 @@ import form from '../styles/form.module.css';
 import { DocumentsTab } from './sources/DocumentsTab';
 import { ImportBatchList } from './sources/ImportBatchList';
 import { CalculationTab } from './calculation/CalculationTab';
+import { RequirementsTab } from './requirements/RequirementsTab';
 import { SearchTab } from './search/SearchTab';
 import { InputEventsLog } from './sources/InputEventsLog';
 import { SourceSetTab } from './sources/SourceSetTab';
@@ -26,6 +27,7 @@ const TABS: ITab[] = [
   { id: 'sources', label: 'Состав источников', icon: 'list-checks' },
   { id: 'search', label: 'Поиск', icon: 'search' },
   { id: 'calculation', label: 'Расчёт', icon: 'calculator' },
+  { id: 'requirements', label: 'Требования', icon: 'list-checks' },
 ];
 
 export const StagePage: FC = () => {
@@ -96,6 +98,7 @@ export const StagePage: FC = () => {
         {active === 'calculation' ? (
           <CalculationTab stageId={stage.id} canCapture={caps.includes('calculation.capture')} canAdmin={caps.includes('admin.tender')} />
         ) : null}
+        {active === 'requirements' ? <RequirementsTab stageId={stage.id} caps={caps} /> : null}
       </div>
     </>
   );

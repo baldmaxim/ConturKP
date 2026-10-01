@@ -19,7 +19,17 @@ export type TTenderCapability =
   | 'audit.read'
   | 'admin.tender'
   | 'source.write'
-  | 'hold.resolve';
+  | 'hold.resolve'
+  | 'calculation.capture'
+  | 'requirement.read'
+  | 'requirement.create'
+  | 'requirement.confirm'
+  | 'requirement.decide'
+  | 'requirement.manage'
+  | 'analysis.run'
+  | 'fact.read'
+  | 'fact.create'
+  | 'fact.confirm';
 
 export interface IMembership {
   tenderId: string;

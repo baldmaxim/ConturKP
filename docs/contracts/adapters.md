@@ -308,7 +308,7 @@ interface DeliveryTarget {                       // проект контрак�
 ## 8. Шлюз модели
 
 ```ts
-interface ModelGateway {                         // проект; провайдер и API — этап 08
+interface ModelGateway {                         // проект этапа 01; реализация этапа 08 — ниже
   complete<T>(input: {
     task: 'requirement_extraction' | 'discrepancy_hypothesis' | 'change_reason' | 'field_draft' | 'question_draft';
     promptVersion: string;
@@ -320,6 +320,23 @@ interface ModelGateway {                         // проект; провайд
 ```
 
 Ответ отклоняется, если он не проходит схему или ссылается на фрагмент вне области (ADR-009 §2).
+
+### Реализация (этап 08)
+
+```ts
+interface IModelGatewayChat {
+  readonly providerId: 'fake' | 'openai_compatible';
+  readonly model: string;
+  readonly version: string;                    // MODEL_REVISION: входит в ключ повтора прогона
+  readonly maxInputChars: number;              // предел пачки
+  readonly inferenceConfig: Record<string, unknown>;
+  complete(input: { task: 'requirement_extraction' | 'fact_extraction'; system: string; user: string; signal?: AbortSignal }):
+    Promise<{ ok: true; value: { content: string; startedAt: Date; finishedAt: Date; promptTokens: number | null; completionTokens: number | null } }
+          | { ok: false; error: { code: 'UNAVAILABLE' | 'TIMEOUT_UNKNOWN_OUTCOME' | 'AUTH_FAILED' | 'RATE_LIMITED' | 'CONTRACT_MISMATCH'; message: string; retryable: boolean } }>;
+}
+```
+
+Схема ответа и её проверка — `parseRequirementOutput` / `parseFactOutput` (`@kontur/core`); вызов — только из worker (задание `analysis.extract`, класс `gpu`). Контракт проверен поддельным HTTP-сервером (`tests/modelGateway.test.ts`) и поддельной моделью в сценариях (`tests/requirementsAnalysis.test.ts`, smoke).
 
 ## 9. Сводка статусов на этап 01
 
@@ -335,4 +352,4 @@ interface ModelGateway {                         // проект; провайд
 | `EmlImporter` (`parseEml`) | VERIFIED_LIVE (Review 07-2) | синтетические EML в тестах и smoke; настоящий EML владельца 2026-10-01 — 11/11 PASS (`artifacts/stage-07/real-eml-check.log`); MailHub — по-прежнему X-03 |
 | `NegotiationImporter` (manifest `kontur.negotiation.v1`) и вопросы–ответы (`kontur.qa.v1`) | VERIFIED_FIXTURE (этап 07) | автоматизация — Q-06 (`BLOCKED_EXTERNAL`) |
 | `YandexDiskTarget`, `SmbTarget` | NOT_IMPLEMENTED | тестовые корни и учётные данные (Q-10) |
-| `ModelGateway` | NOT_IMPLEMENTED | выбор провайдера на этапе 08 |
+| `ModelGateway` (`OpenAiCompatibleChat`, `FakeChat`) | VERIFIED_FIXTURE (этап 08) | контракт — поддельный HTTP-сервер (`tests/modelGateway.test.ts`), прогоны — поддельная модель; живой прогон — `NOT_RUN` до целевого ПК с GPU (U-01, U-05) |

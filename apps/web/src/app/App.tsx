@@ -15,6 +15,7 @@ import { MailPage } from '../pages/mail/MailPage';
 import { NegotiationSessionPage } from '../pages/communications/NegotiationSessionPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { StagePage } from '../pages/StagePage';
+import { RequirementPage } from '../pages/requirements/RequirementPage';
 import { TenderPage } from '../pages/TenderPage';
 import { TendersPage } from '../pages/TendersPage';
 import { AppLayout } from './AppLayout';
@@ -42,6 +43,7 @@ export const App: FC = () => {
             <Route index element={<TendersPage />} />
             <Route path="tenders/:tenderId" element={<TenderPage />} />
             <Route path="stages/:stageId" element={<StagePage />} />
+            <Route path="requirements/:requirementId" element={<RequirementPage />} />
             <Route path="imports/:importId" element={<ImportBatchPage />} />
             <Route path="documents/:documentId" element={<DocumentPage />} />
             <Route path="evidence/:fragmentId" element={<EvidenceViewer />} />

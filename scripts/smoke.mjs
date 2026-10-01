@@ -15,6 +15,7 @@ import { join, resolve } from 'node:path';
 import { buildRdwebExport } from '../tests/rdweb.ts';
 import { smokeLocalRecognition } from './smoke-05a.mjs';
 import { smokeMail } from './smoke-07.mjs';
+import { smokeRequirements } from './smoke-08.mjs';
 import { PRECISE_RATE, TH, standardTender, startFakeTenderHub } from './tenderhub-fake.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -57,6 +58,8 @@ const env = {
   TENDERHUB_API_KEY: SECRET_MARKER,
   INTAKE_ROOTS: INTAKE_ROOT,
   INTAKE_STABILITY_SECONDS: '1',
+  // Генеративная модель этапа 08 — поддельный провайдер: живой модели на машине разработки нет (U-08).
+  MODEL_PROVIDER: 'fake',
 };
 
 const lines = [];
@@ -460,10 +463,15 @@ try {
   const meId = (await (await api('/me')).json()).id;
   await smokeMail({ api, api2, search, record, waitFor, idem, octet, json, tenderId: demo.id, stageId, meId });
 
+  // ---- Этап 08: требования, прогон модели, покрытие, полнота — scripts/smoke-08.mjs
+  const req08 = await smokeRequirements({ api, api2, record, waitFor, idem, json, stageId });
+
   await stopProc(server);
   server = startProc('server', 'apps/server/src/main.ts');
   ready = await waitReady(30_000);
   record('перезапуск server — /ready 200', ready.ok);
+  const reqAfter = await api(`/requirements/${req08.requirementId}`);
+  record('этап 08: после перезапуска требование, ревизии и покрытие на месте', reqAfter.status === 200 && (await reqAfter.json()).coverageState === 'covered');
   const me = await fetch(`${BASE}/api/v1/me`, { headers: { Cookie: cookieHeader() } });
   record('перезапуск server — сессия действительна', me.status === 200);
 

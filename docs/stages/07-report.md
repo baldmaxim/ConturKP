@@ -1,19 +1,40 @@
 # Этап 07 — почта, вопросы–ответы и переговоры
 
-Дата: 2026-09-30
-Статус: **IMPLEMENTED_AWAITING_REAL_EML** — Review 07-1: PRE-PASS (`docs/reviews/07-review-1.md`), блокирующих дефектов нет; интерпретации И-07-2…И-07-5 и И-07-7 — CONFIRMED. Единственное оставшееся условие приёмки — ручной импорт настоящего EML владельцем (OD-07-4), затем Review 07-2.
+Дата: 2026-09-30; real-EML (OD-07-4): 2026-10-01
+Статус: **IMPLEMENTED_AWAITING_REAL_EML** — Review 07-1: PRE-PASS (`docs/reviews/07-review-1.md`), интерпретации И-07-2…И-07-5 и И-07-7 — CONFIRMED; **настоящий EML владельца (OD-07-4) — PASS 2026-10-01** без изменения кода (`artifacts/stage-07/real-eml-check.log`), этап передаётся на Review 07-2. Статус `EmlImporter` в документах — `VERIFIED_FIXTURE` до Review 07-2 (кандидат `VERIFIED_LIVE`).
 Базовый коммит: `a697725` (ветка `stage-05a`: этап 05a принят Review 05a-3 и закрыт).
-Ветка: `stage-07`, создана от базового коммита.
-Коммиты этапа: `9b8fb8a` — решения владельца D-025, проект почтовой модели, остановка миграции на AD-07-1a и AD-07-2a; `4241232` — решения после остановки (AD-07-1a, AD-07-2a, И-07-1, OD-07-7) и матрицы A и B до миграции; `0682b0a` — миграции 0017–0018, серверная часть, worker и тесты; затем коммит интерфейса, уточнений, документов и журналов (хэш — в комментарии ZIP и на странице передачи).
-Рабочее дерево: чистое; не в Git по `.gitignore` — `node_modules/`, `apps/web/dist/`, `runtime/`; по `.git/info/exclude` — архивы и страницы передачи `ConturKP-*`.
+Ветка: `stage-07`, создана от базового коммита; `origin/stage-07` отслеживается.
+Коммиты этапа: `9b8fb8a` — решения владельца D-025, проект почтовой модели, остановка миграции на AD-07-1a и AD-07-2a; `4241232` — решения после остановки (AD-07-1a, AD-07-2a, И-07-1, OD-07-7) и матрицы A и B до миграции; `0682b0a` — миграции 0017–0018, серверная часть, worker и тесты; `50af6b6` — интерфейс, документы и журналы (передача Review 07-1); `4b0060d` — документальный коммит после PRE-PASS (`scripts/real-eml-check.mjs`); затем документальный коммит журнала настоящего EML.
+Рабочее дерево: чистое после документального коммита; не в Git по `.gitignore` — `node_modules/`, `apps/web/dist/`, `runtime/`; по `.git/info/exclude` — архивы и страницы передачи `ConturKP-*`; сам `.eml` в репозиторий не копировался.
 Задание: `docs/spec/03_STAGE_PROMPTS.md` §07; решения владельца — D-025, тексты — `docs/reviews/07-owner-decisions.md`, `docs/reviews/07-arch-decisions-2.md`; проект модели и матрицы миграции — `docs/architecture/07-mail-model-design.md`.
-Среда: Ubuntu 26.04.1, 8 vCPU (AMD EPYC), Node 24.14.1; PostgreSQL 18.6 с pgvector 0.8.6 в контейнере `kontur-pg` на `127.0.0.1:55432`; Chromium headless shell (Playwright 1234). Целевой Windows-ПК не использовался.
+Среда реализации: Ubuntu 26.04.1, Node 24.14.1; PostgreSQL 18.6 с pgvector 0.8.6 в контейнере `kontur-pg` на `127.0.0.1:55432`. Real-EML 2026-10-01: Windows 10, Node 24.13.0; тот же образ `pgvector/pgvector:pg18` в Docker на `127.0.0.1:55432`.
 
 ## Review 07-1 — PRE-PASS: ждём настоящий EML
 
 `docs/reviews/07-review-1.md`: проверена передача `50af6b6`. Приняты миграции 0017–0018, модель владения и доступа почты, коммуникация, связи письма с тендерами, документ вложения с распознаванием 05a, почтовая ветка общего поиска с фильтром прав во всех ветках и повторной проверкой при чтении, отзыв `mail.read` без переиндексации, историческое доказательство после снятия связи, ревизии Q&A, разделение речи и подсказки, инварианты БД, регрессии утечки, обновление 0016 → 0018, интерфейс, X-03 и Q-06 как `BLOCKED_EXTERNAL`. Интерпретации И-07-2…И-07-5, И-07-7 — CONFIRMED.
 
-Условие приёмки — ручной импорт настоящего EML владельцем штатным путём (11 проверок ревью); ревьюеру передаётся безопасный журнал без темы, адресов, тела и вложений. Для этого — `scripts/real-eml-check.mjs`: отдельная временная база, настоящие `server` + `worker`, путь `mailbox → import EML → worker → mail message/revision` через API, журнал `artifacts/stage-07/real-eml-check.log` только со структурой MIME, кодировками, числами и итогами PASS/FAIL. Если журнал покажет дефект разбора — остановка и передача ревьюеру до изменения кода. Инструмент проверен на синтетике (это проверка самого скрипта, а не приёмка): письмо «как из Outlook» — `multipart/mixed` → `multipart/alternative` (text/plain quoted-printable, text/html base64), encoded-word в теме и отправителе, PDF-вложение — все 11 пунктов PASS; письмо в windows-1251 с темой в encoded-word Q — PASS; то же письмо с ложно объявленной `utf-8` — FAIL п. 3 (U+FFFD), то есть повреждение кириллицы детектор ловит. Статусы до Review 07-2: `EmlImporter` — `VERIFIED_FIXTURE`, MailHub — `BLOCKED_EXTERNAL` (X-03), сервис переговоров — `BLOCKED_EXTERNAL` (Q-06).
+Условие приёмки — ручной импорт настоящего EML владельцем штатным путём (11 проверок ревью); ревьюеру передаётся безопасный журнал без темы, адресов, тела и вложений. Для этого — `scripts/real-eml-check.mjs`: отдельная временная база, настоящие `server` + `worker`, путь `mailbox → import EML → worker → mail message/revision` через API, журнал `artifacts/stage-07/real-eml-check.log` только со структурой MIME, кодировками, числами и итогами PASS/FAIL. Инструмент проверен на синтетике до приёмки: письмо «как из Outlook» — все 11 пунктов PASS; windows-1251 — PASS; ложно объявленная `utf-8` — FAIL п. 3 (U+FFFD). **Настоящий EML владельца выполнен 2026-10-01 — PASS** (раздел ниже). Статусы до Review 07-2: `EmlImporter` — `VERIFIED_FIXTURE` (кандидат `VERIFIED_LIVE`), MailHub — `BLOCKED_EXTERNAL` (X-03), сервис переговоров — `BLOCKED_EXTERNAL` (Q-06).
+
+## Настоящий EML (OD-07-4) — PASS, на Review 07-2
+
+2026-10-01, Windows: `node scripts/real-eml-check.mjs` по разрешённому файлу с сетевой папки владельца. Production-код не менялся; `.eml` в Git и ZIP не копировался; в артефакты попал только обезличенный журнал.
+
+| № | Проверка Review 07-1 | Результат (`artifacts/stage-07/real-eml-check.log`) |
+|---|---|---|
+| — | структура MIME без содержимого | 189145 байт; `multipart/mixed` → `text/html; charset=utf-8; base64` + `application/vnd.openxmlformats-officedocument.wordprocessingml.document; base64; attachment`; Subject/From/To/Cc/Date/Message-ID есть; encoded-word utf-8/B |
+| 1 | импорт завершён успешно | PASS — исход `done` |
+| 2 | тема, отправитель, получатели и дата | PASS — тема 31 симв. (кириллица 26); from 1, to 1, cc 2; дата есть |
+| 3 | тело без повреждения кириллицы | PASS — 9 блоков, 941 символ, кириллица 749; источник HTML (`body_from_html`); вложение 1 принято |
+| 4 | ревизия создана | PASS — ревизий 1, идентичность `message_id` |
+| 5 | исходный EML в хранилище побайтно | PASS — `message/rfc822`, 189145 байт, SHA-256 совпадает |
+| 6 | повтор того же EML идемпотентен | PASS |
+| 7 | письмо связано с тестовым тендером | PASS |
+| 8 | письмо в текущем контексте тендера | PASS |
+| 9 | поиск этапа находит фрагмент | PASS — ветка FTS, 3 слова в запросе; 9a — цитата при `mail.read` |
+| 10 | после отзыва `mail.read` письмо/поиск/цитата закрыты | PASS — письмо 404, прежний прогон 409, цитата 404, поиск без письма |
+| 11 | аудит и журналы процессов без темы/адресов/текста | PASS — 11 образцов, совпадений 0 |
+
+Итог журнала: **PASS**. `EmlImporter` в документах остаётся `VERIFIED_FIXTURE` до Review 07-2 (кандидат `VERIFIED_LIVE`).
 
 ## Результат для пользователя
 
@@ -30,7 +51,7 @@
 | OD-07-1 копии допустимы | исходный EML — `blob`, ревизия неизменна; изменённая копия — новая ревизия; облачной отправки нет | `mailSecurity.test.ts` 11–12 |
 | OD-07-2 явная регистрация ящиков | `POST /mailboxes` администратором; сканирования ящиков нет; статус `active`/`archived` | `mail.test.ts` «ящики и выдачи» |
 | OD-07-3 права почты | `mail.read`, `mail.import`, `mail.link`, `mail.manage` строками `mail_access`; действуют при роли инженера или руководителя; `admin.mailbox` без содержимого; в контексте тендера — `mail.read` + доступ к тендеру + связь | `mailSecurity.test.ts` 1–8, 21 |
-| OD-07-4 приёмка без X-03 | ручной и фикстурный режим; MailHub — `BLOCKED_EXTERNAL`; реальный пример — ручной импорт настоящего EML владельцем (`NOT_RUN` в среде разработки) | smoke, UI-check |
+| OD-07-4 приёмка без X-03 | ручной и фикстурный режим; MailHub — `BLOCKED_EXTERNAL`; настоящий EML владельца — PASS 2026-10-01 (`artifacts/stage-07/real-eml-check.log`), на Review 07-2 | smoke, UI-check, real-eml-check |
 | OD-07-6 Q&A | `qa_thread` → `qa_item` (устойчивый номер) → `qa_item_revision`; manifest `kontur.qa.v1` | `mail.test.ts` «вопросы–ответы», `mailSecurity.test.ts` 19–20 |
 | OD-07-7 связь — только человек | `mail_message_tender` создаёт пользователь с `mail.link` и `source.write`; кандидаты — по точному коду тендера портала и номеру TenderHub (`external_ref`) как отдельному токену в теме и тексте; нечёткого и смыслового сопоставления нет | `mail.test.ts` «связь письма с тендером», «проверки промпта» |
 | И-07-1 коммуникация | `mail_communication` группирует копии по нормализованному Message-ID; копии не сливаются, доступ к копии чужого ящика не даётся | `mailSearch.test.ts` 11, `mailSchema.test.ts` 3, 16 |
@@ -146,7 +167,7 @@
 | отправленные (A33) | импорт с направлением `outbound`; лента MailHub — X-03, отсутствие в ней ничего не доказывает |
 | почтовая часть RT-02 | письмо без доступа не участвует в ранжировании ни одной ветки — `mailSearch.test.ts` 1–4 |
 | без побочных эффектов чтения | импорт EML не ходит в MailHub; пометок прочтения и перемещений нет |
-| реальный пример | ручной импорт настоящего EML владельцем — `NOT_RUN` в среде разработки (OD-07-4) |
+| реальный пример | настоящий EML владельца — PASS 2026-10-01, журнал `artifacts/stage-07/real-eml-check.log` (OD-07-4); на Review 07-2 |
 
 ## Фактически выполненные проверки
 
@@ -158,6 +179,7 @@
 | smoke | 51 PASS, в том числе 9 шагов этапа 07 | `artifacts/stage-07/smoke.log` |
 | UI-check этапа 07 | 32 PASS: 390, 360 px без прокрутки, тёмная тема 1280 px, консоль без ошибок и нарушений CSP | `artifacts/stage-07/ui-check.log` |
 | регрессия UI этапов 02–06a | 02 — 12 PASS, 03 — 15, 04 — 29, 05 — 19, 05a — 22, 06 — 26, 06a — 33 (сценарии этапов без изменений) | `artifacts/stage-07/ui-check-stage{02,03,04,05,05a,06,06a}-regression.log` |
+| настоящий EML владельца (OD-07-4) | 11/11 PASS (+ окружение и ACL); код не менялся | `artifacts/stage-07/real-eml-check.log` |
 
 ## Изменения существующих тестов — и почему
 
@@ -208,11 +230,11 @@
 
 ## Непроверенное и ограничения
 
-- **Реальный пример** (OD-07-4) — ручной импорт настоящего EML владельцем; в среде разработки только синтетические письма.
+- **Реальный пример** (OD-07-4) — выполнен 2026-10-01: PASS на одном обычном письме владельца (HTML + DOCX-вложение, utf-8/B); журнал без содержимого. Экзотические кодировки и вложенные `message/rfc822` на настоящих письмах по-прежнему не прогонялись.
 - **MailHub** — `BLOCKED_EXTERNAL` (X-03); **сервис переговоров** — `BLOCKED_EXTERNAL` (Q-06).
-- **Целевой Windows-ПК — `NOT_RUN`** (как на 05a): postal-mime — чистый JS, отдельной проверки на Windows не проводилось.
+- **Целевой Windows-ПК для postal-mime** — отдельный замер не планировался; real-EML 2026-10-01 уже на Windows 10 / Node 24.13.0 — PASS.
 - Список писем ящика — последние 200 без постраничного вывода; постраничность — когда объём ящиков станет рабочим.
-- Кодировки: в тестах — UTF-8 в base64 (тема — encoded-word); quoted-printable и устаревшие кодировки (KOI8-R, CP1251) разбирает postal-mime, но на настоящих письмах это не прогонялось.
+- Кодировки: в тестах — UTF-8 в base64 и windows-1251; на настоящем письме — utf-8/B в шапке и HTML body.
 - Смысловая ветка — поддельная модель, как на этапах 05–05a.
 
 ## Риски и блокировки
@@ -225,22 +247,18 @@
 
 ## Передача независимому ревьюеру
 
-Review 07-1, проверяемый коммит — HEAD ветки `stage-07`; полный хэш — в комментарии ZIP `ConturKP-stage-07-<короткий хэш>.zip` и на странице передачи; ветка в origin не отправлялась. Что смотреть в первую очередь:
+Review 07-2 — после PASS настоящего EML (OD-07-4). Implementation HEAD остаётся `50af6b6`; документальные коммиты после него — `4b0060d` (скрипт real-eml-check) и коммит журнала `artifacts/stage-07/real-eml-check.log`. Production-код не менялся. Ветка `origin/stage-07` отслеживается. Что смотреть в первую очередь:
 
-1. `docs/architecture/07-mail-model-design.md` §10–17 и `docs/migrations/0017_*.sql`, `0018_*.sql` — владение, CHECK видов источника, охранники, FK без владельца, снимок.
-2. `tests/mailSchema.test.ts`, `tests/mailSecurity.test.ts`, `tests/mailSearch.test.ts` — инварианты, 22 теста безопасности, 11 тестов утечки.
-3. `packages/db/src/searchScope.ts` (`unitsNotPermitted`, рабочая и историческая область), `apps/server/src/routes/search.ts` (`permittedScope`), `packages/db/src/recognition.ts` (`getScopedFragment`, `getScopedRun`).
-4. `packages/adapters/src/mail/`, `apps/worker/src/handlers/mail.ts`, `packages/db/src/mailMessages.ts` — разбор, идентичность, ревизии, вложения.
-5. Интерпретации и решения реализации выше.
+1. `artifacts/stage-07/real-eml-check.log` — 11/11 PASS, без темы/адресов/тела/имён вложений.
+2. `docs/stages/07-report.md`, раздел «Настоящий EML (OD-07-4)».
+3. Статус `EmlImporter`: в документах `VERIFIED_FIXTURE` до вердикта Review 07-2 (кандидат `VERIFIED_LIVE`).
+4. Ранее принятое Review 07-1 (`docs/reviews/07-review-1.md`) — PRE-PASS без блокирующих дефектов.
 
-Воспроизведение (PostgreSQL ≥ 17 с pgvector, `KONTUR_TEST_ADMIN_URL`):
+Воспроизведение real-EML (PostgreSQL ≥ 17 с pgvector на `127.0.0.1:55432`; путь к `.eml` — вне Git):
 
 ```bash
 npm ci
-npm run typecheck && npm run build
-npx vitest run --maxWorkers=1 --fileParallelism=false
-SMOKE_STAGE=stage-07 node scripts/smoke.mjs
-CHROME_NO_SANDBOX=1 node artifacts/stage-07/ui-check.mjs
+node scripts/real-eml-check.mjs "<путь-к-письму.eml>"
 ```
 
 Этап 08 и следующие не начинались.

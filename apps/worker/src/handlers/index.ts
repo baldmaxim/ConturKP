@@ -1,4 +1,5 @@
 import type { JobHandler } from '../runtime.ts';
+import { analysisExtractHandler } from './analysis.ts';
 import { calculationCaptureHandler } from './calculation.ts';
 import { importExpandHandler, importRegisterHandler } from './imports.ts';
 import { intakeScanHandler } from './intake.ts';
@@ -19,4 +20,5 @@ export const HANDLERS: Record<string, JobHandler> = {
   'search.semantic': searchSemanticHandler,
   'calculation.capture': calculationCaptureHandler,
   'mail.import': mailImportHandler,
+  'analysis.extract': analysisExtractHandler,
 };

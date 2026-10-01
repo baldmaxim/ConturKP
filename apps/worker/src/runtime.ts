@@ -1,7 +1,15 @@
 // Цикл worker (ADR-004, state-machines §2): захват, heartbeat, условное по токену завершение,
 // повтор с задержкой, recovery истёкших аренд, планирование сканов наблюдаемых папок.
 import { hostname } from 'node:os';
-import { describeLocalRecognizer, localSettings, type ILocalOcrEngineFactory, type IModelGatewayEmbeddings, type LocalInputFormat } from '@kontur/adapters';
+import {
+  createChatModel,
+  describeLocalRecognizer,
+  localSettings,
+  type ILocalOcrEngineFactory,
+  type IModelGatewayChat,
+  type IModelGatewayEmbeddings,
+  type LocalInputFormat,
+} from '@kontur/adapters';
 import type { IAppConfig } from '@kontur/config';
 import {
   autoRecognitionCandidates,
@@ -60,6 +68,8 @@ export interface IJobContext {
   embeddings: IModelGatewayEmbeddings | null;
   // Фабрика локального OCR (этап 05a); null — OCR не настроен (LOCAL_OCR_ENGINE=none).
   localOcr: ILocalOcrEngineFactory | null;
+  // Генеративная модель этапа 08 (OD-08-2); null — модель не настроена (MODEL_PROVIDER=none).
+  chat: IModelGatewayChat | null;
   signal: AbortSignal;
   // Короткая транзакция под действующей арендой: сначала блокировка задания с проверкой токена.
   withLease: <T>(fn: (client: PoolClient) => Promise<T>) => Promise<T>;
@@ -100,6 +110,8 @@ export interface IWorkerOptions {
   embeddings?: IModelGatewayEmbeddings | null;
   // Фабрика OCR для тестов; по умолчанию — по конфигурации (LOCAL_OCR_ENGINE).
   localOcr?: ILocalOcrEngineFactory | null;
+  // Генеративная модель для тестов (сценарии отказов); по умолчанию — по конфигурации (MODEL_PROVIDER).
+  chat?: IModelGatewayChat | null;
 }
 
 // Интерактивная полоса (ADR-004 §7a): только смысловые запросы поиска. Worker выполняет задания
@@ -112,10 +124,12 @@ export class WorkerRuntime {
   private readonly log: (line: string) => void;
 
   private readonly localOcr: ILocalOcrEngineFactory | null;
+  private readonly chat: IModelGatewayChat | null;
 
   constructor(o: IWorkerOptions) {
     this.o = o;
     this.localOcr = o.localOcr !== undefined ? o.localOcr : localOcrFactory(o.config.localRecognition.ocrEngine);
+    this.chat = o.chat !== undefined ? o.chat : createChatModel(o.config.chatModel);
     this.workerId = o.workerId ?? `worker:${hostname()}:${process.pid}`;
     this.log = o.log ?? (() => undefined);
   }
@@ -263,6 +277,7 @@ export class WorkerRuntime {
       config: this.o.config,
       embeddings: this.o.embeddings ?? null,
       localOcr: this.localOcr,
+      chat: this.chat,
       signal: controller.signal,
       withLease,
       complete: async (fn, then) => {

@@ -17,7 +17,9 @@ export type FragmentOrigin =
   | 'negotiation_speech'
   | 'negotiation_hint'
   | 'email_body'
-  | 'attachment_text';
+  | 'attachment_text'
+  | 'qa_question'
+  | 'qa_answer';
 export type FragmentKind =
   | 'text_block'
   | 'image_block'
@@ -445,7 +447,7 @@ export interface IScopedFragmentRow extends IEvidenceFragmentRow {
   revision_media_type: string | null;
   // Почтовая ветка и транскрипция (D-025): письмо (у вложения — письмо вложения), ящик, шапка ревизии;
   // сессия и сегмент транскрипции.
-  source_unit_type: 'recognition_run' | 'mail_message_revision' | 'transcript_revision';
+  source_unit_type: 'recognition_run' | 'mail_message_revision' | 'transcript_revision' | 'qa_item_revision';
   mail_message_revision_id: string | null;
   transcript_revision_id: string | null;
   transcript_segment_id: string | null;
@@ -462,6 +464,11 @@ export interface IScopedFragmentRow extends IEvidenceFragmentRow {
   segment_kind: 'speech' | 'hint' | null;
   t_start_ms: number | null;
   t_end_ms: number | null;
+  // Вопрос–ответ (этап 08, Р-08-1): ревизия, номер вопроса и ветка.
+  qa_item_revision_id: string | null;
+  qa_item_no: string | null;
+  qa_revision_seq: number | null;
+  qa_thread_title: string | null;
 }
 
 // Цитата: фрагмент тендера — доступ к тендеру; договора — contract.read; письма и документа вложения —
@@ -475,7 +482,8 @@ export const getScopedFragment = async (db: Queryable, ctx: IAccessContext, id: 
             coalesce(mr.subject, amr.subject) AS mail_subject, coalesce(mr.from_address, amr.from_address) AS mail_from,
             coalesce(mr.sent_at, amr.sent_at) AS mail_sent_at, a.filename AS attachment_filename,
             ns.id AS session_id, ns.title AS session_title, tr.tender_id AS transcript_tender_id,
-            ts.speaker_label, ts.segment_kind, ts.t_start_ms, ts.t_end_ms
+            ts.speaker_label, ts.segment_kind, ts.t_start_ms, ts.t_end_ms,
+            qi.item_no AS qa_item_no, qr.seq AS qa_revision_seq, qt.title AS qa_thread_title
        FROM evidence_fragment f
        LEFT JOIN document_revision dr ON dr.id = f.document_revision_id
        LEFT JOIN document d ON d.id = dr.document_id
@@ -490,6 +498,9 @@ export const getScopedFragment = async (db: Queryable, ctx: IAccessContext, id: 
        LEFT JOIN transcript_revision tr ON tr.id = f.transcript_revision_id
        LEFT JOIN negotiation_session ns ON ns.id = tr.session_id
        LEFT JOIN transcript_segment ts ON ts.id = f.transcript_segment_id
+       LEFT JOIN qa_item_revision qr ON qr.id = f.qa_item_revision_id
+       LEFT JOIN qa_item qi ON qi.id = qr.item_id
+       LEFT JOIN qa_thread qt ON qt.id = qi.thread_id
       WHERE f.id = $1
         AND (f.tender_id = ANY($2::uuid[]) OR f.contract_id = ANY($3::uuid[])
              OR coalesce(m.mailbox_id, am.mailbox_id) = ANY($4::uuid[])

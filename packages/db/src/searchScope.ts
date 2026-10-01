@@ -90,11 +90,14 @@ export interface IMailUnit {
 export interface ICommunicationUnits {
   mail: IMailUnit[];
   transcripts: string[];
+  // Ревизии вопросов–ответов (этап 08, Р-08-1): входят в снимок, но не в поиск — индекса у Q&A нет.
+  qa: string[];
 }
 
 // Текущий выбор коммуникаций этапа (state-machines §5.1, D-025): каждое письмо с действующей связью с
 // тендером (связь без этапа или с этим этапом) — последней ревизией; каждая сессия переговоров
-// тендера — последней редакцией транскрипции. Тот же состав сверяет evidence_scope_verify.
+// тендера — последней редакцией транскрипции; каждый вопрос веток тендера без этапа или этого этапа —
+// последней ревизией (этап 08). Тот же состав сверяет evidence_scope_verify.
 export const communicationUnits = async (db: Queryable, tenderId: string, stageId: string): Promise<ICommunicationUnits> => {
   const mail = await db.query<{ revision_id: string; message_id: string; mailbox_id: string }>(
     `SELECT mail_message_latest_revision(l.message_id) AS revision_id, l.message_id, m.mailbox_id
@@ -108,15 +111,24 @@ export const communicationUnits = async (db: Queryable, tenderId: string, stageI
       WHERE s.tender_id = $1 AND x.id IS NOT NULL ORDER BY x.id`,
     [tenderId],
   );
+  const qa = await db.query<{ id: string }>(
+    `SELECT qa_item_latest_revision(i.id) AS id
+       FROM qa_item i JOIN qa_thread t ON t.id = i.thread_id
+      WHERE t.tender_id = $1 AND (t.stage_id IS NULL OR t.stage_id = $2) AND qa_item_latest_revision(i.id) IS NOT NULL
+      ORDER BY 1`,
+    [tenderId, stageId],
+  );
   return {
     mail: mail.rows.map((m) => ({ revisionId: m.revision_id, messageId: m.message_id, mailboxId: m.mailbox_id })),
     transcripts: tr.rows.map((t) => t.id),
+    qa: qa.rows.map((q) => q.id),
   };
 };
 
 const communicationScopeUnits = (c: ICommunicationUnits): IScopeUnit[] => [
   ...c.mail.map((m) => ({ unitType: 'mail_message' as const, mailMessageRevisionId: m.revisionId, mailMessageId: m.messageId })),
   ...c.transcripts.map((t) => ({ unitType: 'transcript_revision' as const, transcriptRevisionId: t })),
+  ...c.qa.map((q) => ({ unitType: 'qa_item_revision' as const, qaItemRevisionId: q })),
 ];
 
 // ---------------------------------------------------------------- Развёрнутая область
@@ -152,8 +164,19 @@ const mailUnits = (
     ...mail.map((m) => [m.revisionId, { messageId: m.messageId, mailboxId: m.mailboxId }] as const),
   ]);
 
-const unitIdOf = (u: IScopeUnit): string | null =>
-  u.unitType === 'document_recognition' ? u.recognitionRunId : u.unitType === 'mail_message' ? u.mailMessageRevisionId : u.transcriptRevisionId;
+// Единица поиска; у вопроса–ответа её нет: Q&A не индексируется (Р-08-1).
+const unitIdOf = (u: IScopeUnit): string | null => {
+  switch (u.unitType) {
+    case 'document_recognition':
+      return u.recognitionRunId;
+    case 'mail_message':
+      return u.mailMessageRevisionId;
+    case 'transcript_revision':
+      return u.transcriptRevisionId;
+    case 'qa_item_revision':
+      return null;
+  }
+};
 
 const resolvedFrom = (
   snapshotHash: string,
@@ -221,7 +244,8 @@ export interface IEvidenceScopeRow {
 }
 
 export interface IEvidenceScopeItemRow {
-  unit_type: 'document_recognition' | 'mail_message' | 'transcript_revision';
+  item_id: string;
+  unit_type: 'document_recognition' | 'mail_message' | 'transcript_revision' | 'qa_item_revision';
   document_revision_id: string | null;
   recognition_run_id: string | null;
   inclusion_reason: string;
@@ -244,6 +268,11 @@ export interface IEvidenceScopeItemRow {
   transcript_seq: number | null;
   session_id: string | null;
   session_title: string | null;
+  // Вопрос–ответ: ревизия, номер вопроса, ветка.
+  qa_item_revision_id: string | null;
+  qa_revision_seq: number | null;
+  qa_item_no: string | null;
+  qa_thread_title: string | null;
 }
 
 export interface IScopePlan {
@@ -303,21 +332,25 @@ export const createEvidenceScope = async (
       const docs = s.units.filter((u) => u.unitType === 'document_recognition');
       const mail = s.units.filter((u) => u.unitType === 'mail_message');
       const tr = s.units.filter((u) => u.unitType === 'transcript_revision');
+      const qa = s.units.filter((u) => u.unitType === 'qa_item_revision');
       // Владелец единицы-договора и письмо единицы-вложения выводятся из редакции, письмо ревизии — из
       // ревизии, а не передаются (AD-06a-1 §8–9); FK и охранник единицы сверяют их.
       await tx.query(
         `INSERT INTO evidence_scope_item (scope_id, tender_id, contract_id, unit_type, document_revision_id, recognition_run_id,
-                                          mail_message_id, mail_message_revision_id, transcript_revision_id, inclusion_reason)
+                                          mail_message_id, mail_message_revision_id, transcript_revision_id, qa_item_revision_id, inclusion_reason)
          SELECT $1::uuid, $2::uuid, dr.contract_id, 'document_recognition', u.document_revision_id, u.recognition_run_id,
-                document_revision_mail_message(u.document_revision_id), NULL::uuid, NULL::uuid, 'source_set_included'
+                document_revision_mail_message(u.document_revision_id), NULL::uuid, NULL::uuid, NULL::uuid, 'source_set_included'
            FROM unnest($3::uuid[], $4::uuid[]) AS u(document_revision_id, recognition_run_id)
            JOIN document_revision dr ON dr.id = u.document_revision_id
          UNION ALL
-         SELECT $1::uuid, $2::uuid, NULL::uuid, 'mail_message', NULL::uuid, NULL::uuid, mr.message_id, mr.id, NULL::uuid, 'mail_linked'
+         SELECT $1::uuid, $2::uuid, NULL::uuid, 'mail_message', NULL::uuid, NULL::uuid, mr.message_id, mr.id, NULL::uuid, NULL::uuid, 'mail_linked'
            FROM unnest($5::uuid[]) AS m(id) JOIN mail_message_revision mr ON mr.id = m.id
          UNION ALL
-         SELECT $1::uuid, $2::uuid, NULL::uuid, 'transcript_revision', NULL::uuid, NULL::uuid, NULL::uuid, NULL::uuid, t.id, 'negotiation_transcript'
-           FROM unnest($6::uuid[]) AS t(id)`,
+         SELECT $1::uuid, $2::uuid, NULL::uuid, 'transcript_revision', NULL::uuid, NULL::uuid, NULL::uuid, NULL::uuid, t.id, NULL::uuid, 'negotiation_transcript'
+           FROM unnest($6::uuid[]) AS t(id)
+         UNION ALL
+         SELECT $1::uuid, $2::uuid, NULL::uuid, 'qa_item_revision', NULL::uuid, NULL::uuid, NULL::uuid, NULL::uuid, NULL::uuid, q.id, 'qa_item'
+           FROM unnest($7::uuid[]) AS q(id)`,
         [
           id,
           s.tenderId,
@@ -325,6 +358,7 @@ export const createEvidenceScope = async (
           docs.map((u) => u.recognitionRunId),
           mail.map((u) => u.mailMessageRevisionId),
           tr.map((u) => u.transcriptRevisionId),
+          qa.map((u) => u.qaItemRevisionId),
         ],
       );
     }
@@ -349,10 +383,11 @@ export const listEvidenceScopes = async (db: Queryable, stageId: string): Promis
 // (contract.read, mail.read) — шапка письма без mail.read наружу не выходит.
 export const evidenceScopeItems = async (db: Queryable, scopeId: string): Promise<IEvidenceScopeItemRow[]> => {
   const r = await db.query<IEvidenceScopeItemRow>(
-    `SELECT i.unit_type, i.document_revision_id, i.recognition_run_id, i.inclusion_reason, i.contract_id, d.id AS document_id,
+    `SELECT i.id AS item_id, i.unit_type, i.document_revision_id, i.recognition_run_id, i.inclusion_reason, i.contract_id, d.id AS document_id,
             d.title AS document_title, dr.revision_seq, r.status AS run_status, r.pages_total, r.pages_recognized,
             i.mail_message_id, mm.mailbox_id, i.mail_message_revision_id, mr.seq AS mail_revision_seq, mr.subject AS mail_subject,
-            mr.sent_at AS mail_sent_at, i.transcript_revision_id, tr.seq AS transcript_seq, ns.id AS session_id, ns.title AS session_title
+            mr.sent_at AS mail_sent_at, i.transcript_revision_id, tr.seq AS transcript_seq, ns.id AS session_id, ns.title AS session_title,
+            i.qa_item_revision_id, qr.seq AS qa_revision_seq, qi.item_no AS qa_item_no, qt.title AS qa_thread_title
        FROM evidence_scope_item i
        LEFT JOIN document_revision dr ON dr.id = i.document_revision_id
        LEFT JOIN document d ON d.id = dr.document_id
@@ -361,8 +396,11 @@ export const evidenceScopeItems = async (db: Queryable, scopeId: string): Promis
        LEFT JOIN mail_message_revision mr ON mr.id = i.mail_message_revision_id
        LEFT JOIN transcript_revision tr ON tr.id = i.transcript_revision_id
        LEFT JOIN negotiation_session ns ON ns.id = tr.session_id
+       LEFT JOIN qa_item_revision qr ON qr.id = i.qa_item_revision_id
+       LEFT JOIN qa_item qi ON qi.id = qr.item_id
+       LEFT JOIN qa_thread qt ON qt.id = qi.thread_id
       WHERE i.scope_id = $1
-      ORDER BY i.unit_type, d.title, dr.revision_seq, mr.sent_at, ns.started_at, i.id`,
+      ORDER BY i.unit_type, d.title, dr.revision_seq, mr.sent_at, ns.started_at, qt.title, qi.item_no, i.id`,
     [scopeId],
   );
   return r.rows;

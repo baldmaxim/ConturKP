@@ -281,13 +281,15 @@ export const fuseRrf = (branches: Partial<Record<SearchBranch, readonly IBranchH
 // ---------------------------------------------------------------- Хэши области
 
 // Типизированная единица снимка (ADR-008 п. 1–2): редакция документа с прогоном (у вложения письма —
-// ещё и письмо, D-025), ревизия письма, редакция транскрипции.
+// ещё и письмо, D-025), ревизия письма, редакция транскрипции, ревизия вопроса–ответа (этап 08, Р-08-1).
 export type IScopeUnit =
   | { unitType: 'document_recognition'; documentRevisionId: string; recognitionRunId: string | null; mailMessageId?: string | null }
   | { unitType: 'mail_message'; mailMessageRevisionId: string; mailMessageId: string }
-  | { unitType: 'transcript_revision'; transcriptRevisionId: string };
+  | { unitType: 'transcript_revision'; transcriptRevisionId: string }
+  | { unitType: 'qa_item_revision'; qaItemRevisionId: string };
 
-// Строка хэша по data-model §5: [вид, редакция, прогон, ревизия письма, редакция транскрипции].
+// Строка хэша по data-model §5: [вид, редакция, прогон, ревизия письма, редакция транскрипции]; у вопроса–ответа —
+// шестой слот, поэтому строки прежних видов и хэши существующих снимков не меняются (миграция 0019).
 const scopeUnitRow = (u: IScopeUnit): string[] => {
   switch (u.unitType) {
     case 'document_recognition':
@@ -296,6 +298,8 @@ const scopeUnitRow = (u: IScopeUnit): string[] => {
       return [u.unitType, '', '', u.mailMessageRevisionId, ''];
     case 'transcript_revision':
       return [u.unitType, '', '', '', u.transcriptRevisionId];
+    case 'qa_item_revision':
+      return [u.unitType, '', '', '', '', u.qaItemRevisionId];
   }
 };
 
@@ -307,7 +311,7 @@ const byKey = (a: string[], b: string[]): number => {
 
 // Хэш снимка области (data-model §5): хэш состава ревизии набора + отсортированные типизированные
 // единицы. Одинаковый состав этапа даёт тот же хэш и ту же строку снимка. БД пересчитывает хэш по
-// фактическому составу той же формулой (evidence_scope_composition_hash, миграции 0010 и 0018): менять вместе.
+// фактическому составу той же формулой (evidence_scope_composition_hash, миграции 0010, 0018 и 0019): менять вместе.
 export const evidenceScopeContentHash = (sourceSetHash: string, units: readonly IScopeUnit[]): string => {
   const rows = units.map(scopeUnitRow).sort(byKey);
   return sha256Hex(`kontur.evidence_scope.v1\n${sourceSetHash}\n${JSON.stringify(rows)}`);

@@ -106,6 +106,8 @@ export const testConfig = (overrides: Partial<IAppConfig> = {}): IAppConfig => (
     autoBatch: 20,
   },
   mail: { maxEmlBytes: 50 * 1024 * 1024, maxAttachmentBytes: 25 * 1024 * 1024 },
+  // Генеративная модель этапа 08: в тестах — поддельный провайдер, сценарии задаёт тест.
+  chatModel: { provider: 'fake', baseUrl: null, model: 'fake-chat', revision: 'test', apiKey: null, timeoutMs: 5000, maxInputChars: 4000, maxOutputTokens: 1024, jsonMode: 'none' },
   ...overrides,
 });
 

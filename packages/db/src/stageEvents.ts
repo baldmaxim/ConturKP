@@ -13,9 +13,11 @@ export type StageEventType =
   // Этап 07: подтверждённая связь письма, редакция транскрипции, ревизии вопросов–ответов.
   | 'communication_linked'
   | 'transcript_revision_added'
-  | 'qa_form_added';
+  | 'qa_form_added'
+  // Этап 08: решение по требованию (state-machines §1.1, И-08-9); значение есть в CHECK с миграции 0002.
+  | 'decision_recorded';
 
-const CLASS_OF: Record<StageEventType, 'source' | 'calculation'> = {
+const CLASS_OF: Record<StageEventType, 'source' | 'calculation' | 'content'> = {
   import_accepted: 'source',
   document_revision_registered: 'source',
   source_set_changed: 'source',
@@ -24,6 +26,7 @@ const CLASS_OF: Record<StageEventType, 'source' | 'calculation'> = {
   communication_linked: 'source',
   transcript_revision_added: 'source',
   qa_form_added: 'source',
+  decision_recorded: 'content',
 };
 
 export interface IStageEventInput {

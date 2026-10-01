@@ -15,8 +15,18 @@ import {
 const roles = (...r: Role[]) => new Set<Role>(r);
 
 describe('возможности', () => {
-  it('инженер-участник: чтение и правка этапа, без управления и журнала', () => {
-    expect(tenderCapabilities(roles('engineer'), 'engineer')).toEqual(['tender.read', 'stage.write', 'source.write', 'calculation.capture']);
+  it('инженер-участник: чтение и правка этапа, предложения требований и фактов, без управления и журнала', () => {
+    expect(tenderCapabilities(roles('engineer'), 'engineer')).toEqual([
+      'tender.read',
+      'stage.write',
+      'source.write',
+      'calculation.capture',
+      'requirement.read',
+      'requirement.create',
+      'analysis.run',
+      'fact.read',
+      'fact.create',
+    ]);
   });
   it('руководитель-участник: управление этапами и журнал', () => {
     expect(tenderCapabilities(roles('manager'), 'manager')).toEqual([
@@ -24,8 +34,17 @@ describe('возможности', () => {
       'stage.write',
       'source.write',
       'calculation.capture',
+      'requirement.read',
+      'requirement.create',
+      'analysis.run',
+      'fact.read',
+      'fact.create',
       'stage.manage',
       'hold.resolve',
+      'requirement.confirm',
+      'requirement.decide',
+      'requirement.manage',
+      'fact.confirm',
       'audit.read',
     ]);
   });

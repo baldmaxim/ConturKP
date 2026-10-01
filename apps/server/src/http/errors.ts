@@ -54,6 +54,8 @@ export const fromPgError = (err: unknown): HttpError | null => {
   const e = err as { code?: string; constraint?: string; message?: string };
   if (e.code === '23505') return new HttpError(409, 'STATE_CONFLICT', `значение уже занято (${e.constraint ?? 'unique'})`);
   if (e.code === '23514') return new HttpError(409, 'STATE_CONFLICT', e.message);
+  // Сериализация охранников этапа 08 (параллельная ревизия, второй преемник реестра): повторите после перечитывания.
+  if (e.code === '40001') return new HttpError(409, 'STATE_CONFLICT', e.message);
   return null;
 };
 

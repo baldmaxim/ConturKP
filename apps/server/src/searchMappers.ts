@@ -166,6 +166,10 @@ export const toEvidenceScope = (
             transcriptSeq: i.transcript_seq,
             sessionId: i.session_id,
             sessionTitle: i.session_title,
+            qaItemRevisionId: i.qa_item_revision_id,
+            qaRevisionSeq: i.qa_revision_seq,
+            qaItemNo: i.qa_item_no,
+            qaThreadTitle: i.qa_thread_title,
           };
         }),
       }

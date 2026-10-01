@@ -28,3 +28,7 @@ export * from './mail/htmlText.ts';
 export * from './mail/mailBody.ts';
 export * from './mail/identity.ts';
 export * from './mail/manifests.ts';
+export * from './model/types.ts';
+export * from './model/openaiCompatible.ts';
+export * from './model/fake.ts';
+export * from './model/factory.ts';

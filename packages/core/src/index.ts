@@ -6,3 +6,4 @@ export * from './paths.ts';
 export * from './contentHash.ts';
 export * from './search.ts';
 export * from './calculation.ts';
+export * from './requirements.ts';

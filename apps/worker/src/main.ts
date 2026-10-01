@@ -36,7 +36,9 @@ const main = async (): Promise<void> => {
   const runtime = new WorkerRuntime({ pool, store, config, handlers: HANDLERS, workerId: processId, log, embeddings });
   const controller = new AbortController();
   const loop = runtime.loop(controller.signal);
-  log(`запущен (схема ${schema.dbVersion}), обработчики: ${Object.keys(HANDLERS).join(', ')}; модель эмбеддингов: ${embeddings ? `${embeddings.kind} ${embeddings.model}` : 'не настроена'}`);
+  log(
+    `запущен (схема ${schema.dbVersion}), обработчики: ${Object.keys(HANDLERS).join(', ')}; модель эмбеддингов: ${embeddings ? `${embeddings.kind} ${embeddings.model}` : 'не настроена'}; генеративная модель: ${config.chatModel.provider}`,
+  );
   const stop = (signal: string): void => {
     log(`остановка по ${signal}`);
     clearInterval(timer);

@@ -135,4 +135,14 @@ export const toEvidence = (f: IScopedFragmentRow) => ({
         endMs: f.t_end_ms,
       }
     : null,
+  // Вопрос–ответ (этап 08, Р-08-1): часть ревизии — вопрос участника или ответ заказчика.
+  qa: f.qa_item_revision_id
+    ? {
+        revisionId: f.qa_item_revision_id,
+        revisionSeq: f.qa_revision_seq,
+        itemNo: f.qa_item_no,
+        threadTitle: f.qa_thread_title,
+        part: f.origin === 'qa_answer' ? 'answer' : 'question',
+      }
+    : null,
 });

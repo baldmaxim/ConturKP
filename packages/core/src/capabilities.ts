@@ -20,7 +20,18 @@ export type TenderCapability =
   | 'admin.tender'
   | 'source.write'
   | 'hold.resolve'
-  | 'calculation.capture';
+  | 'calculation.capture'
+  // Этап 08 (D-026, Р-08-8): требования, факты и анализ — из той же модели ролей; БД повторяет
+  // таблицу функцией tender_capabilities (миграция 0019) — менять вместе.
+  | 'requirement.read'
+  | 'requirement.create'
+  | 'requirement.confirm'
+  | 'requirement.decide'
+  | 'requirement.manage'
+  | 'analysis.run'
+  | 'fact.read'
+  | 'fact.create'
+  | 'fact.confirm';
 
 export const ROLES: readonly Role[] = ['admin', 'manager', 'engineer'];
 export const MEMBER_ROLES: readonly MemberRole[] = ['engineer', 'manager'];
@@ -68,8 +79,13 @@ export const tenderCapabilities = (
   const caps: TenderCapability[] = [];
   // Запрос выгрузки расчёта и решения по сопоставлению позиций — участник тендера (state-machines §6).
   if (role) caps.push('tender.read', 'stage.write', 'source.write', 'calculation.capture');
+  // Предложения, анализ и чтение реестра — участник тендера; создатель кандидата права подтверждения
+  // не получает (OD-08-5).
+  if (role) caps.push('requirement.read', 'requirement.create', 'analysis.run', 'fact.read', 'fact.create');
   // Решения о неприменимости (элементы импорта, удержания) — только руководитель тендера (ADR-006 §3).
   if (role === 'manager') caps.push('stage.manage', 'hold.resolve');
+  // Подтверждение, решение и ведение реестра — руководитель тендера (OD-08-5).
+  if (role === 'manager') caps.push('requirement.confirm', 'requirement.decide', 'requirement.manage', 'fact.confirm');
   if (role === 'manager' || roles.has('admin')) caps.push('audit.read');
   if (roles.has('admin')) caps.push('admin.tender');
   return caps;

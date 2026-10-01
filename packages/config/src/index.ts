@@ -98,6 +98,26 @@ export interface ILocalRecognitionConfig {
   autoBatch: number;
 }
 
+// Генеративная модель для извлечения кандидатов (этап 08, OD-08-2, ADR-009 §5): по умолчанию — локальный
+// OpenAI-совместимый сервер (LM Studio, llama.cpp server) на целевом ПК; облачного запасного пути нет.
+// none — модели нет, прогон анализа честно отказывает; fake — детерминированный поддельный провайдер
+// для тестов и разработки, в production запрещён.
+export type ChatModelProviderKind = 'none' | 'openai_compatible' | 'fake';
+
+export interface IChatModelConfig {
+  provider: ChatModelProviderKind;
+  baseUrl: string | null;
+  model: string | null;
+  revision: string;
+  apiKey: string | null;
+  timeoutMs: number;
+  // Символов текста фрагментов в одном запросе: пачка ограничена, чтобы не держать слот gpu (ADR-004 §7a).
+  maxInputChars: number;
+  maxOutputTokens: number;
+  // json_object — просить у сервера режим JSON; none — только инструкция промпта (не все серверы его знают).
+  jsonMode: 'none' | 'json_object';
+}
+
 // Почта (этап 07, D-025): предел файла EML и одного вложения. Вложение сверх предела — отказ вложения
 // (метаданные и хэш без байтов), письмо сверх предела — детерминированный отказ разбора.
 export interface IMailConfig {
@@ -130,6 +150,7 @@ export interface IAppConfig {
   tenderhub: ITenderHubConfig;
   localRecognition: ILocalRecognitionConfig;
   mail: IMailConfig;
+  chatModel: IChatModelConfig;
 }
 
 interface IConfigKey {
@@ -191,6 +212,15 @@ export const CONFIG_KEYS: IConfigKey[] = [
   { name: 'EMBEDDING_INPUT_TEMPLATE', secret: false, required: false, purpose: 'шаблон входа модели: plain (по умолчанию) или e5 (query:/passage:)' },
   { name: 'EMBEDDING_TIMEOUT_SECONDS', secret: false, required: false, purpose: 'таймаут запроса к модели, по умолчанию 30' },
   { name: 'EMBEDDING_BATCH_SIZE', secret: false, required: false, purpose: 'текстов в одном запросе к модели, по умолчанию 32' },
+  { name: 'MODEL_PROVIDER', secret: false, required: false, purpose: 'генеративная модель этапа 08: none (по умолчанию), openai_compatible или fake' },
+  { name: 'MODEL_BASE_URL', secret: false, required: false, purpose: 'адрес OpenAI-совместимого сервера модели (только loopback или LAN, D-013)' },
+  { name: 'MODEL_NAME', secret: false, required: false, purpose: 'имя модели на сервере' },
+  { name: 'MODEL_REVISION', secret: false, required: false, purpose: 'версия или квантование модели — входит в ключ повтора прогона' },
+  { name: 'MODEL_API_KEY', secret: true, required: false, purpose: 'ключ сервера модели, если он требуется' },
+  { name: 'MODEL_TIMEOUT_SECONDS', secret: false, required: false, purpose: 'ожидание ответа модели, по умолчанию 120' },
+  { name: 'MODEL_MAX_INPUT_CHARS', secret: false, required: false, purpose: 'символов фрагментов в одном запросе, по умолчанию 12000' },
+  { name: 'MODEL_MAX_OUTPUT_TOKENS', secret: false, required: false, purpose: 'предел ответа модели, по умолчанию 2048' },
+  { name: 'MODEL_JSON_MODE', secret: false, required: false, purpose: 'none (по умолчанию) или json_object — режим JSON сервера' },
   { name: 'SEARCH_SEMANTIC_DEADLINE_SECONDS', secret: false, required: false, purpose: 'срок смысловой ветки поиска, по умолчанию 60' },
   { name: 'MAILHUB_URL', secret: false, required: false, purpose: 'интеграция MailHub (этап 07)' },
   { name: 'MAILHUB_TOKEN', secret: true, required: false, purpose: 'интеграция MailHub (этап 07)' },
@@ -297,6 +327,27 @@ const isLocalUrl = (raw: string): boolean => {
   if (/^f[cd][0-9a-f]{2}:/u.test(host) || host.startsWith('fe80:')) return true;
   if (/^\d+\.\d+\.\d+\.\d+$/u.test(host) || host.includes(':')) return false;
   return !host.includes('.') || /\.(lan|local|internal|home\.arpa)$/u.test(host);
+};
+
+const CHAT_PROVIDERS: readonly ChatModelProviderKind[] = ['none', 'openai_compatible', 'fake'];
+
+const chatModelFrom = (env: Env, problems: string[]): IChatModelConfig => {
+  const raw = env.MODEL_PROVIDER || 'none';
+  const provider = (CHAT_PROVIDERS as readonly string[]).includes(raw) ? (raw as ChatModelProviderKind) : 'none';
+  if (provider !== raw) problems.push('MODEL_PROVIDER должно быть none, openai_compatible или fake');
+  const jsonMode = env.MODEL_JSON_MODE || 'none';
+  if (jsonMode !== 'none' && jsonMode !== 'json_object') problems.push('MODEL_JSON_MODE должно быть none или json_object');
+  return {
+    provider,
+    baseUrl: env.MODEL_BASE_URL || null,
+    model: env.MODEL_NAME || null,
+    revision: env.MODEL_REVISION || 'unspecified',
+    apiKey: env.MODEL_API_KEY || null,
+    timeoutMs: intFrom(env, 'MODEL_TIMEOUT_SECONDS', 120, problems) * 1000,
+    maxInputChars: intFrom(env, 'MODEL_MAX_INPUT_CHARS', 12000, problems),
+    maxOutputTokens: intFrom(env, 'MODEL_MAX_OUTPUT_TOKENS', 2048, problems),
+    jsonMode: jsonMode === 'json_object' ? 'json_object' : 'none',
+  };
 };
 
 const embeddingFrom = (env: Env, problems: string[]): IEmbeddingConfig => {
@@ -406,6 +457,7 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
       maxEmlBytes: intFrom(env, 'MAIL_MAX_EML_MB', 50, problems) * MIB,
       maxAttachmentBytes: intFrom(env, 'MAIL_MAX_ATTACHMENT_MB', 25, problems) * MIB,
     },
+    chatModel: chatModelFrom(env, problems),
   };
   for (const root of config.intakeRoots) {
     if (!isAbsolute(root)) problems.push(`INTAKE_ROOTS: «${root}» должен быть абсолютным путём`);
@@ -418,6 +470,14 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
   }
   if (e.provider === 'fake' && config.env === 'production') problems.push('EMBEDDING_PROVIDER=fake в production запрещён: поддельная модель не рабочая');
   if (e.dim !== null && e.dim > 4000) problems.push('EMBEDDING_DIM не больше 4000 (ADR-012 §6)');
+  const m = config.chatModel;
+  if (m.provider === 'openai_compatible') {
+    if (!m.baseUrl) problems.push('MODEL_BASE_URL обязателен для MODEL_PROVIDER=openai_compatible');
+    else if (!isLocalUrl(m.baseUrl)) problems.push('MODEL_BASE_URL: только loopback или LAN, облачного пути нет (D-013)');
+    if (!m.model) problems.push('MODEL_NAME обязателен для MODEL_PROVIDER=openai_compatible');
+  }
+  if (m.provider === 'fake' && config.env === 'production') problems.push('MODEL_PROVIDER=fake в production запрещён: поддельная модель не рабочая');
+  if (m.maxInputChars < 500) problems.push('MODEL_MAX_INPUT_CHARS не меньше 500');
   if (problems.length > 0) throw new ConfigError(problems);
   return config;
 };

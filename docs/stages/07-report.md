@@ -1,7 +1,7 @@
 # Этап 07 — почта, вопросы–ответы и переговоры
 
 Дата: 2026-09-30; real-EML (OD-07-4): 2026-10-01
-Статус: **IMPLEMENTED_AWAITING_REAL_EML** — Review 07-1: PRE-PASS (`docs/reviews/07-review-1.md`), интерпретации И-07-2…И-07-5 и И-07-7 — CONFIRMED; **настоящий EML владельца (OD-07-4) — PASS 2026-10-01** без изменения кода (`artifacts/stage-07/real-eml-check.log`), этап передаётся на Review 07-2. Статус `EmlImporter` в документах — `VERIFIED_FIXTURE` до Review 07-2 (кандидат `VERIFIED_LIVE`).
+Статус: **ACCEPTED** — Review 07-2: PASS (`docs/reviews/07-review-2.md`), этап принят по `4037e79fa9e3216206ee78baf01a08078af39509`; настоящий EML владельца (OD-07-4) — 11/11 PASS без изменения кода; `EmlImporter` — `VERIFIED_LIVE`, MailHub — `BLOCKED_EXTERNAL` (X-03), сервис переговоров — `BLOCKED_EXTERNAL` (Q-06). Ранее Review 07-1 — PRE-PASS, интерпретации И-07-2…И-07-5 и И-07-7 — CONFIRMED (`docs/reviews/07-review-1.md`).
 Базовый коммит: `a697725` (ветка `stage-05a`: этап 05a принят Review 05a-3 и закрыт).
 Ветка: `stage-07`, создана от базового коммита; `origin/stage-07` отслеживается.
 Коммиты этапа: `9b8fb8a` — решения владельца D-025, проект почтовой модели, остановка миграции на AD-07-1a и AD-07-2a; `4241232` — решения после остановки (AD-07-1a, AD-07-2a, И-07-1, OD-07-7) и матрицы A и B до миграции; `0682b0a` — миграции 0017–0018, серверная часть, worker и тесты; `50af6b6` — интерфейс, документы и журналы (передача Review 07-1); `4b0060d` — документальный коммит после PRE-PASS (`scripts/real-eml-check.mjs`); затем документальный коммит журнала настоящего EML.
@@ -9,13 +9,17 @@
 Задание: `docs/spec/03_STAGE_PROMPTS.md` §07; решения владельца — D-025, тексты — `docs/reviews/07-owner-decisions.md`, `docs/reviews/07-arch-decisions-2.md`; проект модели и матрицы миграции — `docs/architecture/07-mail-model-design.md`.
 Среда реализации: Ubuntu 26.04.1, Node 24.14.1; PostgreSQL 18.6 с pgvector 0.8.6 в контейнере `kontur-pg` на `127.0.0.1:55432`. Real-EML 2026-10-01: Windows 10, Node 24.13.0; тот же образ `pgvector/pgvector:pg18` в Docker на `127.0.0.1:55432`.
 
+## Итог: Review 07-2 — PASS, этап принят
+
+`docs/reviews/07-review-2.md`: последний критерий приёмки — ручной импорт настоящего EML владельцем (OD-07-4) — выполнен штатным путём `mailbox → import EML → server/worker → mail_message → mail_message_revision` на отдельной временной базе, 11/11 PASS (`artifacts/stage-07/real-eml-check.log`). Настоящее письмо дополнительно подтвердило `multipart/mixed`, тело HTML в base64, заголовки encoded-word UTF-8 и вложение DOCX; дефекта разбора нет, production-код не менялся. Сам `.eml` не коммитился, в ZIP и артефакты не попадал. Review 07-1 PRE-PASS остаётся в силе, ранее принятое подтверждено. Статусы: `EmlImporter` — `VERIFIED_LIVE`; MailHub — `BLOCKED_EXTERNAL` (X-03: настоящий EML подтверждает ручной путь, но X-03 не закрывает); сервис переговоров — `BLOCKED_EXTERNAL` (Q-06). Перед этапом 08 — отдельный preflight.
+
 ## Review 07-1 — PRE-PASS: ждём настоящий EML
 
 `docs/reviews/07-review-1.md`: проверена передача `50af6b6`. Приняты миграции 0017–0018, модель владения и доступа почты, коммуникация, связи письма с тендерами, документ вложения с распознаванием 05a, почтовая ветка общего поиска с фильтром прав во всех ветках и повторной проверкой при чтении, отзыв `mail.read` без переиндексации, историческое доказательство после снятия связи, ревизии Q&A, разделение речи и подсказки, инварианты БД, регрессии утечки, обновление 0016 → 0018, интерфейс, X-03 и Q-06 как `BLOCKED_EXTERNAL`. Интерпретации И-07-2…И-07-5, И-07-7 — CONFIRMED.
 
 Условие приёмки — ручной импорт настоящего EML владельцем штатным путём (11 проверок ревью); ревьюеру передаётся безопасный журнал без темы, адресов, тела и вложений. Для этого — `scripts/real-eml-check.mjs`: отдельная временная база, настоящие `server` + `worker`, путь `mailbox → import EML → worker → mail message/revision` через API, журнал `artifacts/stage-07/real-eml-check.log` только со структурой MIME, кодировками, числами и итогами PASS/FAIL. Инструмент проверен на синтетике до приёмки: письмо «как из Outlook» — все 11 пунктов PASS; windows-1251 — PASS; ложно объявленная `utf-8` — FAIL п. 3 (U+FFFD). **Настоящий EML владельца выполнен 2026-10-01 — PASS** (раздел ниже). Статусы до Review 07-2: `EmlImporter` — `VERIFIED_FIXTURE` (кандидат `VERIFIED_LIVE`), MailHub — `BLOCKED_EXTERNAL` (X-03), сервис переговоров — `BLOCKED_EXTERNAL` (Q-06).
 
-## Настоящий EML (OD-07-4) — PASS, на Review 07-2
+## Настоящий EML (OD-07-4) — PASS, принят Review 07-2
 
 2026-10-01, Windows: `node scripts/real-eml-check.mjs` по разрешённому файлу с сетевой папки владельца. Production-код не менялся; `.eml` в Git и ZIP не копировался; в артефакты попал только обезличенный журнал.
 
@@ -34,7 +38,7 @@
 | 10 | после отзыва `mail.read` письмо/поиск/цитата закрыты | PASS — письмо 404, прежний прогон 409, цитата 404, поиск без письма |
 | 11 | аудит и журналы процессов без темы/адресов/текста | PASS — 11 образцов, совпадений 0 |
 
-Итог журнала: **PASS**. `EmlImporter` в документах остаётся `VERIFIED_FIXTURE` до Review 07-2 (кандидат `VERIFIED_LIVE`).
+Итог журнала: **PASS**. Review 07-2 — PASS: `EmlImporter` переведён в `VERIFIED_LIVE`.
 
 ## Результат для пользователя
 
@@ -247,11 +251,11 @@
 
 ## Передача независимому ревьюеру
 
-Review 07-2 — после PASS настоящего EML (OD-07-4). Implementation HEAD остаётся `50af6b6`; документальные коммиты после него — `4b0060d` (скрипт real-eml-check) и коммит журнала `artifacts/stage-07/real-eml-check.log`. Production-код не менялся. Ветка `origin/stage-07` отслеживается. Что смотреть в первую очередь:
+Этап принят Review 07-2 (раздел «Итог» выше). Передача на Review 07-2 — после PASS настоящего EML (OD-07-4). Implementation HEAD остаётся `50af6b6`; документальные коммиты после него — `4b0060d` (скрипт real-eml-check) и коммит журнала `artifacts/stage-07/real-eml-check.log`. Production-код не менялся. Ветка `origin/stage-07` отслеживается. Что смотреть в первую очередь:
 
 1. `artifacts/stage-07/real-eml-check.log` — 11/11 PASS, без темы/адресов/тела/имён вложений.
 2. `docs/stages/07-report.md`, раздел «Настоящий EML (OD-07-4)».
-3. Статус `EmlImporter`: в документах `VERIFIED_FIXTURE` до вердикта Review 07-2 (кандидат `VERIFIED_LIVE`).
+3. Статус `EmlImporter`: по вердикту Review 07-2 — `VERIFIED_LIVE`.
 4. Ранее принятое Review 07-1 (`docs/reviews/07-review-1.md`) — PRE-PASS без блокирующих дефектов.
 
 Воспроизведение real-EML (PostgreSQL ≥ 17 с pgvector на `127.0.0.1:55432`; путь к `.eml` — вне Git):

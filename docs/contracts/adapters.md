@@ -255,7 +255,7 @@ interface EmlImporter {                          // факт: работает �
 - Отказы детерминированы (`MailParseError`): `empty`, `malformed` (в начале файла нет заголовков RFC 5322), `too_large` (файл, текст или число вложений сверх предела: `MAIL_MAX_EML_MB`, по умолчанию 50 МиБ; вложений — 200). Вложение сверх `MAIL_MAX_ATTACHMENT_MB` (по умолчанию 25 МиБ) — отказ вложения `size_limit` без байтов; тип вложения — по содержимому (`classifyFile`, A38), архив и запрещённый тип — `type_not_allowed`.
 - Разбор выполняет worker (`mail.import`); принятые вложения становятся документами с владельцем-вложением и распознаются движком 05a (AD-07-2a).
 
-Статус: `VERIFIED_FIXTURE` — синтетические EML в тестах (`tests/mailAdapters.test.ts`, `tests/mail*.test.ts`) и smoke (`artifacts/stage-07/smoke.log`); реальный пример — ручной импорт настоящего EML владельцем (OD-07-4).
+Статус: `VERIFIED_LIVE` (Review 07-2) — синтетические EML в тестах (`tests/mailAdapters.test.ts`, `tests/mail*.test.ts`) и smoke (`artifacts/stage-07/smoke.log`); настоящий EML владельца 2026-10-01 штатным путём — 11/11 PASS (`artifacts/stage-07/real-eml-check.log`). Ручной импорт подтверждён; X-03 он не закрывает.
 
 ## 6. Сервис переговоров
 
@@ -332,7 +332,7 @@ interface ModelGateway {                         // проект; провайд
 | `LocalOcrEngine` (`createTesseractJsFactory`) и разборщики DOCX, XLSX, CSV, PDF | VERIFIED_FIXTURE (этап 05a) | настоящие фикстуры и настоящий OCR tesseract.js в тестах и smoke (`tests/localParsers.test.ts`, `tests/localPdf.test.ts`, `artifacts/stage-05a/smoke.log`); замер на целевом Windows-ПК — `NOT_RUN` |
 | `ModelGatewayEmbeddings` | VERIFIED_FIXTURE (этап 05) | `OpenAiCompatibleEmbeddings` проверен контрактными тестами против поддельного HTTP-сервера (`tests/embeddings.test.ts`), `FakeEmbeddings` — в тестах конвейера; живой прогон с моделью — `NOT_RUN` до целевого ПК |
 | `MailHubReader` | BLOCKED_EXTERNAL | X-03 |
-| `EmlImporter` (`parseEml`) | VERIFIED_FIXTURE (этап 07) | синтетические EML в тестах и smoke; реальный пример — ручной импорт настоящего EML владельцем (OD-07-4) |
+| `EmlImporter` (`parseEml`) | VERIFIED_LIVE (Review 07-2) | синтетические EML в тестах и smoke; настоящий EML владельца 2026-10-01 — 11/11 PASS (`artifacts/stage-07/real-eml-check.log`); MailHub — по-прежнему X-03 |
 | `NegotiationImporter` (manifest `kontur.negotiation.v1`) и вопросы–ответы (`kontur.qa.v1`) | VERIFIED_FIXTURE (этап 07) | автоматизация — Q-06 (`BLOCKED_EXTERNAL`) |
 | `YandexDiskTarget`, `SmbTarget` | NOT_IMPLEMENTED | тестовые корни и учётные данные (Q-10) |
 | `ModelGateway` | NOT_IMPLEMENTED | выбор провайдера на этапе 08 |

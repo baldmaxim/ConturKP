@@ -580,6 +580,8 @@
 
 **Review 07-1 (2026-10-01, `docs/reviews/07-review-1.md`) — PRE-PASS.** Интерпретации И-07-2, И-07-3, И-07-4, И-07-5, И-07-7 — CONFIRMED (текст — `docs/stages/07-report.md`, раздел «Интерпретации»). Реализация этапа 07 принята без блокирующих дефектов; условие приёмки — ручной импорт настоящего EML владельцем (OD-07-4), затем Review 07-2. До него: `EmlImporter` — `VERIFIED_FIXTURE`, MailHub — `BLOCKED_EXTERNAL` (X-03), сервис переговоров — `BLOCKED_EXTERNAL` (Q-06).
 
+**Review 07-2 (2026-10-01, `docs/reviews/07-review-2.md`) — PASS, этап 07 ACCEPTED.** Настоящий EML владельца (OD-07-4) импортирован штатным путём без изменения кода — 11/11 PASS (`artifacts/stage-07/real-eml-check.log`); `EmlImporter` — `VERIFIED_LIVE`; MailHub — `BLOCKED_EXTERNAL` (X-03), сервис переговоров — `BLOCKED_EXTERNAL` (Q-06). Перед этапом 08 — отдельный preflight.
+
 Статус: accepted; этап 07 — READY_TO_CONTINUE.
 
 Что изменяет в требованиях/контрактах/тестах: после решений AD-07-1a и AD-07-2a — `docs/architecture/data-model.md` §4.1, §4.6; `state-machines.md` §1.1, §5.1; `docs/contracts/portal-api.md` §2.6; `adapters.md` §5–6; ADR-006 п. 9–10; `test-plan.md`; трассировка F07, F08.

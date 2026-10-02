@@ -5,7 +5,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, type ReadStream } from 'node:fs';
 import { chmod, link, mkdir, open, readdir, realpath, rm, stat } from 'node:fs/promises';
-import { dirname, join, resolve, sep } from 'node:path';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import type { Readable } from 'node:stream';
 
 export const HEAD_BYTES = 64;
@@ -42,10 +42,29 @@ export const storageKeyOf = (sha256: string): string => {
 
 const TMP_MAX_AGE_MS = 24 * 3600_000;
 
+// Физический путь каталога, который может ещё не существовать: realpath ближайшего существующего предка и оставшиеся
+// компоненты. Путь из конфигурации может идти через junction, символическую ссылку или короткое имя Windows (8.3);
+// на Windows создание каталогов через путь с junction давало ENOENT (Review 08-4, R08-05).
+export const physicalPath = async (p: string): Promise<string> => {
+  const rest: string[] = [];
+  for (let cur = resolve(p); ; ) {
+    try {
+      return join(await realpath(cur), ...rest);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      const parent = dirname(cur);
+      if ((code !== 'ENOENT' && code !== 'ENOTDIR') || parent === cur) throw err;
+      rest.unshift(basename(cur));
+      cur = parent;
+    }
+  }
+};
+
 export class BlobStore {
+  // Путь из конфигурации — для сообщений и до инициализации.
   readonly root: string;
-  // Физический (канонический) корень: путь из конфигурации может быть junction/ссылкой,
-  // а проверки пересечения с наблюдаемыми папками должны идти в одном пространстве путей (R03-06).
+  // Физический корень (R03-06, R08-05): все операции хранилища после `physicalRoot()` / `ensureDirs()` идут по нему, а не
+  // через junction или ссылку из конфигурации; по нему же — проверки пересечения с наблюдаемыми папками.
   private canonical: string | null = null;
 
   constructor(root: string) {
@@ -56,8 +75,14 @@ export class BlobStore {
     return this.canonical ?? this.root;
   }
 
+  // Физический корень без создания каталогов: пересечение с папкой проверяется до любой записи.
+  async physicalRoot(): Promise<string> {
+    this.canonical ??= await physicalPath(this.root);
+    return this.canonical;
+  }
+
   pathOf(sha256: string): string {
-    return join(this.root, ...storageKeyOf(sha256).split('/'));
+    return join(this.canonicalRoot(), ...storageKeyOf(sha256).split('/'));
   }
 
   // Путь принадлежит хранилищу (для исключения из сканирования наблюдаемых папок).
@@ -68,19 +93,21 @@ export class BlobStore {
     return p === root || p.startsWith(root + sep) || p === this.root || p.startsWith(this.root + sep);
   }
 
+  // Каталоги создаются по физическому пути: ни один `mkdir` не проходит через junction или ссылку из конфигурации.
   async ensureDirs(): Promise<void> {
-    await mkdir(join(this.root, 'sha256'), { recursive: true });
-    await mkdir(join(this.root, 'tmp'), { recursive: true });
-    await mkdir(join(this.root, 'derived'), { recursive: true });
-    this.canonical = await realpath(this.root);
+    const base = await this.physicalRoot();
+    await mkdir(join(base, 'sha256'), { recursive: true });
+    await mkdir(join(base, 'tmp'), { recursive: true });
+    await mkdir(join(base, 'derived'), { recursive: true });
+    this.canonical = await realpath(base);
   }
 
   // При старте процесса: каталоги и очистка временных файлов старше суток (ADR-003 §3).
   async init(): Promise<void> {
     await this.ensureDirs();
     const now = Date.now();
-    for (const name of await readdir(join(this.root, 'tmp'))) {
-      const p = join(this.root, 'tmp', name);
+    for (const name of await readdir(join(this.canonicalRoot(), 'tmp'))) {
+      const p = join(this.canonicalRoot(), 'tmp', name);
       const s = await stat(p).catch(() => null);
       if (s && now - s.mtimeMs > TMP_MAX_AGE_MS) await rm(p, { force: true });
     }
@@ -89,7 +116,7 @@ export class BlobStore {
   // destroyOnLimit = false — источник не разрушается при превышении лимита (HTTP-запрос дочитывается
   // вызывающим, чтобы клиент получил ответ 413, а не обрыв соединения).
   async putStream(source: Readable, maxBytes: number, destroyOnLimit = true): Promise<IStoredBlob> {
-    const tmp = join(this.root, 'tmp', `${randomUUID()}.part`);
+    const tmp = join(this.canonicalRoot(), 'tmp', `${randomUUID()}.part`);
     const hash = createHash('sha256');
     const handle = await open(tmp, 'wx');
     let size = 0;

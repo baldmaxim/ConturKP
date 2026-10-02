@@ -218,7 +218,8 @@ describe('недоступная папка и защита корня', () => {
     await drain(makeWorker(db, broken, 'broken-worker'));
     const job = await db.pool.query('SELECT status, last_error_code FROM job WHERE dedupe_key = $1 ORDER BY created_at DESC LIMIT 1', [`scan:${c.id}`]);
     expect(job.rows[0]).toMatchObject({ status: 'queued', last_error_code: 'internal' });
-    expect((await channel(c.id)).lastSuccessfulScanAt).toBeNull();
+    // Отказ подготовки хранилища виден в состоянии канала, а не как «ошибок нет» (R08-05).
+    expect(await channel(c.id)).toMatchObject({ lastSuccessfulScanAt: null, lastErrorCode: 'storage_unavailable' });
     rmSync(brokenRoot, { force: true });
     await s.admin.patch(`/intake-channels/${c.id}`, { active: false, disabledReason: 'тест сбоя хранилища завершён' }, { headers: { 'If-Match': `"${c.id}:1"` } });
     await db.pool.query("UPDATE job SET status = 'cancelled', finished_at = now() WHERE dedupe_key = $1 AND status = 'queued'", [`scan:${c.id}`]);

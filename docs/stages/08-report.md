@@ -1,12 +1,12 @@
 # Этап 08 — требования, покрытие и решения
 
-Дата: 2026-10-01; исправления Review 08-2 и Review 08-3 — 2026-10-02
-Статус: **IMPLEMENTED — R08-01…R08-03 закрыты ревью (Review 08-3 принял миграцию 0021); исправления отказов независимого прогона на Windows R08-04…R08-07 переданы на повторное ревью (передача W08). Проверки этой передачи выполнены на Linux; прогон на Windows — у ревьюера**. Живой прогон модели — `NOT_RUN` (на машине разработки нет GPU, OD-08-2: к live/pilot gate); качество модели — экспериментальное на фикстурах (Q-11).
+Дата: 2026-10-01; исправления Review 08-2, 08-3 и 08-4 — 2026-10-02
+Статус: **IMPLEMENTED — R08-01…R08-04, R08-06, R08-07 закрыты ревью (Review 08-4 на Windows); повторное исправление R08-05 передано на ревью (передача W08-2). Проверки этой передачи выполнены на Linux; прогон на Windows — у ревьюера**. Живой прогон модели — `NOT_RUN` (на машине разработки нет GPU, OD-08-2: к live/pilot gate); качество модели — экспериментальное на фикстурах (Q-11).
 Базовый коммит: `4ad01d5` (ветка `stage-07`: этап 07 принят Review 07-2).
 Ветка: `stage-08`, создана от базового коммита.
-Коммиты этапа: `08c2a6f` — решения владельца по preflight (D-026), проект модели, остановка миграции на Р-08-1…Р-08-8; `249b9ab` — решения по расхождениям, окончательная матрица миграции, проверка условий остановки; `4d0a39e` — миграция 0019, слой БД, шлюз модели, задание, API, первые тесты; `c7ebccc` — интерфейс, тесты, документы и журналы (передача Review 08-1); `84ad8cb` — исправления Review 08-1: миграция 0020, видимость по замыканию закрытости, тесты, документы и журналы (передача R08-1); `47ab346` — исправление Review 08-2: миграция 0021 (R08-03), тесты, документы и журналы (передача R08-3); затем коммит исправлений Windows-прогона Review 08-3 — R08-04…R08-07, тесты, документы и журналы (передача W08; хэш — в странице передачи и комментарии архива).
+Коммиты этапа: `08c2a6f` — решения владельца по preflight (D-026), проект модели, остановка миграции на Р-08-1…Р-08-8; `249b9ab` — решения по расхождениям, окончательная матрица миграции, проверка условий остановки; `4d0a39e` — миграция 0019, слой БД, шлюз модели, задание, API, первые тесты; `c7ebccc` — интерфейс, тесты, документы и журналы (передача Review 08-1); `84ad8cb` — исправления Review 08-1: миграция 0020, видимость по замыканию закрытости, тесты, документы и журналы (передача R08-1); `47ab346` — исправление Review 08-2: миграция 0021 (R08-03), тесты, документы и журналы (передача R08-3); `d6e3d47` — исправления Windows-прогона Review 08-3: R08-04…R08-07 (передача W08); затем коммит повторного исправления R08-05 по Review 08-4 — хранилище по физическому пути, отказ подготовки хранилища в состоянии канала (передача W08-2; хэш — в странице передачи, комментарии архива и git bundle).
 Рабочее дерево: чистое после передачи; не в Git по `.gitignore` — `node_modules/`, `apps/web/dist/`, `runtime/`; по `.git/info/exclude` — архивы и страницы передачи `ConturKP-*`.
-Задание: `docs/spec/03_STAGE_PROMPTS.md` §08; замечания ревью — `docs/reviews/08-review-1.md`, `docs/reviews/08-review-2.md`, `docs/reviews/08-review-3.md`; решения владельца — D-026, тексты — `docs/reviews/08-owner-decisions.md`, `docs/reviews/08-arch-decisions-2.md`; проект модели и матрица — `docs/architecture/08-requirements-model-design.md`.
+Задание: `docs/spec/03_STAGE_PROMPTS.md` §08; замечания ревью — `docs/reviews/08-review-1.md` … `docs/reviews/08-review-4.md`; решения владельца — D-026, тексты — `docs/reviews/08-owner-decisions.md`, `docs/reviews/08-arch-decisions-2.md`; проект модели и матрица — `docs/architecture/08-requirements-model-design.md`.
 Среда: Ubuntu 26.04.1 (Linux; Windows на машине разработки нет), Node 24.14.1; PostgreSQL 18.6 с pgvector 0.8.6 в контейнере `kontur-pg` на `127.0.0.1:55432`; Chromium headless без песочницы (AppArmor).
 
 ## Результат для пользователя
@@ -191,11 +191,29 @@ Review 08-3 (`docs/reviews/08-review-3.md`) закрыл R08-03 и принял 
 
 На Windows (у ревьюера): полный набор в один поток, typecheck, build, smoke — те же команды; при повторе аварии R08-07 нужен дамп процесса или `node --trace-exit` с выводом, чтобы установить поток, вызвавший `uv_async_send`.
 
+## Исправление Review 08-4: R08-05 повторно
+
+Review 08-4 (`docs/reviews/08-review-4.md`, Windows, Node v24.13.0) закрыл R08-04, R08-06, R08-07; R08-05 — STILL_OPEN (P2): на Windows `BlobStore.ensureDirs()` создавал каталоги через путь с junction и получал ENOENT, а вызов стоял до проверки пересечения и вне блока, записывающего отказ канала, — `overlaps_storage` не выставлялся, канал оставался без кода ошибки (3 теста: `intakeOverlap` :54, :64, `regressions-r03` :280).
+
+| Что | Было (`d6e3d47`) | Стало |
+|---|---|---|
+| путь хранилища для операций | путь из конфигурации (`this.root`, через junction); физический — только для сравнения | физический путь (`physicalPath`: realpath ближайшего существующего предка и оставшиеся компоненты) — для `mkdir`, временных файлов, объектов, чтения и пробы готовности сервера |
+| порядок в скане | `ensureDirs()` → проверка пересечения | проверка пересечения по физическому пути без создания каталогов → `ensureDirs()` |
+| отказ подготовки хранилища | исключение задания, у канала кода нет | код канала `storage_unavailable` и ошибка задания для повтора |
+
+Пересечение больше не зависит от создания каталогов: путь к ещё не существующему хранилищу через junction разрешается по существующему предку. Подготовка хранилища через junction на Windows идёт по физическому пути — `mkdir` через junction не выполняется.
+
+Воспроизведение на Linux (`artifacts/stage-08/r08-05b-on-d6e3d47.log`): на коде `d6e3d47` хранилище, заданное через junction, после снятия junction не записывает объект — ENOENT по пути `…/alias/…/tmp/…part`, то есть запись шла через junction; сбой подготовки хранилища оставляет канал без кода (`lastErrorCode` — `null`). После исправления оба теста проходят. Сам ENOENT `mkdir` через junction на Linux не воспроизводится — он специфичен для Windows-среды ревьюера.
+
+Тесты: `tests/intakeOverlap.test.ts` — `physicalPath` через псевдоним без создания каталогов; хранилище после снятия junction (каталоги и объект — в физическом месте, `pathOf` внутри физического корня, проверка SHA-256); соседнее хранилище через псевдоним — успешный скан, каталоги `derived`, `sha256`, `tmp` в физическом месте (раньше этот сценарий на Windows проходил впустую: скан падал, а `lastErrorCode` оставался `null`); прежние сценарии первого скана. `tests/intake.test.ts` — сбой хранилища: `storage_unavailable` у канала. Интерфейс: подпись кода «Хранилище портала недоступно на запись».
+
 ## Фактически выполненные проверки
+
+**Передача W08-2 (повторное исправление R08-05), Linux.** Профильные тесты хранилища, наблюдаемых папок и готовности: 171 / 171 PASS в 19 файлах (`artifacts/stage-08/r08-05b-tests.log`); полный набор однопоточно — 751 / 751 PASS, 73 файла (`artifacts/stage-08/tests.log`); 15 инвариантов БД — 15 / 15 PASS (`artifacts/stage-08/db-invariants.log`); typecheck — PASS; сборка web — PASS; smoke, 21 миграция с нуля — PASS, 64 шага (`linux x64`) (`artifacts/stage-08/smoke.log`). **На Windows — NOT_RUN в этой передаче**: Windows на машине разработки нет. Независимый результат передачи W08 на Windows (Review 08-4): полный набор 746 / 749 (3 отказа — R08-05), typecheck и build PASS, smoke 64 PASS.
 
 **Передача W08 (исправления Windows-прогона), Linux.** Профильные тесты R08-04…R08-07: 138 / 138 PASS в 13 файлах (`artifacts/stage-08/r08-04-07-tests.log`); полный набор однопоточно — 749 / 749 PASS, 73 файла (`artifacts/stage-08/tests.log`); 15 инвариантов БД — 15 / 15 PASS (`artifacts/stage-08/db-invariants.log`); typecheck — PASS; сборка web — PASS; smoke на настоящих server + worker, 21 миграция с нуля — PASS, 64 шага (заголовок журнала теперь называет платформу: `linux x64`) (`artifacts/stage-08/smoke.log`). Интерфейс этапа 08 и регрессия 02–07 не перезапускались: код web не менялся. **На Windows — NOT_RUN в этой передаче** (Windows на машине разработки нет): полный набор, typecheck, build и smoke на Windows выполняет ревьюер.
 
-Таблица ниже — передача R08-3 (`47ab346`). Тесты, инварианты, typecheck, сборка и smoke выполнены заново на коммите передачи R08-3; журналы `tests.log`, `db-invariants.log`, `typecheck.log`, `build.log`, `smoke.log` заменены прогоном W08. Интерфейс этапа 08 и регрессия 02–07 — на коммите передачи R08-1 `84ad8cb`: R08-03 меняет только функцию БД (миграция 0021), тесты и документы, код server, worker и web не менялся. Ранее: до исправлений Review 08-1 — 713 / 713 тестов в 68 файлах, smoke 60 шагов, интерфейс 08 — 31 шаг; на передаче R08-1 — 729 / 729 в 71 файле, smoke 64 шага.
+Таблица ниже — передача R08-3 (`47ab346`). Тесты, инварианты, typecheck, сборка и smoke выполнены заново на коммите передачи R08-3; журналы `tests.log`, `db-invariants.log`, `typecheck.log`, `build.log`, `smoke.log` заменены прогоном W08-2. Интерфейс этапа 08 и регрессия 02–07 — на коммите передачи R08-1 `84ad8cb`: R08-03 меняет только функцию БД (миграция 0021), тесты и документы, код server, worker и web не менялся. Ранее: до исправлений Review 08-1 — 713 / 713 тестов в 68 файлах, smoke 60 шагов, интерфейс 08 — 31 шаг; на передаче R08-1 — 729 / 729 в 71 файле, smoke 64 шага.
 
 | Проверка | Итог | Журнал |
 |---|---|---|
@@ -218,6 +236,7 @@ Review 08-3 (`docs/reviews/08-review-3.md`) закрыл R08-03 и принял 
 - `apps/server/src/http/errors.ts` — `40001` охранников этапа 08 → `409`.
 - `apps/worker/src/runtime.ts` — генеративная модель в контексте задания; `packages/config` — ключи `MODEL_*`.
 - `scripts/smoke.mjs` — шаги этапа 08 (`scripts/smoke-08.mjs`), `MODEL_PROVIDER=fake`.
+- Повторное исправление R08-05 (Review 08-4): `packages/storage/src/index.ts` (`physicalPath`, `BlobStore.physicalRoot`, операции по физическому корню), `apps/worker/src/handlers/intake.ts` (порядок проверки и подготовки, `storage_unavailable`), `apps/server/src/routes/health.ts` (проба записи по физическому пути), `apps/web` (код `storage_unavailable`), `docs/runbooks/clean-start.md`; тесты — `tests/intakeOverlap.test.ts`, `tests/intake.test.ts`.
 - Исправления Review 08-3 (Windows): `scripts/smoke.mjs` — платформа в заголовке журнала; `packages/adapters/src/local/pdf.ts` (`standardFontDataUrl`), `apps/worker/src/handlers/intake.ts` (физический корень хранилища до проверки, `insidePath`, идентичность каталогов), `scripts/tenderhub-live-smoke.ts` (естественное завершение); тесты — `tests/intakeOverlap.test.ts` (новый), `tests/localPdf.test.ts`, `tests/tenderhubLiveSmoke.test.ts`, `tests/intake.test.ts`, `tests/regressions-r03.test.ts`, `tests/helpers.ts` (`removeLink`).
 - Исправление Review 08-2: миграция `0021_requirement_param_value.sql`; `tests/requirementsParamValues.test.ts` (новый), `tests/requirementsUpgrade20.test.ts` (обновление 0020 → 0021).
 - Исправления Review 08-1: `packages/db/src/requirementTaint.ts` (новый), `requirementAccess.ts` (`visibilityOf` удалён), `requirements.ts`, `requirementCandidates.ts`, `requirementCoverage.ts`; `apps/server/src/requirementMappers.ts` и маршруты этапа 08 — видимость по замыканию, команды над скрытым объектом, 409 `requirement_conflict` / `unit_mismatch`; `packages/contracts` — `conflictNote`, `unitMismatchReason`; интерфейс — очередь кандидатов, форма покрытия, реестр, карточка, допущения и вопросы; `tests/requirementsSecurity.test.ts` — тест про `clarifies` заменён обратным; `scripts/smoke-08.mjs`, `artifacts/stage-08/ui-check.mjs` — шаги R08-01 и R08-02.
@@ -239,4 +258,4 @@ Review 08-3 (`docs/reviews/08-review-3.md`) закрыл R08-03 и принял 
 
 ## Передача независимому ревьюеру
 
-ZIP `ConturKP-stage-08-<коммит>.zip` из `git archive` коммита передачи W08 (исправления Windows-прогона Review 08-3); SHA-256, число записей и полный коммит — в странице передачи и комментарии архива.
+ZIP `ConturKP-stage-08-<коммит>.zip` из `git archive` коммита передачи W08-2 (повторное исправление R08-05 по Review 08-4); рядом — `ConturKP-stage-08-<коммит>.bundle` (git bundle ветки `stage-08`) для независимой проверки истории коммитов; SHA-256, число записей и полный коммит — в странице передачи и комментарии архива.

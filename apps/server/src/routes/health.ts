@@ -5,6 +5,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { IAppConfig } from '@kontur/config';
 import { checkSchema, freshWorkerCount, type Pool } from '@kontur/db';
+import { physicalPath } from '@kontur/storage';
 import { Router } from 'express';
 
 interface ICheck {
@@ -39,7 +40,8 @@ export const healthRouter = (config: IAppConfig, pool: Pool): Router => {
         }, 'не удалось проверить')
       : { ok: false, detail: 'БД недоступна' };
     const storage = await safe(async () => {
-      const dir = join(config.storageRoot, 'tmp');
+      // Проба записи — по физическому пути хранилища, как и сами операции хранилища (R08-05).
+      const dir = join(await physicalPath(config.storageRoot), 'tmp');
       await mkdir(dir, { recursive: true });
       const probe = join(dir, `ready-${randomUUID()}`);
       await writeFile(probe, 'ok');

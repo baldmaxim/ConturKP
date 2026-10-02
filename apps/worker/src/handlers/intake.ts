@@ -21,7 +21,7 @@ import {
   observeFile,
   type INewItem,
 } from '@kontur/db';
-import { BlobLimitError, type IStoredBlob } from '@kontur/storage';
+import { BlobLimitError, physicalPath, type IStoredBlob } from '@kontur/storage';
 import { RetryableJobError, type IJobContext, type IJobHandlerSpec } from '../runtime.ts';
 import { assertUnchanged, openVerifiedFile, SourceChangedError, UnsafeSourceError } from './safeRead.ts';
 import { addItem } from './imports.ts';
@@ -75,14 +75,15 @@ const overlaps = async (a: string, b: string): Promise<boolean> => {
 export class IntakeRootError extends Error {}
 
 // Проверка корня: папка существует, realpath внутри одного из разрешённых корней и не пересекается с хранилищем.
-// Хранилище сравнивается по физическому пути (realpath): путь из конфигурации может быть junction, ссылкой или иной
-// записью того же каталога (R03-06, R08-05); каталог хранилища к проверке уже создан (`BlobStore.ensureDirs`).
+// Хранилище сравнивается по физическому пути (`physicalPath`: realpath ближайшего существующего предка): путь из
+// конфигурации может быть junction, ссылкой или иной записью того же каталога, а сам каталог хранилища может ещё не
+// существовать — проверка ничего не создаёт и идёт до подготовки хранилища (R03-06, R08-05).
 export const resolveChannelRoot = async (locator: string, roots: string[], storageRoot: string): Promise<string> => {
   if (roots.length === 0) throw new IntakeRootError('intake_root_not_configured');
   const real = await realpath(resolve(locator));
   const realRoots = await Promise.all(roots.map((r) => realpath(r).catch(() => null)));
   if (!realRoots.some((r) => r !== null && insidePath(real, r))) throw new IntakeRootError('outside_intake_root');
-  const store = await realpath(resolve(storageRoot));
+  const store = await physicalPath(storageRoot);
   if (await overlaps(real, store)) throw new IntakeRootError('overlaps_storage');
   return real;
 };
@@ -119,17 +120,25 @@ export const handleIntakeScan = async (ctx: IJobContext): Promise<void> => {
 
   let root: string;
   let files: IFound[];
-  // Физический корень хранилища — до проверки папки: иначе первый скан сравнивал бы с путём из конфигурации, и
-  // пересечение, записанное иначе (junction, короткое имя, регистр), проходило бы (R03-06, R08-05).
-  await ctx.store.ensureDirs();
   try {
-    root = await resolveChannelRoot(channel.locator, ctx.config.intakeRoots, ctx.store.canonicalRoot());
+    // Пересечение — с физическим корнем хранилища, с первого скана и до любой записи в хранилище: путь из конфигурации
+    // может быть junction, ссылкой, коротким именем или иным регистром того же каталога (R03-06, R08-05).
+    root = await resolveChannelRoot(channel.locator, ctx.config.intakeRoots, await ctx.store.physicalRoot());
     files = await walk(root, (abs) => ctx.store.contains(abs));
   } catch (err) {
     const code = err instanceof IntakeRootError ? err.message : 'share_unavailable';
     await ctx.withLease((client) => markScanResult(client, channelId, { startedAt, pendingUnstable: 0, errorCode: code }));
     // Недоступная шара — повтор с задержкой; ошибка конфигурации — тоже повтор (администратор может исправить).
     throw new RetryableJobError(code, code === 'share_unavailable' ? 'папка канала недоступна' : 'папка канала вне разрешённого корня');
+  }
+
+  // Подготовка хранилища — по физическому пути. Отказ не остаётся «отсутствием ошибки»: канал получает код
+  // `storage_unavailable`, задание — ошибку для повтора (R08-05).
+  try {
+    await ctx.store.ensureDirs();
+  } catch (err) {
+    await ctx.withLease((client) => markScanResult(client, channelId, { startedAt, pendingUnstable: 0, errorCode: 'storage_unavailable' }));
+    throw err;
   }
 
   const states = await loadFileStates(ctx.pool, channelId);

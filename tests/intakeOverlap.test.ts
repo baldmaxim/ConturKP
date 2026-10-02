@@ -3,11 +3,13 @@
 // (короткие имена 8.3, регистр, junction), а проверка шла по тексту пути из конфигурации, пока физический корень
 // хранилища ещё не был вычислен, — `overlaps_storage` не возникал. Здесь та же ситуация воспроизводится псевдонимом
 // каталога (символической ссылкой): путь к хранилищу записан через псевдоним, папка канала — физическим путём.
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, posix, win32 } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { Readable } from 'node:stream';
 import { insidePath, resolveChannelRoot } from '../apps/worker/src/handlers/intake.ts';
+import { BlobStore, physicalPath } from '../packages/storage/src/index.ts';
 import { buildScenario, createTestDb, drain, idem, makeApp, makeWorker, removeLink, testConfig, type IScenario, type ITestDb } from './helpers.ts';
 import { fakePdf } from './zip.ts';
 
@@ -73,11 +75,13 @@ describe('R08-05: пересечение с хранилищем — с перв
     await disable(c.id);
   });
 
-  it('соседние каталоги не пересекаются: хранилище рядом с папкой — скан проходит', async () => {
+  it('соседние каталоги не пересекаются: хранилище рядом с папкой, путь через псевдоним — скан успешен, каталоги созданы физически', async () => {
     const dir = join(ROOT, 'd');
     mkdirSync(dir);
     const c = await createChannel(dir);
-    expect((await scanOnce(c.id, join(ALIAS, 'd-store'), 'r0805-d')).lastErrorCode).toBeNull();
+    const view = await scanOnce(c.id, join(ALIAS, 'd-store'), 'r0805-d');
+    expect(view).toMatchObject({ lastErrorCode: null, lastSuccessfulScanAt: expect.any(String) });
+    expect(readdirSync(join(ROOT, 'd-store')).sort()).toEqual(['derived', 'sha256', 'tmp']);
     await disable(c.id);
   });
 
@@ -87,6 +91,33 @@ describe('R08-05: пересечение с хранилищем — с перв
     await expect(resolveChannelRoot(dir, [ROOT], join(ALIAS, 'e', 'store'))).rejects.toThrow('overlaps_storage');
     await expect(resolveChannelRoot(join(ALIAS, 'e'), [ROOT], join(dir, 'store'))).rejects.toThrow('overlaps_storage');
     await expect(resolveChannelRoot(join(dir, 'store'), [ROOT], join(ALIAS, 'e'))).rejects.toThrow('overlaps_storage');
+  });
+});
+
+describe('R08-05: хранилище работает по физическому пути, не через junction', () => {
+  it('physicalPath: несуществующий путь через псевдоним — физический предок и оставшиеся компоненты, без создания', async () => {
+    const real = realpathSync(ROOT);
+    expect(await physicalPath(join(ALIAS, 'нет', 'store'))).toBe(join(real, 'нет', 'store'));
+    expect(existsSync(join(ROOT, 'нет'))).toBe(false);
+    expect(await physicalPath(ALIAS)).toBe(real);
+  });
+
+  it('после вычисления физического корня junction снят — каталоги и объект всё равно создаются: ни mkdir, ни запись не идут через junction', async () => {
+    const target = join(BASE, 'f-target');
+    mkdirSync(target);
+    const alias = join(BASE, 'f-alias');
+    symlinkSync(target, alias, 'junction');
+    const store = new BlobStore(join(alias, 'x', 'store'));
+    const physical = await store.physicalRoot();
+    expect(physical).toBe(join(realpathSync(target), 'x', 'store'));
+    expect(existsSync(join(target, 'x'))).toBe(false);
+    removeLink(alias);
+    await store.ensureDirs();
+    expect(store.canonicalRoot()).toBe(physical);
+    const blob = await store.putStream(Readable.from([Buffer.from('содержимое R08-05')]), 1024);
+    expect(store.pathOf(blob.sha256).startsWith(physical)).toBe(true);
+    expect(existsSync(join(target, 'x', 'store', ...blob.storageKey.split('/')))).toBe(true);
+    expect(await store.verify(blob.sha256)).toBe(true);
   });
 });
 

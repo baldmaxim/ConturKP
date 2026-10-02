@@ -212,7 +212,7 @@ export type TDocType = 'tz' | 'pd' | 'rd' | 'contract' | 'boq' | 'qa_form' | 'le
 export type TSourceSetStatus = 'draft' | 'frozen';
 export type TInclusion = 'included' | 'excluded_not_applicable';
 export type TChannelOrigin = 'local' | 'yandex_disk' | 'smb';
-export type TChannelErrorCode = 'share_unavailable' | 'outside_intake_root' | 'intake_root_not_configured' | 'overlaps_storage' | 'internal';
+export type TChannelErrorCode = 'share_unavailable' | 'outside_intake_root' | 'intake_root_not_configured' | 'overlaps_storage' | 'storage_unavailable' | 'internal';
 
 export interface IBatchCounts {
   total: number;

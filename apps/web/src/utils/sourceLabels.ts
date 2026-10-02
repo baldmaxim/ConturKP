@@ -115,6 +115,7 @@ export const CHANNEL_ERROR_LABELS: Record<string, string> = {
   outside_intake_root: 'Папка вне разрешённого корня',
   intake_root_not_configured: 'На сервере не заданы корни папок',
   overlaps_storage: 'Папка пересекается с хранилищем',
+  storage_unavailable: 'Хранилище портала недоступно на запись',
   internal: 'Внутренняя ошибка',
 };
 

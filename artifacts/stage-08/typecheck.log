@@ -1,4 +1,4 @@
-# npm run typecheck — 2026-10-02T05:50:49Z, Node v24.14.1, Linux 7.0.0-31-generic — Linux, не Windows
+# npm run typecheck — 2026-10-02T06:12:38Z, Node v24.14.1, Linux 7.0.0-31-generic — Linux, не Windows
 
 > typecheck
 > tsc -p tsconfig.json --noEmit && npm run typecheck -w @kontur/web

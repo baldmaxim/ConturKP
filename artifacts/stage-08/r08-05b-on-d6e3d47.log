@@ -1,0 +1,26 @@
+# R08-05 (Review 08-4): код хранилища и обработчика d6e3d47 — запись через junction из конфигурации и сбой подготовки хранилища без кода канала — 2026-10-02T06:10:30Z, Linux; ожидаемо падают
+ ✓ tests/intake.test.ts > настройка канала > создаёт только администратор и только внутри INTAKE_ROOTS 76ms
+ ✓ tests/intake.test.ts > скан папки > A15: файл импортируется только после стабильности, ровно один раз; временные файлы пропускаются 1340ms
+ ✓ tests/intake.test.ts > скан папки > повторное обнаружение: неизменный файл не импортируется снова 1265ms
+ ✓ tests/intake.test.ts > скан папки > переименование: то же содержимое — новое происхождение с новым именем, без новой редакции; удаление ничего не удаляет 1271ms
+ ✓ tests/intake.test.ts > скан папки > A13: то же имя с новым содержимым — новая редакция документа 1270ms
+ ✓ tests/intake.test.ts > скан папки > частично скопированный файл: пока растёт — не импортируется; затем один раз целиком 2523ms
+ ✓ tests/intake.test.ts > скан папки > ZIP в наблюдаемой папке не распаковывается — отказ с исходом 1246ms
+ ✓ tests/intake.test.ts > скан папки > ссылка (junction) внутри папки не открывается — отказ path_traversal 1247ms
+ ✓ tests/intake.test.ts > двойное получение Яндекс Диск / SMB > одно содержимое из двух каналов — одна редакция, два происхождения с видом источника 1362ms
+ ✓ tests/intake.test.ts > недоступная папка и защита корня > недоступная шара: ошибка канала, повтор с задержкой, свежесть не обновляется 66ms
+ × tests/intake.test.ts > недоступная папка и защита корня > сбой хранилища при скане — ошибка задания, а не молчаливое «файл ещё копируется» 52ms
+ ✓ tests/intake.test.ts > недоступная папка и защита корня > папка, пересекающаяся с хранилищем, не сканируется 70ms
+ ✓ tests/intake.test.ts > недоступная папка и защита корня > отключение канала: руководитель с причиной, инженер — нет; отключённый не сканируется 73ms
+ × tests/r0805b.control.test.ts > хранилище через junction: после снятия junction запись объекта не должна идти через него 10ms
+   → ENOENT: no such file or directory, open '/tmp/kontur-r0805b-kGui6L/alias/x/store/tmp/8ee72cff-0bab-4703-898e-ff6f6e30331c.part'
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected { …(16) } to match object { lastSuccessfulScanAt: null, …(1) }
+- Expected
++ Received
+-   "lastErrorCode": "storage_unavailable",
++   "lastErrorCode": null,
+Error: ENOENT: no such file or directory, open '/tmp/kontur-r0805b-kGui6L/alias/x/store/tmp/8ee72cff-0bab-4703-898e-ff6f6e30331c.part'
+Serialized Error: { errno: -2, code: 'ENOENT', syscall: 'open', path: '/tmp/kontur-r0805b-kGui6L/alias/x/store/tmp/8ee72cff-0bab-4703-898e-ff6f6e30331c.part' }
+ Test Files  2 failed (2)
+      Tests  2 failed | 12 passed (14)

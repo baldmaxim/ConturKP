@@ -1,10 +1,10 @@
 # Этап 08a — ответное ядро и диалоги
 
 Дата: 2026-10-02
-Статус: **IMPLEMENTED — исправление Review 08a-2 передано на повторное ревью (Review 08a-3)**; не принят. Review 08a-1 — CHANGES_REQUIRED (`docs/reviews/08a-review-1.md`); Review 08a-2 — CHANGES_REQUIRED (`docs/reviews/08a-review-2.md`): R08a-02 закрыт ревью; R08a-01 (фрагмент с несколькими фактами) и новый R08a-03 (допсоглашения одной даты) исправлены — FIXED, ждут закрытия. AD-08a-1 решён владельцем — граф фактов D-018 (D-028). Модель — только поддельная (`MODEL_PROVIDER=fake`, сценарии тестов): живой прогон — `NOT_RUN`, качество ответов не заявляется (Q-11).
+Статус: **IMPLEMENTED — исправление Review 08a-3 передано на повторное ревью (Review 08a-4)**; не принят. Review 08a-1, 08a-2, 08a-3 — CHANGES_REQUIRED (`docs/reviews/08a-review-1.md` … `08a-review-3.md`): R08a-01, R08a-02, R08a-03 — закрыты ревью; новый R08a-04 (одинаковая величина разных условий) исправлен — FIXED, ждёт закрытия. AD-08a-1 решён владельцем — граф фактов D-018 (D-028). Модель — только поддельная (`MODEL_PROVIDER=fake`, сценарии тестов): живой прогон — `NOT_RUN`, качество ответов не заявляется (Q-11).
 Базовый коммит: `f0b40ba` (запись приёмки этапа 08 по `0a46e8d`, Review 08-6 — PASS).
 Ветка: `stage-08a`, создана от базового коммита; в origin не отправлялась, в `main` не сливалась.
-Коммиты этапа: `ce14826` — проект ответного ядра и D-027 (до кода); `8f2a6d0` — первая передача (Review 08a-1); `1a0faae` — текст Review 08a-1, дефекты R08a-01/R08a-02, решение владельца D-028 и проект графа фактов (до кода); `b4ebbd9` — передача 08a-2 (исправления, граф фактов D-018); затем коммит передачи 08a-3 — исправления Review 08a-2 (R08a-01, R08a-03), тесты, журналы и документы. Точный SHA коммита передачи — в комментарии ZIP, в git bundle и на странице передачи.
+Коммиты этапа: `ce14826` — проект ответного ядра и D-027 (до кода); `8f2a6d0` — первая передача (Review 08a-1); `1a0faae` — текст Review 08a-1, дефекты R08a-01/R08a-02, решение владельца D-028 и проект графа фактов (до кода); `b4ebbd9` — передача 08a-2 (исправления, граф фактов D-018); `d3d6636` — передача 08a-3 (исправления Review 08a-2: R08a-01, R08a-03); затем коммит передачи 08a-4 — исправление Review 08a-3 (R08a-04), тесты, журналы и документы. Точный SHA коммита передачи — в комментарии ZIP, в git bundle и на странице передачи.
 Рабочее дерево: чистое после коммита передачи; не в Git по `.gitignore` — `node_modules/`, `apps/web/dist/`, `runtime/`; по `.git/info/exclude` — архивы и страницы передачи `ConturKP-*`.
 Задание: `docs/spec/prompts/stage-08a.md` (`docs/spec/03_STAGE_PROMPTS.md` §08a); решения — D-013, D-018, D-019, D-027, D-028; проекты — `docs/architecture/08a-answer-core-design.md`, `docs/architecture/08a-fact-graph-design.md`; донор — Locus `apps/rag-api/src/answer-core/*`, `apps/rag-api/src/evidence/*` (HEAD `33c6bcf`, D-013).
 Среда: Ubuntu 26.04.1 (Linux x64; Windows на машине разработки нет — прогон на Windows `NOT_RUN`, выполняет ревьюер), Node 24.14.1; PostgreSQL 18.6 с pgvector 0.8.6 в контейнере `kontur-pg` на `127.0.0.1:55432`; Chromium headless без песочницы (AppArmor).
@@ -28,7 +28,7 @@
 | маршруты API | диалоги — 5 (portal-api §2.11); граф фактов — 3 (§2.12); `method: rules` у прогона анализа (§2.7) |
 | экраны | вкладка «Вопросы» этапа; вкладка договора «Факты и редакции» с диалогом решения; стороны в карточке договора; факты документов тендера и кнопка «Кандидаты по правилам» на вкладке «Требования» |
 | события аудита | `dialog.create`, `answer.request`, `fact.decision`; чтения `dialog.list`, `dialog.read`, `answer.read`, `fact.graph.read` и отказы |
-| тесты этапа | 112 в 14 файлах: `answerChecks` 23, `answers` 10, `answersVersion` 8, `answersFacts` 1, `answersSecurity` 6, `answersMail` 3, `answersVerifier` 4, `answersLocus` 4, `answersSchema` 12, `factRules` 23, `factGraph` 7, `factGraphSchema` 8, `factRequirements` 2, `modelGateway` +1 |
+| тесты этапа | 115 в 14 файлах: `answerChecks` 24, `answers` 10, `answersVersion` 10, `answersFacts` 1, `answersSecurity` 6, `answersMail` 3, `answersVerifier` 4, `answersLocus` 4, `answersSchema` 12, `factRules` 23, `factGraph` 7, `factGraphSchema` 8, `factRequirements` 2, `modelGateway` +1 |
 | smoke / интерфейс | `scripts/smoke-08a.mjs`; `artifacts/stage-08a/ui-check.mjs` |
 
 Не реализовано / внешние зависимости: живой прогон модели (U-01, U-05); пороги качества ответов (Q-11); экран диалога на странице договора; судьба `economics` (цена и итог сметы) — экономика этапа 10; извлечение фактов из писем и вложений.
@@ -70,6 +70,26 @@
 - решение человека — API и экран; граф пересчитывается в той же транзакции.
 
 Случай Locus 11 `pv2-amendment-advance` закрыт (`stage08a`): «Какой сейчас размер аванса…» — 10% из допсоглашения, основание 20% — перекрыто.
+
+## Исправление Review 08a-3
+
+Review 08a-3 (`docs/reviews/08a-review-3.md`, Windows): R08a-01 и R08a-03 — закрыты, R08a-02 — остаётся закрытым; новый R08a-04 (P2).
+
+### R08a-04 — одинаковая величина разных условий
+
+Причина: утверждение связывалось с фактом по совпадению величины без учёта условия. Во фрагменте «3.1. Аванс в размере 20%… НДС 20%.» при заменённом авансе 20% и действующем НДС 20% верное «НДС 20%» отклонялось (`superseded_evidence` по авансу); при авансе в конфликте «НДС 20%» получало ложный конфликт.
+
+Исправление (`packages/core/src/answers/claimChecks.ts`, `packages/core/src/facts/types.ts`): факт связывается с утверждением, если оно называет и его величину, и его условие.
+- Условие — подпись этой величины в утверждении («НДС 20%» → НДС, «Действующий аванс составляет 20%» → аванс); если подпись условия не называет — всё утверждение. Слова условий — `FACT_TYPE_MENTIONS`, по одному набору на каждый из 13 типов.
+- Совпадение величин разных условий связи не создаёт: ни отклонения, ни конфликта.
+- Утверждение, не называющее никакого условия, связывается со всеми фактами этой величины. Это консервативно: заменённое значение без названия условия не проходит, защита R08a-01 сохранена.
+- «…% от цены договора» — база процента, а не условие «цена договора».
+
+Регрессия:
+- `tests/answerChecks.test.ts` «R08a-04»: «НДС 20%» и «Ставка НДС составляет 20%» проходят; «Действующий аванс 20%», «Аванс 20%, НДС 20%» и «Составляет 20% от цены договора» отклонены; при авансе в конфликте «НДС 20%» проходит без конфликта, «Аванс 20%» — конфликт;
+- `tests/answersVersion.test.ts` «R08a-04» — два сквозных сценария через диалог и worker: заменённый аванс и действующий НДС; аванс в конфликте при вопросе, который приводит в пакет обе стороны конфликта.
+
+На коде `d3d6636` модульный и оба сквозных теста падают — проверено подстановкой прежних файлов.
 
 ## Исправление Review 08a-2
 
@@ -132,8 +152,8 @@ Review 08a-2 (`docs/reviews/08a-review-2.md`, Windows): R08a-02 — закрыт
 
 | Команда / сценарий | Среда и данные | Результат | Артефакт |
 |---|---|---|---|
-| `npx vitest run --maxWorkers=1 --fileParallelism=false` | Linux x64, Node 24.14.1, PostgreSQL 18.6 + pgvector; изолированные тестовые БД | PASS: 863 / 863, 86 файлов | `artifacts/stage-08a/tests.log` |
-| тесты этапа (14 файлов) | то же; модель — `FakeChat` / `ScriptedChat` / без модели | 112 / 112 (входят в полный набор) | `artifacts/stage-08a/tests.log` |
+| `npx vitest run --maxWorkers=1 --fileParallelism=false` | Linux x64, Node 24.14.1, PostgreSQL 18.6 + pgvector; изолированные тестовые БД | PASS: 866 / 866, 86 файлов | `artifacts/stage-08a/tests.log` |
+| тесты этапа (14 файлов) | то же; модель — `FakeChat` / `ScriptedChat` / без модели | 115 / 115 (входят в полный набор) | `artifacts/stage-08a/tests.log` |
 | `npm run typecheck` | Linux x64 | PASS | `artifacts/stage-08a/typecheck.log` |
 | `npm run build` | Linux x64 | PASS | `artifacts/stage-08a/build.log` |
 | `SMOKE_STAGE=stage-08a npm run smoke` | Linux x64; настоящие server + worker, чистая БД, `MODEL_PROVIDER=fake`, поддельный TenderHub | PASS: 72 шага (02–08 и 08a: диалоги, граф фактов, кандидаты по правилам; диалог после перезапуска server) | `artifacts/stage-08a/smoke.log` |
@@ -174,7 +194,7 @@ Review 08a-2 (`docs/reviews/08a-review-2.md`, Windows): R08a-02 — закрыт
 
 ## Передача независимому ревьюеру
 
-Область ревью Review 08a-3: исправления Review 08a-2 — R08a-01 (`packages/core/src/answers/claimChecks.ts`, `packet.ts`, `render.ts`, `draft.ts`, `apps/worker/src/handlers/answer.ts`) и R08a-03 (`packages/core/src/facts/graph.ts`). Прежняя область Review 08a-2: исправления R08a-01 (`packages/core/src/answers/claimChecks.ts`) и R08a-02 (`packages/db/src/answers.ts`, вызовы в `apps/worker/src/handlers/answer.ts`, `apps/server/src/routes/dialogs.ts`); граф фактов — `docs/migrations/0023_fact_graph.sql`, `packages/core/src/facts/`, `packages/db/src/facts.ts`, `apps/worker/src/handlers/facts.ts`, `analysisRules.ts`, `apps/server/src/routes/facts.ts`, `factMappers.ts`, пакет ответа (`packages/core/src/answers/packet.ts`), `apps/web/src/pages/facts/`.
+Область ревью Review 08a-4: исправление R08a-04 (`packages/core/src/answers/claimChecks.ts`, `packages/core/src/facts/types.ts`). Прежняя область Review 08a-3: исправления Review 08a-2 — R08a-01 (`packages/core/src/answers/claimChecks.ts`, `packet.ts`, `render.ts`, `draft.ts`, `apps/worker/src/handlers/answer.ts`) и R08a-03 (`packages/core/src/facts/graph.ts`). Прежняя область Review 08a-2: исправления R08a-01 (`packages/core/src/answers/claimChecks.ts`) и R08a-02 (`packages/db/src/answers.ts`, вызовы в `apps/worker/src/handlers/answer.ts`, `apps/server/src/routes/dialogs.ts`); граф фактов — `docs/migrations/0023_fact_graph.sql`, `packages/core/src/facts/`, `packages/db/src/facts.ts`, `apps/worker/src/handlers/facts.ts`, `analysisRules.ts`, `apps/server/src/routes/facts.ts`, `factMappers.ts`, пакет ответа (`packages/core/src/answers/packet.ts`), `apps/web/src/pages/facts/`.
 
 Воспроизведение (из корня; PostgreSQL ≥ 17 с pgvector, адрес — `KONTUR_TEST_ADMIN_URL`):
 

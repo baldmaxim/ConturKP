@@ -15,12 +15,16 @@ let st: IAnswerStage;
 let contractId: string;
 let undatedContractId: string;
 let mixedContractId: string;
+let vatContractId: string;
+let vatConflictContractId: string;
 let snapshotId: string;
 const config = testConfig();
 const MAIN = { title: 'Договор подряда № Д-08A от 10.01.2026', advance: '3.1. Аванс в размере 20% от цены договора.', warranty: '4.1. Гарантийный срок составляет 5 лет.' };
 const ADDENDUM = { title: 'Дополнительное соглашение № 1 от 15.03.2026', text: 'Пункт 3.1 договора изложить в новой редакции: «Аванс в размере 10% от цены договора».' };
 // R08a-01 (Review 08a-2): один фрагмент — заменённый аванс и действующая гарантия.
 const MIXED = '3.1. Аванс в размере 20% от цены договора. Гарантийный срок составляет 5 лет.';
+// R08a-04 (Review 08a-3): аванс и НДС с одинаковой величиной в одном фрагменте.
+const ADVANCE_VAT = '3.1. Аванс в размере 20% от цены договора. НДС 20%.';
 const SUPPLY = { title: 'Договор поставки № П-7 от 01.02.2026', advance: '3.1. Аванс составляет 25% от цены договора.' };
 const SUPPLY_DS = {
   title: 'Дополнительное соглашение № 2 от 01.04.2026 к договору поставки № П-7 от 01.02.2026',
@@ -65,6 +69,18 @@ beforeAll(async () => {
   await seedEvidenceRun(db.pool, main3.revisionId, { pages: [{ blocks: ['Договор подряда № Д-3 от 10.01.2026', MIXED] }] });
   const ds3 = await uploadContractDocument(st.s.manager, mixedContractId, 'ДС-1-смеш.pdf', fakePdf('ДС-1 смеш'), { role: 'addendum', mainDocumentId: main3.documentId });
   await seedEvidenceRun(db.pool, ds3.body.revisionId as string, { pages: [{ blocks: [ADDENDUM.title, ADDENDUM.text] }] });
+  // Договор, где аванс 20% и НДС 20% — в одном фрагменте; датированное ДС меняет только аванс.
+  vatContractId = await createContract(st.s.manager, 'Д-НДС');
+  const main4 = await uploadMain(st.s.manager, vatContractId, 'договор-4.pdf');
+  await seedEvidenceRun(db.pool, main4.revisionId, { pages: [{ blocks: ['Договор подряда № Д-4 от 10.01.2026', ADVANCE_VAT] }] });
+  const ds4 = await uploadContractDocument(st.s.manager, vatContractId, 'ДС-1-ндс.pdf', fakePdf('ДС-1 ндс'), { role: 'addendum', mainDocumentId: main4.documentId });
+  await seedEvidenceRun(db.pool, ds4.body.revisionId as string, { pages: [{ blocks: [ADDENDUM.title, ADDENDUM.text] }] });
+  // То же, но ДС без даты меняет аванс на 15%: аванс в конфликте, НДС действует.
+  vatConflictContractId = await createContract(st.s.manager, 'Д-НДС-К');
+  const main5 = await uploadMain(st.s.manager, vatConflictContractId, 'договор-5.pdf');
+  await seedEvidenceRun(db.pool, main5.revisionId, { pages: [{ blocks: ['Договор подряда № Д-5 от 10.01.2026', ADVANCE_VAT] }] });
+  const ds5 = await uploadContractDocument(st.s.manager, vatConflictContractId, 'ДС-1-ндс-к.pdf', fakePdf('ДС-1 ндс к'), { role: 'addendum', mainDocumentId: main5.documentId });
+  await seedEvidenceRun(db.pool, ds5.body.revisionId as string, { pages: [{ blocks: ['Дополнительное соглашение № 1', 'Пункт 3.1 договора изложить в новой редакции: «Аванс в размере 15% от цены договора».'] }] });
   await buildIndex(db, st.worker);
 });
 afterAll(async () => {
@@ -151,6 +167,43 @@ describe('R08a-01 (Review 08a-2): заменённый и действующий
     const w = await ask(st, st.s.manager, await newDialog(st.s.manager, contractContext(mixedContractId)), 'Какой гарантийный срок?');
     expect(w.answerStatus).toBe('confirmed_by_citations');
     expect(w.answer!.text).toContain('5 лет');
+  });
+});
+
+describe('R08a-04 (Review 08a-3): одинаковая величина разных условий в одном фрагменте', () => {
+  type Graph = { facts: { type: string; display: string; state: { status: string } }[] };
+  const vatDraft = (input: { task: string; user: string }) =>
+    input.task === 'answer_draft' ? draftJson([{ text: 'НДС 20%.', kind: 'percentage', evidence: [label(input.user, 'НДС 20%')] }]) : null;
+
+  it('аванс 20% заменён, НДС 20% действует: «НДС 20%» подтверждено; «Действующий аванс 20%» — отклонено', async () => {
+    const g = (await st.s.manager.get(`/contracts/${vatContractId}/fact-graph`)).body as Graph;
+    expect(g.facts.find((f) => f.type === 'vat_rate')!.state.status).toBe('active');
+    expect(g.facts.find((f) => f.type === 'advance_percent' && f.display === '20 %')!.state.status).toBe('superseded');
+    st.chat.scenario = vatDraft;
+    const vat = await ask(st, st.s.manager, await newDialog(st.s.manager, contractContext(vatContractId)), 'Какова ставка НДС?');
+    expect(vat.answerStatus).toBe('confirmed_by_citations');
+    expect(vat.answer!.text).toContain('НДС 20%');
+    expect(vat.answer!.droppedClaims).toBe(0);
+    st.chat.scenario = (input) =>
+      input.task === 'answer_draft' ? draftJson([{ text: 'Действующий аванс составляет 20% от цены договора.', kind: 'percentage', evidence: [label(input.user, 'НДС 20%')] }]) : null;
+    const advance = await ask(st, st.s.manager, await newDialog(st.s.manager, contractContext(vatContractId)), 'Какой сейчас размер аванса?');
+    expect(advance.answerStatus).not.toBe('confirmed_by_citations');
+    expect(advance.answer!.droppedIssues).toMatchObject({ superseded_evidence: 1 });
+  });
+
+  it('аванс 20% в конфликте (ДС без даты, 15%), НДС 20% действует: «НДС 20%» подтверждено без ложного расхождения', async () => {
+    const g = (await st.s.manager.get(`/contracts/${vatConflictContractId}/fact-graph`)).body as Graph;
+    expect(g.facts.filter((f) => f.type === 'advance_percent').map((f) => f.state.status)).toEqual(['conflict', 'conflict']);
+    expect(g.facts.find((f) => f.type === 'vat_rate')!.state.status).toBe('active');
+    st.chat.scenario = vatDraft;
+    // Вопрос называет и НДС, и аванс: обе стороны конфликта аванса — в пакете, и ложный конфликт был бы показан.
+    const vat = await ask(st, st.s.manager, await newDialog(st.s.manager, contractContext(vatConflictContractId)), 'Какова ставка НДС и размер аванса?');
+    const packet = await packetOf(vat.id);
+    expect(packet.filter((p) => p.version_note === 'conflict').map((p) => p.text)).toEqual(['Пункт 3.1 договора изложить в новой редакции: «Аванс в размере 15% от цены договора».']);
+    expect(packet.find((p) => p.text === ADVANCE_VAT)!.reason).toContain('advance_percent=conflict');
+    expect(vat.answerStatus).toBe('confirmed_by_citations');
+    expect(vat.answer!.conflictCitations).toEqual([]);
+    expect(vat.answer!.text).not.toContain('расхождение');
   });
 });
 

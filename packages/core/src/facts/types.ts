@@ -77,3 +77,25 @@ export interface IExtractedFact {
   amends: boolean;
   fragmentIds: string[];
 }
+
+// Как утверждение называет условие каждого типа (R08a-04): по этим словам гейт ответа связывает величину утверждения
+// с фактом её типа, а не с любым фактом той же величины («НДС 20%» — не аванс 20%). Шире слов вопроса планировщика:
+// утверждение может назвать условие иначе, чем вопрос.
+export const FACT_TYPE_MENTIONS: readonly (readonly [FactType, RegExp])[] = [
+  ['party_customer', /заказчик/iu],
+  ['party_contractor', /(?:ген)?подрядчик/iu],
+  // «…% от цены договора» — база процента, а не условие «цена договора».
+  ['contract_price', /(?<!(?:^|[^\p{L}])от\s+)(?:цен\p{L}*|стоимост\p{L}*)|сумм\p{L}*\s+договор/iu],
+  ['vat_rate', /ндс|налог\p{L}*\s+на\s+добавленн/iu],
+  ['advance_percent', /аванс/iu],
+  ['advance_term', /аванс/iu],
+  ['retention_percent', /удержани/iu],
+  ['retention_return_term', /удержани|возвра/iu],
+  ['warranty_period', /гарант/iu],
+  ['work_start_date', /начал/iu],
+  ['work_end_date', /оконча|заверш|срок\p{L}*\s+(?:выполнени|окончани)/iu],
+  ['penalty_rate', /неустойк|пени|штраф/iu],
+  ['estimate_total', /смет|итог/iu],
+];
+
+export const mentionedFactTypes = (text: string): Set<FactType> => new Set(FACT_TYPE_MENTIONS.filter(([, pattern]) => pattern.test(text)).map(([type]) => type));

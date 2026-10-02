@@ -223,6 +223,38 @@ describe('проверки утверждения (перенос Locus claim-ch
     expect(w.outcome).toBe('confirmed');
   });
 
+  it('R08a-04: одинаковая величина разных условий — «НДС 20%» не наследует состояние аванса 20%', () => {
+    const text = '3.1. Аванс в размере 20% от цены договора. НДС 20%.';
+    const vat = { factId: 'f-vat', factType: 'vat_rate', status: 'active' as const, rawValue: 'НДС 20%' };
+    const oldAdvance = { factId: 'f-adv', factType: 'advance_percent', status: 'superseded' as const, rawValue: 'Аванс в размере 20%' };
+    const fragment = item('E1', text, { facts: [oldAdvance, vat] });
+    const ctx = { evidenceById: new Map([['E1', fragment]]), allowedSourceUnitIds: new Set(['u1']), versionPolicy: 'current' as const };
+    const c = (claimText: string, kind: ClaimKind = 'percentage') => checkClaim({ claimId: 'c1', text: claimText, kind, evidenceIds: ['E1'] }, ctx);
+    // Сценарий ревью: верный НДС проходит.
+    expect(c('НДС 20%.').passed).toBe(true);
+    expect(c('Ставка НДС составляет 20%.').passed).toBe(true);
+    expect(renderVerifiedAnswer({ claims: [{ claimId: 'c1', text: 'НДС 20%.', kind: 'percentage', evidenceIds: ['E1'] }], checks: new Map([['c1', c('НДС 20%.')]]), items: [fragment], level: 'hard_checks' }).outcome).toBe('confirmed');
+    // Защита R08a-01 сохранена: заменённый аванс как действующий — отклонён, и рядом с верным НДС тоже.
+    expect(c('Действующий аванс составляет 20% от цены договора.').issues.map((i) => i.code)).toContain('superseded_evidence');
+    expect(c('Аванс 20%, НДС 20%.').issues.map((i) => i.code)).toContain('superseded_evidence');
+    // Утверждение, не называющее условия, связывается со всеми фактами этой величины — консервативно.
+    expect(c('Составляет 20% от цены договора.').issues.map((i) => i.code)).toContain('superseded_evidence');
+
+    // Вторая форма: аванс 20% в конфликте (другая сторона — 15%) не переносит конфликт на НДС.
+    const disputed = item('E1', text, { facts: [{ ...oldAdvance, status: 'conflict' }, vat] });
+    const other = item('E2', 'Пункт 3.1 договора изложить в новой редакции: «Аванс в размере 15% от цены договора».', {
+      documentKey: 'd2',
+      facts: [{ factId: 'f-adv-15', factType: 'advance_percent', status: 'conflict', rawValue: 'Аванс в размере 15%' }],
+    });
+    const ctx2 = { evidenceById: new Map([disputed, other].map((i) => [i.label, i])), allowedSourceUnitIds: new Set(['u1']), versionPolicy: 'current' as const };
+    const vatCheck = checkClaim({ claimId: 'c1', text: 'НДС 20%.', kind: 'percentage', evidenceIds: ['E1'] }, ctx2);
+    expect(vatCheck).toMatchObject({ passed: true, conflict: false, conflictFactTypes: [] });
+    const vatAnswer = renderVerifiedAnswer({ claims: [{ claimId: 'c1', text: 'НДС 20%.', kind: 'percentage', evidenceIds: ['E1'] }], checks: new Map([['c1', vatCheck]]), items: [disputed, other], level: 'hard_checks' });
+    expect(vatAnswer).toMatchObject({ outcome: 'confirmed', conflictCitations: [] });
+    const advanceCheck = checkClaim({ claimId: 'c2', text: 'Аванс в размере 20% от цены договора.', kind: 'percentage', evidenceIds: ['E1'] }, ctx2);
+    expect(advanceCheck).toMatchObject({ conflict: true, conflictFactTypes: ['advance_percent'] });
+  });
+
   it('цитаты обязаны существовать, лежать в области и указывать на фрагмент', () => {
     expect(codes(check('Удержание 3%.', 'percentage', []))).toEqual(['missing_evidence']);
     expect(codes(check('Удержание 3%.', 'percentage', ['E99']))).toContain('unknown_evidence');

@@ -3,6 +3,7 @@
 // число, единицу, ложную цитату или перекрытый пункт. Отличия от донора — только привязка к пакету Контура:
 // основание — элемент пакета с ID фрагмента портала; признак редакции — `versionNote` пакета (граф фактов D-018, D-028);
 // подтверждают только письменные основания (AD-08a-7).
+import { mentionedFactTypes } from '../facts/types.ts';
 import { compareQuantities, DURATION_UNITS, extractQuantities, type IQuantity, type QuantityUnit } from './claimNumbers.ts';
 
 export const CLAIM_KINDS = ['fact', 'amount', 'percentage', 'date', 'period', 'condition', 'comparison'] as const;
@@ -124,11 +125,24 @@ export interface IClaimContext {
   versionPolicy: VersionPolicy;
 }
 
-// Утверждение использует значение факта: его число (та же величина и единица) или название стороны есть в утверждении.
+// Утверждение использует значение факта, если называет и его величину, и его условие (R08a-04): величина совпадает
+// с величиной фразы факта (та же величина и единица), а подпись этой величины в утверждении — или, если подпись
+// условия не называет, всё утверждение — называет тип факта. Совпадение величин разных условий («аванс 20%» и
+// «НДС 20%») связи не создаёт. Утверждение, не называющее никакого условия, связывается со всеми фактами той же
+// величины — консервативно: заменённое значение без названия условия не проходит. Сторона — по названию организации.
 const usesValue = (text: string, fact: IItemFact): boolean => {
-  if (compareQuantities(text, [fact.rawValue]).some((entry) => entry.status === 'ok')) return true;
+  const quantities = extractQuantities(text);
+  const whole = mentionedFactTypes(text);
+  const named = (types: ReadonlySet<string>): boolean => types.size === 0 || types.has(fact.factType);
+  const byValue = compareQuantities(text, [fact.rawValue]).some(({ quantity, status }) => {
+    if (status !== 'ok') return false;
+    const at = quantities.findIndex((q) => q.index === quantity.index);
+    const label = mentionedFactTypes(labelBefore(text, quantity, at > 0 ? quantities[at - 1] : undefined));
+    return named(label.size ? label : whole);
+  });
+  if (byValue) return true;
   const name = /«([^»]+)»/u.exec(fact.rawValue)?.[1];
-  return Boolean(name && text.includes(name));
+  return Boolean(name && text.includes(name) && named(whole));
 };
 
 // Текст фрагмента без фраз заменённых фактов: опора для чисел утверждения о действующей редакции.

@@ -14,10 +14,13 @@ let db: ITestDb;
 let st: IAnswerStage;
 let contractId: string;
 let undatedContractId: string;
+let mixedContractId: string;
 let snapshotId: string;
 const config = testConfig();
 const MAIN = { title: 'Договор подряда № Д-08A от 10.01.2026', advance: '3.1. Аванс в размере 20% от цены договора.', warranty: '4.1. Гарантийный срок составляет 5 лет.' };
 const ADDENDUM = { title: 'Дополнительное соглашение № 1 от 15.03.2026', text: 'Пункт 3.1 договора изложить в новой редакции: «Аванс в размере 10% от цены договора».' };
+// R08a-01 (Review 08a-2): один фрагмент — заменённый аванс и действующая гарантия.
+const MIXED = '3.1. Аванс в размере 20% от цены договора. Гарантийный срок составляет 5 лет.';
 const SUPPLY = { title: 'Договор поставки № П-7 от 01.02.2026', advance: '3.1. Аванс составляет 25% от цены договора.' };
 const SUPPLY_DS = {
   title: 'Дополнительное соглашение № 2 от 01.04.2026 к договору поставки № П-7 от 01.02.2026',
@@ -56,6 +59,12 @@ beforeAll(async () => {
   await seedEvidenceRun(db.pool, main2.revisionId, { pages: [{ blocks: ['Договор подряда № Д-2 от 10.01.2026', MAIN.advance] }] });
   const undated = await uploadContractDocument(st.s.manager, undatedContractId, 'ДС-без-даты.pdf', fakePdf('ДС без даты'), { role: 'addendum', mainDocumentId: main2.documentId });
   await seedEvidenceRun(db.pool, undated.body.revisionId as string, { pages: [{ blocks: ['Дополнительное соглашение № 1', ADDENDUM.text] }] });
+  // Договор 06a, где аванс и гарантия — в одном фрагменте, а датированное допсоглашение меняет аванс.
+  mixedContractId = await createContract(st.s.manager, 'Д-СМЕШ');
+  const main3 = await uploadMain(st.s.manager, mixedContractId, 'договор-3.pdf');
+  await seedEvidenceRun(db.pool, main3.revisionId, { pages: [{ blocks: ['Договор подряда № Д-3 от 10.01.2026', MIXED] }] });
+  const ds3 = await uploadContractDocument(st.s.manager, mixedContractId, 'ДС-1-смеш.pdf', fakePdf('ДС-1 смеш'), { role: 'addendum', mainDocumentId: main3.documentId });
+  await seedEvidenceRun(db.pool, ds3.body.revisionId as string, { pages: [{ blocks: [ADDENDUM.title, ADDENDUM.text] }] });
   await buildIndex(db, st.worker);
 });
 afterAll(async () => {
@@ -109,6 +118,39 @@ describe('перекрытый пункт: допсоглашение с дат�
     const r = await ask(st, st.s.manager, d, 'Какой гарантийный срок?');
     expect(r.answerStatus).toBe('confirmed_by_citations');
     expect(r.answer!.citations.find((c) => c.text === MAIN.warranty)?.versionNote).toBe('current');
+  });
+});
+
+describe('R08a-01 (Review 08a-2): заменённый и действующий факты в одном фрагменте', () => {
+  it('«Действующий аванс 20%» со ссылкой на смешанный фрагмент — отклонён; гарантия из него же — подтверждена', async () => {
+    const g = (await st.s.manager.get(`/contracts/${mixedContractId}/fact-graph`)).body as { facts: { type: string; display: string; state: { status: string } }[] };
+    expect(g.facts.filter((f) => f.type === 'advance_percent').map((f) => [f.display, f.state.status]).sort()).toEqual([
+      ['10 %', 'active'],
+      ['20 %', 'superseded'],
+    ]);
+    expect(g.facts.find((f) => f.type === 'warranty_period')!.state.status).toBe('active');
+    st.chat.scenario = (input) =>
+      input.task === 'answer_draft' ? draftJson([{ text: 'Действующий аванс составляет 20% от цены договора.', kind: 'percentage', evidence: [label(input.user, 'Гарантийный срок')] }]) : null;
+    const d = await newDialog(st.s.manager, contractContext(mixedContractId));
+    const r = await ask(st, st.s.manager, d, 'Какой сейчас размер аванса?');
+    expect(r.answerStatus).not.toBe('confirmed_by_citations');
+    expect(r.answer!.droppedIssues).toMatchObject({ superseded_evidence: 1 });
+    expect(r.answer!.text ?? '').not.toContain('Действующий аванс составляет 20%');
+    // Пакет: сводная пометка фрагмента — «текущий» (в нём действующая гарантия), состояния фактов — в причине основания.
+    const ev = (await packetOf(r.id)).find((p) => p.text === MIXED)!;
+    expect(ev.version_note).toBe('current');
+    expect(ev.reason).toContain('advance_percent=superseded');
+    expect(ev.reason).toContain('warranty_period=active');
+    // Модель видит, что именно заменено в этом фрагменте.
+    const draftInput = st.chat.inputs.filter((i) => i.task === 'answer_draft').at(-1)!;
+    const sent = (JSON.parse(draftInput.user) as { evidence: { text: string; status: string }[] }).evidence.find((e) => e.text === MIXED)!;
+    expect(sent.status).toContain('заменено более поздним документом: «Аванс в размере 20%»');
+
+    st.chat.scenario = (input) =>
+      input.task === 'answer_draft' ? draftJson([{ text: 'Гарантийный срок составляет 5 лет.', kind: 'period', evidence: [label(input.user, 'Гарантийный срок')] }]) : null;
+    const w = await ask(st, st.s.manager, await newDialog(st.s.manager, contractContext(mixedContractId)), 'Какой гарантийный срок?');
+    expect(w.answerStatus).toBe('confirmed_by_citations');
+    expect(w.answer!.text).toContain('5 лет');
   });
 });
 

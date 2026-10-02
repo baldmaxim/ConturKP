@@ -13,6 +13,16 @@ export const DOCUMENTARY_ORIGINS: ReadonlySet<string> = new Set(['document_text'
 
 export type VersionNote = 'current' | 'superseded' | 'conflict';
 
+// Факт графа D-018, основанием которого служит фрагмент, — со своим состоянием (R08a-01: в одном фрагменте могут быть
+// действующий и заменённый факты; состояние проверяется по факту, а не по фрагменту целиком).
+export interface IItemFact {
+  factId: string;
+  factType: string;
+  status: 'active' | 'superseded' | 'conflict';
+  // Фраза фрагмента, из которой прочитано значение (подстрока текста фрагмента).
+  rawValue: string;
+}
+
 // Элемент пакета доказательств, на который ссылается утверждение меткой E1…En.
 export interface IPacketItem {
   label: string;
@@ -23,6 +33,8 @@ export interface IPacketItem {
   documentKey: string;
   versionNote: VersionNote;
   reason: string;
+  // Факты фрагмента по графу области хода; `undefined` — сведений о фактах нет (решает `versionNote`).
+  facts?: readonly IItemFact[];
 }
 
 export interface IDraftClaim {
@@ -55,6 +67,8 @@ export interface IClaimCheck {
   status: 'passed' | 'unsupported' | 'contradicted';
   issues: IClaimIssue[];
   conflict: boolean;
+  // Типы фактов в конфликте, значения которых утверждение использует (для показа обеих сторон расхождения).
+  conflictFactTypes: string[];
 }
 
 // Проблемы, означающие, что утверждение говорит иное, чем основание (а не просто им не показано).
@@ -110,6 +124,17 @@ export interface IClaimContext {
   versionPolicy: VersionPolicy;
 }
 
+// Утверждение использует значение факта: его число (та же величина и единица) или название стороны есть в утверждении.
+const usesValue = (text: string, fact: IItemFact): boolean => {
+  if (compareQuantities(text, [fact.rawValue]).some((entry) => entry.status === 'ok')) return true;
+  const name = /«([^»]+)»/u.exec(fact.rawValue)?.[1];
+  return Boolean(name && text.includes(name));
+};
+
+// Текст фрагмента без фраз заменённых фактов: опора для чисел утверждения о действующей редакции.
+const currentText = (item: IPacketItem): string =>
+  (item.facts ?? []).filter((f) => f.status === 'superseded').reduce((text, f) => text.split(f.rawValue).join(' … '), item.text);
+
 export const checkClaim = (claim: IDraftClaim, { evidenceById, allowedSourceUnitIds, versionPolicy }: IClaimContext): IClaimCheck => {
   const issues: IClaimIssue[] = [];
   const evidenceIds = Array.isArray(claim.evidenceIds) ? claim.evidenceIds : [];
@@ -130,33 +155,41 @@ export const checkClaim = (claim: IDraftClaim, { evidenceById, allowedSourceUnit
   const documentary = cited.filter((item) => DOCUMENTARY_ORIGINS.has(item.origin));
   if (cited.length && !documentary.length) issues.push({ code: 'non_documentary_basis', detail: [...new Set(cited.map((item) => item.origin))].join(',') });
 
+  // Факты цитат, значения которых утверждение использует (R08a-01: состояние — у факта, а не у фрагмента).
+  const usedFacts = documentary.flatMap((item) => (item.facts ?? []).filter((f) => usesValue(claim.text, f)));
   if (documentary.length) {
-    // R08a-01: о действующей редакции (без исторической формулировки) перекрытое основание ничего не подтверждает —
-    // ни само, ни рядом с текущей цитатой: числа сверяются только с неперекрытыми основаниями, а ссылка на
-    // перекрытое основание отклоняет утверждение.
+    // R08a-01: о действующей редакции (без исторической формулировки) заменённое значение ничего не подтверждает — ни
+    // в целиком перекрытом фрагменте, ни рядом с действующим фактом того же фрагмента, ни рядом с текущей цитатой:
+    // числа сверяются только с текстом действующих фактов, а использование заменённого значения отклоняет утверждение.
     const aboutCurrent = versionPolicy === 'current' && !HISTORY_WORDING.test(claim.text);
     const superseded = documentary.filter((item) => item.versionNote === 'superseded');
-    const support = aboutCurrent ? documentary.filter((item) => item.versionNote !== 'superseded') : documentary;
+    const support = aboutCurrent ? documentary.filter((item) => item.versionNote !== 'superseded').map(currentText) : documentary.map((item) => item.text);
     // Только перекрытые цитаты — достаточно одной проблемы `superseded_evidence` (как у донора).
-    const numbers = support.length ? compareQuantities(claim.text, support.map((item) => item.text)) : [];
+    const numbers = support.length ? compareQuantities(claim.text, support) : [];
     for (const { quantity, status } of numbers) {
       if (status === 'missing') issues.push({ code: 'number_not_in_evidence', detail: quantity.raw });
       if (status === 'unit_mismatch') issues.push({ code: 'unit_mismatch', detail: quantity.raw });
       if (status === 'ambiguous') issues.push({ code: 'ambiguous_number', detail: `${quantity.raw} also appears with another unit` });
     }
-    if (aboutCurrent && superseded.length) {
-      issues.push({ code: 'superseded_evidence', detail: `replaced clauses cited for the current version: ${superseded.map((item) => item.label).join(',')}` });
+    // Заменённое значение, которое не совпадает ни с одним действующим значением того же типа в цитатах.
+    const stale = usedFacts.filter((f) => f.status === 'superseded' && !usedFacts.some((g) => g.factType === f.factType && g.status !== 'superseded'));
+    if (aboutCurrent && (superseded.length || stale.length)) {
+      const where = [...superseded.map((item) => item.label), ...stale.map((f) => `${f.factType}:${f.rawValue}`)];
+      issues.push({ code: 'superseded_evidence', detail: `replaced values cited for the current version: ${where.join(', ')}` });
     }
   }
   issues.push(...typeIssues(claim));
 
   const contradicting = issues.some((issue) => CONTRADICTING_ISSUES.has(issue.code));
+  // Конфликт — по фактам, значения которых утверждение использует; без сведений о фактах — по пометке фрагмента.
+  const conflictFactTypes = [...new Set(usedFacts.filter((f) => f.status === 'conflict').map((f) => f.factType))];
   return {
     claimId: claim.claimId,
     passed: issues.length === 0,
     status: issues.length === 0 ? 'passed' : contradicting ? 'contradicted' : 'unsupported',
     issues,
-    conflict: cited.some((item) => item.versionNote === 'conflict'),
+    conflict: conflictFactTypes.length > 0 || cited.some((item) => item.facts === undefined && item.versionNote === 'conflict'),
+    conflictFactTypes,
   };
 };
 

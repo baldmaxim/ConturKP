@@ -169,6 +169,60 @@ describe('проверки утверждения (перенос Locus claim-ch
     expect(r.answer).not.toContain('30 дней');
   });
 
+  it('R08a-01 (Review 08a-2): в одном фрагменте заменённый аванс и действующая гарантия — гарантия не легализует старый аванс', () => {
+    const mixedText = '3.1. Аванс в размере 20% от цены договора. Гарантийный срок составляет 5 лет.';
+    const mixedFacts = [
+      { factId: 'f-adv-old', factType: 'advance_percent', status: 'superseded' as const, rawValue: 'Аванс в размере 20%' },
+      { factId: 'f-warranty', factType: 'warranty_period', status: 'active' as const, rawValue: 'Гарантийный срок составляет 5 лет' },
+    ];
+    const mixed = item('E1', mixedText, { facts: mixedFacts });
+    const addendum = item('E2', 'Пункт 3.1 договора изложить в новой редакции: «Аванс в размере 10% от цены договора».', { documentKey: 'd2', facts: [{ factId: 'f-adv-new', factType: 'advance_percent', status: 'active', rawValue: 'Аванс в размере 10%' }] });
+    // Сводная пометка фрагмента — «текущий»: в нём есть действующий факт.
+    expect(markVersions([{ fragmentId: mixed.fragmentId, text: mixedText, origin: 'document_text', sourceUnitId: 'u1', documentKey: 'd1', ownerKey: 'contract:1', rank: 1, reason: 'search:1' }], new Map([[mixed.fragmentId, mixedFacts]])).has(mixed.fragmentId)).toBe(false);
+    const ctx = { evidenceById: new Map([mixed, addendum].map((i) => [i.label, i])), allowedSourceUnitIds: new Set(['u1']), versionPolicy: 'current' as const };
+    const c = (text: string, kind: ClaimKind, evidenceIds: string[], policy: 'current' | 'historical' = 'current') =>
+      checkClaim({ claimId: 'c1', text, kind, evidenceIds }, { ...ctx, versionPolicy: policy });
+    // Сценарий ревью: одна ссылка на смешанный фрагмент.
+    const stale = c('Действующий аванс составляет 20% от цены договора.', 'percentage', ['E1']);
+    expect(stale.passed).toBe(false);
+    expect(stale.status).toBe('contradicted');
+    expect(stale.issues.map((i) => i.code)).toEqual(expect.arrayContaining(['superseded_evidence', 'number_not_in_evidence']));
+    expect(c('Аванс составляет 20% от цены договора.', 'percentage', ['E1', 'E2']).issues.map((i) => i.code)).toContain('superseded_evidence');
+    const r = renderVerifiedAnswer({
+      claims: [{ claimId: 'c1', text: 'Действующий аванс составляет 20% от цены договора.', kind: 'percentage', evidenceIds: ['E1'] }],
+      checks: new Map([['c1', stale]]),
+      items: [mixed, addendum],
+      level: 'hard_checks',
+    });
+    expect(r.outcome).toBe('insufficient');
+    expect(r.answer).not.toContain('20%');
+    // Гарантия из того же фрагмента, история аванса и новый аванс — допустимы.
+    expect(c('Гарантийный срок составляет 5 лет.', 'period', ['E1']).passed).toBe(true);
+    expect(c('Ранее аванс составлял 20% от цены договора.', 'percentage', ['E1']).passed).toBe(true);
+    expect(c('Аванс составлял 20% от цены договора.', 'percentage', ['E1'], 'historical').passed).toBe(true);
+    expect(c('Аванс составляет 10% от цены договора.', 'percentage', ['E2', 'E1']).passed).toBe(true);
+  });
+
+  it('R08a-01: конфликт — по факту, значение которого использует утверждение; действующая гарантия рядом конфликтом не становится', () => {
+    const a = item('E1', '3.1. Аванс в размере 20% от цены договора. Гарантийный срок составляет 5 лет.', {
+      facts: [
+        { factId: 'f1', factType: 'advance_percent', status: 'conflict', rawValue: 'Аванс в размере 20%' },
+        { factId: 'f2', factType: 'warranty_period', status: 'active', rawValue: 'Гарантийный срок составляет 5 лет' },
+      ],
+    });
+    const b = item('E2', 'Аванс в размере 15% от цены договора.', { documentKey: 'd2', versionNote: 'conflict', facts: [{ factId: 'f3', factType: 'advance_percent', status: 'conflict', rawValue: 'Аванс в размере 15%' }] });
+    const ctx = { evidenceById: new Map([a, b].map((i) => [i.label, i])), allowedSourceUnitIds: new Set(['u1']), versionPolicy: 'current' as const };
+    const warranty = checkClaim({ claimId: 'c1', text: 'Гарантийный срок составляет 5 лет.', kind: 'period', evidenceIds: ['E1'] }, ctx);
+    expect(warranty).toMatchObject({ passed: true, conflict: false, conflictFactTypes: [] });
+    const advance = checkClaim({ claimId: 'c2', text: 'Аванс в размере 20% от цены договора.', kind: 'percentage', evidenceIds: ['E1'] }, ctx);
+    expect(advance).toMatchObject({ passed: true, conflict: true, conflictFactTypes: ['advance_percent'] });
+    const r = renderVerifiedAnswer({ claims: [{ claimId: 'c2', text: 'Аванс в размере 20% от цены договора.', kind: 'percentage', evidenceIds: ['E1'] }], checks: new Map([['c2', advance]]), items: [a, b], level: 'hard_checks' });
+    expect(r.outcome).toBe('conflict');
+    expect(r.conflictCitations).toHaveLength(2);
+    const w = renderVerifiedAnswer({ claims: [{ claimId: 'c1', text: 'Гарантийный срок составляет 5 лет.', kind: 'period', evidenceIds: ['E1'] }], checks: new Map([['c1', warranty]]), items: [a, b], level: 'hard_checks' });
+    expect(w.outcome).toBe('confirmed');
+  });
+
   it('цитаты обязаны существовать, лежать в области и указывать на фрагмент', () => {
     expect(codes(check('Удержание 3%.', 'percentage', []))).toEqual(['missing_evidence']);
     expect(codes(check('Удержание 3%.', 'percentage', ['E99']))).toContain('unknown_evidence');
@@ -319,7 +373,7 @@ describe('пакет и признак редакции (граф фактов D
   const main = cand('m31', '3.1. Аванс в размере 20% от цены договора.');
   const main32 = cand('m32', '3.2. Аванс перечисляется в течение 10 дней.', { rank: 2 });
   const ds1 = cand('a1', 'Пункт 3.1 договора изложить в новой редакции: «Аванс в размере 10% от цены договора».', { documentKey: 'ds1', rank: 3 });
-  const fact = (factId: string, status: IFragmentFact['status'], factType = 'advance_percent'): IFragmentFact => ({ factId, factType, status });
+  const fact = (factId: string, status: IFragmentFact['status'], factType = 'advance_percent'): IFragmentFact => ({ factId, factType, status, rawValue: 'аванс' });
 
   it('признак основания — из состояния фактов: перекрыт, конфликт, текущий; перекрытое — после действующих', () => {
     const marks = markVersions([main, main32, ds1], new Map([

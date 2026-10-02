@@ -27,8 +27,17 @@ export interface IDraft {
   openQuestions: number;
 }
 
-export const versionNoteText = (item: IPacketItem): string =>
-  item.versionNote === 'superseded' ? 'заменённая редакция: условие изменено более поздним документом' : item.versionNote === 'conflict' ? 'значение расходится с другим документом' : '';
+// Пометка основания для модели. Фрагмент с несколькими фактами: заменённые и спорные значения названы поштучно
+// (R08a-01) — действующая часть фрагмента остаётся текущей.
+export const versionNoteText = (item: IPacketItem): string => {
+  if (item.versionNote === 'superseded') return 'заменённая редакция: условие изменено более поздним документом';
+  if (item.versionNote === 'conflict') return 'значение расходится с другим документом';
+  const stale = (item.facts ?? []).filter((f) => f.status === 'superseded').map((f) => `«${f.rawValue}»`);
+  const disputed = (item.facts ?? []).filter((f) => f.status === 'conflict').map((f) => `«${f.rawValue}»`);
+  return [stale.length ? `в этом фрагменте заменено более поздним документом: ${stale.join('; ')}` : '', disputed.length ? `расходится с другим документом: ${disputed.join('; ')}` : '']
+    .filter(Boolean)
+    .join('; ');
+};
 
 export const draftSystemPrompt = (plan: IAnswerPlan): string => {
   const broad = plan.intent === 'overview';

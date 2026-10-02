@@ -1,10 +1,10 @@
 # Этап 08a — ответное ядро и диалоги
 
 Дата: 2026-10-02
-Статус: **IMPLEMENTED — исправление Review 08a-1 передано на повторное ревью (Review 08a-2)**; не принят. Review 08a-1 — CHANGES_REQUIRED (`docs/reviews/08a-review-1.md`): R08a-01 и R08a-02 исправлены (FIXED, ждут закрытия ревьюером); AD-08a-1 решён владельцем — полный граф фактов D-018 (D-028) реализован. Модель — только поддельная (`MODEL_PROVIDER=fake`, сценарии тестов): живой прогон — `NOT_RUN`, качество ответов не заявляется (Q-11).
+Статус: **IMPLEMENTED — исправление Review 08a-2 передано на повторное ревью (Review 08a-3)**; не принят. Review 08a-1 — CHANGES_REQUIRED (`docs/reviews/08a-review-1.md`); Review 08a-2 — CHANGES_REQUIRED (`docs/reviews/08a-review-2.md`): R08a-02 закрыт ревью; R08a-01 (фрагмент с несколькими фактами) и новый R08a-03 (допсоглашения одной даты) исправлены — FIXED, ждут закрытия. AD-08a-1 решён владельцем — граф фактов D-018 (D-028). Модель — только поддельная (`MODEL_PROVIDER=fake`, сценарии тестов): живой прогон — `NOT_RUN`, качество ответов не заявляется (Q-11).
 Базовый коммит: `f0b40ba` (запись приёмки этапа 08 по `0a46e8d`, Review 08-6 — PASS).
 Ветка: `stage-08a`, создана от базового коммита; в origin не отправлялась, в `main` не сливалась.
-Коммиты этапа: `ce14826` — проект ответного ядра и D-027 (до кода); `8f2a6d0` — первая передача (Review 08a-1); `1a0faae` — текст Review 08a-1, дефекты R08a-01/R08a-02, решение владельца D-028 и проект графа фактов (до кода); затем коммит передачи 08a-2 — исправления, граф фактов D-018, тесты, журналы и документы. Точный SHA коммита передачи — в комментарии ZIP, в git bundle и на странице передачи.
+Коммиты этапа: `ce14826` — проект ответного ядра и D-027 (до кода); `8f2a6d0` — первая передача (Review 08a-1); `1a0faae` — текст Review 08a-1, дефекты R08a-01/R08a-02, решение владельца D-028 и проект графа фактов (до кода); `b4ebbd9` — передача 08a-2 (исправления, граф фактов D-018); затем коммит передачи 08a-3 — исправления Review 08a-2 (R08a-01, R08a-03), тесты, журналы и документы. Точный SHA коммита передачи — в комментарии ZIP, в git bundle и на странице передачи.
 Рабочее дерево: чистое после коммита передачи; не в Git по `.gitignore` — `node_modules/`, `apps/web/dist/`, `runtime/`; по `.git/info/exclude` — архивы и страницы передачи `ConturKP-*`.
 Задание: `docs/spec/prompts/stage-08a.md` (`docs/spec/03_STAGE_PROMPTS.md` §08a); решения — D-013, D-018, D-019, D-027, D-028; проекты — `docs/architecture/08a-answer-core-design.md`, `docs/architecture/08a-fact-graph-design.md`; донор — Locus `apps/rag-api/src/answer-core/*`, `apps/rag-api/src/evidence/*` (HEAD `33c6bcf`, D-013).
 Среда: Ubuntu 26.04.1 (Linux x64; Windows на машине разработки нет — прогон на Windows `NOT_RUN`, выполняет ревьюер), Node 24.14.1; PostgreSQL 18.6 с pgvector 0.8.6 в контейнере `kontur-pg` на `127.0.0.1:55432`; Chromium headless без песочницы (AppArmor).
@@ -28,7 +28,7 @@
 | маршруты API | диалоги — 5 (portal-api §2.11); граф фактов — 3 (§2.12); `method: rules` у прогона анализа (§2.7) |
 | экраны | вкладка «Вопросы» этапа; вкладка договора «Факты и редакции» с диалогом решения; стороны в карточке договора; факты документов тендера и кнопка «Кандидаты по правилам» на вкладке «Требования» |
 | события аудита | `dialog.create`, `answer.request`, `fact.decision`; чтения `dialog.list`, `dialog.read`, `answer.read`, `fact.graph.read` и отказы |
-| тесты этапа | 102 в 14 файлах: `answerChecks` 21, `answers` 10, `answersVersion` 7, `answersFacts` 1, `answersSecurity` 6, `answersMail` 3, `answersVerifier` 4, `answersLocus` 4, `answersSchema` 12, `factRules` 17, `factGraph` 6, `factGraphSchema` 8, `factRequirements` 2, `modelGateway` +1 |
+| тесты этапа | 112 в 14 файлах: `answerChecks` 23, `answers` 10, `answersVersion` 8, `answersFacts` 1, `answersSecurity` 6, `answersMail` 3, `answersVerifier` 4, `answersLocus` 4, `answersSchema` 12, `factRules` 23, `factGraph` 7, `factGraphSchema` 8, `factRequirements` 2, `modelGateway` +1 |
 | smoke / интерфейс | `scripts/smoke-08a.mjs`; `artifacts/stage-08a/ui-check.mjs` |
 
 Не реализовано / внешние зависимости: живой прогон модели (U-01, U-05); пороги качества ответов (Q-11); экран диалога на странице договора; судьба `economics` (цена и итог сметы) — экономика этапа 10; извлечение фактов из писем и вложений.
@@ -71,6 +71,33 @@
 
 Случай Locus 11 `pv2-amendment-advance` закрыт (`stage08a`): «Какой сейчас размер аванса…» — 10% из допсоглашения, основание 20% — перекрыто.
 
+## Исправление Review 08a-2
+
+Review 08a-2 (`docs/reviews/08a-review-2.md`, Windows): R08a-02 — закрыт ревью; R08a-01 — остался открытым для фрагмента с несколькими фактами; R08a-03 — новый.
+
+### R08a-01 — заменённый и действующий факты в одном фрагменте (P1)
+
+Причина: пометка редакции ставилась фрагменту целиком (`superseded` — только если перекрыты все его факты). Фрагмент «3.1. Аванс в размере 20%… Гарантийный срок составляет 5 лет.» с заменённым авансом и действующей гарантией считался текущим, и «Действующий аванс составляет 20%» проходил гейт. Исправление: элемент пакета несёт состояния своих фактов из графа области хода (`IPacketItem.facts`), и гейт (`claimChecks.ts`) проверяет тот факт, значение которого использует утверждение. Число или название стороны должно совпадать с фразой факта. Для утверждения о действующей редакции:
+- числа сверяются с текстом фрагмента без фраз заменённых фактов;
+- использование заменённого значения, которое не совпадает ни с одним действующим значением того же типа в цитатах, — `superseded_evidence`.
+
+Конфликт тоже определяется по факту: действующая гарантия рядом со спорным авансом конфликтом не становится, а стороны конфликта аванса в ответе показываются. Сводная пометка фрагмента остаётся для показа: `current` у такого фрагмента означает «есть действующий факт». Состояния фактов пишутся в причину основания (`answer_evidence.reason`: `facts:advance_percent=superseded,warranty_period=active`). Модель видит в статусе основания, что именно в нём заменено.
+
+Регрессия:
+- `tests/answerChecks.test.ts` «R08a-01 (Review 08a-2)»: «Действующий аванс 20%» отклонён, гарантия, история аванса и новый аванс допустимы;
+- `tests/answerChecks.test.ts` «конфликт — по факту»;
+- `tests/answersVersion.test.ts` «R08a-01 (Review 08a-2)»: маршрут диалога и worker, граф API, причина основания, вход модели.
+
+На коде `b4ebbd9` оба модульных теста падают — проверено подстановкой прежних файлов.
+
+### R08a-03 — допсоглашения одной даты (P1)
+
+Причина: цели перекрытия выбирались среди документов семьи с датой не позже допсоглашения, поэтому допсоглашения одной даты перекрывали друг друга по кругу. Исправление (`graph.ts`): целью бывают только документы, которые точно раньше. Это документы семьи, не являющиеся допсоглашениями, с датой не позже, и допсоглашения строго более ранней даты. Допсоглашения одной даты применяются группой по состоянию до группы. Цель перекрывается, только если вся группа даёт ей одно значение; иначе все значения остаются действующими и показываются конфликтом с замечанием человеку. Порядок по ID документа или номеру допсоглашения не вводится: согласованного правила нет. Цикл из противоречивых решений человека (A > B > C > A) снимается: участники снова действуют, конфликт показан.
+
+Регрессия:
+- `tests/factRules.test.ts` «R08a-03» — 6 тестов: сценарий ревью, независимость от порядка входа, одна дата и одно значение, допсоглашение без даты рядом с датированным, позднее допсоглашение снимает неоднозначность, цикл решений человека. 5 из 6 падают на `b4ebbd9`; тест независимости от порядка проходит и там, потому что прежний цикл тоже был детерминирован;
+- `tests/factGraph.test.ts` «R08a-03 через API»: все три значения аванса в конфликте, `supersededByFactId` пуст, одно открытое замечание со всеми тремя фактами.
+
 ## Проверка критериев
 
 | Критерий задания / инвариант | Реализация | Доказательство | Статус |
@@ -78,8 +105,8 @@
 | Ответное ядро Locus по ADR-009: правила — разбор, пакет, гейты, отрисовка; модель — черновик и необязательная проверка | `packages/core/src/answers/*`; шлюз `IModelGatewayChat` | `08a-answer-core-design.md` §1; `tests/answerChecks.test.ts` | выполнено |
 | Схема результата, существование цитат и принадлежность области — до записи и показа | строгая схема черновика; метки только из пакета; фрагмент — в области прогона поиска (правило и охранник БД) | `tests/answers.test.ts` «ложная цитата»; `tests/answersSchema.test.ts` 8, 9 | выполнено |
 | Числовой гейт: та же единица; проценты ≠ дни, годы; `B30`, `КС-2`, номера пунктов — не числа | `claimNumbers.ts` — дословно Locus; сверка только с документальными и (о действующем) неперекрытыми цитатами | `tests/answerChecks.test.ts`, `tests/answers.test.ts` | выполнено |
-| Перекрытый допсоглашением пункт не выдаётся за текущий | граф фактов D-018 (D-028); гейт `superseded_evidence` — и при смешанных цитатах (R08a-01) | `tests/answersVersion.test.ts`, `tests/answersFacts.test.ts`, `tests/factRules.test.ts`, `tests/answersLocus.test.ts` (случай 11) | выполнено |
-| Конфликт оснований показан, а не разрешён | конфликт графа (без даты, без порядка, цена и смета) и расхождение величин → `citations_disagree`; замечание человеку | `tests/answersVersion.test.ts`, `tests/factGraph.test.ts` | выполнено |
+| Перекрытый допсоглашением пункт не выдаётся за текущий | граф фактов D-018 (D-028); гейт `superseded_evidence` — при смешанных цитатах и по факту внутри фрагмента (R08a-01) | `tests/answersVersion.test.ts`, `tests/answersFacts.test.ts`, `tests/factRules.test.ts`, `tests/answersLocus.test.ts` (случай 11) | выполнено |
+| Конфликт оснований показан, а не разрешён | конфликт графа (без даты, одна дата с разными значениями — R08a-03, без порядка, цена и смета) и расхождение величин → `citations_disagree`; замечание человеку; конфликт — по факту, который использует утверждение | `tests/answersVersion.test.ts`, `tests/factGraph.test.ts`, `tests/factRules.test.ts` | выполнено |
 | Диалоги, сообщения и состояние хода — в PostgreSQL | миграция 0022 | `tests/answersSchema.test.ts`; smoke — диалог после перезапуска | выполнено |
 | Генерация — заданием класса `gpu` | `answer.generate`, `gpu`, 90 | `tests/answers.test.ts`; smoke | выполнено |
 | Непроверенный черновик не показывается и не стримится | `answer: null` до `completed`; непроверенный текст не хранится | `tests/answers.test.ts`, `tests/answersSchema.test.ts` 9; ui-check | выполнено |
@@ -105,8 +132,8 @@
 
 | Команда / сценарий | Среда и данные | Результат | Артефакт |
 |---|---|---|---|
-| `npx vitest run --maxWorkers=1 --fileParallelism=false` | Linux x64, Node 24.14.1, PostgreSQL 18.6 + pgvector; изолированные тестовые БД | PASS: 853 / 853, 86 файлов | `artifacts/stage-08a/tests.log` |
-| тесты этапа (14 файлов) | то же; модель — `FakeChat` / `ScriptedChat` / без модели | 102 / 102 (входят в полный набор) | `artifacts/stage-08a/tests.log` |
+| `npx vitest run --maxWorkers=1 --fileParallelism=false` | Linux x64, Node 24.14.1, PostgreSQL 18.6 + pgvector; изолированные тестовые БД | PASS: 863 / 863, 86 файлов | `artifacts/stage-08a/tests.log` |
+| тесты этапа (14 файлов) | то же; модель — `FakeChat` / `ScriptedChat` / без модели | 112 / 112 (входят в полный набор) | `artifacts/stage-08a/tests.log` |
 | `npm run typecheck` | Linux x64 | PASS | `artifacts/stage-08a/typecheck.log` |
 | `npm run build` | Linux x64 | PASS | `artifacts/stage-08a/build.log` |
 | `SMOKE_STAGE=stage-08a npm run smoke` | Linux x64; настоящие server + worker, чистая БД, `MODEL_PROVIDER=fake`, поддельный TenderHub | PASS: 72 шага (02–08 и 08a: диалоги, граф фактов, кандидаты по правилам; диалог после перезапуска server) | `artifacts/stage-08a/smoke.log` |
@@ -133,7 +160,7 @@
 ## Решения и отклонения
 
 - D-027: AD-08a-2…AD-08a-9 — технические решения; AD-08a-1 — закрыт D-028 (владелец): полный граф фактов D-018, 13 типов донора, семья 06a + дата из текста, кандидаты требований, API и экран.
-- Уточнения при реализации D-028: решение человека по паре снимает и замечание о недатированном допсоглашении для решённых значений; основания фактов плана в пакете сохраняют порядок донора (заменённое — сразу за действующим, лимит пакета его не отсекает).
+- Уточнения при реализации D-028: решение человека по паре снимает и замечание о недатированном допсоглашении для решённых значений; основания фактов плана в пакете сохраняют порядок донора (заменённое — сразу за действующим, лимит пакета его не отсекает); допсоглашения одной даты или без даты друг друга не перекрывают (R08a-03).
 - `ANSWER_MAX_REPAIRS` — 0 или 1 (AD-08a-6).
 - Отклонений от ADR нет; ADR-004 §7a и ADR-009 дополнены записью о реализации.
 
@@ -147,7 +174,7 @@
 
 ## Передача независимому ревьюеру
 
-Область ревью Review 08a-2: исправления R08a-01 (`packages/core/src/answers/claimChecks.ts`) и R08a-02 (`packages/db/src/answers.ts`, вызовы в `apps/worker/src/handlers/answer.ts`, `apps/server/src/routes/dialogs.ts`); граф фактов — `docs/migrations/0023_fact_graph.sql`, `packages/core/src/facts/`, `packages/db/src/facts.ts`, `apps/worker/src/handlers/facts.ts`, `analysisRules.ts`, `apps/server/src/routes/facts.ts`, `factMappers.ts`, пакет ответа (`packages/core/src/answers/packet.ts`), `apps/web/src/pages/facts/`.
+Область ревью Review 08a-3: исправления Review 08a-2 — R08a-01 (`packages/core/src/answers/claimChecks.ts`, `packet.ts`, `render.ts`, `draft.ts`, `apps/worker/src/handlers/answer.ts`) и R08a-03 (`packages/core/src/facts/graph.ts`). Прежняя область Review 08a-2: исправления R08a-01 (`packages/core/src/answers/claimChecks.ts`) и R08a-02 (`packages/db/src/answers.ts`, вызовы в `apps/worker/src/handlers/answer.ts`, `apps/server/src/routes/dialogs.ts`); граф фактов — `docs/migrations/0023_fact_graph.sql`, `packages/core/src/facts/`, `packages/db/src/facts.ts`, `apps/worker/src/handlers/facts.ts`, `analysisRules.ts`, `apps/server/src/routes/facts.ts`, `factMappers.ts`, пакет ответа (`packages/core/src/answers/packet.ts`), `apps/web/src/pages/facts/`.
 
 Воспроизведение (из корня; PostgreSQL ≥ 17 с pgvector, адрес — `KONTUR_TEST_ADMIN_URL`):
 

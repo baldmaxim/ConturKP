@@ -14,6 +14,7 @@ let s: IScenario;
 let worker: WorkerRuntime;
 let contractId: string;
 let undatedContractId: string;
+let sameDateContractId: string;
 const config = testConfig();
 
 interface IGraphBody {
@@ -58,6 +59,17 @@ beforeAll(async () => {
   await seedEvidenceRun(db.pool, main2.revisionId, { pages: [{ blocks: ['Договор подряда № Д-2 от 10.01.2026', '3.1. Аванс в размере 20% от цены договора.'] }] });
   const ds2 = await uploadContractDocument(s.manager, undatedContractId, 'ДС-без-даты.pdf', fakePdf('ДС без даты'), { role: 'addendum', mainDocumentId: main2.documentId });
   await seedEvidenceRun(db.pool, ds2.body.revisionId as string, { pages: [{ blocks: ['Дополнительное соглашение № 1', 'Пункт 3.1 договора изложить в новой редакции: «Аванс в размере 10% от цены договора».'] }] });
+  // Договор с двумя допсоглашениями одной даты к пункту 3.1 (10% и 15%) — сценарий R08a-03.
+  sameDateContractId = await createContract(s.manager, 'Д-ОДНА-ДАТА');
+  const main3 = await uploadMain(s.manager, sameDateContractId, 'договор-3.pdf');
+  await seedEvidenceRun(db.pool, main3.revisionId, { pages: [{ blocks: ['Договор подряда № Д-3 от 10.01.2026', '3.1. Аванс в размере 20% от цены договора.'] }] });
+  for (const [name, n, percent] of [['ДС-1.pdf', 1, 10], ['ДС-2.pdf', 2, 15]] as const) {
+    const d = await uploadContractDocument(s.manager, sameDateContractId, name, fakePdf(`${name} одна дата`), { role: 'addendum', mainDocumentId: main3.documentId });
+    expect(d.status, d.text).toBe(201);
+    await seedEvidenceRun(db.pool, d.body.revisionId as string, {
+      pages: [{ blocks: [`Дополнительное соглашение № ${n} от 01.03.2026`, `Пункт 3.1 договора изложить в новой редакции: «Аванс в размере ${percent}% от цены договора».`] }],
+    });
+  }
   // Документы тендера A: договор поставки и допсоглашение к нему по тексту.
   const supply = await uploadDocument(db, config, s.eng1, s.stageA, 'Договор поставки.pdf');
   await seedEvidenceRun(db.pool, supply, { pages: [{ blocks: ['Договор поставки № П-7 от 01.02.2026', '3.1. Аванс составляет 25% от цены договора.'] }] });
@@ -138,6 +150,23 @@ describe('извлечение и граф договора (явная связ
     expect(cross.status).toBe(409);
     await setAccess(s.admin, contractId, s.ids.eng1, []);
     expect([403, 404]).toContain((await s.eng1.get(`/contracts/${contractId}/fact-graph`)).status);
+  });
+});
+
+describe('R08a-03: допсоглашения одной даты через API', () => {
+  it('два ДС от 01.03.2026 (10% и 15%) — все значения аванса в конфликте, взаимных перекрытий нет, открыто замечание человеку', async () => {
+    const g = await graphOf(s.manager, `/contracts/${sameDateContractId}/fact-graph`);
+    const adv = g.facts.filter((f) => f.type === 'advance_percent');
+    expect(adv.map((f) => [f.display, f.state!.status]).sort()).toEqual([
+      ['10 %', 'conflict'],
+      ['15 %', 'conflict'],
+      ['20 %', 'conflict'],
+    ]);
+    expect(adv.every((f) => f.state!.supersededByFactId === null)).toBe(true);
+    const open = g.remarks.filter((r) => r.status === 'open' && r.kind === 'value_conflict');
+    expect(open).toHaveLength(1);
+    expect(open[0]!.factIds.sort()).toEqual(adv.map((f) => f.id).sort());
+    expect(g.documents.filter((d) => d.kind === 'amendment').map((d) => d.documentDate)).toEqual(['2026-03-01', '2026-03-01']);
   });
 });
 

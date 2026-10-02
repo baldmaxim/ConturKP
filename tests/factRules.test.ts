@@ -12,6 +12,7 @@ import {
   FACT_TYPE_META,
   type IExtractedFact,
   type IFactGraph,
+  type IFactStatus,
   type IGraphDecision,
   type IGraphDocument,
   type IGraphFact,
@@ -287,5 +288,101 @@ describe('Контур: явная связь 06a, решения человек
     const g = computeFactGraph({ documents: [base.document], facts: [...base.facts, retired] });
     expect(g.facts.get('old-rev')).toMatchObject({ status: 'superseded', supersededReason: 'document_revision' });
     expect(g.facts.get(base.facts[0]!.factId)!.status).toBe('active');
+  });
+});
+
+describe('R08a-03: допсоглашения одной даты и порядок изменений', () => {
+  const contract = { ownerKey: 'contract:c9' };
+  const base = () => doc('base', 'Договор подряда № 10 от 01.01.2026\n\n3.1. Аванс составляет 20% от цены договора.', 'договор.pdf', { ...contract, explicit: { role: 'contract', mainDocumentId: null } });
+  const ds = (id: string, title: string, percent: number) =>
+    doc(id, `${title}\n\nПункт 3.1 договора изложить в новой редакции: «Аванс составляет ${percent}% от цены договора».`, `${id}.pdf`, { ...contract, explicit: { role: 'addendum', mainDocumentId: 'base' } });
+  const advances = (b: IBuild) => factsOf(b, 'advance_percent').map((f) => [f.normalized.percent, state(b, f).status, state(b, f).supersededByFactId === null]);
+  const noCycle = (b: IBuild) => {
+    for (const f of b.facts) {
+      const seen = new Set<string>();
+      let cur: string | null = f.factId;
+      while (cur) {
+        expect(seen.has(cur), `цикл перекрытий через ${cur}`).toBe(false);
+        seen.add(cur);
+        const s: IFactStatus = b.graph.facts.get(cur)!;
+        cur = s.status === 'superseded' ? s.supersededByFactId : null;
+      }
+    }
+  };
+
+  it('сценарий ревью: два ДС от 01.03.2026 с 10% и 15% — ни одно не перекрыто, цикла нет, конфликт и замечание человеку', () => {
+    const b = link([base(), ds('ds-a', 'Дополнительное соглашение № 1 от 01.03.2026', 10), ds('ds-b', 'Дополнительное соглашение № 2 от 01.03.2026', 15)]);
+    expect(advances(b)).toEqual([
+      [20, 'conflict', true],
+      [10, 'conflict', true],
+      [15, 'conflict', true],
+    ]);
+    noCycle(b);
+    const conflict = b.graph.remarks.filter((r) => r.kind === 'value_conflict');
+    expect(conflict).toHaveLength(1);
+    expect(conflict[0]!.factIds).toHaveLength(3);
+  });
+
+  it('результат не зависит от порядка документов на входе (не порядок ID)', () => {
+    const parts = [base(), ds('ds-b', 'Дополнительное соглашение № 2 от 01.03.2026', 15), ds('ds-a', 'Дополнительное соглашение № 1 от 01.03.2026', 10)];
+    const forward = link(parts);
+    const reversed = link([...parts].reverse());
+    expect([...reversed.graph.facts.values()].map((s) => [s.factId, s.status, s.supersededByFactId]).sort()).toEqual(
+      [...forward.graph.facts.values()].map((s) => [s.factId, s.status, s.supersededByFactId]).sort(),
+    );
+    expect(reversed.graph.hash).toBe(forward.graph.hash);
+  });
+
+  it('одна дата, одно значение — неоднозначности нет: договор перекрыт, оба ДС действуют', () => {
+    const b = link([base(), ds('ds-a', 'Дополнительное соглашение № 1 от 01.03.2026', 10), ds('ds-b', 'Дополнительное соглашение № 2 от 01.03.2026', 10)]);
+    expect(advances(b).map(([p, s]) => [p, s])).toEqual([
+      [20, 'superseded'],
+      [10, 'active'],
+      [10, 'active'],
+    ]);
+    expect(b.graph.remarks).toEqual([]);
+    noCycle(b);
+  });
+
+  it('ДС без даты рядом с датированным — порядок неизвестен: датированное перекрывает договор, но не соседа; конфликт и два замечания', () => {
+    const b = link([base(), ds('ds-a', 'Дополнительное соглашение № 1 от 01.03.2026', 10), ds('ds-u', 'Дополнительное соглашение № 2', 15)]);
+    expect(advances(b).map(([p, s]) => [p, s])).toEqual([
+      [20, 'superseded'],
+      [10, 'conflict'],
+      [15, 'conflict'],
+    ]);
+    expect(b.graph.remarks.map((r) => r.kind).sort()).toEqual(['undated_amendment', 'value_conflict']);
+    noCycle(b);
+  });
+
+  it('позднее датированное ДС снимает неоднозначность одной даты: все прежние значения перекрыты им', () => {
+    const b = link([
+      base(),
+      ds('ds-a', 'Дополнительное соглашение № 1 от 01.03.2026', 10),
+      ds('ds-b', 'Дополнительное соглашение № 2 от 01.03.2026', 15),
+      ds('ds-c', 'Дополнительное соглашение № 3 от 01.05.2026', 12),
+    ]);
+    const twelve = factsOf(b, 'advance_percent').find((f) => f.normalized.percent === 12)!;
+    expect(advances(b).map(([p, s]) => [p, s])).toEqual([
+      [20, 'superseded'],
+      [10, 'superseded'],
+      [15, 'superseded'],
+      [12, 'active'],
+    ]);
+    expect(factsOf(b, 'advance_percent').filter((f) => f !== twelve).every((f) => state(b, f).supersededByFactId === twelve.factId)).toBe(true);
+    expect(b.graph.remarks).toEqual([]);
+    noCycle(b);
+  });
+
+  it('противоречивые решения человека (A > B > C > A) цикла не создают: значения снова действуют, конфликт показан', () => {
+    const parts = [base(), ds('ds-a', 'Дополнительное соглашение № 1 от 01.03.2026', 10), ds('ds-b', 'Дополнительное соглашение № 2 от 01.03.2026', 15)];
+    const [a, b2, c] = parts.flatMap((p) => p.facts).filter((f) => f.factType === 'advance_percent');
+    const g = link(parts, [
+      { decisionId: 'd1', factId: a!.factId, otherFactId: b2!.factId, kind: 'prevails' },
+      { decisionId: 'd2', factId: b2!.factId, otherFactId: c!.factId, kind: 'prevails' },
+      { decisionId: 'd3', factId: c!.factId, otherFactId: a!.factId, kind: 'prevails' },
+    ]);
+    noCycle(g);
+    expect(advances(g).map(([, s]) => s)).toEqual(['conflict', 'conflict', 'conflict']);
   });
 });

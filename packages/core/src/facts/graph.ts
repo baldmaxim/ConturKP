@@ -176,38 +176,58 @@ export const computeFactGraph = (input: { documents: readonly IGraphDocument[]; 
   const decided = new Set([...effective.values()].filter((d) => d.kind !== 'rule').flatMap((d) => [d.factId, d.otherFactId]));
 
   // ---- 3. Допсоглашения — по дате документа; без даты ничего не перекрывают (донор).
+  // R08a-03: порядок между допсоглашениями известен только при разных датах. Допсоглашение той же даты или без даты
+  // целью перекрытия не бывает (одинаковая дата давала цикл 10% → 15% → 10%); допсоглашения одной даты применяются
+  // группой по состоянию до группы: цель перекрывается, только если все изменения группы дают ей одно значение,
+  // иначе значения остаются действующими и показываются конфликтом с замечанием человеку.
   const amendments = docs.filter((d) => relationOf.get(d.documentId) === 'amends').sort(byDateThenId);
-  for (const amendment of amendments) {
+  for (const amendment of amendments.filter((d) => !d.documentDate)) {
     const amending = live.filter((f) => f.documentId === amendment.documentId && f.amends);
-    if (!amending.length) continue;
-    if (!amendment.documentDate) {
-      // Замечание — пока человек не решил судьбу изменённых значений (решение по паре снимает вопрос порядка).
-      const open = amending.filter((f) => !decided.has(f.factId));
-      if (open.length) remarks.push(remark('undated_amendment', open.map((f) => f.factId), [amendment.documentId], `Допсоглашение № ${amendment.number || '—'} без даты: порядок изменений не известен, пункты не перекрыты.`));
-      continue;
+    // Замечание — пока человек не решил судьбу изменённых значений (решение по паре снимает вопрос порядка).
+    const open = amending.filter((f) => !decided.has(f.factId));
+    if (open.length) remarks.push(remark('undated_amendment', open.map((f) => f.factId), [amendment.documentId], `Допсоглашение № ${amendment.number || '—'} без даты: порядок изменений не известен, пункты не перекрыты.`));
+  }
+  const dates = [...new Set(amendments.flatMap((d) => (d.documentDate ? [d.documentDate] : [])))].sort();
+  for (const date of dates) {
+    const group = amendments.filter((d) => d.documentDate === date);
+    // Цель → изменения группы, которые её заменяют.
+    const proposals = new Map<string, IGraphFact[]>();
+    for (const amendment of group) {
+      const amending = live.filter((f) => f.documentId === amendment.documentId && f.amends);
+      if (!amending.length) continue;
+      const root = rootOf(amendment.documentId);
+      // Предшественники: документы семьи, не являющиеся допсоглашениями, не позже этой даты (или без даты — основной
+      // договор и приложения), и допсоглашения строго более ранней даты.
+      const family = new Set(
+        docs
+          .filter((d) => {
+            if (rootOf(d.documentId) !== root || d.documentId === amendment.documentId) return false;
+            if (relationOf.get(d.documentId) === 'amends') return Boolean(d.documentDate) && d.documentDate! < date;
+            return !d.documentDate || d.documentDate <= date;
+          })
+          .map((d) => d.documentId),
+      );
+      for (const fact of amending) {
+        const candidates = live.filter((f) => family.has(f.documentId) && f.factType === fact.factType && st(f.factId).status === 'active');
+        const sameClause = candidates.filter((f) => f.clauseRef && f.clauseRef === fact.clauseRef);
+        // Без точного совпадения пункта заменяется только единственный факт, пункт которого не противоречит изменяемому:
+        // «пункт 9.9» никогда не перекрывает факт пункта 3.1.
+        const compatible = candidates.filter((f) => !(fact.clauseRef && f.clauseRef && f.clauseRef !== fact.clauseRef));
+        const targets = sameClause.length ? sameClause : compatible.length === 1 ? compatible : [];
+        if (!sameClause.length && compatible.length > 1) {
+          remarks.push(
+            remark('amendment_target_ambiguous', [fact.factId, ...compatible.map((f) => f.factId)], [amendment.documentId], `Допсоглашение № ${amendment.number || '—'} изменяет пункт ${fact.clauseRef || 'без номера'}: в семье несколько подходящих значений — какое изменено, правило не выбирает.`),
+          );
+        }
+        for (const target of targets) proposals.set(target.factId, [...(proposals.get(target.factId) ?? []), fact]);
+        st(fact.factId).validFrom = date;
+      }
     }
-    const root = rootOf(amendment.documentId);
-    const family = new Set(
-      docs
-        .filter((d) => rootOf(d.documentId) === root && d.documentId !== amendment.documentId && (!d.documentDate || d.documentDate <= amendment.documentDate!))
-        .map((d) => d.documentId),
-    );
-    for (const fact of amending) {
-      const candidates = live.filter((f) => family.has(f.documentId) && f.factType === fact.factType && st(f.factId).status === 'active');
-      const sameClause = candidates.filter((f) => f.clauseRef && f.clauseRef === fact.clauseRef);
-      // Без точного совпадения пункта заменяется только единственный факт, пункт которого не противоречит изменяемому:
-      // «пункт 9.9» никогда не перекрывает факт пункта 3.1.
-      const compatible = candidates.filter((f) => !(fact.clauseRef && f.clauseRef && f.clauseRef !== fact.clauseRef));
-      const targets = sameClause.length ? sameClause : compatible.length === 1 ? compatible : [];
-      if (!sameClause.length && compatible.length > 1) {
-        remarks.push(
-          remark('amendment_target_ambiguous', [fact.factId, ...compatible.map((f) => f.factId)], [amendment.documentId], `Допсоглашение № ${amendment.number || '—'} изменяет пункт ${fact.clauseRef || 'без номера'}: в семье несколько подходящих значений — какое изменено, правило не выбирает.`),
-        );
-      }
-      for (const target of targets) {
-        Object.assign(st(target.factId), { status: 'superseded', supersededReason: 'amendment', supersededByFactId: fact.factId, validTo: amendment.documentDate });
-      }
-      st(fact.factId).validFrom = amendment.documentDate;
+    for (const [targetId, changes] of proposals) {
+      // Разные значения одной даты — порядок неизвестен: цель не перекрывается, конфликт покажет шаг 5.
+      if (new Set(changes.map((c) => c.normalizedKey)).size > 1) continue;
+      const by = [...changes].sort((x, y) => (x.factId < y.factId ? -1 : 1))[0]!;
+      Object.assign(st(targetId), { status: 'superseded', supersededReason: 'amendment', supersededByFactId: by.factId, validTo: date });
     }
   }
 
@@ -231,6 +251,20 @@ export const computeFactGraph = (input: { documents: readonly IGraphDocument[]; 
       if (st(b).status === 'superseded' && st(b).supersededByFactId === a) {
         Object.assign(st(b), { status: 'active', supersededReason: null, supersededByFactId: null, validTo: null, decidedBy: 'human', decisionId: d.decisionId });
       }
+    }
+  }
+
+  // Цикл перекрытий (противоречивые решения человека, A > B > C > A) — не выбор: участники цикла снова действуют, и их
+  // различие покажет конфликт с замечанием. Правило циклов не создаёт: перекрывает только более раннее.
+  for (const f of live) {
+    const path: string[] = [];
+    let cur: string | null = f.factId;
+    while (cur && !path.includes(cur)) {
+      path.push(cur);
+      cur = st(cur).status === 'superseded' ? st(cur).supersededByFactId : null;
+    }
+    if (cur && cur === f.factId) {
+      for (const id of path) Object.assign(st(id), { status: 'active', supersededReason: null, supersededByFactId: null, validTo: null });
     }
   }
 

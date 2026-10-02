@@ -114,7 +114,14 @@ export const renderVerifiedAnswer = (o: {
 
   // Расхождение: основания с пометкой правила (AD-08a-1), конфликты проверяющего и расхождение величин (AD-08a-8).
   const conflictLabels = new Set<string>();
-  if (kept.some(({ check }) => check.conflict)) o.items.filter((item) => item.versionNote === 'conflict').forEach((item) => conflictLabels.add(item.label));
+  // Стороны конфликта графа: фрагменты с фактами в конфликте тех типов, значения которых показанные утверждения
+  // используют (R08a-01); без сведений о фактах — фрагменты с пометкой «расхождение».
+  if (kept.some(({ check }) => check.conflict)) {
+    const types = new Set(kept.flatMap(({ check }) => check.conflictFactTypes ?? []));
+    o.items
+      .filter((item) => (item.facts ? item.facts.some((f) => f.status === 'conflict' && types.has(f.factType)) : item.versionNote === 'conflict'))
+      .forEach((item) => conflictLabels.add(item.label));
+  }
   if (kept.length) {
     (o.conflicts ?? []).forEach((conflict) => conflict.evidenceIds.filter((label) => byLabel.has(label)).forEach((label) => conflictLabels.add(label)));
     valueConflictLabels(kept, o.plan ?? null, byLabel).forEach((label) => conflictLabels.add(label));

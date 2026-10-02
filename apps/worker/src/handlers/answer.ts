@@ -165,10 +165,15 @@ export const answerGenerateHandler: IJobHandlerSpec = {
       const outcome = candidates.length > 0 ? incomplete('no_readable_evidence') : scopeIncomplete ? incomplete('scope_incomplete') : { answerStatus: 'not_found_in_scope' as const, incompleteReason: null, answerText: ANSWER_TEXT.not_found_in_scope! };
       return finish(outcome, { coverage });
     }
+    // Состояния фактов — у каждого элемента пакета (R08a-01): гейт проверяет факт, значение которого использует
+    // утверждение, а не сводную пометку фрагмента.
     const factsByFragment = new Map<string, IFragmentFact[]>();
-    for (const f of scopeFacts) for (const id of f.fragmentIds) factsByFragment.set(id, [...(factsByFragment.get(id) ?? []), f]);
+    for (const f of scopeFacts) {
+      const fact: IFragmentFact = { factId: f.factId, factType: f.factType, status: f.status, rawValue: f.rawValue };
+      for (const id of f.fragmentIds) factsByFragment.set(id, [...(factsByFragment.get(id) ?? []), fact]);
+    }
     const marks = markVersions(permitted, factsByFragment);
-    const items = buildPacket(permitted, marks, ctx.config.answer.packetLimit);
+    const items = buildPacket(permitted, marks, ctx.config.answer.packetLimit, factsByFragment);
     const evidence = items.map((i, n) => ({ label: i.label, ordinal: n + 1, fragmentId: i.fragmentId, origin: i.origin, versionNote: i.versionNote, reason: i.reason }));
     Object.assign(coverage, {
       packet: items.length,

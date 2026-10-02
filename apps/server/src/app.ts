@@ -21,6 +21,7 @@ import { mailboxesRouter } from './routes/mailboxes.ts';
 import { mailMessagesRouter } from './routes/mailMessages.ts';
 import { recognitionRouter } from './routes/recognition.ts';
 import { searchRouter } from './routes/search.ts';
+import { dialogsRouter } from './routes/dialogs.ts';
 import { calculationsRouter } from './routes/calculations.ts';
 import { communicationsRouter } from './routes/communications.ts';
 import { requirementCandidatesRouter } from './routes/requirementCandidates.ts';
@@ -76,6 +77,7 @@ export const createApp = (deps: IAppDeps): express.Express => {
   api.use(contractLinksRouter(pool));
   api.use(contractDocumentsRouter(pool, store, config));
   api.use(searchRouter(pool, config, clock));
+  api.use(dialogsRouter(pool, config, clock));
   api.use(calculationsRouter(pool, config));
   api.use(mailboxesRouter(pool, store, config));
   api.use(mailMessagesRouter(pool, store));

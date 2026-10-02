@@ -11,6 +11,7 @@ import { useUploadQueue } from '../hooks/useUploadQueue';
 import form from '../styles/form.module.css';
 import { DocumentsTab } from './sources/DocumentsTab';
 import { ImportBatchList } from './sources/ImportBatchList';
+import { DialogsTab } from './answers/DialogsTab';
 import { CalculationTab } from './calculation/CalculationTab';
 import { RequirementsTab } from './requirements/RequirementsTab';
 import { SearchTab } from './search/SearchTab';
@@ -26,6 +27,7 @@ const TABS: ITab[] = [
   { id: 'documents', label: 'Документы', icon: 'files' },
   { id: 'sources', label: 'Состав источников', icon: 'list-checks' },
   { id: 'search', label: 'Поиск', icon: 'search' },
+  { id: 'answers', label: 'Вопросы', icon: 'message-square' },
   { id: 'calculation', label: 'Расчёт', icon: 'calculator' },
   { id: 'requirements', label: 'Требования', icon: 'list-checks' },
 ];
@@ -95,6 +97,7 @@ export const StagePage: FC = () => {
         {active === 'documents' ? <DocumentsTab stageId={stage.id} /> : null}
         {active === 'sources' ? <SourceSetTab stageId={stage.id} canWrite={canWriteSources} /> : null}
         {active === 'search' ? <SearchTab tenderId={stage.tenderId} stageId={stage.id} canWrite={canWriteSources} /> : null}
+        {active === 'answers' ? <DialogsTab tenderId={stage.tenderId} stageId={stage.id} /> : null}
         {active === 'calculation' ? (
           <CalculationTab stageId={stage.id} canCapture={caps.includes('calculation.capture')} canAdmin={caps.includes('admin.tender')} />
         ) : null}

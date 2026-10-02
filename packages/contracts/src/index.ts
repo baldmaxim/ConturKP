@@ -192,6 +192,12 @@ export const SearchRequest = z
   })
   .strict();
 
+// ---- ответное ядро и диалоги (этап 08a; D-019, D-027)
+
+// Контекст диалога — контекст поиска (AD-08a-4): рабочий состав этапа, снимок области или договор.
+export const CreateDialogRequest = z.object({ context: SearchContext, title: text(200).optional() }).strict();
+export const AskQuestionRequest = z.object({ text: text(4000) }).strict();
+
 // ---- договорной контур (этап 06a; D-017, D-022, D-023)
 
 const DATE_ONLY = z.iso.date();

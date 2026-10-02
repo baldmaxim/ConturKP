@@ -674,6 +674,8 @@
 
 Статус: accepted (AD-08a-2…AD-08a-9); AD-08a-1 — PENDING_OWNER, временная трактовка A + C.
 
-Что изменяет в требованиях/контрактах/тестах: `docs/architecture/data-model.md` §4.17, `state-machines.md`, `docs/contracts/portal-api.md` §2.12 и §3.4, ADR-009 (реализация 08a), `docs/requirements-traceability.md` (F27, I07, I18), `docs/architecture/test-plan.md` (08a), манифест Locus (случаи 6 и 8).
+Реализация (коммит передачи этапа 08a, `docs/stages/08a-report.md`): миграция 0022, ядро `packages/core/src/answers/`, задание `answer.generate`, API `docs/contracts/portal-api.md` §2.11, вкладка «Вопросы». Уточнение AD-08a-6 в коде: `ANSWER_MAX_REPAIRS` — 0 или 1. Временная трактовка AD-08a-1 уточнена: несколько допсоглашений к одному пункту — расхождение (у редакции нет даты документа, только дата получения).
+
+Что изменяет в требованиях/контрактах/тестах: `docs/architecture/data-model.md` §4.17, `state-machines.md`, `docs/contracts/portal-api.md` §2.11 и §3 п. 4, п. 6, ADR-009 (реализация 08a), `docs/requirements-traceability.md` (F27, I07, I18), `docs/architecture/test-plan.md` (08a), манифест Locus (случаи 6 и 8).
 
 Ссылка на подтверждение владельца: задание этапа 08a (сессия 2026-10-02) — «При требуемом нормативом архитектурном решении зафиксируй вопрос до зависимой реализации»; ответ по AD-08a-1 — ожидается.

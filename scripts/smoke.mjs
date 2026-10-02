@@ -3,6 +3,8 @@
 // Этап 06: выгрузка расчёта worker из поддельного TenderHub (scripts/tenderhub-fake.ts) по ключу-маркеру.
 // Этап 05a (scripts/smoke-05a.mjs): локальное распознавание DOCX договора автоматически, PDF-скана — OCR по явной команде.
 // Этап 07 (scripts/smoke-07.mjs): ящик, импорт EML, вложение, связь, поиск письма, вопросы–ответы, переговоры, права.
+// Этап 08 (scripts/smoke-08.mjs): реестр требований, прогон поддельной модели, покрытие, полнота, права.
+// Этап 08a (scripts/smoke-08a.mjs): диалог, вопрос заданием gpu, ответ с цитатами, 409 второго вопроса, права.
 // База kontur_kp_smoke_test создаётся заново и удаляется в конце. Пароль генерируется и не выводится.
 // Результат: artifacts/stage-02/smoke.log; код 0 только если все шаги PASS.
 import { spawn, spawnSync } from 'node:child_process';
@@ -16,6 +18,7 @@ import { buildRdwebExport } from '../tests/rdweb.ts';
 import { smokeLocalRecognition } from './smoke-05a.mjs';
 import { smokeMail } from './smoke-07.mjs';
 import { smokeRequirements } from './smoke-08.mjs';
+import { smokeAnswers } from './smoke-08a.mjs';
 import { PRECISE_RATE, TH, standardTender, startFakeTenderHub } from './tenderhub-fake.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -466,12 +469,21 @@ try {
   // ---- Этап 08: требования, прогон модели, покрытие, полнота — scripts/smoke-08.mjs
   const req08 = await smokeRequirements({ api, api2, record, waitFor, idem, json, stageId });
 
+  // ---- Этап 08a: диалоги и ответное ядро — scripts/smoke-08a.mjs
+  const ans08a = await smokeAnswers({ api, api2, record, waitFor, idem, json, tenderId: demo.id, stageId });
+
   await stopProc(server);
   server = startProc('server', 'apps/server/src/main.ts');
   ready = await waitReady(30_000);
   record('перезапуск server — /ready 200', ready.ok);
   const reqAfter = await api(`/requirements/${req08.requirementId}`);
   record('этап 08: после перезапуска требование, ревизии и покрытие на месте', reqAfter.status === 200 && (await reqAfter.json()).coverageState === 'covered');
+  const dialogAfter = await api(`/dialogs/${ans08a.dialogId}`);
+  const dialogAfterBody = dialogAfter.status === 200 ? await dialogAfter.json() : null;
+  record(
+    'этап 08a: после перезапуска диалог, сообщения и ходы — из PostgreSQL',
+    dialogAfterBody?.runs?.length === 2 && dialogAfterBody.messages?.filter((m) => m.role === 'user').length === 2,
+  );
   const me = await fetch(`${BASE}/api/v1/me`, { headers: { Cookie: cookieHeader() } });
   record('перезапуск server — сессия действительна', me.status === 200);
 

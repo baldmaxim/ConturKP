@@ -495,3 +495,18 @@
 | `transcript_revision` | — | создана | `POST /tenders/{id}/negotiation-imports` | `source.write` | только при изменённом содержании; сегменты и фрагменты — в той же транзакции; событие `transcript_revision_added` |
 
 Документ вложения проходит машину §4 (распознавание) без изменений: DOCX, XLSX и CSV — автоматическим проходом 05a, PDF — только командой (политика `auto`); команду даёт пользователь с `mail.import` на ящик письма.
+
+## 24. Ход ответа (`answer_run`, этап 08a)
+
+Решения — D-019, D-027; проект — `docs/architecture/08a-answer-core-design.md` §6; контракт — `docs/contracts/portal-api.md` §2.11. Диалог и сообщения неизменяемы; удаления нет.
+
+| Объект | Из | В | Событие | Кто | Охранные условия и эффекты |
+|---|---|---|---|---|---|
+| `dialog` | — | создан | `POST /dialogs` | человек с правом контекста поиска | контекст фиксируется и не меняется |
+| `answer_run` | — | `queued` | `POST /dialogs/{id}/messages` | автор диалога с действующим правом контекста | одной транзакцией: сообщение вопроса, прогон поиска, прогон ответа, задание `answer.generate` (`gpu`, 90); незавершённый прогон диалога — `409 answer_pending` |
+| `answer_run` | `queued` / `running` | `running` | worker захватил задание | система | `attempt + 1`; прогон поиска ещё `pending` — задание откладывается (`search_pending`) |
+| `answer_run` | `running` | `completed` | worker `answer.generate` | система | под арендой одной транзакцией: пакет, утверждения, сообщение ответа, статус ответа, охват; права на основания перепроверяются в задании |
+| `answer_run` | `queued` / `running` | `failed` | терминальный сбой задания | система | `failure_code`; «ответ не получен» — неполнота, а не ответ |
+| `answer_run` | `completed` / `failed` | — | — | — | терминален: изменений нет (охранник БД) |
+
+Статус ответа (`answer_status`) — отдельный словарь, не состояние машины: `confirmed_by_citations`, `citations_disagree`, `needs_clarification`, `not_found_in_scope`, `incomplete_processing` (с причиной), `no_data`; `not_provided` и `confirmed_discrepancy` ответное ядро не присваивает.

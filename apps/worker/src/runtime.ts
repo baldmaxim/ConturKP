@@ -116,7 +116,8 @@ export interface IWorkerOptions {
 
 // Интерактивная полоса (ADR-004 §7a): только смысловые запросы поиска. Worker выполняет задания
 // последовательно, поэтому без отдельной полосы запрос ждал бы окончания любого долгого задания.
-export const INTERACTIVE_KINDS: readonly string[] = ['search.semantic'];
+// Интерактивная полоса (ADR-004 §7a): смысловая ветка поиска и ответ ответного ядра (этап 08a).
+export const INTERACTIVE_KINDS: readonly string[] = ['search.semantic', 'answer.generate'];
 
 export class WorkerRuntime {
   readonly workerId: string;

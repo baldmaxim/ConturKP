@@ -7,3 +7,4 @@ export * from './contentHash.ts';
 export * from './search.ts';
 export * from './calculation.ts';
 export * from './requirements.ts';
+export * from './answers/index.ts';

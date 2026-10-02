@@ -108,6 +108,7 @@ export const testConfig = (overrides: Partial<IAppConfig> = {}): IAppConfig => (
   mail: { maxEmlBytes: 50 * 1024 * 1024, maxAttachmentBytes: 25 * 1024 * 1024 },
   // Генеративная модель этапа 08: в тестах — поддельный провайдер, сценарии задаёт тест.
   chatModel: { provider: 'fake', baseUrl: null, model: 'fake-chat', revision: 'test', apiKey: null, timeoutMs: 5000, maxInputChars: 4000, maxOutputTokens: 1024, jsonMode: 'none' },
+  answer: { verifierMode: 'off', maxRepairs: 1, packetLimit: 12 },
   ...overrides,
 });
 
@@ -120,7 +121,7 @@ export class Clock {
 }
 
 export const makeApp = (db: ITestDb, clock = new Clock(), config = testConfig()) =>
-  createApp({ config, pool: db.pool, clock: clock.read, logError: () => undefined });
+  createApp({ config, pool: db.pool, clock: clock.read, logError: process.env.KONTUR_TEST_LOG ? (m, meta) => console.error(m, meta) : () => undefined });
 
 // Worker в том же процессе теста: те же обработчики и хранилище, что у процесса worker.
 export const makeWorker = (db: ITestDb, config: IAppConfig, workerId = 'test-worker', embeddings: IModelGatewayEmbeddings | null = null): WorkerRuntime =>

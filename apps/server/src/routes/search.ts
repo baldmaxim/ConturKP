@@ -2,7 +2,8 @@
 // строит область на сервере и создаёт прогон; точная и полнотекстовая ветки — синхронно,
 // смысловая — из кеша, заданием класса gpu или честным отказом. Итог читается GET /search-runs/{id}.
 import type { IAppConfig } from '@kontur/config';
-import { SearchRequest } from '@kontur/contracts';
+import { SearchContext, SearchRequest } from '@kontur/contracts';
+import type { z } from 'zod';
 import { searchScopeHash } from '@kontur/core';
 import {
   activeLinkedContractIds,
@@ -35,7 +36,7 @@ import { searchRunView } from '../searchMappers.ts';
 import { hasTenderCap } from './scope.ts';
 import { loadStage } from './stages.ts';
 
-interface ISearchContext {
+export interface ISearchContext {
   owner: SearchOwner;
   mode: 'working' | 'review';
   stageId: string | null;
@@ -44,9 +45,11 @@ interface ISearchContext {
 
 // Контекст запроса → проверенный контекст. Чужой тендер, чужой снимок и невидимый договор — 404:
 // существование объекта вне области не раскрывается (ADR-006). Видимый договор без contract.read — 403.
-const searchContext = async (db: PoolClient, ctx: IAccessContext, req: Request): Promise<ISearchContext> => {
-  const body = parseBody(SearchRequest, req.body);
-  const c = body.context;
+const searchContext = async (db: PoolClient, ctx: IAccessContext, req: Request): Promise<ISearchContext> =>
+  resolveSearchContext(db, ctx, parseBody(SearchRequest, req.body).context);
+
+// Контекст поиска (и диалога ответного ядра, этап 08a) → проверенный контекст.
+export const resolveSearchContext = async (db: PoolClient, ctx: IAccessContext, c: z.infer<typeof SearchContext>): Promise<ISearchContext> => {
   if (c.kind === 'contract') {
     const contract = await getContract(db, ctx, c.contractId);
     if (!contract) throw notFound({ entityType: 'contract', entityId: c.contractId });
@@ -91,6 +94,56 @@ const permittedScope = async (db: PoolClient, ctx: IAccessContext, t: ISearchCon
   return { scope: { ...scope, unitIds }, excluded: scope.unitIds.length - unitIds.length };
 };
 
+// Прогон поиска в проверенном контексте: область, фильтр прав до ранжирования, лексические ветки сразу, смысловая —
+// заданием gpu. Общий путь POST /search и вопроса ответного ядра (этап 08a): одна проверка прав и области.
+export const startScopedSearch = async (
+  client: PoolClient,
+  ctx: IAccessContext,
+  t: ISearchContext,
+  query: string,
+  limit: number,
+  config: IAppConfig,
+  clock: () => Date,
+): Promise<{ runId: string; scopeHash: string; excluded: number }> => {
+  const tenderId = t.owner.kind === 'tender' ? t.owner.tenderId : null;
+  // G05-03: без активной версии поиск не работает «по чему-то текущему» — явный отказ.
+  // FOR SHARE закрепляет версию за прогоном: удаление её данных ждёт (state-machines §20).
+  const version = await getActiveVersion(client, 'share');
+  if (!version) {
+    throw new HttpError(409, 'STATE_CONFLICT', 'индекс поиска ещё не построен', { current: { reason: 'search_index_not_ready' } }, { tenderId });
+  }
+  const resolved =
+    t.owner.kind === 'contract'
+      ? await resolveContractScope(client, t.owner.contractId)
+      : t.mode === 'working'
+        ? await resolveWorkingScope(client, t.stageId!)
+        : await resolveSnapshotScope(client, (await getEvidenceScope(client, ctx, t.evidenceScopeId!))!);
+  // Фильтр прав поверх области (ADR-008 §4): прогоны тендера и транскрипции — доступ к тендеру,
+  // проверенный выше; прогоны договора — contract.read; письма и вложения — mail.read и связь (D-025).
+  const { scope, excluded } = await permittedScope(client, ctx, t, resolved);
+  const scopeHash = searchScopeHash(scope.snapshotHash, scope.unitIds);
+  const started = await startSearch(client, {
+    owner: t.owner,
+    excludedByAcl: excluded,
+    stageId: t.stageId,
+    mode: t.mode,
+    evidenceScopeId: t.evidenceScopeId,
+    requestedBy: ctx.principal.userId,
+    rawQuery: query,
+    limit,
+    deadlineMs: config.search.semanticDeadlineMs,
+    scope,
+    scopeHash,
+    version,
+    now: clock(),
+  });
+  if (started.needsJob) {
+    const job = await enqueueSemantic(client, started.runId, tenderId);
+    await setRunJob(client, started.runId, job.id);
+  }
+  return { runId: started.runId, scopeHash, excluded };
+};
+
 export const searchRouter = (pool: Pool, config: IAppConfig, clock: () => Date): Router => {
   const router = Router();
 
@@ -106,42 +159,8 @@ export const searchRouter = (pool: Pool, config: IAppConfig, clock: () => Date):
         const body = parseBody(SearchRequest, req.body);
         const t = await searchContext(client, ctx, req);
         const tenderId = t.owner.kind === 'tender' ? t.owner.tenderId : null;
-        // G05-03: без активной версии поиск не работает «по чему-то текущему» — явный отказ.
-        // FOR SHARE закрепляет версию за прогоном: удаление её данных ждёт (state-machines §20).
-        const version = await getActiveVersion(client, 'share');
-        if (!version) {
-          throw new HttpError(409, 'STATE_CONFLICT', 'индекс поиска ещё не построен', { current: { reason: 'search_index_not_ready' } }, { tenderId });
-        }
-        const resolved =
-          t.owner.kind === 'contract'
-            ? await resolveContractScope(client, t.owner.contractId)
-            : t.mode === 'working'
-              ? await resolveWorkingScope(client, t.stageId!)
-              : await resolveSnapshotScope(client, (await getEvidenceScope(client, ctx, t.evidenceScopeId!))!);
-        // Фильтр прав поверх области (ADR-008 §4): прогоны тендера и транскрипции — доступ к тендеру,
-        // проверенный выше; прогоны договора — contract.read; письма и вложения — mail.read и связь (D-025).
-        const { scope, excluded } = await permittedScope(client, ctx, t, resolved);
-        const scopeHash = searchScopeHash(scope.snapshotHash, scope.unitIds);
-        const started = await startSearch(client, {
-          owner: t.owner,
-          excludedByAcl: excluded,
-          stageId: t.stageId,
-          mode: t.mode,
-          evidenceScopeId: t.evidenceScopeId,
-          requestedBy: ctx.principal.userId,
-          rawQuery: body.query,
-          limit: body.limit,
-          deadlineMs: config.search.semanticDeadlineMs,
-          scope,
-          scopeHash,
-          version,
-          now: clock(),
-        });
-        if (started.needsJob) {
-          const job = await enqueueSemantic(client, started.runId, tenderId);
-          await setRunJob(client, started.runId, job.id);
-        }
-        const view = await searchRunView(client, started.runId);
+        const { runId, scopeHash, excluded } = await startScopedSearch(client, ctx, t, body.query, body.limit, config, clock);
+        const view = await searchRunView(client, runId);
         return {
           status: 200,
           body: view,
@@ -149,7 +168,7 @@ export const searchRouter = (pool: Pool, config: IAppConfig, clock: () => Date):
             {
               action: 'search.run',
               entityType: 'search_run',
-              entityId: started.runId,
+              entityId: runId,
               tenderId,
               details: {
                 mode: t.mode,

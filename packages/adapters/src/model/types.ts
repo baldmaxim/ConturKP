@@ -21,8 +21,11 @@ export interface IChatCompletion {
   completionTokens: number | null;
 }
 
+// Задачи шлюза: извлечение кандидатов (этап 08) и ответное ядро (этап 08a) — черновик и необязательная проверка.
+export type ChatTask = AnalysisTask | 'answer_draft' | 'answer_verify';
+
 export interface IChatCompleteInput {
-  task: AnalysisTask;
+  task: ChatTask;
   system: string;
   user: string;
   signal?: AbortSignal;

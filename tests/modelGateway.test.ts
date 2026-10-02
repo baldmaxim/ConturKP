@@ -84,6 +84,15 @@ describe('OpenAI-совместимый провайдер /chat/completions', (
     expect(() => loadConfig({ ...env, MODEL_PROVIDER: 'openai_compatible', MODEL_BASE_URL: 'https://cloud.example.com/v1', MODEL_NAME: 'm' })).toThrow(/MODEL_BASE_URL/u);
     expect(createChatModel({ provider: 'none', baseUrl: null, model: null, revision: 'r', apiKey: null, timeoutMs: 1, maxInputChars: 500, maxOutputTokens: 1, jsonMode: 'none' })).toBeNull();
   });
+
+  it('ответное ядро 08a: проверяющий выключен по умолчанию, исправлений — не больше одного (AD-08a-6)', () => {
+    const env = { KONTUR_ENV: 'test', DATABASE_URL: 'x', STORAGE_ROOT: '/tmp/x', ALLOWED_ORIGINS: 'http://127.0.0.1:5173' };
+    expect(loadConfig(env).answer).toEqual({ verifierMode: 'off', maxRepairs: 1, packetLimit: 12 });
+    expect(loadConfig({ ...env, ANSWER_VERIFIER: 'same_model', ANSWER_MAX_REPAIRS: '0', ANSWER_PACKET_LIMIT: '30' }).answer).toEqual({ verifierMode: 'same_model', maxRepairs: 0, packetLimit: 30 });
+    expect(() => loadConfig({ ...env, ANSWER_VERIFIER: 'cloud' })).toThrow(/ANSWER_VERIFIER/u);
+    expect(() => loadConfig({ ...env, ANSWER_MAX_REPAIRS: '2' })).toThrow(/ANSWER_MAX_REPAIRS/u);
+    expect(() => loadConfig({ ...env, ANSWER_PACKET_LIMIT: '0' })).toThrow(/ANSWER_PACKET_LIMIT/u);
+  });
 });
 
 describe('разбор ответа модели до записи (ADR-009 §2, A37)', () => {

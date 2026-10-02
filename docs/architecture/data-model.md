@@ -475,6 +475,18 @@ CHECK 0014 требовал размеры у `pdf_page` только в ста�
 - **Конфликт требований (R08-01, R08-03).** `requirement_parameter_conflicts(registry, requirement, parameters, scope)` — действующие требования реестра с тем же параметром (имя без регистра и лишних пробелов) и другим ключом значения при пересекающейся области (`object_scopes_overlap`: пустое поле — весь объект). Ключ значения (`requirement_param_value`, миграция `0021`): число — каноническим `numeric` без незначащих нулей (`100` = `100.0` = `100,00`; группы разрядов `1 000`), иначе текст — trim, нижний регистр, пробелы внутри сведены к одному (`B30`, `IP54`, `5x10` — текст); единица — после `unit_normalize`. Правило — И-08-16 (`08-requirements-model-design.md` §16). Охранник ревизии требует `conflict_note` при подтверждении в конфликте или с основанием `contradicts` и не принимает его без конфликта.
 - **Видимость производного текста (R08-02).** Не хранится: вычисляется при каждом чтении по замыканию закрытости этапа — основания любой роли объекта и всего, из чего его текст мог быть унаследован (`packages/db/src/requirementTaint.ts`, ADR-006).
 
+### 4.17. Диалоги и ответное ядро (этап 08a; D-019, D-027)
+
+Проект и инварианты — `docs/architecture/08a-answer-core-design.md` §5, §9; миграция `0022_answers.sql`.
+
+- **`dialog`** (неизменяемая): контекст поиска 05 — `context_kind` (`tender`/`contract`), `tender_id` / `contract_id`, `stage_id`, `mode` (`working`/`review`/`contract`), `evidence_scope_id`; `title`, `created_by` (человек). Охранник вставки: `tender.read` по `tender_capabilities` или `contract_readable_by(user, contract)`; снимок области — этого этапа.
+- **`dialog_message`** (неизменяемая): `seq` — следующий в диалоге; `role = user` пишет только автор диалога; `role = assistant` — только для своего прогона в статусе `running` (транзакция завершения), `answer_run_id` уникален.
+- **`answer_run`** (frozen-after): вопрос (`question_message_id`), прогон поиска хода (`search_run_id`, контекст и автор — как у диалога), `status` `queued` → `running` → `completed` / `failed`, `answer_status` (словарь AD-08a-2, без `not_provided` и `confirmed_discrepancy`), `incomplete_reason` ⇔ `incomplete_processing`, план правила (`plan`, `planner_version`), модель, версия и SHA-256 промпта, конфигурации, входа и черновика, `verifier_mode`, `verification_level`, `repairs`, `coverage`, `attempt`, `job_id`. Один незавершённый прогон на диалог (`answer_run_pending_key`); `completed` подтверждается на COMMIT наличием сообщения ответа.
+- **`answer_evidence`** (неизменяемая): пакет хода — метка `E1…`, `ordinal`, `fragment_id` (единица фрагмента — в `search_run.allowed_source_unit_ids`), `origin` (равно происхождению фрагмента), `version_note` (`current`/`superseded`/`conflict`), `reason`; только пока прогон `running`.
+- **`answer_claim`** (неизменяемая): утверждения черновика — вид, `text_sha256`, `text` **только у показанного**, метки, итог правил (`check_status`, `issues`), итог проверки моделью, `final_status`, `shown = (final_status = 'supported')`, `citations` ⊆ меткам пакета; только пока прогон `running`.
+- **Непроверенный текст не хранится**: черновик модели, отклонённые утверждения и сводка — только хэши и коды проблем. Видимость ответа не хранится: вычисляется при чтении — текст и цитаты выдаются автору, только если он сейчас читает все процитированные основания.
+- Роль приложения: `SELECT, INSERT` на `dialog`, `dialog_message`, `answer_evidence`, `answer_claim`; `SELECT, INSERT, UPDATE` на `answer_run`; удаления нет.
+
 ## 5. Хэши содержимого
 
 | Хэш | Что входит | Где используется |

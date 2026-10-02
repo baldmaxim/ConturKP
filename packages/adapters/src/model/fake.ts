@@ -37,6 +37,43 @@ const factsOf = (f: IFragmentIn, kinds: ReadonlySet<string>): unknown[] => {
   return out;
 };
 
+// ---------------------------------------------------------------- Ответное ядро (этап 08a)
+
+interface IAnswerEvidenceIn {
+  label: string;
+  status: string;
+  text: string;
+}
+
+const stemsOf = (text: string): Set<string> =>
+  new Set((text.toLowerCase().replaceAll('ё', 'е').match(/[\p{L}\d]+/gu) ?? []).filter((w) => w.length >= 4).map((w) => w.slice(0, 5)));
+
+const kindOf = (sentence: string): string =>
+  /%|процент/iu.test(sentence) ? 'percentage' : /руб|₽/iu.test(sentence) ? 'amount' : /\d{2}\.\d{2}\.\d{4}/u.test(sentence) ? 'date' : /(?:дн|день|недел|месяц|год|лет)/iu.test(sentence) ? 'period' : 'fact';
+
+// Черновик поддельной модели: на каждое основание, разделяющее с вопросом основу слова, — первое такое предложение
+// дословно, со ссылкой на метку. Заменённые редакции пропускаются, если не спрашивают о прежней. Не «качество модели»,
+// а исполнимый контракт: тот же вход — тот же черновик.
+const fakeDraft = (user: string): string => {
+  const input = JSON.parse(user) as { question: string; plan?: { versionPolicy?: string }; evidence: IAnswerEvidenceIn[] };
+  const wanted = stemsOf(input.question);
+  const historical = input.plan?.versionPolicy === 'historical';
+  const claims = input.evidence
+    .filter((e) => historical || !e.status.startsWith('заменённая'))
+    .flatMap((e) => {
+      const sentence = e.text.split(/(?<=[.!?;])\s+/u).find((s) => [...stemsOf(s)].some((stem) => wanted.has(stem)));
+      return sentence ? [{ claim_id: `c${e.label}`, text: sentence.trim().slice(0, 400), kind: kindOf(sentence), evidence_ids: [e.label] }] : [];
+    })
+    .slice(0, 6);
+  return JSON.stringify({ claims, summary: 'Поддельная модель', open_questions: claims.length ? [] : ['В основаниях нет ответа на вопрос'] });
+};
+
+// Проверяющий поддельной модели: каждое утверждение подтверждено своими ссылками.
+const fakeVerdict = (user: string): string => {
+  const input = JSON.parse(user) as { claims: { claim_id: string; evidence_ids: string[] }[] };
+  return JSON.stringify({ overall: 'pass', claims: input.claims.map((c) => ({ claim_id: c.claim_id, status: 'supported', supported_by: c.evidence_ids, issues: [] })), conflicts: [] });
+};
+
 export class FakeChat implements IModelGatewayChat {
   readonly providerId = 'fake' as const;
   readonly model: string;
@@ -60,6 +97,13 @@ export class FakeChat implements IModelGatewayChat {
     if (input.signal?.aborted) return chatError('UNAVAILABLE', 'запрос отменён', true);
     const scripted = this.script?.(input, this.calls) ?? null;
     if (scripted) return scripted.ok ? { ok: true, value: this.done(scripted.value, startedAt) } : scripted;
+    if (input.task === 'answer_draft' || input.task === 'answer_verify') {
+      try {
+        return { ok: true, value: this.done(input.task === 'answer_draft' ? fakeDraft(input.user) : fakeVerdict(input.user), startedAt) };
+      } catch {
+        return chatError('CONTRACT_MISMATCH', 'поддельная модель ждёт вход ответного ядра', false);
+      }
+    }
     let fragments: IFragmentIn[];
     try {
       fragments = (JSON.parse(input.user) as { fragments: IFragmentIn[] }).fragments;

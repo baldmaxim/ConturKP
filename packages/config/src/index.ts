@@ -118,6 +118,15 @@ export interface IChatModelConfig {
   jsonMode: 'none' | 'json_object';
 }
 
+// Ответное ядро (этап 08a, D-027 AD-08a-6): проверяющий — необязательный (off — уровень «правила»; same_model —
+// отдельный прогон того же шлюза), исправление черновика — не больше двух (по умолчанию одно), пакет — не больше
+// ANSWER_PACKET_LIMIT оснований.
+export interface IAnswerConfig {
+  verifierMode: 'off' | 'same_model';
+  maxRepairs: number;
+  packetLimit: number;
+}
+
 // Почта (этап 07, D-025): предел файла EML и одного вложения. Вложение сверх предела — отказ вложения
 // (метаданные и хэш без байтов), письмо сверх предела — детерминированный отказ разбора.
 export interface IMailConfig {
@@ -151,6 +160,7 @@ export interface IAppConfig {
   localRecognition: ILocalRecognitionConfig;
   mail: IMailConfig;
   chatModel: IChatModelConfig;
+  answer: IAnswerConfig;
 }
 
 interface IConfigKey {
@@ -221,6 +231,9 @@ export const CONFIG_KEYS: IConfigKey[] = [
   { name: 'MODEL_MAX_INPUT_CHARS', secret: false, required: false, purpose: 'символов фрагментов в одном запросе, по умолчанию 12000' },
   { name: 'MODEL_MAX_OUTPUT_TOKENS', secret: false, required: false, purpose: 'предел ответа модели, по умолчанию 2048' },
   { name: 'MODEL_JSON_MODE', secret: false, required: false, purpose: 'none (по умолчанию) или json_object — режим JSON сервера' },
+  { name: 'ANSWER_VERIFIER', secret: false, required: false, purpose: 'проверяющий ответа этапа 08a: off (по умолчанию, уровень «правила») или same_model' },
+  { name: 'ANSWER_MAX_REPAIRS', secret: false, required: false, purpose: 'исправлений черновика ответа, 0–1 (AD-08a-6), по умолчанию 1' },
+  { name: 'ANSWER_PACKET_LIMIT', secret: false, required: false, purpose: 'оснований в пакете ответа, 1–30, по умолчанию 12' },
   { name: 'SEARCH_SEMANTIC_DEADLINE_SECONDS', secret: false, required: false, purpose: 'срок смысловой ветки поиска, по умолчанию 60' },
   { name: 'MAILHUB_URL', secret: false, required: false, purpose: 'интеграция MailHub (этап 07)' },
   { name: 'MAILHUB_TOKEN', secret: true, required: false, purpose: 'интеграция MailHub (этап 07)' },
@@ -330,6 +343,18 @@ const isLocalUrl = (raw: string): boolean => {
 };
 
 const CHAT_PROVIDERS: readonly ChatModelProviderKind[] = ['none', 'openai_compatible', 'fake'];
+
+const answerFrom = (env: Env, problems: string[]): IAnswerConfig => {
+  const raw = env.ANSWER_VERIFIER || 'off';
+  if (raw !== 'off' && raw !== 'same_model') problems.push('ANSWER_VERIFIER должно быть off или same_model');
+  // 0 — допустимое значение (без исправления), поэтому не через intFrom (он требует положительное).
+  const repairsRaw = env.ANSWER_MAX_REPAIRS;
+  const maxRepairs = repairsRaw === undefined || repairsRaw === '' ? 1 : repairsRaw === '0' || repairsRaw === '1' ? Number(repairsRaw) : -1;
+  if (maxRepairs < 0) problems.push('ANSWER_MAX_REPAIRS — 0 или 1 (AD-08a-6)');
+  const packetLimit = intFrom(env, 'ANSWER_PACKET_LIMIT', 12, problems);
+  if (packetLimit < 1 || packetLimit > 30) problems.push('ANSWER_PACKET_LIMIT — от 1 до 30');
+  return { verifierMode: raw === 'same_model' ? 'same_model' : 'off', maxRepairs: Math.min(1, Math.max(0, maxRepairs)), packetLimit: Math.min(30, Math.max(1, packetLimit)) };
+};
 
 const chatModelFrom = (env: Env, problems: string[]): IChatModelConfig => {
   const raw = env.MODEL_PROVIDER || 'none';
@@ -458,6 +483,7 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
       maxAttachmentBytes: intFrom(env, 'MAIL_MAX_ATTACHMENT_MB', 25, problems) * MIB,
     },
     chatModel: chatModelFrom(env, problems),
+    answer: answerFrom(env, problems),
   };
   for (const root of config.intakeRoots) {
     if (!isAbsolute(root)) problems.push(`INTAKE_ROOTS: «${root}» должен быть абсолютным путём`);

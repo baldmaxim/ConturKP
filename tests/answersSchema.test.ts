@@ -234,6 +234,8 @@ describe('обновление схемы 0021 → 0022', () => {
       const before = (await up.pool.query('SELECT count(*)::int AS n FROM requirement_registry')).rows[0].n;
       expect(await migrateTo(22)).toBe(1);
       expect((await up.pool.query('SELECT count(*)::int AS n FROM requirement_registry')).rows[0].n).toBe(before);
+      // Код работает на последней схеме: граф фактов 0023 — следом (его обновление проверяет factGraphSchema).
+      expect(await migrateTo(23)).toBe(1);
       const worker = workerWithChat(up, config, null, 'upgrade-worker');
       await buildIndex(up, worker);
       const d = await s08.s.eng1.post('/dialogs', { context: { kind: 'tender', tenderId: s08.s.tenderA, mode: 'working', stageId: s08.s.stageA } }, { headers: idem() });

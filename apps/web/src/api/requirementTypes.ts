@@ -84,7 +84,19 @@ export interface IAnalysisRun {
   promptVersion: string;
   inputCount: number;
   attempt: number;
-  coverage: { fragmentsTotal?: number; batchesTotal?: number; batchesProcessed?: number; batchesFailed?: number; candidatesSaved?: number; truncatedFragments?: number; dropped?: Record<string, number> };
+  coverage: {
+    fragmentsTotal?: number;
+    batchesTotal?: number;
+    batchesProcessed?: number;
+    batchesFailed?: number;
+    candidatesSaved?: number;
+    truncatedFragments?: number;
+    dropped?: Record<string, number>;
+    // Прогон по правилам (провайдер rules, D-028).
+    eligible?: number;
+    skippedSuperseded?: number;
+    conflicts?: number;
+  };
   createdAt: string;
   finishedAt: string | null;
   reused?: boolean;

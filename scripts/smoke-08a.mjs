@@ -2,7 +2,8 @@
 // (MODEL_PROVIDER=fake: живой модели на машине разработки нет), поэтому проверяется ядро, а не качество ответа (Q-11).
 // Вопрос — задание gpu; до завершения прогон отдаётся без текста (черновик не показывается и не стримится); ответ —
 // с цитатами фрагментов области; второй вопрос до ответа на первый — 409; вопрос без оснований — не «подтверждено»;
-// чужой участник тендера диалога и прогона не видит (404). Вызывается из scripts/smoke.mjs.
+// чужой участник тендера диалога и прогона не видит (404). Граф фактов D-018 (D-028): worker извлёк факты правилами,
+// граф тендера посчитан; прогон кандидатов требований по правилам завершается без модели. Вызывается из scripts/smoke.mjs.
 export const smokeAnswers = async ({ api, api2, record, waitFor, idem, json, tenderId, stageId }) => {
   const context = { kind: 'tender', tenderId, mode: 'working', stageId };
   const key = idem();
@@ -50,6 +51,28 @@ export const smokeAnswers = async ({ api, api2, record, waitFor, idem, json, ten
   record(
     'этап 08a: другой участник тендера — 404 на диалог и прогон, в его списке диалога нет',
     foreignDialog.status === 404 && foreignRun.status === 404 && !foreignList.items?.some((x) => x.id === dialog.id),
+  );
+  const graph = await waitFor(async () => {
+    const r = await api(`/tenders/${tenderId}/fact-graph`);
+    const b = r.status === 200 ? await r.json() : null;
+    return b?.graphHash ? b : null;
+  }, 60_000);
+  record(
+    'этап 08a: граф фактов D-018 — worker извлёк факты правилами, граф тендера посчитан',
+    Boolean(graph) && graph.documents.length > 0,
+    graph ? `документов ${graph.documents.length}, фактов ${graph.facts.length}, замечаний ${graph.remarks.length}` : 'нет графа',
+  );
+  const view = await (await api(`/stages/${stageId}/requirement-registry`)).json();
+  const rules = await api(`/requirement-registries/${view.active.id}/analysis-runs`, { method: 'POST', headers: { ...json, ...idem() }, body: JSON.stringify({ task: 'requirement_extraction', method: 'rules' }) });
+  const rulesRun = await rules.json();
+  const rulesDone = await waitFor(async () => {
+    const r = await (await api(`/analysis-runs/${rulesRun.id}`)).json();
+    return ['completed', 'failed'].includes(r.status) ? r : null;
+  }, 60_000);
+  record(
+    'этап 08a: кандидаты требований по правилам — прогон rules без модели завершён',
+    rules.status === 201 && rulesDone?.status === 'completed' && rulesDone.providerId === 'rules',
+    rulesDone ? `кандидатов ${rulesDone.coverage?.candidatesSaved ?? 0}` : 'нет итога',
   );
   return { dialogId: dialog.id };
 };

@@ -70,17 +70,17 @@ beforeAll(async () => {
 afterAll(async () => db.drop());
 
 describe('манифест переноса (AR05-05)', () => {
-  it('17 случаев донора: 9 stage05, 3 stage05a, 2 stage08a и 3 отложенных — каждый ID из корпуса есть в манифесте', () => {
+  it('17 случаев донора: 9 stage05, 3 stage05a, 3 stage08a и 2 отложенных — каждый ID из корпуса есть в манифесте', () => {
     const statuses = manifestStatuses();
     expect([...statuses.keys()].sort()).toEqual(cases.map((c) => c.id).sort());
     const stage05 = [...statuses.values()].filter((v) => v === 'stage05');
     expect(stage05).toHaveLength(9);
     // Случаи deferred:05a закрыты этапом 05a (stage05a, tests/searchLocus05a.test.ts); остальные отложены.
     expect([...statuses.values()].filter((v) => v === 'stage05a')).toHaveLength(3);
-    // Случаи deferred:08a закрыты этапом 08a (stage08a, tests/answersLocus.test.ts).
-    expect([...statuses.values()].filter((v) => v === 'stage08a')).toHaveLength(2);
+    // Случаи deferred:08a закрыты этапом 08a (stage08a, tests/answersLocus.test.ts); случай 11 — граф фактов D-018 (D-028).
+    expect([...statuses.values()].filter((v) => v === 'stage08a')).toHaveLength(3);
     const deferred = [...statuses.values()].filter((v) => v.startsWith('deferred:'));
-    expect(deferred.sort()).toEqual(['deferred:08', 'deferred:16', 'deferred:16']);
+    expect(deferred.sort()).toEqual(['deferred:16', 'deferred:16']);
   });
 });
 

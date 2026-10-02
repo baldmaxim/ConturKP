@@ -113,7 +113,8 @@ export const dialogsRouter = (pool: Pool, config: IAppConfig, clock: () => Date)
         if (pending) {
           throw new HttpError(409, 'STATE_CONFLICT', 'предыдущий вопрос ещё обрабатывается — дождитесь ответа', { current: { reason: 'answer_pending', runId: pending.id } }, { tenderId, entityType: 'dialog', entityId: dialog.id });
         }
-        const turns = await previousTurns(client, dialog.id, 2_000_000_000);
+        // R08a-02: ответы, основания которых автор сейчас не читает, в план и запрос поиска не попадают.
+        const turns = await previousTurns(client, ctx, dialog.id, 2_000_000_000);
         const history = boundedHistory(turns);
         const plan = planQuestion(body.text, history);
         const search = await startScopedSearch(client, ctx, t, retrievalQuery(body.text, history).slice(0, 500), QUESTION_SEARCH_LIMIT, config, clock);

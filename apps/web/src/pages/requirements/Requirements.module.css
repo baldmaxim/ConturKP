@@ -163,3 +163,10 @@
     padding: var(--space-4);
   }
 }
+
+/* Подзаголовок раздела (факты документов тендера, этап 08a). */
+.sectionTitle {
+  margin: var(--space-4) 0 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+}

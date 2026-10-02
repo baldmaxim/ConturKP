@@ -1,4 +1,4 @@
-# 2026-10-02T13:18:31+05:00, linux x64 Node v24.14.1, Ubuntu 26.04.1 LTS
+# 2026-10-02T14:28:44+05:00, linux x64 Node v24.14.1, Ubuntu 26.04.1 LTS
 # npm run build
 
 > build
@@ -10,26 +10,26 @@
 
 vite v8.3.0 building client environment for production...
 transforming...
-✓ 218 modules transformed.
+✓ 225 modules transformed.
 rendering chunks...
 computing gzip size...
 dist/index.html                                      1.80 kB │ gzip:   0.78 kB
 dist/assets/pdf.worker.min-iDqQPrd3.mjs          1,232.30 kB
-dist/assets/index-Dv0dbV0P.css                      48.89 kB │ gzip:   8.80 kB
+dist/assets/index-CVjJucFm.css                      51.51 kB │ gzip:   9.14 kB
 dist/assets/workbox-window.prod.es5-Bd17z0YL.js      5.65 kB │ gzip:   2.20 kB
-dist/assets/pdf-D2soYk8t.js                        409.76 kB │ gzip: 121.72 kB
-dist/assets/index-BLjnOtD2.js                      621.64 kB │ gzip: 177.07 kB
+dist/assets/pdf-DDt53Uz7.js                        409.76 kB │ gzip: 121.72 kB
+dist/assets/index-5xvyIQ3F.js                      633.66 kB │ gzip: 180.43 kB
 
 [plugin builtin:vite-reporter] 
 (!) Some chunks are larger than 500 kB after minification. Consider:
 - Using dynamic import() to code-split the application
 - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
-✓ built in 661ms
+✓ built in 603ms
 
 PWA v1.3.0
 mode      generateSW
-precache  18 entries (1080.07 KiB)
+precache  18 entries (1094.37 KiB)
 files generated
   dist/sw.js
   dist/workbox-98f7a950.js

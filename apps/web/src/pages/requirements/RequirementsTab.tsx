@@ -19,6 +19,7 @@ import { AnalysisPanel } from './AnalysisPanel';
 import { CandidateQueue } from './CandidateQueue';
 import { CompletenessPanel } from './CompletenessPanel';
 import { FactsPanel } from './FactsPanel';
+import { FactGraphPanel } from '../facts/FactGraphPanel';
 import { RequirementList } from './RequirementList';
 import { StageRecordsPanel } from './StageRecordsPanel';
 import styles from './Requirements.module.css';
@@ -95,7 +96,7 @@ const RegistryDialog: FC<{ stageId: string; currentScopeId: string | null; onClo
  * Требования этапа (D-026): один активный реестр на снимке области; разделы — реестр, кандидаты с
  * последовательным обходом, факты, полнота по фрагментам, прогоны модели, допущения и вопросы.
  */
-export const RequirementsTab: FC<{ stageId: string; caps: string[] }> = ({ stageId, caps }) => {
+export const RequirementsTab: FC<{ stageId: string; tenderId: string; caps: string[] }> = ({ stageId, tenderId, caps }) => {
   const [version, setVersion] = useState(0);
   const res = useApiResource((signal) => getRegistryView(stageId, signal), `registry:${stageId}:${version}`);
   const [section, setSection] = useState<TSection>('list');
@@ -147,9 +148,15 @@ export const RequirementsTab: FC<{ stageId: string; caps: string[] }> = ({ stage
           </nav>
           {section === 'list' ? <RequirementList registryId={active.id} /> : null}
           {section === 'candidates' ? <CandidateQueue registryId={active.id} caps={caps} onChanged={reload} /> : null}
-          {section === 'facts' ? <FactsPanel registryId={active.id} /> : null}
+          {section === 'facts' ? (
+            <>
+              <FactsPanel registryId={active.id} />
+              <h3 className={styles.sectionTitle}>Факты документов тендера (D-018)</h3>
+              <FactGraphPanel owner={{ kind: 'tender', id: tenderId }} />
+            </>
+          ) : null}
           {section === 'completeness' ? <CompletenessPanel registryId={active.id} caps={caps} onChanged={reload} /> : null}
-          {section === 'analysis' ? <AnalysisPanel registryId={active.id} canRun={caps.includes('analysis.run') && model.configured} /> : null}
+          {section === 'analysis' ? <AnalysisPanel registryId={active.id} canRun={caps.includes('analysis.run') && model.configured} canRunRules={caps.includes('analysis.run')} /> : null}
           {section === 'records' ? <StageRecordsPanel stageId={stageId} caps={caps} /> : null}
         </>
       ) : null}

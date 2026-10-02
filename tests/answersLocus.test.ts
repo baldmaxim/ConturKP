@@ -3,6 +3,8 @@
 // (D-019). Проверяется ответное ядро, а не качество модели (Q-11): модель задаётся поддельной (эвристика или сценарий).
 // Случай 6 — нет ответа: ни «честная» модель без утверждений, ни «выдумывающая» депозит не дают подтверждённого ответа.
 // Случай 8 — уточняющий вопрос: «А какой гарантийный срок?» после вопроса о цене — ответ по Балчугу с «3 года».
+// Случай 11 — «какой сейчас аванс» (D-018, D-028): допсоглашение № 1 к договору № 15-П по тексту перекрывает пункт 3.1;
+// граф фактов области хода — 10%, основание 20% — перекрытое.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -114,5 +116,25 @@ describe('случай 8 pv2-follow-up-warranty — уточняющий воп�
     );
     expect(cited.rows.map((x) => x.tender_id)).toEqual([tenderOf.get(project)!.tenderId]);
     expect((await db.pool.query('SELECT plan FROM answer_run WHERE id = $1', [r.id])).rows[0].plan).toMatchObject({ followUp: true });
+  });
+});
+
+describe('случай 11 pv2-amendment-advance — перекрытый допсоглашением пункт (Locus verified, D-018)', () => {
+  it('«Какой сейчас размер аванса…» — 10% из допсоглашения; пункт договора 20% — перекрытое основание, не текущее', async () => {
+    const c = caseOf('pv2-amendment-advance');
+    chat.scenario = null;
+    const r = await askIn(await dialogFor(s.eng1, c.expected.sourceIds[0]!), c.question);
+    expect(r.answerStatus).toBe('confirmed_by_citations');
+    for (const must of c.expected.answer!.mustContain!) expect(r.answer!.text).toContain(must);
+    for (const bad of c.expected.answer!.mustNotContain!) expect(r.answer!.text!.toLowerCase()).not.toContain(bad);
+    const packet = await db.pool.query<{ version_note: string; text: string }>(
+      'SELECT e.version_note, f.text FROM answer_evidence e JOIN evidence_fragment f ON f.id = e.fragment_id WHERE e.run_id = $1',
+      [r.id],
+    );
+    const cited = r.answer!.citations.map((x) => x.text ?? '');
+    expect(c.expected.evidence.every((e) => cited.some((t) => t.toLowerCase().includes(e.includes.toLowerCase())))).toBe(true);
+    for (const stale of (c.expected as unknown as { staleEvidence: { includes: string }[] }).staleEvidence) {
+      expect(packet.rows.find((p) => p.text.toLowerCase().includes(stale.includes.toLowerCase()))?.version_note).toBe('superseded');
+    }
   });
 });

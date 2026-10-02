@@ -10,6 +10,7 @@ import { TextField } from '../../components/TextField';
 import { useToast } from '../../hooks/useToast';
 import { useUnsavedChanges } from '../../hooks/unsavedChanges';
 import { CONTRACT_CAPABILITY_LABELS } from '../../utils/contractLabels';
+import { ContractParties } from '../facts/ContractParties';
 import { formatDateOnly, formatDateTime } from '../../utils/datetime';
 import form from '../../styles/form.module.css';
 
@@ -161,6 +162,7 @@ export const ContractCardPanel: FC<IContractCardPanelProps> = ({ contract, onCha
         <dt>Мои права</dt>
         <dd>{contract.capabilities.length > 0 ? contract.capabilities.map((c) => CONTRACT_CAPABILITY_LABELS[c]).join(' · ') : 'нет — вы администратор договоров'}</dd>
       </dl>
+      {!contract.restricted ? <ContractParties contractId={contract.id} /> : null}
       {canManage ? (
         <div className={form.actions}>
           <Button

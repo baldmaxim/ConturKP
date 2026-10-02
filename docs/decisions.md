@@ -700,3 +700,5 @@
 Что изменяет: D-027 (AD-08a-1 закрыт этим решением; временная трактовка A + C снята); Р-08-4 (перечень 13 типов теперь задан этим решением); проект — `docs/architecture/08a-fact-graph-design.md`; миграция `0023`; `docs/architecture/data-model.md`, `state-machines.md`, `docs/contracts/portal-api.md`, ADR-009, `requirements-traceability.md`, `test-plan.md`; манифест Locus (случай 11 `pv2-amendment-advance`).
 
 Ссылка на подтверждение владельца: Review 08a-1 (раздел «AD-08a-1 — решение владельца»); ответы в сессии 2026-10-02: «Взять из Locus», «06a + дата из текста», «Граф + кандидаты требований», «API + экран».
+
+Реализация (коммит передачи 08a-2, `docs/stages/08a-report.md` «Исправление Review 08a-1»): миграция `0023_fact_graph.sql`, правила `packages/core/src/facts/` (`rules/1-kontur`), слой БД `packages/db/src/facts.ts`, задания `fact.extract` и `analysis.rules`, API `docs/contracts/portal-api.md` §2.12, вкладка договора «Факты и редакции», стороны в карточке, факты документов тендера в разделе «Факты», кнопка «Кандидаты по правилам». Уточнение при реализации: решение человека по паре снимает и замечание о недатированном допсоглашении для решённых значений.

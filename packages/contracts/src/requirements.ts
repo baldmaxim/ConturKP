@@ -22,7 +22,11 @@ export const ObjectScopeSchema = z
   .strict();
 
 export const CreateRequirementRegistryRequest = z.object({ evidenceScopeId: z.uuid(), reason: text(1000) }).strict();
-export const StartAnalysisRunRequest = z.object({ task: z.enum(['requirement_extraction', 'fact_extraction']) }).strict();
+// `method`: `model` — генеративная модель (этап 08); `rules` — кандидаты требований из фактов графа D-018 (D-028, этап 08a).
+export const StartAnalysisRunRequest = z
+  .object({ task: z.enum(['requirement_extraction', 'fact_extraction']), method: z.enum(['model', 'rules']).optional() })
+  .strict()
+  .refine((b) => b.method !== 'rules' || b.task === 'requirement_extraction', { message: 'правила дают только кандидатов требований' });
 
 export const CreateRequirementCandidateRequest = z
   .object({

@@ -2,8 +2,10 @@
 // Вопрос, прогон поиска, прогон ответа и задание — одной транзакцией; пакет, утверждения, сообщение ответа и итог —
 // одной транзакцией завершения под арендой задания. Непроверенный текст модели сюда не передаётся.
 import type { AnswerStatus, IncompleteReason, IPacketCandidate } from '@kontur/core';
+import type { IAccessContext } from './access.ts';
 import { enqueueJob } from './jobs.ts';
 import type { Queryable } from './pool.ts';
+import { readableFragments } from './requirementAccess.ts';
 
 export const ANSWER_JOB_KIND = 'answer.generate';
 // ADR-004 §7a: ответ ответного ядра — класс gpu, приоритет 90, интерактивная полоса worker.
@@ -262,11 +264,18 @@ export const runClaims = async (db: Queryable, runIds: readonly string[]): Promi
       ).rows
     : [];
 
-// Предыдущие ходы диалога (для уточняющего вопроса): вопрос и показанный ответ завершённых прогонов.
-export const previousTurns = async (db: Queryable, dialogId: string, beforeSeq: number): Promise<{ question: string; answer: string }[]> =>
-  (
-    await db.query<{ question: string; answer: string }>(
-      `SELECT q.text AS question, a.text AS answer
+// Отметка вместо текста прежнего ответа, процитированное основание которого автор сейчас не читает (R08a-02).
+export const HIDDEN_ANSWER_MARK = '(ответ скрыт: нет доступа к его основаниям)';
+
+// Предыдущие ходы диалога (для уточняющего вопроса): вопрос и показанный ответ завершённых прогонов. R08a-02: текст
+// ответа — только если автор сейчас читает все его процитированные основания (то же правило, что при чтении ответа,
+// `answerRunView`); иначе вместо текста — отметка. Проверка — до любого обращения к модели.
+export const previousTurns = async (db: Queryable, access: IAccessContext | null, dialogId: string, beforeSeq: number): Promise<{ question: string; answer: string }[]> => {
+  const rows = (
+    await db.query<{ id: string; question: string; answer: string; cited: string[] }>(
+      `SELECT r.id, q.text AS question, a.text AS answer,
+              coalesce((SELECT array_agg(e.fragment_id) FROM answer_evidence e
+                         WHERE e.run_id = r.id AND e.label IN (SELECT jsonb_array_elements_text(coalesce(r.coverage -> 'citations', '[]'::jsonb)))), '{}') AS cited
          FROM answer_run r
          JOIN dialog_message q ON q.id = r.question_message_id
          JOIN dialog_message a ON a.answer_run_id = r.id
@@ -275,24 +284,8 @@ export const previousTurns = async (db: Queryable, dialogId: string, beforeSeq: 
       [dialogId, beforeSeq],
     )
   ).rows;
-
-// Решения человека этапа 08 (AD-08a-1, C): основание прежней ревизии факта или заменённого факта — перекрыто, если оно
-// не основание действующей ревизии подтверждённого факта этапа.
-export const humanFactFragments = async (db: Queryable, stageId: string | null): Promise<{ superseded: Set<string>; current: Set<string> }> => {
-  const superseded = new Set<string>();
-  const current = new Set<string>();
-  if (!stageId) return { superseded, current };
-  const r = await db.query<{ fragment_id: string; current: boolean }>(
-    `SELECT l.fragment_id, (v.id = f.current_revision_id AND cur.status = 'confirmed') AS current
-       FROM fact f
-       JOIN fact_revision cur ON cur.id = f.current_revision_id
-       JOIN fact_revision v ON v.fact_id = f.id
-       JOIN evidence_link l ON l.fact_revision_id = v.id AND l.role = 'supports'
-      WHERE f.stage_id = $1`,
-    [stageId],
-  );
-  for (const row of r.rows) (row.current ? current : superseded).add(row.fragment_id);
-  return { superseded, current };
+  const readable = access ? await readableFragments(db, access, rows.flatMap((r) => r.cited)) : new Set<string>();
+  return rows.map((r) => ({ question: r.question, answer: r.cited.every((f) => readable.has(f)) ? r.answer : HIDDEN_ANSWER_MARK }));
 };
 
 interface ICandidateRow {
@@ -306,18 +299,12 @@ interface ICandidateRow {
   mail_message_revision_id: string | null;
   transcript_revision_id: string | null;
   qa_item_revision_id: string | null;
-  contract_role: 'contract' | 'addendum' | 'appendix' | null;
-  family_id: string | null;
-  issued_at: Date | null;
 }
 
 const CANDIDATE_SELECT = `SELECT f.id, f.text, f.origin, f.source_unit_id, f.tender_id, f.contract_id, dr.document_id, f.mail_message_revision_id,
-       f.transcript_revision_id, f.qa_item_revision_id, d.contract_role, coalesce(d.main_document_id, CASE WHEN d.contract_role = 'contract' THEN d.id END) AS family_id,
-       -- Даты документа в модели нет (у редакции — только время регистрации): порядок допсоглашений неизвестен.
-       NULL::timestamptz AS issued_at
+       f.transcript_revision_id, f.qa_item_revision_id
   FROM evidence_fragment f
-  LEFT JOIN document_revision dr ON dr.id = f.document_revision_id
-  LEFT JOIN document d ON d.id = dr.document_id`;
+  LEFT JOIN document_revision dr ON dr.id = f.document_revision_id`;
 
 const toCandidate = (row: ICandidateRow, rank: number, reason: string): IPacketCandidate => ({
   fragmentId: row.id,
@@ -326,7 +313,6 @@ const toCandidate = (row: ICandidateRow, rank: number, reason: string): IPacketC
   sourceUnitId: row.source_unit_id,
   documentKey: row.document_id ?? row.mail_message_revision_id ?? row.transcript_revision_id ?? row.qa_item_revision_id ?? row.source_unit_id,
   ownerKey: row.contract_id ? `contract:${row.contract_id}` : `tender:${row.tender_id ?? ''}`,
-  family: row.family_id && row.contract_role ? { familyId: row.family_id, role: row.contract_role, issuedAt: row.issued_at ? row.issued_at.toISOString().slice(0, 10) : null } : null,
   rank,
   reason,
 });
@@ -343,18 +329,20 @@ export const searchCandidates = async (db: Queryable, searchRunId: string, allow
   });
 };
 
-// Изменения пунктов той же семьи договора (AD-08a-1, A): фрагменты допсоглашений к основным документам, попавшим в
-// пакет, — в пределах области прогона. Проверку фразы «изложить в новой редакции» выполняет правило пакета.
-export const amendmentCandidates = async (db: Queryable, familyIds: readonly string[], allowedUnits: readonly string[], startRank: number): Promise<IPacketCandidate[]> => {
-  if (familyIds.length === 0) return [];
-  const rows = await db.query<ICandidateRow>(
-    `${CANDIDATE_SELECT}
-      WHERE d.contract_role = 'addendum' AND d.main_document_id = ANY($1::uuid[]) AND f.source_unit_id = ANY($2::uuid[]) AND f.text ~* 'изложить\\s+в\\s+(новой|следующей)\\s+редакции'
-      ORDER BY f.id
-      LIMIT 20`,
-    [[...familyIds], [...allowedUnits]],
-  );
-  return rows.rows.map((row, i) => toCandidate(row, startRank + i, 'amendment'));
+// Фрагменты фактов запланированных типов (граф D-018, донор `factsForPlan`) — в пределах области хода, в заданном порядке.
+export const fragmentCandidates = async (
+  db: Queryable,
+  ordered: readonly { fragmentId: string; reason: string }[],
+  allowedUnits: readonly string[],
+  startRank: number,
+): Promise<IPacketCandidate[]> => {
+  if (ordered.length === 0) return [];
+  const rows = await db.query<ICandidateRow>(`${CANDIDATE_SELECT} WHERE f.id = ANY($1::uuid[]) AND f.source_unit_id = ANY($2::uuid[])`, [ordered.map((o) => o.fragmentId), [...allowedUnits]]);
+  const byId = new Map(rows.rows.map((r) => [r.id, r]));
+  return ordered.flatMap((o, i) => {
+    const row = byId.get(o.fragmentId);
+    return row ? [{ ...toCandidate(row, startRank + i, o.reason), factHit: true }] : [];
+  });
 };
 
 // Единицы области прогона поиска: каких нет совсем, а какие не распознаны (неполнота области).

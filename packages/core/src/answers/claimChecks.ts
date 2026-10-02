@@ -1,7 +1,7 @@
 // Детерминированные проверки утверждения черновика (этап 08a): перенос Locus `claim-checks.js` (HEAD 33c6bcf).
 // Выполняются до проверяющей модели и независимо от неё: её ложное «подтверждено» не пропустит в ответ неверное
 // число, единицу, ложную цитату или перекрытый пункт. Отличия от донора — только привязка к пакету Контура:
-// основание — элемент пакета с ID фрагмента портала; признак редакции — `versionNote` пакета (AD-08a-1);
+// основание — элемент пакета с ID фрагмента портала; признак редакции — `versionNote` пакета (граф фактов D-018, D-028);
 // подтверждают только письменные основания (AD-08a-7).
 import { compareQuantities, DURATION_UNITS, extractQuantities, type IQuantity, type QuantityUnit } from './claimNumbers.ts';
 
@@ -60,8 +60,9 @@ export interface IClaimCheck {
 // Проблемы, означающие, что утверждение говорит иное, чем основание (а не просто им не показано).
 const CONTRADICTING_ISSUES: ReadonlySet<ClaimIssueCode> = new Set(['unit_mismatch', 'type_mismatch', 'superseded_evidence']);
 
-// Утверждение само говорит о прежней редакции — ссылка на заменённый пункт тогда верна.
-const HISTORY_WORDING = /ранее|прежн|первоначальн|изначальн|изменен|заменен|до\s+(?:подписания\s+|заключения\s+)?(?:доп|дс(?![\p{L}\p{N}]))|в\s+редакции\s+договора|(?<![\p{L}])был[аио]?(?![\p{L}])/iu;
+// Утверждение само говорит о прежней редакции — ссылка на заменённый пункт тогда верна. Контур (R08a-01): глаголы
+// изменения и прошедшее время значения («составлял», «изменило») — тоже история.
+const HISTORY_WORDING = /ранее|прежн|первоначальн|изначальн|изменен|изменён|изменил|заменен|заменён|составлял|действовал|до\s+(?:подписания\s+|заключения\s+)?(?:доп|дс(?![\p{L}\p{N}]))|в\s+редакции\s+договора|(?<![\p{L}])был[аио]?(?![\p{L}])/iu;
 // Подпись называет значение, когда стоит в начале фразы («Срок возврата — 3%») или прямо перед ним
 // («в течение 3%»); «Неустойка за нарушение срока — 0,1%» — не срок.
 const PERIOD_LABEL = /^\s*(?:срок|период|продолжительн)|(?:в\s+течени\p{L}*|сроком|на\s+срок)\s*$/iu;
@@ -130,14 +131,21 @@ export const checkClaim = (claim: IDraftClaim, { evidenceById, allowedSourceUnit
   if (cited.length && !documentary.length) issues.push({ code: 'non_documentary_basis', detail: [...new Set(cited.map((item) => item.origin))].join(',') });
 
   if (documentary.length) {
-    for (const { quantity, status } of compareQuantities(claim.text, documentary.map((item) => item.text))) {
+    // R08a-01: о действующей редакции (без исторической формулировки) перекрытое основание ничего не подтверждает —
+    // ни само, ни рядом с текущей цитатой: числа сверяются только с неперекрытыми основаниями, а ссылка на
+    // перекрытое основание отклоняет утверждение.
+    const aboutCurrent = versionPolicy === 'current' && !HISTORY_WORDING.test(claim.text);
+    const superseded = documentary.filter((item) => item.versionNote === 'superseded');
+    const support = aboutCurrent ? documentary.filter((item) => item.versionNote !== 'superseded') : documentary;
+    // Только перекрытые цитаты — достаточно одной проблемы `superseded_evidence` (как у донора).
+    const numbers = support.length ? compareQuantities(claim.text, support.map((item) => item.text)) : [];
+    for (const { quantity, status } of numbers) {
       if (status === 'missing') issues.push({ code: 'number_not_in_evidence', detail: quantity.raw });
       if (status === 'unit_mismatch') issues.push({ code: 'unit_mismatch', detail: quantity.raw });
       if (status === 'ambiguous') issues.push({ code: 'ambiguous_number', detail: `${quantity.raw} also appears with another unit` });
     }
-    const allSuperseded = documentary.every((item) => item.versionNote === 'superseded');
-    if (versionPolicy === 'current' && allSuperseded && !HISTORY_WORDING.test(claim.text)) {
-      issues.push({ code: 'superseded_evidence', detail: 'only replaced clauses are cited for the current version' });
+    if (aboutCurrent && superseded.length) {
+      issues.push({ code: 'superseded_evidence', detail: `replaced clauses cited for the current version: ${superseded.map((item) => item.label).join(',')}` });
     }
   }
   issues.push(...typeIssues(claim));

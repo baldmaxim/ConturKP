@@ -4,7 +4,8 @@
 // основание (AD-08a-7), признак редакции из пакета (AD-08a-1).
 import { describe, expect, it } from 'vitest';
 import {
-  annotateVersions,
+  factsForPlan,
+  markVersions,
   buildPacket,
   checkClaim,
   compareQuantities,
@@ -18,6 +19,7 @@ import {
   retrievalQuery,
   stripInlineEvidenceLabels,
   type ClaimKind,
+  type IFragmentFact,
   type IPacketCandidate,
   type IPacketItem,
 } from '../packages/core/src/index.ts';
@@ -143,6 +145,28 @@ describe('проверки утверждения (перенос Locus claim-ch
     expect(check('Аванс составлял 20%, ДС изменило его на 10%.', 'comparison', ['E3', 'E4']).passed).toBe(true);
     expect(check('Аванс составляет 20% от цены договора.', 'percentage', ['E3'], { versionPolicy: 'historical' }).passed).toBe(true);
     expect(check('Аванс составляет 10% от цены договора.', 'percentage', ['E4']).passed).toBe(true);
+  });
+
+  it('R08a-01: текущая цитата рядом не снимает запрет — перекрытое основание не подтверждает действующее значение', () => {
+    // Сценарий Review 08a-1: E1 — старая редакция (30 дней, перекрыта), E2 — новая редакция пункта 3.1 (90 дней).
+    const old = item('E1', 'Срок оплаты составляет 30 дней.', { versionNote: 'superseded' });
+    const fresh = item('E2', 'Пункт 3.1 изложить в новой редакции: срок оплаты составляет 90 дней.', { documentKey: 'd2' });
+    const ctx = (versionPolicy: 'current' | 'historical' | 'all') => ({ evidenceById: new Map([old, fresh].map((i) => [i.label, i])), allowedSourceUnitIds: new Set(['u1']), versionPolicy });
+    const mixed = checkClaim({ claimId: 'c1', text: 'Действующий срок оплаты составляет 30 дней.', kind: 'period', evidenceIds: ['E1', 'E2'] }, ctx('current'));
+    expect(mixed.passed).toBe(false);
+    expect(mixed.status).toBe('contradicted');
+    expect(mixed.issues.map((i) => i.code)).toEqual(expect.arrayContaining(['superseded_evidence', 'number_not_in_evidence']));
+    // Верное значение с лишней ссылкой на перекрытую редакцию тоже отклоняется: старое основание не подтверждает текущее.
+    expect(checkClaim({ claimId: 'c1', text: 'Срок оплаты составляет 90 дней.', kind: 'period', evidenceIds: ['E1', 'E2'] }, ctx('current')).issues.map((i) => i.code)).toEqual(['superseded_evidence']);
+    expect(checkClaim({ claimId: 'c1', text: 'Срок оплаты составляет 90 дней.', kind: 'period', evidenceIds: ['E2'] }, ctx('current')).passed).toBe(true);
+    // История и вопрос о прежней редакции — допустимы.
+    expect(checkClaim({ claimId: 'c1', text: 'Ранее срок оплаты составлял 30 дней, теперь — 90 дней.', kind: 'comparison', evidenceIds: ['E1', 'E2'] }, ctx('current')).passed).toBe(true);
+    expect(checkClaim({ claimId: 'c1', text: 'Срок оплаты составлял 30 дней.', kind: 'period', evidenceIds: ['E1', 'E2'] }, ctx('historical')).passed).toBe(true);
+    // Отрисовка: смешанное утверждение не показывается, ответ не «подтверждён».
+    const claims = [{ claimId: 'c1', text: 'Действующий срок оплаты составляет 30 дней.', kind: 'period' as const, evidenceIds: ['E1', 'E2'] }];
+    const r = renderVerifiedAnswer({ claims, checks: new Map([['c1', mixed]]), items: [old, fresh], level: 'hard_checks' });
+    expect(r.outcome).toBe('insufficient');
+    expect(r.answer).not.toContain('30 дней');
   });
 
   it('цитаты обязаны существовать, лежать в области и указывать на фрагмент', () => {
@@ -280,7 +304,7 @@ describe('отрисовка (перенос Locus answer-renderer)', () => {
   });
 });
 
-describe('пакет и признак редакции (AD-08a-1, временная трактовка)', () => {
+describe('пакет и признак редакции (граф фактов D-018, D-028)', () => {
   const cand = (id: string, text: string, o: Partial<IPacketCandidate> = {}): IPacketCandidate => ({
     fragmentId: id,
     text,
@@ -288,55 +312,47 @@ describe('пакет и признак редакции (AD-08a-1, времен�
     sourceUnitId: 'u',
     documentKey: 'main',
     ownerKey: 'contract:1',
-    family: { familyId: 'main', role: 'contract', issuedAt: '2026-01-10' },
     rank: 1,
     reason: 'search:1',
     ...o,
   });
   const main = cand('m31', '3.1. Аванс в размере 20% от цены договора.');
   const main32 = cand('m32', '3.2. Аванс перечисляется в течение 10 дней.', { rank: 2 });
-  const ds1 = cand('a1', 'Пункт 3.1 договора изложить в новой редакции: «3.1. Аванс в размере 10% от цены договора».', {
-    documentKey: 'ds1',
-    family: { familyId: 'main', role: 'addendum', issuedAt: '2026-03-01' },
-    rank: 3,
-  });
+  const ds1 = cand('a1', 'Пункт 3.1 договора изложить в новой редакции: «Аванс в размере 10% от цены договора».', { documentKey: 'ds1', rank: 3 });
+  const fact = (factId: string, status: IFragmentFact['status'], factType = 'advance_percent'): IFragmentFact => ({ factId, factType, status });
 
-  it('допсоглашение с явной связью перекрывает пункт N основного документа, другие пункты не трогает', () => {
-    const marks = annotateVersions([main, main32, ds1]);
-    expect(marks.get('m31')).toEqual({ note: 'superseded', reason: 'amended:3.1' });
+  it('признак основания — из состояния фактов: перекрыт, конфликт, текущий; перекрытое — после действующих', () => {
+    const marks = markVersions([main, main32, ds1], new Map([
+      ['m31', [fact('f1', 'superseded')]],
+      ['a1', [fact('f2', 'active')]],
+    ]));
+    expect(marks.get('m31')).toEqual({ note: 'superseded', reason: 'fact:advance_percent:superseded' });
     expect(marks.has('m32')).toBe(false);
     expect(marks.has('a1')).toBe(false);
-    const packet = buildPacket([main, main32, ds1], marks);
-    // Перекрытое основание — после действующих.
-    expect(packet.map((i) => [i.label, i.fragmentId, i.versionNote])).toEqual([
+    expect(buildPacket([main, main32, ds1], marks).map((i) => [i.label, i.fragmentId, i.versionNote])).toEqual([
       ['E1', 'm32', 'current'],
       ['E2', 'a1', 'current'],
       ['E3', 'm31', 'superseded'],
     ]);
+    // Основание факта плана остаётся на своём месте (донор): заменённое значение — сразу за действующим, лимит его не отсекает.
+    const hits = [cand('a1', ds1.text, { rank: -2, factHit: true, reason: 'fact:advance_percent:active' }), cand('m31', main.text, { rank: -1, factHit: true, reason: 'fact:advance_percent:superseded' }), main32];
+    expect(buildPacket(hits, marks, 2).map((i) => [i.fragmentId, i.versionNote])).toEqual([
+      ['a1', 'current'],
+      ['m31', 'superseded'],
+    ]);
+    // Фрагмент, подтверждающий и перекрытый, и действующий факт, — не перекрыт; конфликт сильнее всего.
+    expect(markVersions([main], new Map([['m31', [fact('f1', 'superseded'), fact('f3', 'active', 'advance_term')]]])).has('m31')).toBe(false);
+    expect(markVersions([main], new Map([['m31', [fact('f1', 'superseded'), fact('f4', 'conflict')]]])).get('m31')?.note).toBe('conflict');
   });
 
-  it('два допсоглашения к одному пункту: раннее перекрыто по дате; без даты — расхождение, а не выбор', () => {
-    const ds2 = cand('a2', 'Пункт 3.1 изложить в следующей редакции: аванс 5%.', { documentKey: 'ds2', family: { familyId: 'main', role: 'addendum', issuedAt: '2026-06-01' }, rank: 4 });
-    const dated = annotateVersions([main, ds1, ds2]);
-    expect(dated.get('a1')?.note).toBe('superseded');
-    expect(dated.has('a2')).toBe(false);
-    const undated = annotateVersions([main, ds1, { ...ds2, family: { familyId: 'main', role: 'addendum', issuedAt: null } }]);
-    expect(undated.get('a1')?.note).toBe('conflict');
-    expect(undated.get('a2')?.note).toBe('conflict');
-  });
-
-  it('без явной связи (документы тендера): пункт и изменение — расхождение, значение не выбирается', () => {
-    const t1 = cand('t1', '3.1. Аванс в размере 20% от цены договора.', { family: null, ownerKey: 'tender:1', documentKey: 'doc1' });
-    const t2 = cand('t2', 'Пункт 3.1 договора изложить в новой редакции: аванс 10%.', { family: null, ownerKey: 'tender:1', documentKey: 'doc2' });
-    const marks = annotateVersions([t1, t2]);
-    expect(marks.get('t1')?.note).toBe('conflict');
-    expect(marks.get('t2')?.note).toBe('conflict');
-  });
-
-  it('основание факта, заменённого человеком (этап 08), перекрыто; основание действующего факта — нет', () => {
-    const marks = annotateVersions([main, main32], { superseded: new Set(['m31', 'm32']), current: new Set(['m32']) });
-    expect(marks.get('m31')?.note).toBe('superseded');
-    expect(marks.has('m32')).toBe(false);
+  it('факты плана (донор factsForPlan): текущее, за ним заменённое; прежняя редакция — сначала старое; другая сторона цены', () => {
+    const f = (factId: string, factType: string, status: IFragmentFact['status'], validFrom: string, supersededByFactId: string | null = null) => ({ factId, factType, status, validFrom, supersededByFactId, fragmentIds: [`frag-${factId}`] });
+    const facts = [f('old', 'advance_percent', 'superseded', '2026-01-10', 'new'), f('new', 'advance_percent', 'active', '2026-03-01'), f('price', 'contract_price', 'conflict', '2026-01-10'), f('total', 'estimate_total', 'conflict', '2026-01-10')];
+    expect(factsForPlan({ intent: 'fact', entities: ['advance_percent'], versionPolicy: 'current' }, facts).map((h) => h.fragmentId)).toEqual(['frag-new', 'frag-old']);
+    expect(factsForPlan({ intent: 'fact', entities: ['advance_percent'], versionPolicy: 'historical' }, facts).map((h) => h.fragmentId)).toEqual(['frag-old', 'frag-new']);
+    expect(factsForPlan({ intent: 'fact', entities: ['contract_price'], versionPolicy: 'current' }, facts).map((h) => h.reason)).toEqual(['fact:contract_price:conflict', 'fact:estimate_total:conflict']);
+    expect(factsForPlan({ intent: 'overview', entities: [], versionPolicy: 'current' }, facts).map((h) => h.fragmentId)).toEqual(['frag-price', 'frag-new', 'frag-old']);
+    expect(factsForPlan({ intent: 'fact', entities: [], versionPolicy: 'current' }, facts)).toEqual([]);
   });
 });
 

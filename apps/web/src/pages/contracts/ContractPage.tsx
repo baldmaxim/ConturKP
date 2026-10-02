@@ -16,6 +16,7 @@ import { ContractCardPanel } from './ContractCardPanel';
 import { ContractDocumentsPanel } from './ContractDocumentsPanel';
 import { ContractLinksPanel } from './ContractLinksPanel';
 import { ContractSearchPanel } from './ContractSearchPanel';
+import { FactGraphPanel } from '../facts/FactGraphPanel';
 
 const tabsFor = (contract: IContract, isContractAdmin: boolean): ITab[] => {
   const canRead = contract.capabilities.includes('contract.read');
@@ -23,6 +24,7 @@ const tabsFor = (contract: IContract, isContractAdmin: boolean): ITab[] => {
   if (canRead) {
     tabs.push({ id: 'documents', label: 'Документы', icon: 'files' });
     tabs.push({ id: 'search', label: 'Поиск', icon: 'search' });
+    tabs.push({ id: 'facts', label: 'Факты и редакции', icon: 'layers' });
   }
   if (contract.capabilities.length > 0) tabs.push({ id: 'tenders', label: 'Тендеры', icon: 'link' });
   tabs.push({ id: 'card', label: 'Карточка', icon: 'file-signature' });
@@ -30,7 +32,7 @@ const tabsFor = (contract: IContract, isContractAdmin: boolean): ITab[] => {
   return tabs;
 };
 
-/** Договор: документы и редакции, поиск по корпусу договора, связи с тендерами, карточка и доступ. */
+/** Договор: документы и редакции, поиск по корпусу договора, факты и редакции (D-018), связи с тендерами, карточка и доступ. */
 export const ContractPage: FC = () => {
   const { contractId = '' } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -62,6 +64,7 @@ export const ContractPage: FC = () => {
       <div className={styles.panel} role="tabpanel" id={tabPanelId(active)} aria-labelledby={tabId(active)}>
         {active === 'documents' ? <ContractDocumentsPanel contract={contract} /> : null}
         {active === 'search' ? <ContractSearchPanel contractId={contract.id} /> : null}
+        {active === 'facts' ? <FactGraphPanel owner={{ kind: 'contract', id: contract.id }} /> : null}
         {active === 'tenders' ? <ContractLinksPanel contract={contract} /> : null}
         {active === 'card' ? <ContractCardPanel contract={contract} onChanged={(next) => setData(next)} /> : null}
         {active === 'access' ? <ContractAccessPanel contract={contract} onContractChanged={reload} /> : null}

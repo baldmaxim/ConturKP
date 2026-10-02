@@ -4,7 +4,6 @@
 // всё, что видит пользователь, записывается одной транзакцией завершения; непроверенный текст модели не хранится.
 import { createHash } from 'node:crypto';
 import {
-  annotateVersions,
   boundedHistory,
   buildPacket,
   checkClaims,
@@ -12,6 +11,8 @@ import {
   DraftParseError,
   draftSystemPrompt,
   draftUserContent,
+  factsForPlan,
+  markVersions,
   parseDraft,
   parseVerdict,
   renderVerifiedAnswer,
@@ -24,24 +25,24 @@ import {
   type IClaimVerdict,
   type IDraft,
   type IDraftFeedback,
+  type IFragmentFact,
   type IncompleteReason,
   type IPacketItem,
   type IVerdict,
 } from '@kontur/core';
 import {
-  amendmentCandidates,
   completeAnswerRun,
   degradeIfExpired,
   failAnswerRun,
+  fragmentCandidates,
   getAnswerRun,
-  getDialog,
   getSearchRun,
   hitDetails,
-  humanFactFragments,
   loadAccessContext,
   markAnswerRunning,
   previousTurns,
   readableFragments,
+  scopeFactGraph,
   searchCandidates,
   searchScopeCounts,
   unitsNotPermitted,
@@ -115,7 +116,6 @@ export const answerGenerateHandler: IJobHandlerSpec = {
       await ctx.complete();
       return;
     }
-    const dialog = (await getDialog(ctx.pool, run.dialog_id))!;
     const plan = run.plan as unknown as IAnswerPlan;
     const question = (await ctx.pool.query<{ text: string }>('SELECT text FROM dialog_message WHERE id = $1', [run.question_message_id])).rows[0]!.text;
     const chat = ctx.chat;
@@ -144,9 +144,12 @@ export const answerGenerateHandler: IJobHandlerSpec = {
     const lostUnits = access ? new Set(await unitsNotPermitted(ctx.pool, access, search.allowed_source_unit_ids, search.tender_id, search.mode === 'review' ? 'review' : 'working')) : null;
     const allowedUnits = search.allowed_source_unit_ids.filter((u) => lostUnits !== null && !lostUnits.has(u));
     const found = await searchCandidates(ctx.pool, search.id, search.allowed_source_unit_ids);
-    const familyIds = [...new Set(found.flatMap((c) => (c.family ? [c.family.familyId] : [])))];
-    const amendments = await amendmentCandidates(ctx.pool, familyIds, search.allowed_source_unit_ids, (found.at(-1)?.rank ?? 0) + 1);
-    const candidates = [...found, ...amendments.filter((a) => !found.some((f) => f.fragmentId === a.fragmentId))];
+    // Граф фактов D-018 по области хода (D-028): фрагменты фактов запланированных типов — перед попаданиями поиска
+    // (донор `factsForPlan`); состояние фактов даёт признак редакции основания.
+    const scopeFacts = await scopeFactGraph(ctx.pool, search.allowed_source_unit_ids);
+    const factHits = factsForPlan(plan, scopeFacts);
+    const factCandidates = await fragmentCandidates(ctx.pool, factHits, search.allowed_source_unit_ids, -factHits.length);
+    const candidates = [...factCandidates, ...found.filter((f) => !factCandidates.some((c) => c.fragmentId === f.fragmentId))];
     const readable = access ? await readableFragments(ctx.pool, access, candidates.map((c) => c.fragmentId)) : new Set<string>();
     const permitted = candidates.filter((c) => readable.has(c.fragmentId) && allowedUnits.includes(c.sourceUnitId));
     const counts = scope.counts as { unitsNotIndexed?: number; revisionsWithoutRun?: number };
@@ -162,14 +165,16 @@ export const answerGenerateHandler: IJobHandlerSpec = {
       const outcome = candidates.length > 0 ? incomplete('no_readable_evidence') : scopeIncomplete ? incomplete('scope_incomplete') : { answerStatus: 'not_found_in_scope' as const, incompleteReason: null, answerText: ANSWER_TEXT.not_found_in_scope! };
       return finish(outcome, { coverage });
     }
-    const human = await humanFactFragments(ctx.pool, dialog.stage_id);
-    const marks = annotateVersions(permitted, human);
+    const factsByFragment = new Map<string, IFragmentFact[]>();
+    for (const f of scopeFacts) for (const id of f.fragmentIds) factsByFragment.set(id, [...(factsByFragment.get(id) ?? []), f]);
+    const marks = markVersions(permitted, factsByFragment);
     const items = buildPacket(permitted, marks, ctx.config.answer.packetLimit);
     const evidence = items.map((i, n) => ({ label: i.label, ordinal: n + 1, fragmentId: i.fragmentId, origin: i.origin, versionNote: i.versionNote, reason: i.reason }));
     Object.assign(coverage, {
       packet: items.length,
       superseded: items.filter((i) => i.versionNote === 'superseded').length,
       conflict: items.filter((i) => i.versionNote === 'conflict').length,
+      facts: { inScope: scopeFacts.length, planned: factHits.length },
     });
     const withPacket = { evidence, coverage, inputSha256: packetHash(items) };
 
@@ -191,7 +196,8 @@ export const answerGenerateHandler: IJobHandlerSpec = {
     const details = await hitDetails(ctx.pool, items.map((i) => i.fragmentId));
     const places = new Map(items.map((i) => [i.label, details.get(i.fragmentId) ? placeOf(details.get(i.fragmentId)!) : '']));
     const labelByFragment = new Map(items.map((i) => [i.fragmentId, i.label]));
-    const history = boundedHistory(await previousTurns(ctx.pool, run.dialog_id, run.seq));
+    // R08a-02: история — с текущими правами автора (скрытый ответ — отметкой), до обращения к модели.
+    const history = boundedHistory(await previousTurns(ctx.pool, access, run.dialog_id, run.seq));
     let draftSha: string | null = null;
 
     // Модель отказала: повторяемый отказ — повтор задания (не больше MODEL_RETRY_ATTEMPTS попыток), иначе неполнота.

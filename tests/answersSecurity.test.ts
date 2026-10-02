@@ -89,6 +89,35 @@ describe('основания — по правам источника, сейч�
     }
   });
 
+  it('R08a-02: право отозвано между ходами — скрытый ответ не уходит в историю модели следующего хода', async () => {
+    const d = await newDialog(st.s.manager, workingContext(st));
+    const first = await ask(st, st.s.manager, d, 'Какая неустойка подрядчика за просрочку?');
+    expect(first.answer!.text).toContain('0,7%');
+    await setAccess(st.s.admin, contractId, st.s.ids.manager, ['contract.link']);
+    try {
+      st.chat.inputs.length = 0;
+      const next = await ask(st, st.s.manager, d, 'А чем облицовывается фасад?');
+      const drafts = st.chat.inputs.filter((i) => i.task === 'answer_draft');
+      expect(drafts.length).toBeGreaterThan(0);
+      for (const input of drafts) {
+        const payload = JSON.parse(input.user) as { history: { question: string; answer: string }[]; evidence: { text: string }[] };
+        // Вход модели — фактический запрос к адаптеру: ни в истории, ни в основаниях нет текста договора.
+        expect(input.user).not.toContain('0,7%');
+        expect(input.user).not.toContain('Д-СЕКРЕТ');
+        expect(payload.history.map((h) => h.answer)).toEqual(['(ответ скрыт: нет доступа к его основаниям)']);
+        expect(payload.history.map((h) => h.question)).toEqual(['Какая неустойка подрядчика за просрочку?']);
+      }
+      expect(JSON.stringify(next)).not.toContain('0,7%');
+    } finally {
+      await setAccess(st.s.admin, contractId, st.s.ids.manager, ['contract.read', 'contract.link', 'contract.manage']);
+    }
+    // Право вернули — история снова с текстом ответа.
+    st.chat.inputs.length = 0;
+    await ask(st, st.s.manager, d, 'А какая неустойка?');
+    const back = JSON.parse(st.chat.inputs.find((i) => i.task === 'answer_draft')!.user) as { history: { answer: string }[] };
+    expect(back.history[0]!.answer).toContain('0,7%');
+  });
+
   it('участник, у которого нет contract.read, получает ответ без основания договора', async () => {
     const d = await newDialog(st.s.eng1, workingContext(st));
     const r = await ask(st, st.s.eng1, d, 'Какая неустойка подрядчика за просрочку?');

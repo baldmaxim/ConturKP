@@ -4,7 +4,7 @@
 import { createChatModel } from '@kontur/adapters';
 import type { IAppConfig } from '@kontur/config';
 import { CreateRequirementRegistryRequest, MarkFragmentsRequest, StartAnalysisRunRequest } from '@kontur/contracts';
-import { analysisInputHash, configHash, OUTPUT_SCHEMA_VERSION, PROMPT_VERSION, sha256Hex, systemPrompt, type FragmentReviewState } from '@kontur/core';
+import { analysisInputHash, configHash, FACT_RULES_VERSION, OUTPUT_SCHEMA_VERSION, PROMPT_VERSION, sha256Hex, systemPrompt, type FragmentReviewState } from '@kontur/core';
 import {
   analysisRunInputIds,
   completeRegistryReview,
@@ -23,6 +23,7 @@ import {
   markFragments,
   readableContractIds,
   readableFragments,
+  RULES_PROVIDER,
   readableMailboxIds,
   registryCompleteness,
   reviewableScopeFragments,
@@ -217,27 +218,30 @@ export const requirementRegistriesRouter = (pool: Pool, config: IAppConfig): Rou
         const registry = await loadRegistryWith(client, ctx, uuidParam(req, 'id', 'requirement_registry'), 'analysis.run');
         const target = { tenderId: registry.tender_id, entityType: 'requirement_registry', entityId: registry.id };
         requireActiveRegistry(registry.active, target);
-        const chat = createChatModel(config.chatModel);
-        if (!chat) throw new HttpError(409, 'STATE_CONFLICT', 'генеративная модель не настроена (MODEL_PROVIDER=none)', { current: { reason: 'model_not_configured' } }, target);
+        // Правила (D-028) — кандидаты требований из фактов графа D-018, модель не нужна; иначе — генеративная модель.
+        const rules = body.method === 'rules';
+        const chat = rules ? null : createChatModel(config.chatModel);
+        if (!rules && !chat) throw new HttpError(409, 'STATE_CONFLICT', 'генеративная модель не настроена (MODEL_PROVIDER=none)', { current: { reason: 'model_not_configured' } }, target);
         // Вход — допустимые фрагменты снимка, которые запустивший может читать (OD-08-1 «Запрет», И-08-2).
         const all = await reviewableScopeFragments(client, registry.evidence_scope_id);
         const readable = await readableFragments(client, ctx, all.map((f) => f.id));
         const inputs = all.filter((f) => readable.has(f.id));
         const kinds = body.task === 'fact_extraction' ? await factKindCodes(client) : [];
-        const system = systemPrompt(body.task, kinds);
+        const system = rules ? `rules:${FACT_RULES_VERSION}:requirement_candidate` : systemPrompt(body.task, kinds);
+        const inference = chat ? chat.inferenceConfig : { rulesVersion: FACT_RULES_VERSION };
         const { run, created } = await createAnalysisRun(client, {
           registryId: registry.id,
           tenderId: registry.tender_id,
           stageId: registry.stage_id,
           evidenceScopeId: registry.evidence_scope_id,
           task: body.task,
-          providerId: chat.providerId,
-          modelId: chat.model,
-          modelVersion: chat.version,
-          promptVersion: PROMPT_VERSION[body.task],
+          providerId: chat ? chat.providerId : RULES_PROVIDER,
+          modelId: chat ? chat.model : 'evidence_fact',
+          modelVersion: chat ? chat.version : FACT_RULES_VERSION,
+          promptVersion: rules ? 'rules' : PROMPT_VERSION[body.task],
           promptSha256: sha256Hex(system),
-          inferenceConfig: chat.inferenceConfig,
-          configSha256: configHash(chat.inferenceConfig),
+          inferenceConfig: inference,
+          configSha256: configHash(inference),
           outputSchemaVersion: OUTPUT_SCHEMA_VERSION[body.task],
           inputSha256: analysisInputHash(inputs.map((f) => ({ id: f.id, textSha256: f.text_sha256 }))),
           inputFragmentIds: inputs.map((f) => f.id),

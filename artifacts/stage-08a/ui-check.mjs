@@ -5,6 +5,8 @@
 // стримится); после запуска worker ответ появляется опросом — бейдж «Подтверждено цитатами», номер цитаты, текст
 // цитаты и ссылка на неё; вопрос без оснований — не «подтверждено»; на 390/360 px — диалог вместо списка, кнопка
 // «К списку», без горизонтальной прокрутки; 1280 px — две колонки, тёмная тема; инженер не видит чужой диалог;
+// граф фактов D-018 (D-028): договор из DOCX с допсоглашением без даты — замечание «Значения расходятся», решение
+// человека через экран («Решить» → «Действует «10 %»» → причина), пересчёт графа, стороны в карточке договора;
 // нет ошибок консоли и CSP.
 // Требует: npm run build, PostgreSQL ≥ 17 с pgvector (KONTUR_TEST_ADMIN_URL), Chromium по CHROME_PATH.
 // Запуск: CHROME_NO_SANDBOX=1 node artifacts/stage-08a/ui-check.mjs → artifacts/stage-08a/ui-check.log.
@@ -16,6 +18,7 @@ import { createServer } from 'node:net';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { standardTender, startFakeTenderHub, TH, TH_KEY } from '../../scripts/tenderhub-fake.ts';
+import { buildDocx } from '../../tests/ooxmlFixtures.ts';
 
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const BROWSER =
@@ -205,6 +208,18 @@ const CSV = Buffer.from(
   'Раздел;Текст\nФасад;Фасад должен быть облицован клинкерным кирпичом.\nКровля;Гарантийный срок кровли составляет 5 лет.\nПрочее;Пояснительная записка к проекту.\n',
   'utf8',
 );
+// Документ договора из страницы: тот же путь загрузки, что у кнопки (роль и основной документ — параметрами).
+const uploadContractBytes = (contractId, name, bytes, role, mainDocumentId) =>
+  evaluate(`(async () => {
+    const csrf = decodeURIComponent((document.cookie.split('; ').find((c) => c.startsWith('kkp_csrf=')) ?? '').slice(9));
+    const body = Uint8Array.from(atob(${JSON.stringify(bytes.toString('base64'))}), (c) => c.charCodeAt(0));
+    const q = new URLSearchParams({ name: ${JSON.stringify(name)}, role: ${JSON.stringify(role)}${mainDocumentId ? `, mainDocumentId: ${JSON.stringify(mainDocumentId)}` : ''} });
+    const r = await fetch('/api/v1/contracts/${contractId}/documents?' + q.toString(), {
+      method: 'POST', headers: { 'X-CSRF-Token': csrf, 'Content-Type': 'application/octet-stream', 'Idempotency-Key': ${JSON.stringify(key())} }, body });
+    return { status: r.status, body: await r.json() };
+  })()`);
+const MAIN_DOCX = buildDocx({ blocks: [{ p: 'Договор подряда № Д-08A-UI от 10.01.2026' }, { p: 'Заказчик: ООО «Альфа». Генподрядчик: ООО «Бета».' }, { p: '3.1. Аванс в размере 20% от цены договора.' }] });
+const ADDENDUM_DOCX = buildDocx({ blocks: [{ p: 'Дополнительное соглашение № 1' }, { p: 'Пункт 3.1 договора изложить в новой редакции: «Аванс в размере 10% от цены договора».' }] });
 const count = (s) => evaluate(`(document.body?.innerText ?? '').split(${JSON.stringify(s)}).length - 1`);
 const visible = (selector) => evaluate(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); return Boolean(el && el.offsetParent !== null); })()`);
 
@@ -349,6 +364,53 @@ try {
   );
   if (SHOTS) await sleep(500);
   await shot('1280-dark-dialog');
+
+  // ---- Граф фактов D-018 (D-028): договор с допсоглашением без даты
+  await evaluate(`document.documentElement.removeAttribute('data-theme'), true`);
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 3, mobile: true });
+  await api(`/admin/contract-creators/${me.id}`, { method: 'PUT', headers: json, body: '{}' });
+  const contract = await api('/contracts', { method: 'POST', headers: { ...json, 'Idempotency-Key': key() }, body: JSON.stringify({ number: 'Д-08A-UI', title: 'Договор подряда для графа фактов' }) });
+  const contractId = contract.body.id;
+  const mainDoc = await uploadContractBytes(contractId, 'договор.docx', MAIN_DOCX, 'contract');
+  const addDoc = await uploadContractBytes(contractId, 'ДС-1.docx', ADDENDUM_DOCX, 'addendum', mainDoc.body.documentId);
+  record('договор и допсоглашение (DOCX) загружены', contract.status === 201 && mainDoc.status === 201 && addDoc.status === 201, `${contract.status}/${mainDoc.status}/${addDoc.status}`);
+  const graph = await poll(async () => {
+    const g = (await api(`/contracts/${contractId}/fact-graph`)).body;
+    return g?.facts?.filter((f) => f.type === 'advance_percent').length === 2 ? g : null;
+  }, 120_000);
+  record('worker распознал DOCX и извлёк факты правилами (fact.extract)', Boolean(graph));
+  await send('Page.navigate', { url: `${BASE}/contracts/${contractId}?tab=facts` });
+  record(
+    'вкладка «Факты и редакции»: допсоглашение без даты — замечание «Значения расходятся», оба значения в конфликте',
+    await waitFor(`${text('Нужно решение человека')} && ${text('Значения расходятся')} && ${text('Конфликт')} && ${text('Допсоглашение без даты')}`, 20_000),
+  );
+  record('нет горизонтальной прокрутки на 390 px (факты договора)', await noHorizontalScroll());
+  record('390 px: подписи кнопок не обрезаны, иконки видны (факты)', await buttonsFit());
+  await shot('390-facts-conflict');
+  await evaluate(`(() => { const card = [...document.querySelectorAll('li')].find((li) => li.innerText.includes('Значения расходятся'));
+    const b = card && [...card.querySelectorAll('button')].find((x) => x.innerText.trim() === 'Решить'); b?.click(); return Boolean(b); })()`);
+  await waitFor(text('Записать решение'));
+  await evaluate(`(() => { const l = [...document.querySelectorAll('label')].find((x) => x.innerText.includes('Действует «10 %»')); l?.querySelector('input')?.click(); return Boolean(l); })()`);
+  await fillField('Причина', 'ДС № 1 подписано после договора');
+  // Снимок — после анимации появления диалога (только в режиме снимков).
+  if (SHOTS) await sleep(500);
+  await shot('390-facts-decision');
+  await clickButton('Записать решение');
+  record(
+    'решение человека записано: 20 % — «перекрыт решением человека», замечание о конфликте закрыто',
+    await waitFor(`${text('Решение записано, граф пересчитан')} && ${text('перекрыт решением человека')} && ${text('Решение человека')}`, 15_000),
+  );
+  const after = (await api(`/contracts/${contractId}/fact-graph`)).body;
+  record('API подтверждает: конфликт закрыт, решение в истории', after.remarks.some((r) => r.kind === 'value_conflict' && r.status === 'resolved') && after.decisions.length === 1);
+  await send('Page.navigate', { url: `${BASE}/contracts/${contractId}?tab=card` });
+  record('карточка договора: «Стороны по тексту договора» — без перезаписи полей карточки', await waitFor(`${text('Стороны по тексту договора')} && ${text('ООО «Альфа»')} && ${text('ООО «Бета»')}`));
+  await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+  await send('Page.navigate', { url: `${BASE}/contracts/${contractId}?tab=facts` });
+  await waitFor(text('Документы и связи'));
+  await evaluate(`document.documentElement.setAttribute('data-theme', 'dark'), true`);
+  record('тёмная тема, 1280 px: факты и редакции договора читаются', await waitFor(`${text('Документы и связи')} && ${text('Размер аванса')} && ${text('Открыть цитату')}`));
+  if (SHOTS) await sleep(500);
+  await shot('1280-dark-facts');
 
   // ---- Инженер: чужой диалог не виден
   await logout();

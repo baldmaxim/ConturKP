@@ -1,7 +1,9 @@
 import type { JobHandler } from '../runtime.ts';
 import { analysisExtractHandler } from './analysis.ts';
+import { analysisRulesHandler } from './analysisRules.ts';
 import { answerGenerateHandler } from './answer.ts';
 import { calculationCaptureHandler } from './calculation.ts';
+import { factExtractHandler } from './facts.ts';
 import { importExpandHandler, importRegisterHandler } from './imports.ts';
 import { intakeScanHandler } from './intake.ts';
 import { localRecognitionHandler } from './localRecognition.ts';
@@ -22,5 +24,7 @@ export const HANDLERS: Record<string, JobHandler> = {
   'calculation.capture': calculationCaptureHandler,
   'mail.import': mailImportHandler,
   'analysis.extract': analysisExtractHandler,
+  'analysis.rules': analysisRulesHandler,
   'answer.generate': answerGenerateHandler,
+  'fact.extract': factExtractHandler,
 };

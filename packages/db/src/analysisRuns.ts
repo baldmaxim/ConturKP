@@ -92,16 +92,20 @@ const keyParams = (k: IRunKey): unknown[] => [k.registryId, k.task, k.providerId
 export const ANALYSIS_JOB_PRIORITY = 20;
 export const ANALYSIS_JOB_ATTEMPTS = 3;
 
-export const enqueueAnalysisBatch = (db: Queryable, run: { id: string; tender_id: string }) =>
-  enqueueJob(db, {
-    kind: 'analysis.extract',
+// Прогон по правилам (провайдер `rules`, D-028): кандидаты требований из фактов графа — без модели, класс default.
+export const RULES_PROVIDER = 'rules';
+export const enqueueAnalysisBatch = (db: Queryable, run: { id: string; tender_id: string; provider_id?: string }) => {
+  const rules = run.provider_id === RULES_PROVIDER;
+  return enqueueJob(db, {
+    kind: rules ? 'analysis.rules' : 'analysis.extract',
     dedupeKey: `analysis:${run.id}`,
     payload: { runId: run.id },
-    resourceClass: 'gpu',
-    priority: ANALYSIS_JOB_PRIORITY,
+    resourceClass: rules ? 'default' : 'gpu',
+    priority: rules ? 50 : ANALYSIS_JOB_PRIORITY,
     maxAttempts: ANALYSIS_JOB_ATTEMPTS,
     tenderId: run.tender_id,
   });
+};
 
 // Повтор с тем же ключом — тот же прогон (если он не отказ); иначе новая попытка с входом и заданием.
 export const createAnalysisRun = async (db: Queryable, r: INewAnalysisRun): Promise<{ run: IAnalysisRunRow; created: boolean }> => {

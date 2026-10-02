@@ -17,6 +17,7 @@ import {
   confirmCancel,
   dueChannels,
   dueDeadlineCaptures,
+  enqueueFactExtraction,
   enqueueJob,
   enqueueLocalRecognition,
   failJob,
@@ -27,6 +28,7 @@ import {
   recoverExpiredJobs,
   requestCapture,
   requeueJob,
+  runsAwaitingExtraction,
   succeedJob,
   withTransaction,
   type FingerprintByFormat,
@@ -151,7 +153,17 @@ export class WorkerRuntime {
     const due = Date.now() - this.lastModelCheck >= this.o.config.search.modelCheckIntervalMs;
     const checkModel = o.checkModel ?? due;
     if (checkModel) this.lastModelCheck = Date.now();
-    return runSearchMaintenance({ pool: this.o.pool, config: this.o.config, embeddings: this.o.embeddings ?? null, log: this.log }, { checkModel });
+    const report = await runSearchMaintenance({ pool: this.o.pool, config: this.o.config, embeddings: this.o.embeddings ?? null, log: this.log }, { checkModel });
+    await this.scheduleFactExtraction();
+    return report;
+  }
+
+  // Извлечение фактов D-018 (D-028): предпочтительные завершённые прогоны распознавания документов тендера и договора
+  // без извлечения текущей версии правил получают задание `fact.extract` (dedupe — одно на прогон).
+  async scheduleFactExtraction(): Promise<number> {
+    const runs = await runsAwaitingExtraction(this.o.pool);
+    for (const r of runs) await enqueueFactExtraction(this.o.pool, r.id, r.tender_id);
+    return runs.length;
   }
 
   // Каналы, которым пора сканировать, получают задание (dedupe — одно активное на канал).

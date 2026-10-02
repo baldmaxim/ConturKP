@@ -198,6 +198,10 @@ export const SearchRequest = z
 export const CreateDialogRequest = z.object({ context: SearchContext, title: text(200).optional() }).strict();
 export const AskQuestionRequest = z.object({ text: text(4000) }).strict();
 
+// Решение человека по паре фактов графа D-018 (D-028): `prevails` — этот факт действует вместо другого; `distinct` —
+// значения независимы; `rule` — пара возвращается правилу.
+export const FactDecisionRequest = z.object({ otherFactId: z.uuid(), kind: z.enum(['prevails', 'distinct', 'rule']), reason: text(2000) }).strict();
+
 // ---- договорной контур (этап 06a; D-017, D-022, D-023)
 
 const DATE_ONLY = z.iso.date();

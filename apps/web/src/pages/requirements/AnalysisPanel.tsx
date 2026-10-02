@@ -33,7 +33,7 @@ const statusBadge = (r: IAnalysisRun) =>
  * фрагментам, которые вы можете читать; повтор с теми же входами возвращает прежний прогон. «Ничего не найдено»
  * полноты не доказывает (A44) — полнота отдельно, по фрагментам.
  */
-export const AnalysisPanel: FC<{ registryId: string; canRun: boolean }> = ({ registryId, canRun }) => {
+export const AnalysisPanel: FC<{ registryId: string; canRun: boolean; canRunRules: boolean }> = ({ registryId, canRun, canRunRules }) => {
   const [version, setVersion] = useState(0);
   const res = useApiResource((signal) => listAnalysisRuns(registryId, signal), `runs:${registryId}:${version}`);
   const [busy, setBusy] = useState(false);
@@ -45,11 +45,11 @@ export const AnalysisPanel: FC<{ registryId: string; canRun: boolean }> = ({ reg
     const t = window.setInterval(() => res.reload(), 3000);
     return () => window.clearInterval(t);
   }, [pending, res]);
-  const start = async (task: TAnalysisTask): Promise<void> => {
+  const start = async (task: TAnalysisTask, method: 'model' | 'rules' = 'model'): Promise<void> => {
     setBusy(true);
     setError(null);
     try {
-      const run = await startAnalysis(registryId, task, newUuid());
+      const run = await startAnalysis(registryId, task, newUuid(), method);
       toast.push({ kind: 'info', text: run.reused ? 'Прогон с теми же входами уже есть — показан он' : `Прогон поставлен в очередь${run.excludedByAccess ? `; без доступа исключено фрагментов: ${run.excludedByAccess}` : ''}` });
       setVersion((v) => v + 1);
     } catch (e) {
@@ -72,23 +72,32 @@ export const AnalysisPanel: FC<{ registryId: string; canRun: boolean }> = ({ reg
           </Button>
         </div>
       ) : (
-        <Notice tone="info">Запуск анализа недоступен: модель не настроена или нет права analysis.run.</Notice>
+        <Notice tone="info">Запуск анализа моделью недоступен: модель не настроена или нет права analysis.run.</Notice>
       )}
+      {canRunRules ? (
+        <div className={styles.actions}>
+          <Button variant="secondary" icon="list-checks" disabled={busy} onClick={() => void start('requirement_extraction', 'rules')}>
+            Кандидаты по правилам (факты D-018)
+          </Button>
+        </div>
+      ) : null}
       {error ? <Notice tone="danger">{error}</Notice> : null}
       {res.data.items.length === 0 ? (
-        <EmptyState icon="scan-search" title="Прогонов не было" text="Модель ещё не запускалась — это не «требований нет»." />
+        <EmptyState icon="scan-search" title="Прогонов не было" text="Модель и правила ещё не запускались — это не «требований нет»." />
       ) : (
         <ul className={styles.cards}>
           {res.data.items.map((r) => (
             <li key={r.id} className={styles.card}>
               <div className={styles.headLine}>
-                <strong>{TASK_LABELS[r.task]}</strong>
+                <strong>{r.providerId === 'rules' ? 'Кандидаты требований по правилам' : TASK_LABELS[r.task]}</strong>
                 {statusBadge(r)}
                 {r.attempt > 1 ? <Badge tone="neutral" icon="repeat" label={`Попытка ${r.attempt}`} /> : null}
               </div>
               <p className={styles.muted}>{`${r.providerId} · ${r.modelId} (${r.modelVersion}) · ${r.promptVersion} · ${formatDateTime(r.createdAt)} МСК`}</p>
               <p className={styles.muted}>
-                {`Фрагментов на входе: ${r.inputCount}; пачек: ${r.coverage.batchesProcessed ?? 0} из ${r.coverage.batchesTotal ?? '—'}${r.coverage.batchesFailed ? `, с ошибкой ${r.coverage.batchesFailed}` : ''}; кандидатов: ${r.coverage.candidatesSaved ?? 0}`}
+                {r.providerId === 'rules'
+                  ? `Фрагментов на входе: ${r.inputCount}; фактов на входе: ${r.coverage.eligible ?? 0}, перекрытых пропущено: ${r.coverage.skippedSuperseded ?? 0}, в конфликте: ${r.coverage.conflicts ?? 0}; кандидатов: ${r.coverage.candidatesSaved ?? 0}`
+                  : `Фрагментов на входе: ${r.inputCount}; пачек: ${r.coverage.batchesProcessed ?? 0} из ${r.coverage.batchesTotal ?? '—'}${r.coverage.batchesFailed ? `, с ошибкой ${r.coverage.batchesFailed}` : ''}; кандидатов: ${r.coverage.candidatesSaved ?? 0}`}
                 {r.coverage.dropped && Object.keys(r.coverage.dropped).length > 0 ? `; отброшено до записи: ${Object.values(r.coverage.dropped).reduce((a, b) => a + b, 0)}` : ''}
               </p>
             </li>

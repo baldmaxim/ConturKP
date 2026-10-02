@@ -1,13 +1,13 @@
-# npm run smoke — 2026-10-02T08:18:21.303Z
+# npm run smoke — 2026-10-02T09:29:42.941Z
 # Node v24.14.1, linux x64, PostgreSQL postgresql://***@127.0.0.1:55432/postgres
 PASS  db:setup — роли и база — база kontur_kp_smoke_test: создана; роли и права выставлены
-PASS  db:migrate — пустая БД — готово, применено миграций: 22
+PASS  db:migrate — пустая БД — готово, применено миграций: 23
 PASS  db:migrate — повторный запуск без изменений
 PASS  bootstrap — первый администратор-руководитель
 PASS  bootstrap — повтор отклонён
 PASS  db:seed-demo — синтетические данные — демо-данные готовы
 PASS  config:check — без значений секретов
-PASS  server + worker — /ready 200 — {"database":{"ok":true,"detail":"доступна"},"schema":{"ok":true,"detail":"версия 22"},"storage":{"ok":true,"detail":"доступно на запись"},"worker":{"ok":true,"detail":"heartbeat свежий"}}
+PASS  server + worker — /ready 200 — {"database":{"ok":true,"detail":"доступна"},"schema":{"ok":true,"detail":"версия 23"},"storage":{"ok":true,"detail":"доступно на запись"},"worker":{"ok":true,"detail":"heartbeat свежий"}}
 PASS  неаутентифицированный запрос — 401
 PASS  вход администратора — HTTP 200
 PASS  список тендеров (демо) — тендеров: 2
@@ -65,6 +65,8 @@ PASS  этап 08a: вопрос принят заданием; до ответ�
 PASS  этап 08a: worker составил ответ поддельной моделью — подтверждено цитатами фрагментов области — confirmed_by_citations, цитат 1, модель fake
 PASS  этап 08a: вопрос без оснований — не «подтверждено цитатами», утверждений без цитат нет — not_found_in_scope
 PASS  этап 08a: другой участник тендера — 404 на диалог и прогон, в его списке диалога нет
+PASS  этап 08a: граф фактов D-018 — worker извлёк факты правилами, граф тендера посчитан — документов 2, фактов 0, замечаний 0
+PASS  этап 08a: кандидаты требований по правилам — прогон rules без модели завершён — кандидатов 0
 PASS  перезапуск server — /ready 200
 PASS  этап 08: после перезапуска требование, ревизии и покрытие на месте
 PASS  этап 08a: после перезапуска диалог, сообщения и ходы — из PostgreSQL

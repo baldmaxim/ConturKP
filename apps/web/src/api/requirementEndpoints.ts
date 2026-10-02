@@ -93,8 +93,8 @@ export const recordCoverage = (
 export const recordDecision = (requirementId: string, input: { statement: string; rationale: string; supersedesDecisionId?: string | null; evidence?: TRef[] }, idempotencyKey: string) =>
   apiPost<{ decisionId: string; requirement: IRequirementCard }>(`/requirements/${enc(requirementId)}/decisions`, { body: input, idempotencyKey });
 
-export const startAnalysis = (registryId: string, task: TAnalysisTask, idempotencyKey: string): Promise<IAnalysisRun> =>
-  apiPost(`/requirement-registries/${enc(registryId)}/analysis-runs`, { body: { task }, idempotencyKey });
+export const startAnalysis = (registryId: string, task: TAnalysisTask, idempotencyKey: string, method: 'model' | 'rules' = 'model'): Promise<IAnalysisRun> =>
+  apiPost(`/requirement-registries/${enc(registryId)}/analysis-runs`, { body: method === 'rules' ? { task, method } : { task }, idempotencyKey });
 
 export const listAnalysisRuns = (registryId: string, signal?: AbortSignal): Promise<IListResponse<IAnalysisRun>> =>
   apiGet(`/requirement-registries/${enc(registryId)}/analysis-runs`, { signal });

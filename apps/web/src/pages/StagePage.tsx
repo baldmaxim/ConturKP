@@ -101,7 +101,7 @@ export const StagePage: FC = () => {
         {active === 'calculation' ? (
           <CalculationTab stageId={stage.id} canCapture={caps.includes('calculation.capture')} canAdmin={caps.includes('admin.tender')} />
         ) : null}
-        {active === 'requirements' ? <RequirementsTab stageId={stage.id} caps={caps} /> : null}
+        {active === 'requirements' ? <RequirementsTab stageId={stage.id} tenderId={stage.tenderId} caps={caps} /> : null}
       </div>
     </>
   );

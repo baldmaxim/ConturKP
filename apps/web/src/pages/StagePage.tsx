@@ -14,6 +14,8 @@ import { ImportBatchList } from './sources/ImportBatchList';
 import { DialogsTab } from './answers/DialogsTab';
 import { CalculationTab } from './calculation/CalculationTab';
 import { RequirementsTab } from './requirements/RequirementsTab';
+import { FindingsTab } from './review/FindingsTab';
+import { ReviewTab } from './review/ReviewTab';
 import { SearchTab } from './search/SearchTab';
 import { InputEventsLog } from './sources/InputEventsLog';
 import { SourceSetTab } from './sources/SourceSetTab';
@@ -30,6 +32,8 @@ const TABS: ITab[] = [
   { id: 'answers', label: 'Вопросы', icon: 'message-square' },
   { id: 'calculation', label: 'Расчёт', icon: 'calculator' },
   { id: 'requirements', label: 'Требования', icon: 'list-checks' },
+  { id: 'review', label: 'Проверка', icon: 'scan-search' },
+  { id: 'discrepancies', label: 'Разногласия', icon: 'file-exclamation-point' },
 ];
 
 export const StagePage: FC = () => {
@@ -102,6 +106,8 @@ export const StagePage: FC = () => {
           <CalculationTab stageId={stage.id} canCapture={caps.includes('calculation.capture')} canAdmin={caps.includes('admin.tender')} />
         ) : null}
         {active === 'requirements' ? <RequirementsTab stageId={stage.id} tenderId={stage.tenderId} caps={caps} /> : null}
+        {active === 'review' ? <ReviewTab stageId={stage.id} caps={caps} onOpenFindings={() => selectTab('discrepancies')} /> : null}
+        {active === 'discrepancies' ? <FindingsTab stageId={stage.id} tenderId={stage.tenderId} /> : null}
       </div>
     </>
   );

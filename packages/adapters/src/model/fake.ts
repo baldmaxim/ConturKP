@@ -74,6 +74,17 @@ const fakeVerdict = (user: string): string => {
   return JSON.stringify({ overall: 'pass', claims: input.claims.map((c) => ({ claim_id: c.claim_id, status: 'supported', supported_by: c.evidence_ids, issues: [] })), conflicts: [] });
 };
 
+// Гипотезы поддельной модели (этап 09): требование, ни одна позиция которого не разделяет с формулировкой основу слова,
+// — «возможно, не отражено в расчёте». Не качество модели, а исполнимый контракт: тот же вход — те же гипотезы.
+const fakeHypotheses = (user: string): string => {
+  const input = JSON.parse(user) as { requirements: { code: string; statement: string; fragments: { fragmentId: string }[] }[]; positions: { positionId: string; text: string }[] };
+  const positionStems = input.positions.map((p) => stemsOf(p.text));
+  const hypotheses = input.requirements
+    .filter((r) => r.fragments.length > 0 && !positionStems.some((ps) => [...stemsOf(r.statement)].some((s) => ps.has(s))))
+    .map((r) => ({ title: `${r.code}: возможно, не отражено в расчёте`, rationale: 'Поддельная модель: ни одна позиция не разделяет слов с формулировкой', left: { fragmentId: r.fragments[0]!.fragmentId }, right: null }));
+  return JSON.stringify({ hypotheses });
+};
+
 export class FakeChat implements IModelGatewayChat {
   readonly providerId = 'fake' as const;
   readonly model: string;
@@ -97,6 +108,13 @@ export class FakeChat implements IModelGatewayChat {
     if (input.signal?.aborted) return chatError('UNAVAILABLE', 'запрос отменён', true);
     const scripted = this.script?.(input, this.calls) ?? null;
     if (scripted) return scripted.ok ? { ok: true, value: this.done(scripted.value, startedAt) } : scripted;
+    if (input.task === 'review_hypotheses') {
+      try {
+        return { ok: true, value: this.done(fakeHypotheses(input.user), startedAt) };
+      } catch {
+        return chatError('CONTRACT_MISMATCH', 'поддельная модель ждёт вход проверки', false);
+      }
+    }
     if (input.task === 'answer_draft' || input.task === 'answer_verify') {
       try {
         return { ok: true, value: this.done(input.task === 'answer_draft' ? fakeDraft(input.user) : fakeVerdict(input.user), startedAt) };

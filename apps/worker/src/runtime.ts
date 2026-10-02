@@ -29,6 +29,8 @@ import {
   requestCapture,
   requeueJob,
   runsAwaitingExtraction,
+  eventsAwaitingInvalidation,
+  enqueueInvalidation,
   succeedJob,
   withTransaction,
   type FingerprintByFormat,
@@ -155,7 +157,16 @@ export class WorkerRuntime {
     if (checkModel) this.lastModelCheck = Date.now();
     const report = await runSearchMaintenance({ pool: this.o.pool, config: this.o.config, embeddings: this.o.embeddings ?? null, log: this.log }, { checkModel });
     await this.scheduleFactExtraction();
+    await this.scheduleStageInvalidation();
     return report;
+  }
+
+  // Инвалидация (этап 09, §5.4): каждое необработанное событие барьера получает задание `stage.invalidate` (dedupe —
+  // одно на событие). Барьер от задания не зависит: устаревание прогона видно сразу по версии входов.
+  async scheduleStageInvalidation(): Promise<number> {
+    const events = await eventsAwaitingInvalidation(this.o.pool);
+    for (const e of events) await enqueueInvalidation(this.o.pool, e.id, e.tender_id);
+    return events.length;
   }
 
   // Извлечение фактов D-018 (D-028): предпочтительные завершённые прогоны распознавания документов тендера и договора

@@ -28,6 +28,8 @@ import { communicationsRouter } from './routes/communications.ts';
 import { requirementCandidatesRouter } from './routes/requirementCandidates.ts';
 import { requirementItemsRouter } from './routes/requirementItems.ts';
 import { requirementRegistriesRouter } from './routes/requirementRegistries.ts';
+import { discrepanciesRouter } from './routes/discrepancies.ts';
+import { reviewsRouter } from './routes/reviews.ts';
 import { stageRecordsRouter } from './routes/stageRecords.ts';
 import { contractDocumentsRouter } from './routes/contractDocuments.ts';
 import { contractLinksRouter } from './routes/contractLinks.ts';
@@ -80,6 +82,8 @@ export const createApp = (deps: IAppDeps): express.Express => {
   api.use(searchRouter(pool, config, clock));
   api.use(dialogsRouter(pool, config, clock));
   api.use(factsRouter(pool));
+  api.use(reviewsRouter(pool, config));
+  api.use(discrepanciesRouter(pool));
   api.use(calculationsRouter(pool, config));
   api.use(mailboxesRouter(pool, store, config));
   api.use(mailMessagesRouter(pool, store));

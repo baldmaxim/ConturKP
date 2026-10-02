@@ -322,6 +322,8 @@ CHECK 0014 требовал размеры у `pdf_page` только в ста�
 
 ### 4.7. Требования, проверки, решения
 
+Этап 09 реализован миграцией `0024_review_checks.sql` (D-029): `review_check`, `review_finding_kind`, `source_priority_revision`, `review_run`, `review_check_result`, `finding`, `finding_event`, `finding_evidence`, `finding_occurrence`, `model_suggestion`, `model_suggestion_evidence`, `discrepancy`, `discrepancy_status_event`, `discrepancy_basis`, `evidence_dependency`, `evidence_invalidation`, `stage_input_event_processing`; виды решений `finding_resolution`, `finding_risk_acceptance`, `discrepancy_decision`. Отличия от строк ниже — `docs/architecture/09-review-checks-design.md` §2, §13 (оси разногласия — события, без хранимых значений; приоритет — последняя ревизия тендера).
+
 | Таблица | Класс | Ключевые колонки | Ограничения |
 |---|---|---|---|
 | `requirement_registry` | immutable | `stage_id`, `evidence_scope_id`, `seq`, `previous_registry_id`, `reason`, `created_by` | этап 08 (Р-08-6): реестр закреплён на снимке; новый — явной операцией за действующим; прежний не меняется |

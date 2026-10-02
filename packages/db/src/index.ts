@@ -42,3 +42,8 @@ export * from './completeness.ts';
 export * from './requirementTaint.ts';
 export * from './answers.ts';
 export * from './facts.ts';
+export * from './reviewInputs.ts';
+export * from './reviewRuns.ts';
+export * from './findings.ts';
+export * from './invalidation.ts';
+export * from './discrepancies.ts';

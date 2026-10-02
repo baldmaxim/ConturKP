@@ -37,6 +37,8 @@ export interface IRunSpec {
   pages: IPageSpec[];
   // Фрагменты без страницы (секции без блока, R04-10).
   unpaged?: string[];
+  // Страницы, которые распознавание не прочитало (A16): прогон завершается «частично».
+  missingPages?: number;
 }
 
 // Загрузка файла штатным импортом (этап 03): редакция документа в тендере этапа.
@@ -74,7 +76,18 @@ export const seedEvidenceRun = async (pool: Pool, revisionId: string, spec: IRun
   await insertPages(
     pool,
     runId,
-    spec.pages.map((_, i) => ({ pageIndex: i, pageLabel: String(i + 1), sheetLabel: null, widthPx: 2480, heightPx: 3508, rotation: 0, status: 'recognized' as const })),
+    [
+      ...spec.pages.map((_, i) => ({ pageIndex: i, pageLabel: String(i + 1), sheetLabel: null, widthPx: 2480, heightPx: 3508, rotation: 0, status: 'recognized' as const })),
+      ...Array.from({ length: spec.missingPages ?? 0 }, (_, k) => ({
+        pageIndex: spec.pages.length + k,
+        pageLabel: String(spec.pages.length + k + 1),
+        sheetLabel: null,
+        widthPx: 2480,
+        heightPx: 3508,
+        rotation: 0,
+        status: 'missing' as const,
+      })),
+    ],
   );
   const fragments: INewFragment[] = [];
   const base = (pageIndex: number | null, key: string, ordinal: number, text: string): INewFragment => ({
@@ -111,9 +124,9 @@ export const seedEvidenceRun = async (pool: Pool, revisionId: string, spec: IRun
   (spec.unpaged ?? []).forEach((text, i) => fragments.push({ ...base(null, `md:px:${i}:text`, i, text), fragmentKind: 'unknown_block' }));
   await insertFragments(pool, { runId, tenderId, contractId, documentRevisionId: revisionId }, fragments);
   const ok = await finishRun(pool, runId, {
-    status: 'complete',
+    status: spec.missingPages ? 'partial' : 'complete',
     engineSchemaVersion: '1',
-    pagesTotal: spec.pages.length,
+    pagesTotal: spec.pages.length + (spec.missingPages ?? 0),
     pagesRecognized: spec.pages.length,
     quality: {},
   });

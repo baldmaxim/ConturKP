@@ -17,6 +17,7 @@ import { TenderContractsPanel } from './contracts/TenderContractsPanel';
 import { IntakeChannelsPanel } from './intake/IntakeChannelsPanel';
 import { MembersPanel } from './MembersPanel';
 import { StagesPanel } from './StagesPanel';
+import { SourcePriorityPanel } from './review/SourcePriorityPanel';
 import { TenderCard } from './TenderCard';
 import styles from './TenderPage.module.css';
 
@@ -34,6 +35,7 @@ const tabsFor = (tender: ITender, canAdminIntake: boolean): ITab[] => {
     tabs.push({ id: 'mail', label: 'Переписка', icon: 'mail' });
     tabs.push({ id: 'qa', label: 'Вопросы и ответы', icon: 'message-square' });
     tabs.push({ id: 'negotiations', label: 'Переговоры', icon: 'mic' });
+    tabs.push({ id: 'priority', label: 'Приоритет источников', icon: 'list-checks' });
   }
   tabs.push({ id: 'card', label: 'Карточка', icon: 'briefcase' });
   tabs.push({ id: 'members', label: 'Участники', icon: 'users' });
@@ -102,6 +104,7 @@ export const TenderPage: FC = () => {
         {active === 'mail' ? <TenderMailPanel tenderId={tender.id} /> : null}
         {active === 'qa' ? <TenderQaPanel tenderId={tender.id} canImport={caps.includes('source.write')} /> : null}
         {active === 'negotiations' ? <TenderNegotiationsPanel tenderId={tender.id} canImport={caps.includes('source.write')} /> : null}
+        {active === 'priority' ? <SourcePriorityPanel tenderId={tender.id} /> : null}
         {active === 'card' ? <TenderCard tender={tender} onChanged={(next) => setData(next)} /> : null}
         {active === 'members' ? (
           <MembersPanel

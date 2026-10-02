@@ -26,6 +26,8 @@ describe('возможности', () => {
       'analysis.run',
       'fact.read',
       'fact.create',
+      'review.run',
+      'finding.write',
     ]);
   });
   it('руководитель-участник: управление этапами и журнал', () => {
@@ -39,12 +41,16 @@ describe('возможности', () => {
       'analysis.run',
       'fact.read',
       'fact.create',
+      'review.run',
+      'finding.write',
       'stage.manage',
       'hold.resolve',
       'requirement.confirm',
       'requirement.decide',
       'requirement.manage',
       'fact.confirm',
+      'finding.accept_risk',
+      'source_priority.manage',
       'audit.read',
     ]);
   });

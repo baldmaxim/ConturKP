@@ -31,7 +31,13 @@ export type TenderCapability =
   | 'analysis.run'
   | 'fact.read'
   | 'fact.create'
-  | 'fact.confirm';
+  | 'fact.confirm'
+  // Этап 09 (D-029): запуск проверки и ведение замечаний — участник; принятие риска и приоритет источников —
+  // руководитель тендера (ADR-006 §3). БД повторяет в tender_capabilities (миграция 0024).
+  | 'review.run'
+  | 'finding.write'
+  | 'finding.accept_risk'
+  | 'source_priority.manage';
 
 export const ROLES: readonly Role[] = ['admin', 'manager', 'engineer'];
 export const MEMBER_ROLES: readonly MemberRole[] = ['engineer', 'manager'];
@@ -82,10 +88,12 @@ export const tenderCapabilities = (
   // Предложения, анализ и чтение реестра — участник тендера; создатель кандидата права подтверждения
   // не получает (OD-08-5).
   if (role) caps.push('requirement.read', 'requirement.create', 'analysis.run', 'fact.read', 'fact.create');
+  if (role) caps.push('review.run', 'finding.write');
   // Решения о неприменимости (элементы импорта, удержания) — только руководитель тендера (ADR-006 §3).
   if (role === 'manager') caps.push('stage.manage', 'hold.resolve');
   // Подтверждение, решение и ведение реестра — руководитель тендера (OD-08-5).
   if (role === 'manager') caps.push('requirement.confirm', 'requirement.decide', 'requirement.manage', 'fact.confirm');
+  if (role === 'manager') caps.push('finding.accept_risk', 'source_priority.manage');
   if (role === 'manager' || roles.has('admin')) caps.push('audit.read');
   if (roles.has('admin')) caps.push('admin.tender');
   return caps;

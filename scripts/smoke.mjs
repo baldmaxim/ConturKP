@@ -5,6 +5,7 @@
 // Этап 07 (scripts/smoke-07.mjs): ящик, импорт EML, вложение, связь, поиск письма, вопросы–ответы, переговоры, права.
 // Этап 08 (scripts/smoke-08.mjs): реестр требований, прогон поддельной модели, покрытие, полнота, права.
 // Этап 08a (scripts/smoke-08a.mjs): диалог, вопрос заданием gpu, ответ с цитатами, 409 второго вопроса, права.
+// Этап 09 (scripts/smoke-09.mjs): прогон проверки, 12 исходов, замечания, права на риск и приоритет; после перезапуска — из БД.
 // База kontur_kp_smoke_test создаётся заново и удаляется в конце. Пароль генерируется и не выводится.
 // Результат: artifacts/stage-02/smoke.log; код 0 только если все шаги PASS.
 import { spawn, spawnSync } from 'node:child_process';
@@ -19,6 +20,7 @@ import { smokeLocalRecognition } from './smoke-05a.mjs';
 import { smokeMail } from './smoke-07.mjs';
 import { smokeRequirements } from './smoke-08.mjs';
 import { smokeAnswers } from './smoke-08a.mjs';
+import { smokeReview } from './smoke-09.mjs';
 import { PRECISE_RATE, TH, standardTender, startFakeTenderHub } from './tenderhub-fake.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -472,6 +474,9 @@ try {
   // ---- Этап 08a: диалоги и ответное ядро — scripts/smoke-08a.mjs
   const ans08a = await smokeAnswers({ api, api2, record, waitFor, idem, json, tenderId: demo.id, stageId });
 
+  // ---- Этап 09: проверка и разногласия — scripts/smoke-09.mjs
+  const rev09 = await smokeReview({ api, api2, record, waitFor, idem, json, tenderId: demo.id, stageId });
+
   await stopProc(server);
   server = startProc('server', 'apps/server/src/main.ts');
   ready = await waitReady(30_000);
@@ -484,6 +489,9 @@ try {
     'этап 08a: после перезапуска диалог, сообщения и ходы — из PostgreSQL',
     dialogAfterBody?.runs?.length === 2 && dialogAfterBody.messages?.filter((m) => m.role === 'user').length === 2,
   );
+  const runAfter = await api(`/review-runs/${rev09.runId}`);
+  const runAfterBody = runAfter.status === 200 ? await runAfter.json() : null;
+  record('этап 09: после перезапуска отчёт проверки — из PostgreSQL, итог прежний', runAfterBody?.status === rev09.status && runAfterBody?.checks?.length === 12);
   const me = await fetch(`${BASE}/api/v1/me`, { headers: { Cookie: cookieHeader() } });
   record('перезапуск server — сессия действительна', me.status === 200);
 

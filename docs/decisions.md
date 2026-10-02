@@ -726,3 +726,5 @@
 Что изменяет: проект `docs/architecture/09-review-checks-design.md` §2–§5, §11; Q-09 — для этапа 09 решён В-09-3 (матрица блокеров выпуска — этап 13); миграция `0024`.
 
 Ссылка на подтверждение владельца: `docs/reviews/09-owner-decisions.md`.
+
+Реализация (передача 09-1, `docs/stages/09-report.md`): миграция `0024_review_checks.sql`, ядро `packages/core/src/review/`, слой БД `reviewRuns.ts`, `reviewInputs.ts`, `findings.ts`, `discrepancies.ts`, `invalidation.ts`, задания `review.run`, `review.model`, `stage.invalidate`, API portal-api §2.7, вкладки этапа «Проверка» и «Разногласия», вкладка тендера «Приоритет источников». Технические уточнения без изменения решений владельца — `docs/architecture/09-review-checks-design.md` §13.

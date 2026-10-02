@@ -14,6 +14,7 @@ import {
   type IGraphDecision,
   type IGraphDocument,
   type IGraphFact,
+  type IGraphRemark,
 } from '@kontur/core';
 import { enqueueJob } from './jobs.ts';
 import type { Queryable } from './pool.ts';
@@ -298,10 +299,13 @@ export interface IScopeFact {
 
 // Граф по единицам области хода (прогоны распознавания): поздний документ вне области не перекрывает пункт в области
 // (I05); решения человека — если оба факта пары в области.
-export const scopeFactGraph = async (db: Queryable, allowedUnits: readonly string[]): Promise<IScopeFact[]> => {
-  if (allowedUnits.length === 0) return [];
+export const scopeFactGraph = async (db: Queryable, allowedUnits: readonly string[]): Promise<IScopeFact[]> => (await scopeFactGraphFull(db, allowedUnits)).facts;
+
+// Граф области с замечаниями (этап 09, C09 и C11): конфликты значений и перекрытые факты в пределах снимка.
+export const scopeFactGraphFull = async (db: Queryable, allowedUnits: readonly string[]): Promise<{ facts: IScopeFact[]; remarks: IGraphRemark[]; extractedUnits: string[] }> => {
+  if (allowedUnits.length === 0) return { facts: [], remarks: [], extractedUnits: [] };
   const runs = (await db.query<IExtractionRow>(`${EXTRACTION_SELECT} WHERE x.recognition_run_id = ANY($1::uuid[]) AND x.rules_version = $2`, [[...allowedUnits], FACT_RULES_VERSION])).rows;
-  if (runs.length === 0) return [];
+  if (runs.length === 0) return { facts: [], remarks: [], extractedUnits: [] };
   const facts = await factsOfRuns(db, runs.map((r) => r.id));
   const ids = facts.map((f) => f.id);
   const decisions = ids.length
@@ -310,7 +314,7 @@ export const scopeFactGraph = async (db: Queryable, allowedUnits: readonly strin
   const input = graphInput(runs, facts, decisions);
   const graph = computeFactGraph(input);
   const runById = new Map(runs.map((r) => [r.id, r]));
-  return facts.map((f) => {
+  const out = facts.map((f) => {
     const st = graph.facts.get(f.id)!;
     return {
       factId: f.id,
@@ -325,6 +329,7 @@ export const scopeFactGraph = async (db: Queryable, allowedUnits: readonly strin
       clauseRef: f.clause_ref,
     };
   });
+  return { facts: out, remarks: graph.remarks, extractedUnits: runs.map((r) => r.recognition_run_id) };
 };
 
 // ---------------------------------------------------------------- Решение человека и просмотр

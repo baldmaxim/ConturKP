@@ -9,6 +9,7 @@ import { intakeScanHandler } from './intake.ts';
 import { localRecognitionHandler } from './localRecognition.ts';
 import { mailImportHandler } from './mail.ts';
 import { recognitionImportHandler } from './recognition.ts';
+import { reviewModelHandler, reviewRunHandler, stageInvalidateHandler } from './review.ts';
 import { indexBuildHandler, indexEmbedHandler, indexPurgeHandler, searchSemanticHandler } from './search.ts';
 
 export const HANDLERS: Record<string, JobHandler> = {
@@ -27,4 +28,7 @@ export const HANDLERS: Record<string, JobHandler> = {
   'analysis.rules': analysisRulesHandler,
   'answer.generate': answerGenerateHandler,
   'fact.extract': factExtractHandler,
+  'review.run': reviewRunHandler,
+  'review.model': reviewModelHandler,
+  'stage.invalidate': stageInvalidateHandler,
 };

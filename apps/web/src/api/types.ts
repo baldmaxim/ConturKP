@@ -29,7 +29,11 @@ export type TTenderCapability =
   | 'analysis.run'
   | 'fact.read'
   | 'fact.create'
-  | 'fact.confirm';
+  | 'fact.confirm'
+  | 'review.run'
+  | 'finding.write'
+  | 'finding.accept_risk'
+  | 'source_priority.manage';
 
 export interface IMembership {
   tenderId: string;

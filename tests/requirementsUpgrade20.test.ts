@@ -2,6 +2,8 @@
 // получают единицы и статус той же функцией, что и новые; прежняя оценка «покрыто» с несовпадением единиц не
 // ломает миграцию и после обновления явно помечена; прежние конфликтующие требования видны как конфликт; новые
 // записи проходят проверки 0020. Данные этапа 08 до 0020 пишутся SQL в форме 0019 (код HEAD уже знает 0020).
+// R08-03: обновление 0020 → 0021 — ложный конфликт `100` / `100.0` исчезает, пояснение прежней ревизии остаётся в
+// истории; записи, равные только без внутренних пробелов (`5x10` / `5 x 10`), после 0021 показываются конфликтом.
 import { cpSync, mkdtempSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,7 +14,7 @@ import { BlobStore } from '../packages/storage/src/index.ts';
 import { startFakeTenderHub, type IFakeTenderHub } from '../scripts/tenderhub-fake.ts';
 import { adminMember, captureNow, linkSource, standardTender, TH, TH_KEY, tenderHubConfig } from './calculationFixtures.ts';
 import { ADMIN_URL, idem, makeWorker, testConfig, type ITestDb } from './helpers.ts';
-import { buildStage08, type IStage08 } from './requirementFixtures.ts';
+import { buildStage08, confirm, propose, supports, type IStage08 } from './requirementFixtures.ts';
 
 const name = `kontur_kp_test_upgrade20_${Date.now().toString(36)}`;
 const urlFor = (user: string): string => {
@@ -151,5 +153,35 @@ describe('обновление схемы 0019 → 0020 (R08-01)', () => {
     const again = await st.s.manager.post(`/requirement-revisions/${r1.revisionId}/coverage`, { state: 'covered', objects: [{ type: 'calculation_revision', calculationRevisionId: calc1, externalPositionId: TH.p1, externalItemId: TH.l2, match: 'explicit_line' }] }, { headers: idem() });
     expect(again.status).toBe(409);
     expect(again.body.current.reason).toBe('unit_mismatch');
+  });
+
+  it('0020 → 0021 (R08-03): ложный конфликт числа исчезает, пояснение остаётся в истории; новые подтверждения — по ключу 0021', async () => {
+    const make = async (statement: string, name: string, value: string, unit: string | null, fragment: string, body: object = {}) => {
+      const c = await propose(st.s.eng1, st.registryId, statement, supports(fragment), { parameters: [{ name, value, unit }] });
+      return { candidateId: c.id, result: await confirm(st.s.manager, c.id, body) };
+    };
+    // На 0020: 100 и 100.0 мм — ложный конфликт, подтверждение только с пояснением; 5x10 и 5 x 10 — «равны».
+    const a = await make('Толщина стены — 100 мм', 'Толщина стены', '100', 'мм', st.frag.facade);
+    expect(a.result.status, a.result.text).toBe(200);
+    const b = await make('Толщина стены — 100.0 мм', 'Толщина стены', '100.0', 'мм', st.frag.note);
+    expect(b.result.status).toBe(409);
+    const bNoted = await confirm(st.s.manager, b.candidateId, { conflictNote: 'ложный конфликт 0020' });
+    expect(bNoted.status, bNoted.text).toBe(200);
+    const g1 = await make('Сетка — 5x10', 'Шаг сетки', '5x10', null, st.frag.facade);
+    const g2 = await make('Сетка — 5 x 10', 'Шаг сетки', '5 x 10', null, st.frag.note);
+    expect([g1.result.status, g2.result.status]).toEqual([200, 200]);
+
+    expect(await migrateTo(21)).toBe(1);
+
+    const cardA = (await st.s.eng1.get(`/requirements/${a.result.body.requirementId}`)).body;
+    const cardB = (await st.s.eng1.get(`/requirements/${bNoted.body.requirementId}`)).body;
+    expect(cardA.conflicts).toEqual([]);
+    expect(cardB).toMatchObject({ conflicts: [], conflictNote: 'ложный конфликт 0020' });
+    // Внутренние пробелы текста больше не удаляются: конфликт становится видимым.
+    const cardG2 = (await st.s.eng1.get(`/requirements/${g2.result.body.requirementId}`)).body;
+    expect(cardG2.conflicts).toEqual([{ requirementId: g1.result.body.requirementId, code: expect.stringMatching(/^R-/u), parameter: 'шаг сетки' }]);
+    // Новое подтверждение 100,00 мм — без пояснения.
+    const c = await make('Толщина стены — 100,00 мм', 'Толщина стены', '100,00', 'мм', st.frag.roof);
+    expect(c.result.status, c.result.text).toBe(200);
   });
 });

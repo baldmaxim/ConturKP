@@ -1,0 +1,13 @@
+# R08-03: тесты tests/requirementsParamValues.test.ts на схеме без 0021 (нормализация 0020, коммит 84ad8cb) — 2026-10-02T05:07:07Z; ожидаемо падают
+ × tests/requirementsParamValues.test.ts > ключ значения параметра (функция БД, 0021) > число — каноническим numeric: без незначащих нулей, десятичная запятая, группы разрядов, знак 6ms
+ × tests/requirementsParamValues.test.ts > ключ значения параметра (функция БД, 0021) > смешанные и нечисловые записи — текст: trim, нижний регистр, пробелы сведены, не удалены 3ms
+ × tests/requirementsParamValues.test.ts > ключ значения параметра (функция БД, 0021) > единица — часть ключа после unit_normalize 5ms
+ × tests/requirementsParamValues.test.ts > конфликта нет (R08-03): API и вторая линия БД > 1. 100 мм против 100.0 мм; 6. пояснение к конфликту отклоняется — conflict_note_unexpected / 23514 132ms
+ × tests/requirementsParamValues.test.ts > конфликта нет (R08-03): API и вторая линия БД > 2. 100,00 мм против 100 мм; 6. пояснение к конфликту отклоняется — conflict_note_unexpected / 23514 92ms
+ ✓ tests/requirementsParamValues.test.ts > конфликта нет (R08-03): API и вторая линия БД > текст: B30 против « b30 » (регистр и крайние пробелы); 6. пояснение к конфликту отклоняется — conflict_note_unexpected / 23514 180ms
+ ✓ tests/requirementsParamValues.test.ts > конфликт (R08-03): API и вторая линия БД > 3. 100 мм против 100.1 мм — без пояснения 409 / 23514, с пояснением подтверждается, конфликт виден у обоих 187ms
+ ✓ tests/requirementsParamValues.test.ts > конфликт (R08-03): API и вторая линия БД > 4. одинаковое число, разные единицы: 100 мм против 100 см — без пояснения 409 / 23514, с пояснением подтверждается, конфликт виден у обоих 150ms
+ ✓ tests/requirementsParamValues.test.ts > конфликт (R08-03): API и вторая линия БД > 5. B30 против B30.0: смешанное обозначение — текст, не число — без пояснения 409 / 23514, с пояснением подтверждается, конфликт виден у обоих 198ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+ Test Files  1 failed (1)
+      Tests  5 failed | 4 passed (9)

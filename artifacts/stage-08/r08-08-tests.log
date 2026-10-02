@@ -1,0 +1,19 @@
+# R08-08 — профильный тест: npx vitest run --maxWorkers=1 --fileParallelism=false --reporter=verbose tests/intakeOverlap.test.ts — 2026-10-02T06:49:14Z, Node v24.14.1, Linux 7.0.0-31-generic — Linux, не Windows
+
+ RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
+
+ ✓ tests/intakeOverlap.test.ts > R08-05: пересечение с хранилищем — с первого скана, при любой записи пути > хранилище внутри папки канала, путь к нему — через псевдоним каталога: overlaps_storage на первом скане 60ms
+ ✓ tests/intakeOverlap.test.ts > R08-05: пересечение с хранилищем — с первого скана, при любой записи пути > папка канала внутри хранилища, путь к хранилищу — через псевдоним: overlaps_storage на первом скане 43ms
+ ✓ tests/intakeOverlap.test.ts > R08-05: пересечение с хранилищем — с первого скана, при любой записи пути > хранилище по прямому пути, ещё не созданное к первому скану: overlaps_storage 47ms
+ ✓ tests/intakeOverlap.test.ts > R08-05: пересечение с хранилищем — с первого скана, при любой записи пути > соседние каталоги не пересекаются: хранилище рядом с папкой, путь через псевдоним — скан успешен, каталоги созданы физически 45ms
+ ✓ tests/intakeOverlap.test.ts > R08-05: пересечение с хранилищем — с первого скана, при любой записи пути > resolveChannelRoot: пересечение по физической идентичности каталога — и через псевдоним, и напрямую 3ms
+ ✓ tests/intakeOverlap.test.ts > R08-05: хранилище работает по физическому пути, не через junction > physicalPath: несуществующий путь через псевдоним — физический предок и оставшиеся компоненты, без создания 1ms
+ ✓ tests/intakeOverlap.test.ts > R08-05: хранилище работает по физическому пути, не через junction > после вычисления физического корня junction снят — каталоги и объект всё равно создаются: ни mkdir, ни запись не идут через junction 5ms
+ ✓ tests/intakeOverlap.test.ts > R08-05: сравнение путей с правилами платформы > Windows — без учёта регистра и разделителей; POSIX — с учётом регистра 1ms
+ ✓ tests/intakeOverlap.test.ts > R08-06: снятие тестовой ссылки > removeLink снимает только ссылку — каталог назначения и файлы остаются; обычный каталог не трогает 1ms
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+   Start at  11:49:15
+   Duration  3.28s (tests 51%, transform 36%, import 13%)
+

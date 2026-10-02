@@ -94,9 +94,11 @@ describe('R08-05: пересечение с хранилищем — с перв
   });
 });
 
+// Ожидаемый физический путь — тем же системным вызовом, что у продукта (`fs.promises.realpath` = `realpathSync.native`):
+// на Windows обычный `realpathSync` оставляет короткое имя 8.3 (`ODINTS~1.A`), а системный возвращает полное (R08-08).
 describe('R08-05: хранилище работает по физическому пути, не через junction', () => {
   it('physicalPath: несуществующий путь через псевдоним — физический предок и оставшиеся компоненты, без создания', async () => {
-    const real = realpathSync(ROOT);
+    const real = realpathSync.native(ROOT);
     expect(await physicalPath(join(ALIAS, 'нет', 'store'))).toBe(join(real, 'нет', 'store'));
     expect(existsSync(join(ROOT, 'нет'))).toBe(false);
     expect(await physicalPath(ALIAS)).toBe(real);
@@ -109,7 +111,7 @@ describe('R08-05: хранилище работает по физическом�
     symlinkSync(target, alias, 'junction');
     const store = new BlobStore(join(alias, 'x', 'store'));
     const physical = await store.physicalRoot();
-    expect(physical).toBe(join(realpathSync(target), 'x', 'store'));
+    expect(physical).toBe(join(realpathSync.native(target), 'x', 'store'));
     expect(existsSync(join(target, 'x'))).toBe(false);
     removeLink(alias);
     await store.ensureDirs();

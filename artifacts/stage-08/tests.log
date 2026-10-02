@@ -1,10 +1,10 @@
-# npx vitest run --maxWorkers=1 --fileParallelism=false — 2026-10-02T05:11:59Z, Node v24.14.1
+# npx vitest run --maxWorkers=1 --fileParallelism=false — 2026-10-02T05:54:49Z, Node v24.14.1, Linux 7.0.0-31-generic — Linux, не Windows
 
  RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
 
 
- Test Files  72 passed (72)
-      Tests  739 passed (739)
-   Start at  10:07:59
-   Duration  222.73s (tests 92%, import 7%, transform 1%)
+ Test Files  73 passed (73)
+      Tests  749 passed (749)
+   Start at  10:50:51
+   Duration  238.07s (tests 91%, import 7%, transform 1%)
 

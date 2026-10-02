@@ -2,12 +2,19 @@
 // Движок — pdfjs-dist, тот же, что считает страницы оригинала на этапе 04 и показывает участок
 // в браузере. Сети нет: шрифты и данные не догружаются, скрипты PDF не исполняются.
 import { createRequire } from 'node:module';
-import { dirname, join, sep } from 'node:path';
+import path, { dirname, type PlatformPath } from 'node:path';
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
 import { LocalRecognitionError } from './types.ts';
 
 const require = createRequire(import.meta.url);
 const pdfjsRoot = dirname(require.resolve('pdfjs-dist/package.json'));
+
+// Каталог стандартных шрифтов pdf.js. Адрес обязан заканчиваться «/» (pdf.js проверяет это до открытия документа), а
+// шрифт читается `fs.readFile(адрес + имя файла)`: значит, нужен путь с прямыми разделителями — Windows их принимает.
+// Прежде на конце стоял системный разделитель: на Windows `\`, и pdf.js отказывал «must include trailing slash» — PDF
+// не открывался ни для текстового слоя, ни для OCR (R08-04).
+export const standardFontDataUrl = (root: string = pdfjsRoot, p: Pick<PlatformPath, 'join' | 'sep'> = path): string =>
+  `${p.join(root, 'standard_fonts').split(p.sep).join('/')}/`;
 
 export const pdfjsVersion = (): string => (require('pdfjs-dist/package.json') as { version: string }).version;
 
@@ -19,7 +26,7 @@ export const openPdf = async (bytes: Uint8Array): Promise<PDFDocumentProxy> => {
     useSystemFonts: false,
     disableFontFace: true,
     stopAtErrors: false,
-    standardFontDataUrl: `${join(pdfjsRoot, 'standard_fonts')}${sep}`,
+    standardFontDataUrl: standardFontDataUrl(),
   });
   try {
     return await task.promise;

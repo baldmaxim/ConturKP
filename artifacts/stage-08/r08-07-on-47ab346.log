@@ -1,0 +1,41 @@
+# R08-07: tests/tenderhubLiveSmoke.test.ts (с проверкой --trace-exit) на прежнем скрипте 47ab346 (process.exit после запросов) — 2026-10-02T05:34:44Z, Linux; ожидаемо падают сценарии с выходом через process.exit()
+ × tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > без адреса и ключа — NOT_RUN с кодом 3, запросов нет 204ms
+(node:3599994) WARNING: Exited the environment with code 3
+ × tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > обычный тендер на одну страницу: доступ, только GET, пробный обход, with-costs, BOQ, согласованность, числа, Q-05; журнал без ключа и данных 266ms
+(node:3600021) WARNING: Exited the environment with code 0
+ × tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > несколько страниц: курсор сменяется и выдан следующей странице, повторов и дублей нет — pagination_multi_page = PASS 247ms
+(node:3600033) WARNING: Exited the environment with code 0
+ × tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > несоответствие positions и with-costs: общее поле изменилось между маршрутами — FAIL с именем поля, без значения 255ms
+(node:3600045) WARNING: Exited the environment with code 1
+ × tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > строка BOQ без известной позиции — orphan_lines = 1, согласованность inconsistent 257ms
+(node:3600057) WARNING: Exited the environment with code 1
+ × tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > повтор id строки BOQ при прежнем числе строк (R06-01) — вердикт рабочей стратегии item_duplicated, inconsistent, без утечки 254ms
+(node:3600069) WARNING: Exited the environment with code 1
+ × tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > повтор курсора: адаптер останавливает обход — cursor_repeated = DETECTED, выгрузка FAIL, расхождение схемы по positions 234ms
+(node:3600101) WARNING: Exited the environment with code 1
+ × tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > шапка изменилась во время выгрузки — before_after_stable = FAIL с именем признака, без значения 249ms
+(node:3600113) WARNING: Exited the environment with code 1
+ × tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > отсутствующее необязательное поле — расхождение field_absent по обоим маршрутам, итог PASS 246ms
+(node:3600125) WARNING: Exited the environment with code 0
+ × tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > неожиданная форма ответа: overview без конверта data — FAIL, класс схемы и маршрут в расхождениях, доступ по ключу подтверждён 241ms
+(node:3600137) WARNING: Exited the environment with code 1
+ × tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > тендер вне списка ключа — FAIL: 403 с машинным кодом ошибки и именами полей RFC 7807 246ms
+(node:3600165) WARNING: Exited the environment with code 1
+ × tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > неверный ключ — FAIL с HTTP 401; ключ не печатается 244ms
+(node:3600177) WARNING: Exited the environment with code 1
+ ✓ tests/tenderhubLiveSmoke.test.ts > live-smoke: маскирование и разбор наблюдений > строка, совпавшая с ключом, строкой или числом тендера, скрывается; счётчики и хэши остаются 3ms
+ ✓ tests/tenderhubLiveSmoke.test.ts > live-smoke: маскирование и разбор наблюдений > uuid маскируются, путь — без идентификаторов, курсора и поискового значения 1ms
+ ✓ tests/tenderhubLiveSmoke.test.ts > live-smoke: маскирование и разбор наблюдений > запрос не-GET в наблюдении даёт non_GET_requests = 1 и FAIL 1ms
+ ✓ tests/tenderhubLiveSmoke.test.ts > live-smoke: маскирование и разбор наблюдений > разбор страниц: повтор курсора, дубли и обход не по курсору обнаруживаются 1ms
+⎯⎯⎯⎯⎯⎯ Failed Tests 12 ⎯⎯⎯⎯⎯⎯⎯
+(node:3599994) WARNING: Exited the environment with code 3
+     56|       if (signal !== null || /Exited the environment|Assertion failed/…
+(node:3600021) WARNING: Exited the environment with code 0
+     56|       if (signal !== null || /Exited the environment|Assertion failed/…
+(node:3600033) WARNING: Exited the environment with code 0
+     56|       if (signal !== null || /Exited the environment|Assertion failed/…
+(node:3600045) WARNING: Exited the environment with code 1
+     56|       if (signal !== null || /Exited the environment|Assertion failed/…
+(node:3600057) WARNING: Exited the environment with code 1
+     56|       if (signal !== null || /Exited the environment|Assertion failed/…
+(node:3600069) WARNING: Exited the environment with code 1

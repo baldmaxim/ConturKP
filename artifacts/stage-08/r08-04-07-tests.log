@@ -1,0 +1,151 @@
+# R08-04…R08-07 — профильные тесты (Linux; Windows-прогон — у ревьюера): npx vitest run --maxWorkers=1 --fileParallelism=false --reporter=verbose tests/localPdf.test.ts tests/localRecognition.test.ts tests/localRecognitionAccess.test.ts tests/localRecognitionSchema.test.ts tests/regressions-r05a.test.ts tests/intakeOverlap.test.ts tests/intake.test.ts tests/regressions-r03.test.ts tests/regressions-r03b.test.ts tests/regressions-r03c.test.ts tests/regressions-r03d.test.ts tests/tenderhubLiveSmoke.test.ts tests/tenderhubAdapter.test.ts — 2026-10-02T05:49:26Z, Node v24.14.1, Linux 7.0.0-31-generic — Linux, не Windows
+
+ RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
+
+ ✓ tests/localPdf.test.ts > PDF: текстовый слой и OCR > текстовый PDF — встроенный текст, OCR не запускается (OD-5) 157ms
+ ✓ tests/localPdf.test.ts > PDF: текстовый слой и OCR > скан без текстового слоя — OCR tesseract.js: распознанный текст, уверенность выше шлюза 1375ms
+ ✓ tests/localPdf.test.ts > PDF: текстовый слой и OCR > смешанный PDF: страница 1 — текстовый слой, страница 2 — OCR; якоря воспроизводимы 2765ms
+ ✓ tests/localPdf.test.ts > PDF: текстовый слой и OCR > пустая страница — missing; пригодного текста нет — failed no_usable_text (OD-6) 585ms
+ ✓ tests/localPdf.test.ts > PDF: текстовый слой и OCR > шум вместо текста — страница нечитаема, мусор OCR в доказательства не идёт 15313ms
+ ✓ tests/localPdf.test.ts > PDF: текстовый слой и OCR > текст ниже шлюза — needs_review с сохранённым текстом; прогон partial (OD-6) 277ms
+ ✓ tests/localPdf.test.ts > PDF: текстовый слой и OCR > OCR не настроен: скан — missing с ocr_unavailable, прогон failed ocr_unavailable 13ms
+ ✓ tests/localPdf.test.ts > PDF: текстовый слой и OCR > движок упал или завис — страница failed, прогон без неё; таймаут страницы соблюдается 1033ms
+stderr | tests/localPdf.test.ts > PDF: текстовый слой и OCR > пределы страниц, OCR-страниц и размера файла — too_large (тест 18); повреждённый PDF — pdf_unreadable
+Warning: Indexing all PDF objects
+
+ ✓ tests/localPdf.test.ts > PDF: текстовый слой и OCR > отмена между страницами не глотается конвейером 15ms
+ ✓ tests/localPdf.test.ts > PDF: текстовый слой и OCR > пределы страниц, OCR-страниц и размера файла — too_large (тест 18); повреждённый PDF — pdf_unreadable 14ms
+ ✓ tests/localPdf.test.ts > R08-04: адрес стандартных шрифтов pdf.js > путь Windows — прямые разделители и завершающий «/»; путь POSIX — без изменений 1ms
+ ✓ tests/localPdf.test.ts > R08-04: адрес стандартных шрифтов pdf.js > pdf.js отвергает адрес без завершающего «/» (прежнее поведение на Windows) и принимает построенный 2ms
+ ✓ tests/localPdf.test.ts > R08-04: адрес стандартных шрифтов pdf.js > шрифт читается так же, как это делает pdf.js в Node: адрес + имя файла 0ms
+ ✓ tests/intake.test.ts > настройка канала > создаёт только администратор и только внутри INTAKE_ROOTS 51ms
+ ✓ tests/intake.test.ts > скан папки > A15: файл импортируется только после стабильности, ровно один раз; временные файлы пропускаются 1304ms
+ ✓ tests/intake.test.ts > скан папки > повторное обнаружение: неизменный файл не импортируется снова 1271ms
+ ✓ tests/intake.test.ts > скан папки > переименование: то же содержимое — новое происхождение с новым именем, без новой редакции; удаление ничего не удаляет 1274ms
+ ✓ tests/intake.test.ts > скан папки > A13: то же имя с новым содержимым — новая редакция документа 1249ms
+ ✓ tests/intake.test.ts > скан папки > частично скопированный файл: пока растёт — не импортируется; затем один раз целиком 2514ms
+ ✓ tests/intake.test.ts > скан папки > ZIP в наблюдаемой папке не распаковывается — отказ с исходом 1266ms
+ ✓ tests/intake.test.ts > скан папки > ссылка (junction) внутри папки не открывается — отказ path_traversal 1289ms
+ ✓ tests/intake.test.ts > двойное получение Яндекс Диск / SMB > одно содержимое из двух каналов — одна редакция, два происхождения с видом источника 1421ms
+ ✓ tests/intake.test.ts > недоступная папка и защита корня > недоступная шара: ошибка канала, повтор с задержкой, свежесть не обновляется 107ms
+ ✓ tests/intake.test.ts > недоступная папка и защита корня > сбой хранилища при скане — ошибка задания, а не молчаливое «файл ещё копируется» 63ms
+ ✓ tests/intake.test.ts > недоступная папка и защита корня > папка, пересекающаяся с хранилищем, не сканируется 79ms
+ ✓ tests/intake.test.ts > недоступная папка и защита корня > отключение канала: руководитель с причиной, инженер — нет; отключённый не сканируется 78ms
+ ✓ tests/regressions-r03.test.ts > R03-01: состав замороженной ревизии набора источников > строку замороженной ревизии нельзя перенести в черновик 151ms
+ ✓ tests/regressions-r03.test.ts > R03-02: неизменяемость элемента завершённой партии > поля доказательства и идентичности не меняются после завершения партии 67ms
+ ✓ tests/regressions-r03.test.ts > R03-02: неизменяемость элемента завершённой партии > исход задаётся один раз и не переписывает другие поля 58ms
+ ✓ tests/regressions-r03.test.ts > R03-03: версия входов этапа и событие барьера — одна операция > повышение input_version без события отклоняется 25ms
+ ✓ tests/regressions-r03.test.ts > R03-03: версия входов этапа и событие барьера — одна операция > событие без соответствующей версии отклоняется 17ms
+ ✓ tests/regressions-r03.test.ts > R03-03: версия входов этапа и событие барьера — одна операция > штатная выдача событий работает и не оставляет пропусков seq 31ms
+ ✓ tests/regressions-r03.test.ts > R03-04: ограждение слота GPU > слот занят другим владельцем: heartbeat, блокировка и завершение прежнего владельца невозможны 21ms
+ ✓ tests/regressions-r03.test.ts > R03-04: ограждение слота GPU > после перехвата слота прежний владелец не завершает задание, новый — единственный 1725ms
+ ✓ tests/regressions-r03.test.ts > R03-05: терминальная ошибка импорта переводит партию в failed > исчерпание попыток разбора: задание failed и партия failed с кодом 51ms
+ ✓ tests/regressions-r03.test.ts > R03-06: физический корень хранилища и alias > хранилище через junction внутри наблюдаемой папки не сканируется 1289ms
+ ✓ tests/regressions-r03.test.ts > R03-07: подмена файла между обходом и чтением > замена каталога ссылкой во время скана не приводит к импорту файла вне корня 1393ms
+ ✓ tests/regressions-r03.test.ts > R03-08: проверка существующего объекта хранилища > повреждённый объект того же размера обнаруживается, а не считается дубликатом 5ms
+ ✓ tests/regressions-r03.test.ts > R03-09: запись метаданных blob под действующей арендой > после потери аренды обработчик скана не создаёт строку blob и партию 1244ms
+ ✓ tests/regressions-r05a.test.ts > R05a-01: размеры страницы PDF в БД > 1–4: страница PDF локального прогона без размеров — отказ при любом статусе 42ms
+ ✓ tests/regressions-r05a.test.ts > R05a-01: размеры страницы PDF в БД > 5: с размерами допустимы все четыре статуса локальной страницы PDF 45ms
+ ✓ tests/regressions-r05a.test.ts > R05a-01: размеры страницы PDF в БД > Review 05a-2: страница PDF без размеров допустима только у rdweb_export в статусе missing 127ms
+ ✓ tests/regressions-r05a.test.ts > R05a-01: размеры страницы PDF в БД > те же движки с размерами допустимы; needs_review у нелокального движка — по-прежнему отказ 73ms
+ ✓ tests/regressions-r05a.test.ts > R05a-01: размеры страницы PDF в БД > CHECK остаётся общей второй линией: без охранника pdf_page без размеров — только missing 42ms
+ ✓ tests/regressions-r05a.test.ts > R05a-01: размеры страницы PDF в БД > 6–7: у логической единицы размеров нет — с размерами отказ, без размеров PASS 98ms
+ ✓ tests/regressions-r05a.test.ts > R05a-01: штатный конвейер PDF пишет размеры страницы при любом исходе > адаптер: слабый текстовый слой, нечитаемый OCR, OCR не настроен, OCR не нашёл текста 439ms
+ ✓ tests/regressions-r05a.test.ts > R05a-01: штатный конвейер PDF пишет размеры страницы при любом исходе > worker → БД > нечитаемый OCR, недоступный OCR и слабый текстовый слой — страницы записаны с размерами 529ms
+ ✓ tests/regressions-r05a.test.ts > R05a-01: обновление схемы 0014 → 0015 → 0016 > данные этапов 04–05a с размерами и RDWeb-страница без размеров переживают 0015 и 0016; ограничения проверены 590ms
+ ✓ tests/regressions-r05a.test.ts > R05a-01: обновление схемы 0014 → 0015 → 0016 > локальная страница PDF без размеров, записанная на 0014, не даёт применить 0015: needs_review — CHECK, missing — проверка миграции 790ms
+ ✓ tests/regressions-r05a.test.ts > R05a-01: обновление схемы 0014 → 0015 → 0016 > Review 05a-2: 0015 → 0016 сохраняет исторический rdweb_export missing без размеров 589ms
+ ✓ tests/regressions-r05a.test.ts > R05a-01: обновление схемы 0014 → 0015 → 0016 > Review 05a-2: страница text_layer или rdweb_api missing без размеров, записанная на 0015, не даёт применить 0016 878ms
+ ✓ tests/regressions-r03d.test.ts > R03-13: устаревший обработчик не освобождает слот GPU > stale succeedJob: false и слот не изменён 541ms
+ ✓ tests/regressions-r03d.test.ts > R03-13: устаревший обработчик не освобождает слот GPU > stale confirmCancel: false и слот не изменён 531ms
+ ✓ tests/regressions-r03d.test.ts > R03-13: устаревший обработчик не освобождает слот GPU > stale failJob с повтором: ok=false и слот не изменён 528ms
+ ✓ tests/regressions-r03d.test.ts > R03-13: устаревший обработчик не освобождает слот GPU > stale requeueJob: false и слот не изменён 518ms
+ ✓ tests/regressions-r03d.test.ts > R03-13: устаревший обработчик не освобождает слот GPU > после устаревших вызовов защитный интервал GPU не обойдён 3846ms
+ ✓ tests/regressions-r03d.test.ts > R03-13: устаревший обработчик не освобождает слот GPU > обработчик, потерявший аренду, не освобождает слот через onError worker 322ms
+ ✓ tests/regressions-r03c.test.ts > R03-10: единый порядок блокировок GPU (resource_slot → job) > доменная транзакция берёт слот раньше строки задания 378ms
+ ✓ tests/regressions-r03c.test.ts > R03-10: единый порядок блокировок GPU (resource_slot → job) > heartbeat параллельно с доменной транзакцией не даёт взаимоблокировки и не теряет результат 448ms
+ ✓ tests/regressions-r03c.test.ts > R03-10: единый порядок блокировок GPU (resource_slot → job) > обратный порядок: heartbeat держит блокировки, доменная транзакция ждёт и завершается успешно 364ms
+ ✓ tests/regressions-r03c.test.ts > R03-11: heartbeat не продлевает слот после потери аренды задания > после recovery старый heartbeat возвращает потерю и не трогает слот 20ms
+ ✓ tests/regressions-r03c.test.ts > R03-11: heartbeat не продлевает слот после потери аренды задания > после подтверждённой потери аренды worker не шлёт новые heartbeat 2029ms
+ ✓ tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > без адреса и ключа — NOT_RUN с кодом 3, запросов нет 234ms
+ ✓ tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > обычный тендер на одну страницу: доступ, только GET, пробный обход, with-costs, BOQ, согласованность, числа, Q-05; журнал без ключа и данных 289ms
+ ✓ tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > несколько страниц: курсор сменяется и выдан следующей странице, повторов и дублей нет — pagination_multi_page = PASS 284ms
+ ✓ tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > несоответствие positions и with-costs: общее поле изменилось между маршрутами — FAIL с именем поля, без значения 295ms
+ ✓ tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > строка BOQ без известной позиции — orphan_lines = 1, согласованность inconsistent 291ms
+ ✓ tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > повтор id строки BOQ при прежнем числе строк (R06-01) — вердикт рабочей стратегии item_duplicated, inconsistent, без утечки 270ms
+ ✓ tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > повтор курсора: адаптер останавливает обход — cursor_repeated = DETECTED, выгрузка FAIL, расхождение схемы по positions 309ms
+ ✓ tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > шапка изменилась во время выгрузки — before_after_stable = FAIL с именем признака, без значения 310ms
+ ✓ tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > отсутствующее необязательное поле — расхождение field_absent по обоим маршрутам, итог PASS 284ms
+ ✓ tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > неожиданная форма ответа: overview без конверта data — FAIL, класс схемы и маршрут в расхождениях, доступ по ключу подтверждён 304ms
+ ✓ tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > тендер вне списка ключа — FAIL: 403 с машинным кодом ошибки и именами полей RFC 7807 306ms
+ ✓ tests/tenderhubLiveSmoke.test.ts > live-smoke TenderHub (U-04) — сценарии на поддельном сервере > неверный ключ — FAIL с HTTP 401; ключ не печатается 283ms
+ ✓ tests/tenderhubLiveSmoke.test.ts > live-smoke: маскирование и разбор наблюдений > строка, совпавшая с ключом, строкой или числом тендера, скрывается; счётчики и хэши остаются 2ms
+ ✓ tests/tenderhubLiveSmoke.test.ts > live-smoke: маскирование и разбор наблюдений > uuid маскируются, путь — без идентификаторов, курсора и поискового значения 1ms
+ ✓ tests/tenderhubLiveSmoke.test.ts > live-smoke: маскирование и разбор наблюдений > запрос не-GET в наблюдении даёт non_GET_requests = 1 и FAIL 1ms
+ ✓ tests/tenderhubLiveSmoke.test.ts > live-smoke: маскирование и разбор наблюдений > разбор страниц: повтор курсора, дубли и обход не по курсору обнаруживаются 1ms
+ ✓ tests/localRecognition.test.ts > автоматическая постановка (OD-2) > XLSX: прогон local_ocr, листы — единицы, строки — фрагменты с якорем; событие барьера этапа 187ms
+ ✓ tests/localRecognition.test.ts > автоматическая постановка (OD-2) > DOCX и CSV в Windows-1251 — автоматически; повторный проход ничего не ставит 216ms
+ ✓ tests/localRecognition.test.ts > автоматическая постановка (OD-2) > PDF с политикой auto автоматически не распознаётся (тест 3); с политикой local — да 269ms
+ ✓ tests/localRecognition.test.ts > автоматическая постановка (OD-2) > неподдерживаемый формат — явный отказ unsupported_format, автоматически не ставится (OD-4) 57ms
+ ✓ tests/localRecognition.test.ts > явная команда (OD-1, OD-2) > PDF с политикой auto — командой (тест 4); повтор той же идентичности идемпотентен (тест 5) 118ms
+ ✓ tests/localRecognition.test.ts > явная команда (OD-1, OD-2) > новая версия распознавателя — новый прогон; worker другой версии его не выполняет (тест 6) 92ms
+ ✓ tests/localRecognition.test.ts > явная команда (OD-1, OD-2) > смена конфигурации (DPI) — новый хэш конфигурации и новый прогон за хвостом истории (тест 7) 176ms
+ ✓ tests/localRecognition.test.ts > явная команда (OD-1, OD-2) > поздний RDWeb выше локального (тест 1); прогон RDWeb закрывает локальный маршрут (OD-1) 118ms
+ ✓ tests/localRecognition.test.ts > явная команда (OD-1, OD-2) > документ с политикой rdweb: команда отклонена 50ms
+ ✓ tests/localRecognition.test.ts > итог и качество (OD-6) > needs_review не выдаётся за успех: partial, единица в reviewUnits (тест 15) 84ms
+ ✓ tests/localRecognition.test.ts > итог и качество (OD-6) > повреждённый DOCX — failed file_corrupt (тест 16); пустой PDF — failed no_usable_text с диагностикой 90ms
+ ✓ tests/localRecognition.test.ts > итог и качество (OD-6) > предел размера файла — failed too_large (тест 18) 34ms
+ ✓ tests/localRecognition.test.ts > надёжность очереди (тесты 19–20) > перезапуск worker посреди прогона: после истечения аренды прогон завершается один раз, без дублей 80ms
+ ✓ tests/localRecognition.test.ts > надёжность очереди (тесты 19–20) > дубли: два прохода и параллельная команда дают один прогон и одно задание 121ms
+ ✓ tests/localRecognition.test.ts > надёжность очереди (тесты 19–20) > отмена поставленного задания терминализует прогон: cancelled 65ms
+ ✓ tests/localRecognitionSchema.test.ts > маршрут и формат (OD-1, OD-4) > DOCX, XLSX, CSV ставятся и автоматически; неподдерживаемый формат — отказ БД 37ms
+ ✓ tests/localRecognitionSchema.test.ts > маршрут и формат (OD-1, OD-4) > PDF с политикой auto: автоматически — нет, явной командой (с автором) — да (тест 3–4) 40ms
+ ✓ tests/localRecognitionSchema.test.ts > маршрут и формат (OD-1, OD-4) > PDF с политикой local — автоматически можно; с политикой rdweb — нельзя никак 33ms
+ ✓ tests/localRecognitionSchema.test.ts > маршрут и формат (OD-1, OD-4) > PDF с прогоном RDWeb (идущим или успешным) — маршрут rdweb, локальный не ставится (OD-1 п. 1–2, D-014) 36ms
+ ✓ tests/localRecognitionSchema.test.ts > маршрут и формат (OD-1, OD-4) > источник — оригинал редакции без имени файла; описание распознавателя проверяет БД (AD-05a-2) 90ms
+ ✓ tests/localRecognitionSchema.test.ts > маршрут и формат (OD-1, OD-4) > отпечаток и хэш конфигурации считает БД; клиентское значение не принимается 26ms
+ ✓ tests/localRecognitionSchema.test.ts > идентичность и повтор (AD-05a-2, тесты 5–7) > та же идентичность — второй прогон невозможен; новая версия и новая конфигурация — новый прогон 76ms
+ ✓ tests/localRecognitionSchema.test.ts > идентичность и повтор (AD-05a-2, тесты 5–7) > после отказа та же идентичность ставится снова (сбой мог быть техническим) 22ms
+ ✓ tests/localRecognitionSchema.test.ts > идентичность и повтор (AD-05a-2, тесты 5–7) > описание распознавателя, отпечаток и владелец неизменяемы после вставки 33ms
+ ✓ tests/localRecognitionSchema.test.ts > единица источника и якорь (AD-05a-1) > логическая единица без пикселей; фиктивные размеры и поворот отклоняются 67ms
+ ✓ tests/localRecognitionSchema.test.ts > единица источника и якорь (AD-05a-1) > распознанная страница PDF обязана иметь размеры; у RDWeb — только страницы PDF и без needs_review 90ms
+ ✓ tests/localRecognitionSchema.test.ts > единица источника и якорь (AD-05a-1) > локальный фрагмент: якорь обязателен и согласован с единицей, координат нет, происхождение по способу 178ms
+ ✓ tests/localRecognitionSchema.test.ts > единица источника и якорь (AD-05a-1) > полнота прежняя: needs_review не считается распознанной, complete без всех единиц невозможен (I18) 47ms
+ ✓ tests/localRecognitionSchema.test.ts > предпочтительный прогон (AD-05a-3, тесты 1–2) > локальный, затем поздний RDWeb: выбран RDWeb; история линейна 34ms
+ ✓ tests/localRecognitionSchema.test.ts > предпочтительный прогон (AD-05a-3, тесты 1–2) > RDWeb выше локального, даже если локальный глубже в цепочке; не время создания 66ms
+ ✓ tests/localRecognitionSchema.test.ts > предпочтительный прогон (AD-05a-3, тесты 1–2) > только локальные — глубже по истории; отказы и отмены не выбираются; без успешных — NULL 56ms
+ ✓ tests/localRecognitionSchema.test.ts > предпочтительный прогон (AD-05a-3, тесты 1–2) > снимок принимает только предпочтительный прогон — вторая линия автоподбора 157ms
+ ✓ tests/regressions-r03b.test.ts > R03-03: каждое повышение версии входов имеет своё событие > два повышения версии и одно событие финального номера — COMMIT отклоняется 8ms
+ ✓ tests/regressions-r03b.test.ts > R03-03: каждое повышение версии входов имеет своё событие > новый этап нельзя создать с ненулевой версией входов 2ms
+ ✓ tests/regressions-r03b.test.ts > R03-03: каждое повышение версии входов имеет своё событие > два штатных события в одной транзакции проходят и не дают пропусков 22ms
+ ✓ tests/regressions-r03b.test.ts > R03-04: перехват слота GPU сериализован с владельцем > перехват слота во время heartbeat: прежний владелец получает потерю аренды, а не ok 334ms
+ ✓ tests/regressions-r03b.test.ts > R03-04: перехват слота GPU сериализован с владельцем > доменная транзакция владельца слота блокирует перехват до своего завершения 431ms
+ ✓ tests/regressions-r03b.test.ts > R03-05: неудачная фиксация терминальной ошибки не оставляет задание failed > исключение в onTerminalFailure: задание не failed, доменного маркера нет, повтор возможен 23ms
+ ✓ tests/localRecognitionAccess.test.ts > договор: contract.read (OD-3, тест 12) > распознавание договора автоматическое; с contract.read — текст, якорь, движок и итог в выдаче (A43) 88ms
+ ✓ tests/localRecognitionAccess.test.ts > договор: contract.read (OD-3, тест 12) > команда по договору — как приём RDWeb в 06a: редакция видна с contract.read, запуск — с contract.manage 81ms
+ ✓ tests/localRecognitionAccess.test.ts > договор: contract.read (OD-3, тест 12) > без выдачи по договору команда не проходит; распознавание права чтения не выдаёт 19ms
+ ✓ tests/localRecognitionAccess.test.ts > договор: contract.read (OD-3, тест 12) > отзыв contract.read после индексации сразу закрывает выдачу (тест 13) 61ms
+ ✓ tests/localRecognitionAccess.test.ts > область и история (тесты 11, 14) > распознавание не расширяет снимок и текущую область само (тест 14) 396ms
+ ✓ tests/localRecognitionAccess.test.ts > область и история (тесты 11, 14) > историческая выдача остаётся на прогоне снимка; текущая — на новом предпочтительном (тест 11) 209ms
+ ✓ tests/intakeOverlap.test.ts > R08-05: пересечение с хранилищем — с первого скана, при любой записи пути > хранилище внутри папки канала, путь к нему — через псевдоним каталога: overlaps_storage на первом скане 39ms
+ ✓ tests/intakeOverlap.test.ts > R08-05: пересечение с хранилищем — с первого скана, при любой записи пути > папка канала внутри хранилища, путь к хранилищу — через псевдоним: overlaps_storage на первом скане 26ms
+ ✓ tests/intakeOverlap.test.ts > R08-05: пересечение с хранилищем — с первого скана, при любой записи пути > хранилище по прямому пути, ещё не созданное к первому скану: overlaps_storage 31ms
+ ✓ tests/intakeOverlap.test.ts > R08-05: пересечение с хранилищем — с первого скана, при любой записи пути > соседние каталоги не пересекаются: хранилище рядом с папкой — скан проходит 36ms
+ ✓ tests/intakeOverlap.test.ts > R08-05: пересечение с хранилищем — с первого скана, при любой записи пути > resolveChannelRoot: пересечение по физической идентичности каталога — и через псевдоним, и напрямую 3ms
+ ✓ tests/intakeOverlap.test.ts > R08-05: сравнение путей с правилами платформы > Windows — без учёта регистра и разделителей; POSIX — с учётом регистра 1ms
+ ✓ tests/intakeOverlap.test.ts > R08-06: снятие тестовой ссылки > removeLink снимает только ссылку — каталог назначения и файлы остаются; обычный каталог не трогает 1ms
+ ✓ tests/tenderhubAdapter.test.ts > HTTP-транспорт > ключ — только в X-API-Key, без Authorization; gzip запрашивается и распаковывается; кэш with-costs сбрасывается 34ms
+ ✓ tests/tenderhubAdapter.test.ts > HTTP-транспорт > адрес: https, http только loopback, без учётных данных и параметров — и в адаптере, и в конфигурации 2ms
+ ✓ tests/tenderhubAdapter.test.ts > HTTP-транспорт > редирект не выполняется: ключ не уходит на другой адрес 5ms
+ ✓ tests/tenderhubAdapter.test.ts > HTTP-транспорт > предел распакованного ответа, таймаут и обрыв — классы ошибок без ключа в тексте 114ms
+ ✓ tests/tenderhubAdapter.test.ts > HTTP-транспорт > собственный лимит запросов в минуту: третий запрос ждёт окно 210ms
+ ✓ tests/tenderhubAdapter.test.ts > HTTP-транспорт > 429 без Retry-After: ожидание окна; держится дольше предела — RATE_LIMITED (повторяемая) 171ms
+ ✓ tests/tenderhubAdapter.test.ts > разбор ответов по контракту > без конверта {"data": …} и с неверными типами — CONTRACT_MISMATCH с путём, без данных ответа 4ms
+ ✓ tests/tenderhubAdapter.test.ts > разбор ответов по контракту > отсутствующие документированные поля — null с учётом в отчёте (сверка со сборкой, R-06) 1ms
+ ✓ tests/tenderhubAdapter.test.ts > разбор ответов по контракту > зацикленный курсор постраничного маршрута — CONTRACT_MISMATCH, а не бесконечная выгрузка 1ms
+
+ Test Files  13 passed (13)
+      Tests  138 passed (138)
+   Start at  10:49:26
+   Duration  82.38s (tests 94%, import 4%, transform 2%)
+

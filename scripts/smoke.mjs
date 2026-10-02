@@ -494,7 +494,7 @@ mkdirSync(dir, { recursive: true });
 const summary = `Итог: ${failed ? 'FAIL' : 'PASS'}`;
 writeFileSync(
   join(dir, 'smoke.log'),
-  `# npm run smoke — ${new Date().toISOString()}\n# Node ${process.version}, PostgreSQL ${ADMIN.replace(/\/\/[^@]*@/, '//***@')}\n${lines.join('\n')}\n${summary}\n`,
+  `# npm run smoke — ${new Date().toISOString()}\n# Node ${process.version}, ${process.platform} ${process.arch}, PostgreSQL ${ADMIN.replace(/\/\/[^@]*@/, '//***@')}\n${lines.join('\n')}\n${summary}\n`,
 );
 console.log(summary);
 process.exit(failed ? 1 : 0);

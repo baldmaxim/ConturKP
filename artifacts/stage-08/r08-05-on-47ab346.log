@@ -1,0 +1,18 @@
+# R08-05: сценарии tests/intakeOverlap.test.ts (без проверки insidePath — её нет в прежнем коде) на обработчике 47ab346 — 2026-10-02T05:38:35Z, Linux; путь к хранилищу через псевдоним каталога воспроизводит расхождение записи пути на Windows
+ × tests/intakeOverlap.control.test.ts > R08-05: пересечение с хранилищем — с первого скана, при любой записи пути > хранилище внутри папки канала, путь к нему — через псевдоним каталога: overlaps_storage на первом скане 65ms
+ × tests/intakeOverlap.control.test.ts > R08-05: пересечение с хранилищем — с первого скана, при любой записи пути > папка канала внутри хранилища, путь к хранилищу — через псевдоним: overlaps_storage на первом скане 56ms
+ ✓ tests/intakeOverlap.control.test.ts > R08-05: пересечение с хранилищем — с первого скана, при любой записи пути > хранилище по прямому пути, ещё не созданное к первому скану: overlaps_storage 45ms
+ ✓ tests/intakeOverlap.control.test.ts > R08-05: пересечение с хранилищем — с первого скана, при любой записи пути > соседние каталоги не пересекаются: хранилище рядом с папкой — скан проходит 36ms
+ × tests/intakeOverlap.control.test.ts > R08-05: пересечение с хранилищем — с первого скана, при любой записи пути > resolveChannelRoot: пересечение по физической идентичности каталога — и через псевдоним, и напрямую 3ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+AssertionError: expected null to be 'overlaps_storage' // Object.is equality
+- Expected:
++ Received:
+AssertionError: expected null to be 'overlaps_storage' // Object.is equality
+- Expected:
++ Received:
+AssertionError: promise resolved "'/tmp/kontur-r0805-BsZwPz/intake/e'" instead of rejecting
+- Expected:
++ Received:
+ Test Files  1 failed (1)
+      Tests  3 failed | 2 passed (5)

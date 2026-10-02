@@ -5,7 +5,7 @@
 // Удаление файла из папки ничего не удаляет. Успешный скан — полный проход без файлов,
 // ожидающих стабильности.
 import { lstat, opendir, realpath, stat } from 'node:fs/promises';
-import { join, relative, resolve, sep } from 'node:path';
+import path, { dirname, join, relative, resolve, sep, type PlatformPath } from 'node:path';
 import { classifyFile, safeRelativePath } from '@kontur/core';
 import {
   createBatch,
@@ -39,18 +39,51 @@ interface IFound {
   symlink: boolean;
 }
 
-const inside = (child: string, parent: string): boolean => child === parent || child.startsWith(parent.endsWith(sep) ? parent : parent + sep);
+// Путь внутри каталога (или совпадает с ним) по правилам платформы: на Windows `relative` не различает регистр и
+// разделители, на POSIX различает регистр. Сравнение префиксом строки на Windows давало ложное «снаружи» (R08-05).
+export const insidePath = (child: string, parent: string, p: Pick<PlatformPath, 'relative' | 'isAbsolute' | 'sep'> = path): boolean => {
+  const rel = p.relative(parent, child);
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${p.sep}`) && !p.isAbsolute(rel));
+};
+
+// Физическая идентичность каталога: устройство и номер файла. Не зависит от записи пути — регистра, коротких имён 8.3,
+// junction и ссылок. Номер 0 (файловая система его не сообщает) и недоступный по правам предок идентичности не дают:
+// сравнение по пути (`insidePath`) остаётся в силе.
+const dirIdentity = async (dir: string): Promise<string | null> => {
+  const st = await stat(dir, { bigint: true }).catch(() => null);
+  return st === null || st.ino === 0n ? null : `${st.dev}:${st.ino}`;
+};
+
+// `real` — физический путь: каталог и все его предки по identity, от него вверх до корня тома.
+const lineageOf = async (real: string): Promise<Set<string>> => {
+  const ids = new Set<string>();
+  for (let dir = real; ; dir = dirname(dir)) {
+    const id = await dirIdentity(dir);
+    if (id) ids.add(id);
+    if (dirname(dir) === dir) return ids;
+  }
+};
+
+// Один каталог внутри другого: по физическим путям и по идентичности каталогов — пересечение находится, как бы ни были
+// записаны пути в конфигурации.
+const overlaps = async (a: string, b: string): Promise<boolean> => {
+  if (insidePath(a, b) || insidePath(b, a)) return true;
+  const [idA, idB] = await Promise.all([dirIdentity(a), dirIdentity(b)]);
+  return (idB !== null && (await lineageOf(a)).has(idB)) || (idA !== null && (await lineageOf(b)).has(idA));
+};
 
 export class IntakeRootError extends Error {}
 
 // Проверка корня: папка существует, realpath внутри одного из разрешённых корней и не пересекается с хранилищем.
+// Хранилище сравнивается по физическому пути (realpath): путь из конфигурации может быть junction, ссылкой или иной
+// записью того же каталога (R03-06, R08-05); каталог хранилища к проверке уже создан (`BlobStore.ensureDirs`).
 export const resolveChannelRoot = async (locator: string, roots: string[], storageRoot: string): Promise<string> => {
   if (roots.length === 0) throw new IntakeRootError('intake_root_not_configured');
   const real = await realpath(resolve(locator));
   const realRoots = await Promise.all(roots.map((r) => realpath(r).catch(() => null)));
-  if (!realRoots.some((r) => r !== null && inside(real, r))) throw new IntakeRootError('outside_intake_root');
-  const store = resolve(storageRoot);
-  if (inside(real, store) || inside(store, real)) throw new IntakeRootError('overlaps_storage');
+  if (!realRoots.some((r) => r !== null && insidePath(real, r))) throw new IntakeRootError('outside_intake_root');
+  const store = await realpath(resolve(storageRoot));
+  if (await overlaps(real, store)) throw new IntakeRootError('overlaps_storage');
   return real;
 };
 
@@ -86,8 +119,10 @@ export const handleIntakeScan = async (ctx: IJobContext): Promise<void> => {
 
   let root: string;
   let files: IFound[];
+  // Физический корень хранилища — до проверки папки: иначе первый скан сравнивал бы с путём из конфигурации, и
+  // пересечение, записанное иначе (junction, короткое имя, регистр), проходило бы (R03-06, R08-05).
+  await ctx.store.ensureDirs();
   try {
-    // Хранилище сравнивается по физическому корню: alias/junction не должен скрывать пересечение (R03-06).
     root = await resolveChannelRoot(channel.locator, ctx.config.intakeRoots, ctx.store.canonicalRoot());
     files = await walk(root, (abs) => ctx.store.contains(abs));
   } catch (err) {
@@ -97,7 +132,6 @@ export const handleIntakeScan = async (ctx: IJobContext): Promise<void> => {
     throw new RetryableJobError(code, code === 'share_unavailable' ? 'папка канала недоступна' : 'папка канала вне разрешённого корня');
   }
 
-  await ctx.store.ensureDirs();
   const states = await loadFileStates(ctx.pool, channelId);
   const stableMs = ctx.config.intakeStabilitySeconds * 1000;
   // blob — метаданные записанного содержимого; строка в БД появится под арендой (R03-09).

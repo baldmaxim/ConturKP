@@ -1,11 +1,11 @@
 // Наблюдаемые папки (этап 03): стабильность файла (A15), повторное обнаружение, переименование,
 // новое содержимое (A13), двойное получение Яндекс/SMB (A14), недоступная шара, выход за корень,
 // ссылки, временные файлы, отключение канала.
-import { appendFileSync, mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildScenario, createTestDb, drain, idem, makeApp, makeWorker, testConfig, type IScenario, type ITestDb } from './helpers.ts';
+import { buildScenario, createTestDb, drain, idem, makeApp, makeWorker, removeLink, testConfig, type IScenario, type ITestDb } from './helpers.ts';
 import { fakePdf } from './zip.ts';
 
 let db: ITestDb;
@@ -156,7 +156,10 @@ describe('скан папки', () => {
     expect(item.rows[0]).toEqual({ status: 'rejected', reject_reason: 'path_traversal' });
     const leaked = await db.pool.query("SELECT 1 FROM document_occurrence WHERE observed_name = 'secret.pdf'");
     expect(leaked.rowCount).toBe(0);
-    rmSync(join(dir, 'link'));
+    // Снимается только ссылка: каталог назначения и его файл остаются (R08-06).
+    removeLink(join(dir, 'link'));
+    expect(existsSync(join(dir, 'link'))).toBe(false);
+    expect(existsSync(join(outside, 'secret.pdf'))).toBe(true);
     rmSync(outside, { recursive: true, force: true });
   });
 });

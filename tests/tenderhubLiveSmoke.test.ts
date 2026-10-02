@@ -37,19 +37,25 @@ beforeEach(() => {
 });
 
 // Окружение процесса — только переменные TenderHub: без БД, без .env и прочей конфигурации портала.
+// --trace-exit печатает стек каждого вызова process.exit(): скрипт должен завершаться естественно, без принудительного
+// выхода поверх живых сетевых ресурсов (R08-07: на Windows такой выход падал в libuv). Код выхода и сигнал — как есть.
 const run = (env: Record<string, string>, tender: string, name: string): Promise<{ code: number | null; out: string; log: string }> =>
-  new Promise((done) => {
+  new Promise((done, reject) => {
     const out = join(dir, `${name}.log`);
-    const p = spawn(process.execPath, ['scripts/tenderhub-live-smoke.ts', '--tender', tender, '--out', out], { cwd: ROOT, env: { PATH: process.env.PATH ?? '', ...env } });
+    const p = spawn(process.execPath, ['--trace-exit', 'scripts/tenderhub-live-smoke.ts', '--tender', tender, '--out', out], { cwd: ROOT, env: { PATH: process.env.PATH ?? '', ...env } });
     let text = '';
     p.stdout.on('data', (d) => (text += d));
     p.stderr.on('data', (d) => (text += d));
-    p.on('close', (code) => {
+    p.on('close', (code, signal) => {
       let log = '';
       try {
         log = readFileSync(out, 'utf8');
       } catch {
         // журнал не записан
+      }
+      if (signal !== null || /Exited the environment|Assertion failed/u.test(text)) {
+        reject(new Error(`скрипт завершён не естественно (код ${code}, сигнал ${signal}):\n${text.slice(-2000)}`));
+        return;
       }
       done({ code, out: text, log });
     });

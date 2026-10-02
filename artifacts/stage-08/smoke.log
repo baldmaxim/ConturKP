@@ -1,5 +1,5 @@
-# npm run smoke — 2026-10-02T05:13:04.794Z
-# Node v24.14.1, PostgreSQL postgresql://***@127.0.0.1:55432/postgres
+# npm run smoke — 2026-10-02T05:55:49.467Z
+# Node v24.14.1, linux x64, PostgreSQL postgresql://***@127.0.0.1:55432/postgres
 PASS  db:setup — роли и база — база kontur_kp_smoke_test: создана; роли и права выставлены
 PASS  db:migrate — пустая БД — готово, применено миграций: 21
 PASS  db:migrate — повторный запуск без изменений

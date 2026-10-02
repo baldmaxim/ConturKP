@@ -3,7 +3,7 @@
 // needs_review (partial) или failed. OCR — настоящий tesseract.js с моделями rus и eng без сети;
 // отказы движка — подставной фабрикой. Фикстуры — tests/fixtures/local/*.pdf.
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, posix, win32 } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_LOCAL_LIMITS,
@@ -14,6 +14,7 @@ import {
   type ILocalOcrEngineFactory,
   type ILocalRunOptions,
 } from '../packages/adapters/src/index.ts';
+import { standardFontDataUrl } from '../packages/adapters/src/local/pdf.ts';
 import { prepareTesseractModels } from '../packages/storage/src/index.ts';
 
 const tesseractJsFactory = createTesseractJsFactory(prepareTesseractModels);
@@ -141,3 +142,28 @@ describe('PDF: текстовый слой и OCR', () => {
     expect(await code(run(Buffer.from('%PDF-1.7\nэто не PDF'), {}))).toBe('pdf_unreadable');
   });
 });
+
+// R08-04: адрес стандартных шрифтов pdf.js. На Windows системный разделитель на конце адреса (`\`) pdf.js отвергает до
+// открытия документа — падали все сценарии PDF выше. Адрес строится с прямыми разделителями и завершающим «/».
+describe('R08-04: адрес стандартных шрифтов pdf.js', () => {
+  it('путь Windows — прямые разделители и завершающий «/»; путь POSIX — без изменений', () => {
+    expect(standardFontDataUrl('C:\\Kontur\\node_modules\\pdfjs-dist', win32)).toBe('C:/Kontur/node_modules/pdfjs-dist/standard_fonts/');
+    expect(standardFontDataUrl('D:\\Мои проекты\\ConturKP\\node_modules\\pdfjs-dist\\', win32)).toBe('D:/Мои проекты/ConturKP/node_modules/pdfjs-dist/standard_fonts/');
+    expect(standardFontDataUrl('/srv/kontur/node_modules/pdfjs-dist', posix)).toBe('/srv/kontur/node_modules/pdfjs-dist/standard_fonts/');
+  });
+
+  it('pdf.js отвергает адрес без завершающего «/» (прежнее поведение на Windows) и принимает построенный', async () => {
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const open = (url: string) => pdfjs.getDocument({ data: new Uint8Array(pdf('letter-text')), useWorkerFetch: false, useSystemFonts: false, disableFontFace: true, standardFontDataUrl: url });
+    expect(() => open('C:\\Kontur\\node_modules\\pdfjs-dist\\standard_fonts\\')).toThrow(/trailing slash/u);
+    const task = open(standardFontDataUrl());
+    const doc = await task.promise;
+    expect(doc.numPages).toBeGreaterThan(0);
+    await task.destroy();
+  });
+
+  it('шрифт читается так же, как это делает pdf.js в Node: адрес + имя файла', () => {
+    expect(readFileSync(`${standardFontDataUrl()}LiberationSans-Regular.ttf`).length).toBeGreaterThan(1000);
+  });
+});
+

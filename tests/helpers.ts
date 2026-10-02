@@ -1,6 +1,6 @@
 // Тестовая обвязка: изолированная БД на файл тестов (имя содержит test), клиент с cookie/CSRF.
 import { randomBytes } from 'node:crypto';
-import { mkdtempSync } from 'node:fs';
+import { lstatSync, mkdtempSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import pg from 'pg';
@@ -337,3 +337,12 @@ export const auditRows = async (pool: Pool, where: string, params: unknown[] = [
       details: Record<string, unknown>;
     }>(`SELECT action, outcome, actor_user_id, entity_type, entity_id, tender_id, details FROM audit_event WHERE ${where} ORDER BY seq`, params)
   ).rows;
+
+// Снятие тестовой ссылки (junction на Windows, символическая ссылка на POSIX) без захода в каталог назначения: unlink
+// удаляет только саму ссылку. `rmSync` на junction в Windows отвечает «Path is a directory», а рекурсивное удаление
+// каталога со ссылкой внутри не должно доходить до цели ссылки (R08-06).
+export const removeLink = (link: string): void => {
+  if (!lstatSync(link).isSymbolicLink()) throw new Error(`не ссылка: ${link}`);
+  unlinkSync(link);
+};
+

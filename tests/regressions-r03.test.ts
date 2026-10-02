@@ -26,7 +26,7 @@ import {
 import { BlobStore } from '../packages/storage/src/index.ts';
 import { handleIntakeScan } from '../apps/worker/src/handlers/intake.ts';
 import { LeaseLostError, type IJobContext } from '../apps/worker/src/runtime.ts';
-import { buildScenario, createTestDb, drain, idem, makeApp, makeWorker, seedRecognition, testConfig, type IScenario, type ITestDb } from './helpers.ts';
+import { buildScenario, createTestDb, drain, idem, makeApp, makeWorker, removeLink, seedRecognition, testConfig, type IScenario, type ITestDb } from './helpers.ts';
 import { fakePdf } from './zip.ts';
 
 let db: ITestDb;
@@ -278,7 +278,10 @@ describe('R03-06: физический корень хранилища и alias'
       : 0;
     expect(scannedOwnStore).toBe(0);
     expect(view.lastErrorCode).toBe('overlaps_storage');
+    // Сначала снимается ссылка, затем удаляется её каталог: физическое хранилище не затрагивается (R08-06).
+    removeLink(alias);
     rmSync(aliasBase, { recursive: true, force: true });
+    expect(existsSync(physicalStore)).toBe(true);
   });
 });
 
@@ -318,7 +321,8 @@ describe('R03-07: подмена файла между обходом и чте�
     const secretSha = createHash('sha256').update(secret.subarray(0, inner.length)).digest('hex');
     const leaked = await db.pool.query('SELECT 1 FROM blob WHERE sha256 = $1', [secretSha]);
     expect(leaked.rowCount, 'файл вне разрешённого корня попал в хранилище').toBe(0);
-    rmSync(sub, { recursive: true, force: true });
+    removeLink(sub);
+    expect(existsSync(join(outside, 'doc.pdf'))).toBe(true);
     rmSync(outside, { recursive: true, force: true });
   }, 60_000);
 });

@@ -6,13 +6,13 @@ import { createChatModel } from '@kontur/adapters';
 import type { IAppConfig } from '@kontur/config';
 import { CreateFindingRequest, FindingTransitionRequest, PatchFindingRequest } from '@kontur/contracts';
 import { FINDING_KIND_META, formatEtag, HUMAN_FINDING_TRANSITIONS, type FindingStatus, type IEvidenceDraft } from '@kontur/core';
-import { createHumanFinding, createReviewRun, getFinding, getReviewRun, listFindings, listReviewRuns, lockTenderStages, patchFinding, transitionFinding, type Pool } from '@kontur/db';
+import { createHumanFinding, createReviewRun, getFinding, getReviewRun, listFindings, listReviewRuns, lockTenderStages, patchFinding, readableFragments, transitionFinding, type Pool } from '@kontur/db';
 import { Router } from 'express';
 import { command, parseBody, query, requireIfMatch, uuidParam, versionConflict } from '../http/command.ts';
 import { forbidden } from '../http/errors.ts';
 import { findingDetail, findingsList, runBrief, runView } from '../reviewMappers.ts';
 import { loadStageWith, requireInScope } from './requirementScope.ts';
-import { conflict, loadFinding, requireFindingVisible, stageVersion } from './reviewScope.ts';
+import { conflict, loadFinding, requireFindingCurrent, requireFindingVisible, stageVersion, syncStageForDecision } from './reviewScope.ts';
 import { hasTenderCap } from './scope.ts';
 
 export const reviewsRouter = (pool: Pool, config: IAppConfig): Router => {
@@ -31,8 +31,15 @@ export const reviewsRouter = (pool: Pool, config: IAppConfig): Router => {
         const stage = await loadStageWith(client, ctx, uuidParam(req, 'id', 'tender_stage'), 'review.run');
         const target = { tenderId: stage.tender_id, entityType: 'tender_stage', entityId: stage.id };
         const chat = createChatModel(config.chatModel);
-        const r = await createReviewRun(client, { tenderId: stage.tender_id, stageId: stage.id, userId: ctx.principal.userId, model: chat ? { providerId: chat.providerId, model: chat.model, version: chat.version } : null });
-        if (!r.ok) throw conflict('у этапа нет снимка области: зафиксируйте снимок источников', 'no_scope', target);
+        const r = await createReviewRun(client, {
+          tenderId: stage.tender_id,
+          stageId: stage.id,
+          userId: ctx.principal.userId,
+          model: chat ? { providerId: chat.providerId, model: chat.model, version: chat.version } : null,
+          readable: (ids) => readableFragments(client, ctx, ids),
+        });
+        if (!r.ok && r.reason === 'no_scope') throw conflict('у этапа нет снимка области: зафиксируйте снимок источников', 'no_scope', target);
+        if (!r.ok) throw conflict('реестр или записи этапа менялись во время запуска: повторите запуск', 'inputs_changed', target);
         return {
           status: r.created ? 201 : 200,
           body: { ...runBrief(r.run), reused: !r.created },
@@ -143,6 +150,7 @@ export const reviewsRouter = (pool: Pool, config: IAppConfig): Router => {
       entityType: 'finding',
       idempotent: true,
       authorize: async (client, ctx, req) => void (await loadFinding(client, ctx, uuidParam(req, 'id', 'finding'), 'finding.write')),
+      prepare: async (client, ctx, req) => syncStageForDecision(client, (await loadFinding(client, ctx, uuidParam(req, 'id', 'finding'), 'finding.write')).stage_id),
       run: async (client, ctx, req) => {
         const id = uuidParam(req, 'id', 'finding');
         const body = parseBody(FindingTransitionRequest, req.body);
@@ -151,9 +159,12 @@ export const reviewsRouter = (pool: Pool, config: IAppConfig): Router => {
         if (body.to === 'accepted_risk' && !hasTenderCap(ctx, probe.tender_id, 'finding.accept_risk')) throw forbidden('finding.accept_risk', target);
         // Порядок блокировок §1.2: этапы тендера (решение проходит барьер), затем замечание.
         await lockTenderStages(client, probe.tender_id, [probe.stage_id]);
+        // Актуальность основания (R09-01): поступившие события обрабатываются здесь, под блокировкой этапа.
+        await syncStageForDecision(client, probe.stage_id);
         const f = await loadFinding(client, ctx, id, 'finding.write', true);
-        if (requireIfMatch(req, f.id) !== Number(f.row_version)) throw versionConflict({ rowVersion: Number(f.row_version), status: f.status });
         await requireFindingVisible(client, ctx, f);
+        if (body.to !== 'open') requireFindingCurrent(f);
+        if (requireIfMatch(req, f.id) !== Number(f.row_version)) throw versionConflict({ rowVersion: Number(f.row_version), status: f.status });
         if (!HUMAN_FINDING_TRANSITIONS[f.status].includes(body.to)) {
           throw conflict(`переход ${f.status} → ${body.to} не допускается`, 'transition_not_allowed', target, { status: f.status });
         }

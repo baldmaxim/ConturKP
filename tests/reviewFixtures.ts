@@ -251,6 +251,7 @@ export interface IFindingView {
   suggestedSide: string | null;
   etag: string;
   discrepancyId: string | null;
+  riskAcceptable: boolean;
   requirements: string[];
 }
 

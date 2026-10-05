@@ -1,5 +1,5 @@
-# регрессия на коде 09: 2026-10-02T18:56:16+05:00, linux x64 Node v24.14.1, artifacts/stage-06/ui-check.mjs, exit 0
-# ui-check — 2026-10-02T13:56:15.988Z, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker, поддельный TenderHub по контракту (не live)
+# регрессия на коде 09-2: 2026-10-05T11:23:53+05:00, linux x64 Node v24.14.1, artifacts/stage-06/ui-check.mjs, exit 0
+# ui-check — 2026-10-05T06:23:53.540Z, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker, поддельный TenderHub по контракту (не live)
 PASS  server + worker готовы (worker с адресом поддельного TenderHub)
 PASS  вход администратора-руководителя
 PASS  администратор назначен участником тендера (admin.tender для связи этапа) — HTTP 200

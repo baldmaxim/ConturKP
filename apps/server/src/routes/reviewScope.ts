@@ -1,6 +1,7 @@
-// Общие проверки маршрутов этапа 09: конфликт с причиной, версия входов этапа, замечание в области пользователя и
-// видимость его оснований (команда над замечанием требует читать все основания — как R08-02).
-import { findingEvidence, getFinding, type IAccessContext, type IFindingRow, type Queryable } from '@kontur/db';
+// Общие проверки маршрутов этапа 09: конфликт с причиной, версия входов этапа, замечание в области пользователя,
+// видимость его оснований (команда над замечанием требует читать все основания — как R08-02) и актуальность основания
+// (R09-01, R09-03): под блокировкой этапа команда сама обрабатывает необработанные события барьера, затем проверяет статус.
+import { findingEvidence, getFinding, processPendingStageEvents, type IAccessContext, type IFindingRow, type Queryable } from '@kontur/db';
 import { HttpError } from '../http/errors.ts';
 import { reviewVisibility } from '../reviewMappers.ts';
 import { requireInScope } from './requirementScope.ts';
@@ -22,3 +23,15 @@ export const requireFindingVisible = async (db: Queryable, ctx: IAccessContext, 
   }
 };
 
+// Доменная блокировка этапа и обработка поступивших событий в транзакции команды: решение не зависит от того, успел ли
+// worker выполнить инвалидацию.
+export const syncStageForDecision = async (db: Queryable, stageId: string): Promise<void> => {
+  await processPendingStageEvents(db, stageId);
+};
+
+// Решение, ось, разногласие — только по действующему замечанию: «устарело» — основание изменилось, сначала перепроверка.
+export const requireFindingCurrent = (f: IFindingRow): void => {
+  if (f.status === 'stale') {
+    throw conflict('основание замечания изменилось: решение — только после перепроверки', 'finding_stale', { tenderId: f.tender_id, entityType: 'finding', entityId: f.id });
+  }
+};

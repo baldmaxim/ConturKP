@@ -1,10 +1,12 @@
 // Задания этапа 09 (docs/architecture/09-review-checks-design.md §5.4, §5.5, §6). review.run — программные проверки
-// C01–C11 на закреплённых входах одной транзакцией: исходы, замечания, основания, зависимости; гипотезы модели (C12) —
-// отдельным заданием класса gpu. Модель не настроена или отказала — C12 неполна или с ошибкой, результаты правил
-// сохраняются, прогон «с пробелами» (D-029 В-09-5). stage.invalidate — обработка одного события барьера.
+// C01–C11 на входе, закреплённом при запуске (R09-02), одной транзакцией: исходы, замечания, основания, зависимости;
+// гипотезы модели (C12) — отдельным заданием класса gpu на том же закреплённом входе. Результаты пишутся под блокировкой
+// этапа и сверяются с уже обработанными событиями после снимка (R09-01). Модель не настроена или отказала — C12 неполна
+// или с ошибкой, результаты правил сохраняются, прогон «с пробелами» (D-029 В-09-5). stage.invalidate — одно событие.
 import {
   hypothesisInputSha256,
   parseHypotheses,
+  parseReviewInput,
   reviewSystemPrompt,
   reviewUserContent,
   runRuleChecks,
@@ -17,15 +19,13 @@ import {
   enqueueReviewModel,
   finishReviewRun,
   getReviewRun,
-  hypothesisSource,
   insertCheckResults,
   insertSuggestions,
-  loadAccessContext,
-  loadReviewInput,
+  lockStageForReview,
   processStageEvent,
-  readableFragments,
+  reconcileRunWithProcessedEvents,
   reviewCheckResults,
-  stageContentFingerprint,
+  reviewRunInput,
   startReviewRun,
   updateReviewCoverage,
   writeRuleFindings,
@@ -54,26 +54,35 @@ export const reviewRunHandler: IJobHandlerSpec = {
       await ctx.complete();
       return;
     }
+    const pinned = await reviewRunInput(ctx.pool, run.id);
+    // Прогон без закреплённого входа (создан до миграции 0025) не выполняется: проверять «текущее» вместо закреплённого нельзя.
+    if (!pinned) {
+      await ctx.complete((client) => failRun(client, run.id, 'input_not_pinned'));
+      return;
+    }
     if (run.status === 'queued') await ctx.withLease((client) => startReviewRun(client, run.id));
-    const contentFingerprint = await stageContentFingerprint(ctx.pool, run.stage_id, run.registry_id);
-    const { input } = await loadReviewInput(ctx.pool, run);
+    const input = parseReviewInput(pinned.input);
     const { results, findings } = runRuleChecks(input);
     ctx.throwIfStopped();
     await ctx.complete(
       async (client) => {
+        // Доменная блокировка этапа: запись результатов и обработка событий барьера не перекрываются (R09-01).
+        await lockStageForReview(client, run.stage_id);
         const fresh = await getReviewRun(client, run.id);
         if (!fresh || fresh.status !== 'running') return;
         // Повтор задания после сбоя транзакции: исходы правил уже записаны — второй раз не пишутся.
         if ((await reviewCheckResults(client, run.id)).length > 0) return;
         await insertCheckResults(client, run.id, results);
         const written = await writeRuleFindings(client, fresh, findings);
+        // События после снимка, обработанные до записи результатов, применяются к записанным сейчас замечаниям.
+        const reconciled = await reconcileRunWithProcessedEvents(client, fresh, { findingIds: new Set(written.createdIds), suggestionIds: new Set() });
         const coverage = {
-          rules: { findings: findings.length, created: written.created, observed: written.observed },
+          rules: { findings: findings.length, created: written.created, observed: written.observed, staleOnWrite: reconciled },
           units: input.units.length,
           requirements: input.requirements.length,
           positions: input.positions.length,
           facts: input.facts.length,
-          contentFingerprint,
+          inputSha256: pinned.input_sha256,
         };
         if (!fresh.model_provider) {
           await finishWithModel(client, fresh, { outcome: 'incomplete', reason: 'модель не настроена: гипотезы не построены', counts: {} }, coverage);
@@ -117,9 +126,10 @@ export const reviewModelHandler: IJobHandlerSpec = {
     }
     const system = reviewSystemPrompt();
     if (sha256Hex(system) !== run.prompt_sha256) return finishModel(ctx, run.id, 'error', 'промпт изменился после запуска', {});
-    const access = await loadAccessContext(ctx.pool, run.requested_by, `review-model:${run.id}`);
-    if (!access) return finishModel(ctx, run.id, 'error', 'запустивший пользователь недоступен', {});
-    const source = await hypothesisSource(ctx.pool, run, (ids) => readableFragments(ctx.pool, access, ids));
+    // Вход модели закреплён при запуске вместе с входом правил (R09-02): те же требования, цитаты, которые запустивший
+    // читал в момент запуска, и позиции закреплённой ревизии расчёта.
+    const source = (await reviewRunInput(ctx.pool, run.id))?.model_input;
+    if (!source) return finishModel(ctx, run.id, 'error', 'вход модели не закреплён при запуске', {});
     const input: IHypothesisInput = { requirements: source.requirements, positions: source.positions };
     const counts = { requirements: input.requirements.length, positions: input.positions.length, restricted: source.restricted };
     if (input.requirements.length === 0) {
@@ -162,9 +172,12 @@ export const reviewModelHandler: IJobHandlerSpec = {
       dropped += parsed.dropped;
     }
     await ctx.complete(async (client) => {
+      await lockStageForReview(client, run.stage_id);
       const fresh = await getReviewRun(client, run.id);
       if (!fresh || fresh.status !== 'running' || (await reviewCheckResults(client, run.id)).some((r) => r.check_code === 'model_hypotheses')) return;
-      const saved = await insertSuggestions(client, fresh, items);
+      const savedIds = await insertSuggestions(client, fresh, items);
+      await reconcileRunWithProcessedEvents(client, fresh, { findingIds: new Set(), suggestionIds: new Set(savedIds) });
+      const saved = savedIds.length;
       const gaps = [
         source.restricted > 0 ? `требований с цитатами, недоступными запустившему, — ${source.restricted}` : '',
         invalid > 0 ? `ответов модели не прошли проверку — ${invalid} из ${batches.length}` : '',

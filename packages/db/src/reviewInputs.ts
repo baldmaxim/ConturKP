@@ -4,6 +4,7 @@
 import {
   calcObjectKey,
   FACT_RULES_VERSION,
+  hasPdUncertainty,
   sourceKindOf,
   type ICalcObjectText,
   type IBasisFragment,
@@ -245,9 +246,10 @@ const positionsOf = async (db: Queryable, calcRevisionId: string | null): Promis
       }))
     : [];
 
-// Текст документов снимка (C08) с отметкой связанного действующего допущения.
-const documentFragments = async (db: Queryable, scopeId: string): Promise<IReviewFragment[]> =>
-  (
+// Текст документов снимка (C08): во вход — только фрагменты с фразами неопределённости ПД (с отметкой связанного
+// действующего допущения) и общее число фрагментов: вход закрепляется снимком, полный текст документов в нём не нужен.
+const documentFragments = async (db: Queryable, scopeId: string): Promise<{ fragments: IReviewFragment[]; total: number }> => {
+  const rows = (
     await db.query<{ id: string; text: string; origin: string; has_assumption: boolean }>(
       `SELECT f.id, f.text, f.origin,
               EXISTS (SELECT 1 FROM evidence_link l JOIN assumption_revision v ON v.id = l.assumption_revision_id
@@ -258,7 +260,12 @@ const documentFragments = async (db: Queryable, scopeId: string): Promise<IRevie
         ORDER BY i.id, f.page_index NULLS LAST, f.ordinal NULLS LAST, f.part_index, f.id`,
       [scopeId],
     )
-  ).rows.map((f) => ({ fragmentId: f.id, text: f.text, origin: f.origin, hasAssumption: f.has_assumption }));
+  ).rows;
+  return {
+    fragments: rows.filter((f) => hasPdUncertainty(f.text)).map((f) => ({ fragmentId: f.id, text: f.text, origin: f.origin, hasAssumption: f.has_assumption })),
+    total: rows.length,
+  };
+};
 
 // Новые редакции документов оснований (A10): прежняя редакция → последняя.
 const newerRevisions = async (db: Queryable, revisionIds: readonly string[]): Promise<Map<string, string>> => {
@@ -323,6 +330,7 @@ export const loadReviewInput = async (
     registry = { id: run.registry_id, passCompleted: (pass.rowCount ?? 0) > 0, unreviewed: counts.unreviewed_units, total: counts.total_units };
     ({ requirements, sources } = await requirementsOf(db, run.registry_id));
   }
+  const docText = await documentFragments(db, run.evidence_scope_id);
   const basisRevisions = [...sources.values()].map((s) => s.documentRevisionId).filter((x): x is string => !!x);
   const input: IReviewInput = {
     priority: run.priority_kinds as SourceKind[],
@@ -333,7 +341,8 @@ export const loadReviewInput = async (
     calcObjects: await calcObjectTexts(db, requirements),
     positions: await positionsOf(db, run.calculation_revision_id),
     requirements,
-    fragments: await documentFragments(db, run.evidence_scope_id),
+    fragments: docText.fragments,
+    fragmentsTotal: docText.total,
     facts,
     factConflicts: graph.remarks.filter((r) => r.kind === 'value_conflict').map((r) => ({ factIds: r.factIds })),
     newerRevisions: await newerRevisions(db, basisRevisions),

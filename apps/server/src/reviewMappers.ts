@@ -27,6 +27,7 @@ import {
   readableFragments,
   readableMailRevisions,
   reviewCheckResults,
+  reviewRunInput,
   stageContentFingerprint,
   stageVisibility,
   type IAccessContext,
@@ -100,8 +101,9 @@ export const runFreshness = async (db: Queryable, run: IReviewRunRow): Promise<I
   const reasons: string[] = [];
   if (source.length > 0) reasons.push(`после снимка области поступили источники — событий ${source.length}`);
   if (calc.length > 0) reasons.push(`после проверки добавлена ревизия расчёта — событий ${calc.length}`);
-  const stored = (run.coverage as { contentFingerprint?: string }).contentFingerprint;
-  if (stored && run.status !== 'queued' && stored !== (await stageContentFingerprint(db, run.stage_id, run.registry_id))) {
+  // Отпечаток содержимого закреплён при запуске вместе со входом (R09-02): изменение после запуска — «устарел».
+  const stored = (await reviewRunInput(db, run.id))?.content_fingerprint ?? null;
+  if (stored && stored !== (await stageContentFingerprint(db, run.stage_id, run.registry_id))) {
     reasons.push('после проверки изменились реестр требований, покрытие или записи этапа');
   }
   return {
@@ -124,6 +126,7 @@ export const runBrief = (run: IReviewRunRow) => ({
 
 export const runView = async (db: Queryable, ctx: IAccessContext, run: IReviewRunRow) => {
   const results = await reviewCheckResults(db, run.id);
+  const pinned = await reviewRunInput(db, run.id);
   const freshness = await runFreshness(db, run);
   const counts = (
     await db.query<{ status: string; n: number }>(
@@ -158,6 +161,7 @@ export const runView = async (db: Queryable, ctx: IAccessContext, run: IReviewRu
       rulesSha256: run.rules_sha256,
       promptVersion: run.prompt_version,
       promptSha256: run.prompt_sha256,
+      inputSha256: pinned?.input_sha256 ?? null,
     },
     coverage: run.coverage,
     checks: REVIEW_CHECKS.map((code: ReviewCheckCode) => {

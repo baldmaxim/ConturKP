@@ -1,4 +1,4 @@
-# 2026-10-02T18:58:45+05:00, linux x64 Node v24.14.1, Ubuntu 26.04.1 LTS
+# 2026-10-05T11:23:50+05:00, linux x64 Node v24.14.1, Ubuntu 26.04.1 LTS
 # npm run build
 
 > build
@@ -17,19 +17,19 @@ dist/index.html                                      1.80 kB │ gzip:   0.78 kB
 dist/assets/pdf.worker.min-iDqQPrd3.mjs          1,232.30 kB
 dist/assets/index-Dcm_4UCP.css                      55.62 kB │ gzip:   9.65 kB
 dist/assets/workbox-window.prod.es5-Bd17z0YL.js      5.65 kB │ gzip:   2.20 kB
-dist/assets/pdf-BUVmAFz9.js                        409.76 kB │ gzip: 121.72 kB
-dist/assets/index-022MLMsr.js                      675.91 kB │ gzip: 190.65 kB
+dist/assets/pdf-BC4U0hZY.js                        409.76 kB │ gzip: 121.72 kB
+dist/assets/index-Dv7odcO7.js                      676.10 kB │ gzip: 190.68 kB
 
 [plugin builtin:vite-reporter] 
 (!) Some chunks are larger than 500 kB after minification. Consider:
 - Using dynamic import() to code-split the application
 - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
-✓ built in 633ms
+✓ built in 563ms
 
 PWA v1.3.0
 mode      generateSW
-precache  18 entries (1139.64 KiB)
+precache  18 entries (1139.82 KiB)
 files generated
   dist/sw.js
   dist/workbox-98f7a950.js

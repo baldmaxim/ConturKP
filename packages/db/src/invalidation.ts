@@ -146,14 +146,15 @@ export interface IInvalidationOutcome {
   suggestions: number;
 }
 
-// Обработка одного события барьера: один раз (строка обработки — ключ события).
-export const processStageEvent = async (db: Queryable, eventId: string): Promise<IInvalidationOutcome | null> => {
-  await db.query("SELECT pg_advisory_xact_lock(hashtext('stage_invalidate'), hashtext($1::text))", [eventId]);
-  if ((await db.query('SELECT 1 FROM stage_input_event_processing WHERE event_id = $1', [eventId])).rowCount) return null;
-  const e = (await db.query<IStageEventRow>('SELECT * FROM stage_input_event WHERE id = $1', [eventId])).rows[0];
-  if (!e) return null;
-  const tenderId = (await db.query<{ tender_id: string }>('SELECT tender_id FROM tender_stage WHERE id = $1', [e.stage_id])).rows[0]!.tender_id;
-  const change = await analyzeEvent(db, e);
+// Объекты, к которым применяется изменение события: все (обработка события) или только записанные прогоном после
+// обработки события (сверка поздних результатов, R09-01).
+export interface IApplyScope {
+  findingIds: ReadonlySet<string>;
+  suggestionIds: ReadonlySet<string>;
+}
+
+// Применение изменения события: «устарело» с причиной, отметки решений и событий осей, «истекла» у гипотез. Идемпотентно.
+const applyEventChange = async (db: Queryable, e: IStageEventRow, tenderId: string, change: IEventChange, scope: IApplyScope | null): Promise<IInvalidationOutcome> => {
   const reason = `${change.reason} (событие № ${e.seq})`;
   const types = change.targets.map((t) => t.type);
   const ids = change.targets.map((t) => t.id);
@@ -167,7 +168,8 @@ export const processStageEvent = async (db: Queryable, eventId: string): Promise
             [e.stage_id, type, types, ids],
           )
         ).rows.map((r) => r.id);
-  const findingIds = new Set(await dependents('finding'));
+  const inScope = (set: ReadonlySet<string> | undefined) => (id: string) => !scope || (set?.has(id) ?? false);
+  const findingIds = new Set((await dependents('finding')).filter(inScope(scope?.findingIds)));
   // Основа прогона для класса события: источники — версия снимка области; расчёт — версия при запуске (ревизия
   // расчёта закреплена тогда).
   const basis = e.event_class === 'calculation' ? 'stage_input_version' : 'scope_input_version';
@@ -179,11 +181,11 @@ export const processStageEvent = async (db: Queryable, eventId: string): Promise
           AND greatest(f.created_input_version, coalesce((SELECT max(r.${basis}) FROM finding_occurrence o JOIN review_run r ON r.id = o.run_id WHERE o.finding_id = f.id), 0)) < $3`,
       [e.stage_id, change.families, e.seq],
     );
-    for (const x of r.rows) findingIds.add(x.id);
+    for (const x of r.rows) if (inScope(scope?.findingIds)(x.id)) findingIds.add(x.id);
   }
   const out: IInvalidationOutcome = { mode: change.mode, reason, findings: 0, decisions: 0, axisEvents: 0, suggestions: 0 };
   for (const id of [...findingIds].sort()) {
-    const f = (await db.query<{ status: string; tender_id: string }>('SELECT status, tender_id FROM finding WHERE id = $1 FOR UPDATE', [id])).rows[0];
+    const f = (await db.query<{ status: string }>('SELECT status FROM finding WHERE id = $1 FOR UPDATE', [id])).rows[0];
     if (!f) continue;
     await mark(db, e, tenderId, 'finding', id, change.mode, reason);
     if (f.status !== 'stale') {
@@ -205,14 +207,16 @@ export const processStageEvent = async (db: Queryable, eventId: string): Promise
     );
     for (const d of decisions.rows) if (await mark(db, e, tenderId, 'decision', d.id, change.mode, reason)) out.decisions += 1;
   }
-  for (const id of await dependents('discrepancy_status_event')) if (await mark(db, e, tenderId, 'discrepancy_status_event', id, change.mode, reason)) out.axisEvents += 1;
-  const suggestionIds = new Set(await dependents('model_suggestion'));
+  if (!scope) {
+    for (const id of await dependents('discrepancy_status_event')) if (await mark(db, e, tenderId, 'discrepancy_status_event', id, change.mode, reason)) out.axisEvents += 1;
+  }
+  const suggestionIds = new Set((await dependents('model_suggestion')).filter(inScope(scope?.suggestionIds)));
   if (change.families.length > 0) {
     const r = await db.query<{ id: string }>(
       `SELECT m.id FROM model_suggestion m JOIN review_run r ON r.id = m.run_id WHERE m.stage_id = $1 AND m.status = 'open' AND r.${basis} < $2`,
       [e.stage_id, e.seq],
     );
-    for (const x of r.rows) suggestionIds.add(x.id);
+    for (const x of r.rows) if (inScope(scope?.suggestionIds)(x.id)) suggestionIds.add(x.id);
   }
   for (const id of [...suggestionIds].sort()) {
     const upd = await db.query("UPDATE model_suggestion SET status = 'expired', updated_at = now(), row_version = row_version + 1 WHERE id = $1 AND status = 'open'", [id]);
@@ -221,14 +225,64 @@ export const processStageEvent = async (db: Queryable, eventId: string): Promise
       out.suggestions += 1;
     }
   }
+  return out;
+};
+
+// Доменная блокировка этапа: обработка событий, запись результатов прогона и команды решений сериализуются строкой
+// этапа (тот же порядок, что у барьера §1.1: сначала этап).
+export const lockStageForReview = async (db: Queryable, stageId: string): Promise<string | null> =>
+  (await db.query<{ tender_id: string }>('SELECT tender_id FROM tender_stage WHERE id = $1 FOR UPDATE', [stageId])).rows[0]?.tender_id ?? null;
+
+// Обработка одного события барьера: один раз (строка обработки — ключ события), под блокировкой этапа.
+export const processStageEvent = async (db: Queryable, eventId: string): Promise<IInvalidationOutcome | null> => {
+  const head = (await db.query<{ stage_id: string }>('SELECT stage_id FROM stage_input_event WHERE id = $1', [eventId])).rows[0];
+  if (!head) return null;
+  const tenderId = await lockStageForReview(db, head.stage_id);
+  if (!tenderId) return null;
+  if ((await db.query('SELECT 1 FROM stage_input_event_processing WHERE event_id = $1', [eventId])).rowCount) return null;
+  const e = (await db.query<IStageEventRow>('SELECT * FROM stage_input_event WHERE id = $1', [eventId])).rows[0]!;
+  const change = await analyzeEvent(db, e);
+  const out = await applyEventChange(db, e, tenderId, change, null);
   await db.query('INSERT INTO stage_input_event_processing (event_id, stage_id, mode, reason, affected) VALUES ($1, $2, $3, $4, $5)', [
     e.id,
     e.stage_id,
     change.mode,
-    reason.slice(0, 1000),
+    out.reason.slice(0, 1000),
     JSON.stringify({ targets: change.targets.length, families: change.families, findings: out.findings, decisions: out.decisions, axisEvents: out.axisEvents, suggestions: out.suggestions }),
   ]);
   return out;
+};
+
+// Все необработанные события этапа — в транзакции вызывающего под блокировкой этапа (команда решения не ждёт worker,
+// R09-01): после вызова статусы замечаний отражают все поступившие изменения.
+export const processPendingStageEvents = async (db: Queryable, stageId: string): Promise<number> => {
+  await lockStageForReview(db, stageId);
+  const pending = await db.query<{ id: string }>(
+    `SELECT e.id FROM stage_input_event e WHERE e.stage_id = $1 AND NOT EXISTS (SELECT 1 FROM stage_input_event_processing p WHERE p.event_id = e.id)
+      ORDER BY e.seq`,
+    [stageId],
+  );
+  for (const p of pending.rows) await processStageEvent(db, p.id);
+  return pending.rowCount ?? 0;
+};
+
+// Сверка поздних результатов прогона (R09-01): события после закреплённого снимка, уже обработанные до записи
+// результатов, применяются к замечаниям и гипотезам, которые записал этот прогон. Вызывается под блокировкой этапа.
+export const reconcileRunWithProcessedEvents = async (db: Queryable, run: { stage_id: string; tender_id: string; scope_input_version: number }, scope: IApplyScope): Promise<number> => {
+  if (scope.findingIds.size === 0 && scope.suggestionIds.size === 0) return 0;
+  const events = (
+    await db.query<IStageEventRow>(
+      `SELECT e.* FROM stage_input_event e JOIN stage_input_event_processing p ON p.event_id = e.id
+        WHERE e.stage_id = $1 AND e.seq > $2 ORDER BY e.seq`,
+      [run.stage_id, run.scope_input_version],
+    )
+  ).rows;
+  let affected = 0;
+  for (const e of events) {
+    const out = await applyEventChange(db, e, run.tender_id, await analyzeEvent(db, e), scope);
+    affected += out.findings + out.suggestions;
+  }
+  return affected;
 };
 
 // События после версии прогона (для пометки «устарел») с обработкой, если она уже есть.

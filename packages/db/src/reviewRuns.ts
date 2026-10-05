@@ -5,10 +5,12 @@
 import {
   DEFAULT_SOURCE_PRIORITY,
   FINDING_KIND_META,
+  canonicalJson,
   REVIEW_PROMPT_VERSION,
   REVIEW_RULES_SHA256,
   REVIEW_RULES_VERSION,
   reviewSystemPrompt,
+  serializeReviewInput,
   sha256Hex,
   type CheckOutcome,
   type ICheckResult,
@@ -19,6 +21,7 @@ import {
   type ReviewRunStatus,
 } from '@kontur/core';
 import { enqueueJob } from './jobs.ts';
+import { loadReviewInput } from './reviewInputs.ts';
 import type { Queryable } from './pool.ts';
 
 export interface IReviewRunRow {
@@ -67,10 +70,17 @@ export interface IModelIdentity {
   version: string;
 }
 
-export type CreateReviewRunResult = { ok: true; run: IReviewRunRow; created: boolean } | { ok: false; reason: 'no_scope' };
+export type CreateReviewRunResult = { ok: true; run: IReviewRunRow; created: boolean } | { ok: false; reason: 'no_scope' | 'inputs_changed' };
+
+export type ReadableFragments = (fragmentIds: readonly string[]) => Promise<ReadonlySet<string>>;
 
 // Запуск: активный прогон этапа (в очереди или выполняется) возвращается повторно — двойной запуск не плодит прогонов.
-export const createReviewRun = async (db: Queryable, r: { tenderId: string; stageId: string; userId: string; model: IModelIdentity | null }): Promise<CreateReviewRunResult> => {
+// Вход закрепляется в транзакции запуска под блокировкой этапа (R09-02): содержимое реестра, покрытие, вход модели (только
+// читаемые запустившим цитаты), отпечаток содержимого этапа. Если содержимое изменилось во время сборки — отказ, повтор.
+export const createReviewRun = async (
+  db: Queryable,
+  r: { tenderId: string; stageId: string; userId: string; model: IModelIdentity | null; readable: ReadableFragments },
+): Promise<CreateReviewRunResult> => {
   const stage = (await db.query<{ input_version: number }>('SELECT input_version FROM tender_stage WHERE id = $1 FOR UPDATE', [r.stageId])).rows[0]!;
   const active = (await db.query<IReviewRunRow>("SELECT * FROM review_run WHERE stage_id = $1 AND status IN ('queued', 'running') ORDER BY created_at DESC LIMIT 1", [r.stageId])).rows[0];
   if (active) return { ok: true, run: active, created: false };
@@ -103,10 +113,39 @@ export const createReviewRun = async (db: Queryable, r: { tenderId: string; stag
     ],
   );
   const run = ins.rows[0]!;
+  const fingerprint = await stageContentFingerprint(db, r.stageId, run.registry_id);
+  const { input } = await loadReviewInput(db, run);
+  const modelInput = run.model_provider ? await hypothesisSource(db, run, r.readable) : null;
+  if ((await stageContentFingerprint(db, r.stageId, run.registry_id)) !== fingerprint) return { ok: false, reason: 'inputs_changed' };
+  const json = serializeReviewInput(input);
+  await db.query('INSERT INTO review_run_input (run_id, input, model_input, input_sha256, content_fingerprint) VALUES ($1, $2, $3, $4, $5)', [
+    run.id,
+    JSON.stringify(json),
+    modelInput ? JSON.stringify(modelInput) : null,
+    sha256Hex(`kontur.review_run_input.v1\n${canonicalJson({ input: json, model: modelInput })}`),
+    fingerprint,
+  ]);
   const job = await enqueueReviewRun(db, run);
   const upd = await db.query<IReviewRunRow>('UPDATE review_run SET job_id = $2, updated_at = now(), row_version = row_version + 1 WHERE id = $1 RETURNING *', [run.id, job.id]);
   return { ok: true, run: upd.rows[0]!, created: true };
 };
+
+export interface IHypothesisSource {
+  requirements: { code: string; statement: string; parameters: { name: string; value: string; unit: string | null }[]; fragments: { fragmentId: string; text: string }[] }[];
+  positions: { positionId: string; text: string; unit: string | null; volume: number | null }[];
+  restricted: number;
+}
+
+export interface IReviewRunInputRow {
+  input: Record<string, unknown>;
+  model_input: IHypothesisSource | null;
+  input_sha256: string;
+  content_fingerprint: string;
+}
+
+// Закреплённый вход прогона; у прогонов до 0025 входа нет — их задание завершается отказом `input_not_pinned`.
+export const reviewRunInput = async (db: Queryable, runId: string): Promise<IReviewRunInputRow | null> =>
+  (await db.query<IReviewRunInputRow>('SELECT input, model_input, input_sha256, content_fingerprint FROM review_run_input WHERE run_id = $1', [runId])).rows[0] ?? null;
 
 export const getReviewRun = async (db: Queryable, id: string): Promise<IReviewRunRow | null> =>
   (await db.query<IReviewRunRow>('SELECT * FROM review_run WHERE id = $1', [id])).rows[0] ?? null;
@@ -237,6 +276,7 @@ export const insertFindingEvidence = async (db: Queryable, findingId: string, te
 export interface IRuleFindingsOutcome {
   created: number;
   observed: number;
+  createdIds: string[];
 }
 
 // Замечание правила: действующее (не устаревшее) с тем же ключом получает вхождение; иначе — новое замечание с событием
@@ -244,6 +284,7 @@ export interface IRuleFindingsOutcome {
 export const writeRuleFindings = async (db: Queryable, run: IReviewRunRow, drafts: readonly IFindingDraft[]): Promise<IRuleFindingsOutcome> => {
   let created = 0;
   let observed = 0;
+  const createdIds: string[] = [];
   for (const d of drafts) {
     const live = (await db.query<{ id: string }>("SELECT id FROM finding WHERE stage_id = $1 AND finding_key = $2 AND status <> 'stale'", [run.stage_id, d.key])).rows[0];
     if (live) {
@@ -267,15 +308,16 @@ export const writeRuleFindings = async (db: Queryable, run: IReviewRunRow, draft
     await insertFindingEvidence(db, id, run.tender_id, d.evidence);
     await insertDependencies(db, { tenderId: run.tender_id, stageId: run.stage_id, dependentType: 'finding', dependentId: id, refs: await dependenciesOf(db, d.evidence) });
     await db.query('INSERT INTO finding_occurrence (run_id, finding_id) VALUES ($1, $2)', [run.id, id]);
+    createdIds.push(id);
     created += 1;
   }
-  return { created, observed };
+  return { created, observed, createdIds };
 };
 
 // ---------------------------------------------------------------- Гипотезы модели
 
-export const insertSuggestions = async (db: Queryable, run: IReviewRunRow, items: readonly IHypothesis[]): Promise<number> => {
-  let n = 0;
+export const insertSuggestions = async (db: Queryable, run: IReviewRunRow, items: readonly IHypothesis[]): Promise<string[]> => {
+  const ids: string[] = [];
   for (const h of items) {
     const ins = await db.query<{ id: string }>(
       `INSERT INTO model_suggestion (tender_id, stage_id, run_id, request_id, kind, title, rationale, payload)
@@ -297,21 +339,17 @@ export const insertSuggestions = async (db: Queryable, run: IReviewRunRow, items
       );
     }
     await insertDependencies(db, { tenderId: run.tender_id, stageId: run.stage_id, dependentType: 'model_suggestion', dependentId: id, refs: await dependenciesOf(db, evidence) });
-    n += 1;
+    ids.push(id);
   }
-  return n;
+  return ids;
 };
 
 // Вход модели: подтверждённые требования реестра с цитатами, которые запустивший может читать, и позиции расчёта.
 export const hypothesisSource = async (
   db: Queryable,
-  run: IReviewRunRow,
-  readable: (fragmentIds: readonly string[]) => Promise<ReadonlySet<string>>,
-): Promise<{
-  requirements: { code: string; statement: string; parameters: { name: string; value: string; unit: string | null }[]; fragments: { fragmentId: string; text: string }[] }[];
-  positions: { positionId: string; text: string; unit: string | null; volume: number | null }[];
-  restricted: number;
-}> => {
+  run: { registry_id: string | null; calculation_revision_id: string | null },
+  readable: ReadableFragments,
+): Promise<IHypothesisSource> => {
   if (!run.registry_id) return { requirements: [], positions: [], restricted: 0 };
   const rows = (
     await db.query<{ code: string; statement: string; parameters: { name: string; value: string; unit: string | null }[]; fragment_id: string; text: string }>(

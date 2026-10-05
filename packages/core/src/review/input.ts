@@ -100,7 +100,9 @@ export interface IReviewInput {
   calcObjects: ReadonlyMap<string, ICalcObjectText>;
   positions: IReviewPosition[];
   requirements: IReviewRequirement[];
+  // Фрагменты текста документов снимка с фразами неопределённости ПД (C08) и общее число фрагментов текста документов.
   fragments: IReviewFragment[];
+  fragmentsTotal: number;
   facts: IReviewFact[];
   factConflicts: { factIds: string[] }[];
   // Редакции документов оснований, у которых есть более новая редакция: старая → новая.
@@ -145,3 +147,18 @@ export interface ICheckResult {
   reason: string | null;
   counts: Record<string, number>;
 }
+
+// ---------------------------------------------------------------- Закреплённый вход (R09-02)
+
+// Вход прогона закрепляется при запуске как JSON: отображения — массивами пар; порядок полей не влияет на хэш.
+export const serializeReviewInput = (input: IReviewInput): Record<string, unknown> => ({
+  ...input,
+  calcObjects: [...input.calcObjects.entries()],
+  newerRevisions: [...input.newerRevisions.entries()],
+});
+
+export const parseReviewInput = (json: Record<string, unknown>): IReviewInput => {
+  const raw = json as unknown as Omit<IReviewInput, 'calcObjects' | 'newerRevisions'> & { calcObjects: [string, ICalcObjectText][]; newerRevisions: [string, string][] };
+  return { ...raw, calcObjects: new Map(raw.calcObjects), newerRevisions: new Map(raw.newerRevisions) };
+};
+

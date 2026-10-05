@@ -1,5 +1,5 @@
 // Этап 09: инварианты БД миграции 0024 (09-review-checks-design.md §9) прямым SQL — вторая линия держит их без кода;
-// устная реплика и подсказка переговоров не становятся согласием (A03); обновление схемы 0023 → 0024 на данных 08a.
+// устная реплика и подсказка переговоров не становятся согласием (A03); обновление схемы 0023 → 0025 на данных 08a.
 import { cpSync, mkdtempSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -260,8 +260,8 @@ describe('зависимости, инвалидация, приоритет, г
   });
 });
 
-describe('обновление схемы 0023 → 0024', () => {
-  it('данные этапов 08 и 08a переживают 0024; на обновлённой базе прогон проверки работает', async () => {
+describe('обновление схемы 0023 → 0025', () => {
+  it('данные этапов 08 и 08a переживают 0024 и 0025; на обновлённой базе прогон проверки работает', async () => {
     const name = `kontur_kp_test_upgrade24_${Date.now().toString(36)}`;
     const urlFor = (user: string): string => {
       const u = new URL(ADMIN_URL);
@@ -288,7 +288,7 @@ describe('обновление схемы 0023 → 0024', () => {
       expect(await migrateTo(23)).toBe(23);
       const s08 = await buildStage08(up, config);
       const before = (await up.pool.query('SELECT count(*)::int AS n FROM requirement_registry')).rows[0].n;
-      expect(await migrateTo(24)).toBe(1);
+      expect(await migrateTo(25)).toBe(2);
       expect((await up.pool.query('SELECT count(*)::int AS n FROM requirement_registry')).rows[0].n).toBe(before);
       expect((await up.pool.query('SELECT count(*)::int AS n FROM review_check')).rows[0].n).toBe(12);
       const r = await s08.s.eng1.post(`/stages/${s08.s.stageA}/review-runs`, {}, { headers: idem() });

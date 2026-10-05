@@ -82,8 +82,8 @@ const checkPdUncertainty = (input: IReviewInput): { result: ICheckResult; findin
       }),
     );
   }
-  const counts = { fragments: input.fragments.length, matched, findings: findings.length };
-  return { result: { check: 'pd_uncertainty', outcome: outcomeOf(findings.length, 0, input.fragments.length), reason: input.fragments.length === 0 ? 'в снимке нет текста документов' : null, counts }, findings };
+  const counts = { fragments: input.fragmentsTotal, matched, findings: findings.length };
+  return { result: { check: 'pd_uncertainty', outcome: outcomeOf(findings.length, 0, input.fragmentsTotal), reason: input.fragmentsTotal === 0 ? 'в снимке нет текста документов' : null, counts }, findings };
 };
 
 // ---------------------------------------------------------------- C09 Конфликты источников

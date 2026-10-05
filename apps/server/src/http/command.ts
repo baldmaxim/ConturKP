@@ -39,6 +39,9 @@ export interface ICommandSpec {
   authorize: (client: PoolClient, ctx: IAccessContext, req: Request) => Promise<void>;
   // Материал хэша запроса для идемпотентности; по умолчанию — метод, URL и JSON-тело.
   requestKey?: (req: Request) => string;
+  // Подготовка в отдельной транзакции до команды, после проверки прав (этап 09, R09-01): например, обработка
+  // поступивших событий этапа — её результат сохраняется, даже если сама команда получит отказ.
+  prepare?: (client: PoolClient, ctx: IAccessContext, req: Request) => Promise<void>;
   run: (client: PoolClient, ctx: IAccessContext, req: Request) => Promise<ICommandResult>;
 }
 
@@ -100,6 +103,13 @@ export const command =
       const requestHash = createHash('sha256')
         .update(spec.requestKey ? spec.requestKey(req) : `${req.method} ${req.originalUrl}\n${JSON.stringify(req.body ?? null)}`)
         .digest('hex');
+      if (spec.prepare) {
+        const prepare = spec.prepare;
+        await withTransaction(pool, async (client) => {
+          await spec.authorize(client, ctx, req);
+          await prepare(client, ctx, req);
+        });
+      }
       const result = await withTransaction(pool, async (client) => {
         await spec.authorize(client, ctx, req);
         if (key) {

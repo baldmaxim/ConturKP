@@ -30,6 +30,7 @@ const empty = (o: Partial<IReviewInput> = {}): IReviewInput => ({
   positions: [],
   requirements: [],
   fragments: [],
+  fragmentsTotal: 0,
   facts: [],
   factConflicts: [],
   newerRevisions: new Map(),

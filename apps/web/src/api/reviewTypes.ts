@@ -54,6 +54,7 @@ export interface IRunView extends IRunBrief {
     rulesSha256: string;
     promptVersion: string | null;
     promptSha256: string | null;
+    inputSha256: string | null;
   };
   checks: ICheckView[];
   findings: { byStatus: Partial<Record<TFindingStatus, number>>; unsettled: number };

@@ -177,6 +177,8 @@ export const RunReport: FC<IRunReportProps> = ({ run, canWrite, onChanged, onOpe
           <dd className={styles.mono}>{run.inputs.calculationRevisionId ?? 'нет'}</dd>
           <dt>Версия входов</dt>
           <dd>{`снимок — ${run.inputs.scopeInputVersion}, запуск — ${run.inputs.stageInputVersion}`}</dd>
+          <dt>Закреплённый вход</dt>
+          <dd className={styles.mono}>{run.inputs.inputSha256 ? run.inputs.inputSha256.slice(0, 16) : 'не закреплён'}</dd>
           <dt>Правила</dt>
           <dd className={styles.mono}>{`${run.inputs.rulesVersion} · ${run.inputs.rulesSha256.slice(0, 12)}`}</dd>
           <dt>Промпт модели</dt>

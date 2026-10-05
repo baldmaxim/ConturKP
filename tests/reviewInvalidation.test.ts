@@ -111,13 +111,19 @@ describe('новая редакция после закрытия замечан
     expect(v.summary.kind).toBe('outdated');
   });
 
-  it('пересмотр: «устарело» → «открыто» человеком; повторная проверка создаёт новое замечание, устаревшее остаётся в истории', async () => {
+  it('повторная проверка на прежнем снимке: новое замечание сразу «устарело» (R09-01); пересмотр — человеком, одно действующее на условие', async () => {
     const r = await runReview(st);
     const lampNow = (await findings(st)).filter((f) => f.kind === 'parameter_mismatch' && f.requirements.includes(req.lamp!.code));
-    expect(lampNow.map((f) => f.status).sort()).toEqual(['open', 'stale']);
+    // Снимок прогона старше новой редакции ТЗ: результат по прежней редакции действующим не становится.
+    expect(lampNow.map((f) => f.status)).toEqual(['stale', 'stale']);
     expect(r.freshness.outdated).toBe(true);
-    // Повторное открытие устаревшего при действующем замечании того же условия — конфликт, а не дубль.
-    const reopen = await transition(st.s.eng1, lampId, { to: 'open', reason: 'пересмотр' });
+    const second = lampNow.find((f) => f.id !== lampId)!;
+    const d = (await st.s.eng1.get(`/findings/${second.id}`)).body;
+    expect(d.invalidations[0]).toMatchObject({ mode: 'exact', eventType: 'document_revision_registered' });
+    expect(d.events.map((e: { kind: string; to: string }) => `${e.kind}:${e.to}`)).toEqual(['created:open', 'status:stale']);
+    // Пересмотр человеком: одно из устаревших открыто; второе того же условия — конфликт, а не дубль.
+    expect((await transition(st.s.eng1, lampId, { to: 'open', reason: 'пересмотр' })).status).toBe(200);
+    const reopen = await transition(st.s.eng1, second.id, { to: 'open', reason: 'пересмотр' });
     expect(reopen.status, reopen.text).toBe(409);
     // Решённое замечание напрямую не открывается.
     const resolvedOther = (await findings(st)).find((f) => f.kind === 'duplicate_position')!;

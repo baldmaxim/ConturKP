@@ -1,10 +1,10 @@
 # Этап 09 — правила проверки и договорные разногласия
 
 Дата: 2026-10-02
-Статус: **READY_FOR_REVIEW** — передача 09-2 (исправление Review 09-1: R09-01, R09-02, R09-03) независимому ревьюеру (Windows). Review 09-1 (`docs/reviews/09-review-1.md`) — CHANGES REQUIRED: на Windows штатные проверки PASS (928/928, smoke 77, UI 29), три дефекта P1 воспроизведены ревьюером.
+Статус: **READY_FOR_REVIEW** — передача 09-3 (исправление Review 09-2: R09-04) независимому ревьюеру (Windows). Review 09-2 (`docs/reviews/09-review-2.md`) — CHANGES REQUIRED: R09-01…R09-03 закрыты на `8be22a7`, открыт R09-04; штатные проверки на Windows — PASS (937/937, smoke 77, UI 29). Review 09-1 — CHANGES REQUIRED (R09-01…R09-03).
 Базовый коммит: `187015e` (запись приёмки этапа 08a по `bd89405`, Review 08a-4 — PASS).
 Ветка: `stage-09`, создана от базового коммита; в origin не отправлялась, в `main` не сливалась.
-Коммиты этапа: `605fe20` — проект до кода (модель данных, состояния, API, матрица проверок, контрольные сценарии, вопросы владельцу); `93abb88` — решения владельца D-029 до зависимого кода; `a568b3b` — таблица критичности по умолчанию подтверждена; `28a447e` — передача 09-1 (Review 09-1 — CHANGES REQUIRED); `8020e76` — текст Review 09-1, дефекты открыты; затем коммит исправления — проверяемый коммит передачи 09-2 (полный хеш — в комментарии ZIP и на странице передачи).
+Коммиты этапа: `605fe20` — проект до кода; `93abb88` — решения владельца D-029 до зависимого кода; `a568b3b` — таблица критичности; `28a447e` — передача 09-1 (Review 09-1 — CHANGES REQUIRED); `8020e76` — текст Review 09-1; `8be22a7` — передача 09-2 (Review 09-2: R09-01…R09-03 закрыты, R09-04 открыт); `1774e1b` — текст Review 09-2; затем коммит исправления R09-04 — проверяемый коммит передачи 09-3 (полный хеш — в комментарии ZIP и на странице передачи).
 Рабочее дерево: чистое; не в Git по `.gitignore` — `node_modules/`, `apps/web/dist/`, `runtime/`; по `.git/info/exclude` — архивы и страницы передачи `ConturKP-*`, каталог `archive/` (контрольная передача 08a).
 Задание: `docs/spec/prompts/stage-09.md` (`docs/spec/03_STAGE_PROMPTS.md` §09); решения — D-018, D-026, D-028, D-029; проект — `docs/architecture/09-review-checks-design.md` (§13 — уточнения реализации).
 Среда: Ubuntu 26.04.1 (Linux x64; Windows на машине разработки нет — прогон на Windows `NOT_RUN`, выполняет ревьюер), Node 24.14.1; PostgreSQL 18.6 с pgvector 0.8.6 в контейнере `kontur-pg` на `127.0.0.1:55432`; Chromium headless без песочницы (AppArmor).
@@ -31,7 +31,7 @@
 | маршруты API | 16 (portal-api §2.7 в редакции этапа 09) |
 | экраны | вкладки этапа «Проверка» (отчёт, гипотезы) и «Разногласия» (список, карточка, оси, решения); вкладка тендера «Приоритет источников» |
 | события аудита | `review.run.request`, `finding.create`, `finding.<переход>`, `finding.update`, `discrepancy.create`, `discrepancy.axis`, `discrepancy.decision`, `model_suggestion.accept`, `model_suggestion.reject`, `source_priority.update`; чтения и отказы |
-| тесты этапа | 71 в 9 файлах: `reviewCore` 12, `reviewScenarios` 9, `reviewInvalidation` 6, `reviewCompleteness` 5, `reviewModel` 7, `reviewFacts` 4, `reviewSchema` 12, `reviewSecurity` 7, `reviewRegressions09` 9 (Review 09-1) |
+| тесты этапа | 76 в 10 файлах: `reviewCore` 12, `reviewScenarios` 9, `reviewInvalidation` 6, `reviewCompleteness` 5, `reviewModel` 7, `reviewFacts` 4, `reviewSchema` 12, `reviewSecurity` 7, `reviewRegressions09` 9 (Review 09-1), `reviewModelAccess` 5 (Review 09-2) |
 | smoke / интерфейс | `scripts/smoke-09.mjs`; `artifacts/stage-09/ui-check.mjs` |
 
 Не реализовано / внешние зависимости: живой прогон модели (U-01, U-05); ось «отражено в КП» из приложений — этап 11 (до него ставит человек); денежная арифметика — этап 10 (Q-05); `risk_acceptance` у кандидата выпуска и матрица блокеров — этап 13; MCP-предложения замечаний — этап 16.
@@ -51,6 +51,21 @@
 | `tests/answersSchema.test.ts` | обновление 0021 → 0022 запускает код после домиграции до 0024 (код требует последнюю схему) |
 
 Принятые миграции 0001–0023 не менялись (ADR-002); исправление Review 09-1 — новой миграцией `0025`, переданная `0024` не менялась.
+
+## Исправление Review 09-2
+
+Review 09-2 (Windows, `8be22a7`): R09-01…R09-03 закрыты; открыт R09-04 (P1) — регрессия исправления R09-02: задание `review.model` отправляло закреплённый при запуске вход без проверки текущих прав запустившего. Регрессии — `tests/reviewModelAccess.test.ts` (5 тестов); на `8be22a7` все падают (проверено подстановкой прежних файлов).
+
+### R09-04 — права запустившего перед моделью
+
+- Вход модели остаётся закреплённым при запуске (R09-02): требования, цитаты и позиции не подменяются текущими.
+- Перед моделью и перед каждой пачкой проверяются текущие права запустившего: пользователь активен, участвует в тендере (`review.run`), каждое требование видимо целиком — замыкание закрытости R08-02 (основания любой роли и наследование текста) и все цитаты читаются (`requirementGateFor`).
+- Закрытое сейчас требование исключается из пачки; отключение или снятие с тендера прекращают проверку гипотез. C12 — «неполно» с причиной; `restricted` — исключённые при запуске и перед отправкой; `requirements` — фактически отправленные. Ссылки гипотез принимаются только на цитаты отправленной пачки.
+- Тот же фильтр применяется при закреплении входа на запуске: раньше учитывалась только читаемость цитат `supports`, теперь — замыкание закрытости (требование с закрытым основанием «уточняет» в модель не уходит).
+
+Регрессии: отзыв `mail.read` между заданиями правил и модели — в фактическом `IChatCompleteInput.user` нет текста письма и производной формулировки, C12 «неполно»; закрытость по основанию «уточняет» — при запуске и перед моделью; отзыв после первой пачки — закрытые требования следующих пачек не отправлены; снятие с тендера и отключение — модель не вызывается, C12 «неполно» с причиной. Закреплённый вход при этом не меняется.
+
+Изменённые файлы: `packages/db/src/reviewRuns.ts` (`requirementGateFor`, `hypothesisSource` с `requirementId`), `apps/worker/src/handlers/review.ts`, `apps/server/src/routes/reviews.ts`, `tests/reviewModelAccess.test.ts`.
 
 ## Исправление Review 09-1
 
@@ -96,7 +111,7 @@ Review 09-1 (Windows, `28a447e`): штатные проверки PASS, но т�
 | Нераспознанная страница (A16) | C01 `incomplete`, «всё проверено» не показывается | `tests/reviewCompleteness.test.ts` | выполнено |
 | Новая редакция после закрытия замечания | «устарело» с причиной; решение и событие оси — отметки недействительности; история и прежний отчёт сохранены | `tests/reviewInvalidation.test.ts` | выполнено |
 | «Всё проверено» не из пустого результата или незавершённого задания (I07, I18) | сводка `clean` — только полный прогон; «завершён» ⇔ все исходы без пробелов (БД) | `tests/reviewCompleteness.test.ts` (положительный контроль и очередь), `reviewCore.test.ts`, `reviewSchema.test.ts` | выполнено |
-| Права (ADR-006), закрытость текста (R08-02) | возможности этапа 09; текст замечаний, решений и осей — читающему все основания | `tests/reviewSecurity.test.ts` | выполнено |
+| Права (ADR-006), закрытость текста (R08-02) | возможности этапа 09; текст замечаний, решений и осей — читающему все основания; вход модели — только требования, видимые запустившему целиком сейчас: при запуске и перед каждой пачкой (R09-04) | `tests/reviewSecurity.test.ts`, `reviewModelAccess.test.ts` | выполнено |
 | Решения владельца — до зависимого кода | проект `605fe20`, D-029 `93abb88`, таблица критичности `a568b3b` | `git log` | выполнено |
 | Не ослаблены инварианты 02–08a | миграции 0001–0023 не менялись | полный набор; регрессия интерфейса 02–08a | выполнено |
 
@@ -120,8 +135,8 @@ Review 09-1 (Windows, `28a447e`): штатные проверки PASS, но т�
 
 | Команда / сценарий | Среда и данные | Результат | Артефакт |
 |---|---|---|---|
-| `npx vitest run --maxWorkers=1 --fileParallelism=false` | Linux x64, Node 24.14.1, PostgreSQL 18.6 + pgvector; изолированные тестовые БД | PASS: 937 / 937, 95 файлов | `artifacts/stage-09/tests.log` |
-| тесты этапа (9 файлов) | то же; модель — `FakeChat` (эвристика и сценарии отказов) | 71 / 71 (входят в полный набор) | `artifacts/stage-09/tests.log` |
+| `npx vitest run --maxWorkers=1 --fileParallelism=false` | Linux x64, Node 24.14.1, PostgreSQL 18.6 + pgvector; изолированные тестовые БД | PASS: 942 / 942, 96 файлов | `artifacts/stage-09/tests.log` |
+| тесты этапа (10 файлов) | то же; модель — `FakeChat` (эвристика и сценарии отказов), записывающая модель (R09-04) | 76 / 76 (входят в полный набор) | `artifacts/stage-09/tests.log` |
 | `npm run typecheck` | Linux x64 | PASS | `artifacts/stage-09/typecheck.log` |
 | `npm run build` | Linux x64 | PASS | `artifacts/stage-09/build.log` |
 | `SMOKE_STAGE=stage-09 npm run smoke` | Linux x64; настоящие server + worker, чистая БД, `MODEL_PROVIDER=fake`, поддельный TenderHub | PASS: 77 шагов (02–08a и 09: прогон, 12 исходов, замечания, права на риск и приоритет; отчёт после перезапуска server) | `artifacts/stage-09/smoke.log` |
@@ -162,7 +177,7 @@ Review 09-1 (Windows, `28a447e`): штатные проверки PASS, но т�
 
 ## Передача независимому ревьюеру
 
-Область Review 09-2: исправление R09-01…R09-03 — `docs/migrations/0025_review_currency.sql`, `packages/db/src/invalidation.ts`, `reviewRuns.ts`, `apps/worker/src/handlers/review.ts`, `apps/server/src/http/command.ts`, `routes/reviews.ts`, `discrepancies.ts`, `reviewScope.ts`, `tests/reviewRegressions09.test.ts`. Прежняя область (Review 09-1): `docs/migrations/0024_review_checks.sql`; `packages/core/src/review/`; `packages/db/src/reviewRuns.ts`, `reviewInputs.ts`, `findings.ts`, `discrepancies.ts`, `invalidation.ts`, `facts.ts` (`scopeFactGraphFull`); `apps/worker/src/handlers/review.ts`, `runtime.ts`; `apps/server/src/routes/reviews.ts`, `discrepancies.ts`, `reviewScope.ts`, `reviewMappers.ts`; `apps/web/src/pages/review/`; `packages/contracts/src/review.ts`; проект и решения — `docs/architecture/09-review-checks-design.md`, D-029.
+Область Review 09-3: исправление R09-04 — `apps/worker/src/handlers/review.ts` (задание `review.model`), `packages/db/src/reviewRuns.ts` (`requirementGateFor`, `hypothesisSource`), `apps/server/src/routes/reviews.ts`, `tests/reviewModelAccess.test.ts`. Область Review 09-2: исправление R09-01…R09-03 — `docs/migrations/0025_review_currency.sql`, `packages/db/src/invalidation.ts`, `reviewRuns.ts`, `apps/worker/src/handlers/review.ts`, `apps/server/src/http/command.ts`, `routes/reviews.ts`, `discrepancies.ts`, `reviewScope.ts`, `tests/reviewRegressions09.test.ts`. Прежняя область (Review 09-1): `docs/migrations/0024_review_checks.sql`; `packages/core/src/review/`; `packages/db/src/reviewRuns.ts`, `reviewInputs.ts`, `findings.ts`, `discrepancies.ts`, `invalidation.ts`, `facts.ts` (`scopeFactGraphFull`); `apps/worker/src/handlers/review.ts`, `runtime.ts`; `apps/server/src/routes/reviews.ts`, `discrepancies.ts`, `reviewScope.ts`, `reviewMappers.ts`; `apps/web/src/pages/review/`; `packages/contracts/src/review.ts`; проект и решения — `docs/architecture/09-review-checks-design.md`, D-029.
 
 Воспроизведение (из корня; PostgreSQL ≥ 17 с pgvector, адрес — `KONTUR_TEST_ADMIN_URL`):
 
@@ -171,7 +186,7 @@ npm ci
 npm run typecheck
 npm run build
 npx vitest run --maxWorkers=1 --fileParallelism=false
-npx vitest run tests/reviewRegressions09.test.ts tests/reviewCore.test.ts tests/reviewScenarios.test.ts tests/reviewInvalidation.test.ts tests/reviewCompleteness.test.ts tests/reviewModel.test.ts tests/reviewFacts.test.ts tests/reviewSchema.test.ts tests/reviewSecurity.test.ts --maxWorkers=1 --fileParallelism=false
+npx vitest run tests/reviewModelAccess.test.ts tests/reviewRegressions09.test.ts tests/reviewCore.test.ts tests/reviewScenarios.test.ts tests/reviewInvalidation.test.ts tests/reviewCompleteness.test.ts tests/reviewModel.test.ts tests/reviewFacts.test.ts tests/reviewSchema.test.ts tests/reviewSecurity.test.ts --maxWorkers=1 --fileParallelism=false
 SMOKE_STAGE=stage-09 npm run smoke
 node artifacts/stage-09/ui-check.mjs
 ```

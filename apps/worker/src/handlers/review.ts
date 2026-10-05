@@ -5,6 +5,7 @@
 // или с ошибкой, результаты правил сохраняются, прогон «с пробелами» (D-029 В-09-5). stage.invalidate — одно событие.
 import {
   hypothesisInputSha256,
+  tenderCapabilities,
   parseHypotheses,
   parseReviewInput,
   reviewSystemPrompt,
@@ -21,16 +22,20 @@ import {
   getReviewRun,
   insertCheckResults,
   insertSuggestions,
+  loadAccessContext,
   lockStageForReview,
+  memberRoleOf,
   processStageEvent,
   reconcileRunWithProcessedEvents,
   reviewCheckResults,
+  requirementGateFor,
   reviewRunInput,
   startReviewRun,
   updateReviewCoverage,
   writeRuleFindings,
   type IReviewRunRow,
   type PoolClient,
+  type RequirementGate,
 } from '@kontur/db';
 import { RetryableJobError, type IJobContext, type IJobHandlerSpec } from '../runtime.ts';
 
@@ -126,15 +131,39 @@ export const reviewModelHandler: IJobHandlerSpec = {
     }
     const system = reviewSystemPrompt();
     if (sha256Hex(system) !== run.prompt_sha256) return finishModel(ctx, run.id, 'error', 'промпт изменился после запуска', {});
-    // Вход модели закреплён при запуске вместе с входом правил (R09-02): те же требования, цитаты, которые запустивший
-    // читал в момент запуска, и позиции закреплённой ревизии расчёта.
+    // Вход модели закреплён при запуске вместе с входом правил (R09-02); права запустившего — текущие (R09-04): перед
+    // моделью и перед каждой пачкой проверяются активность, участие в тендере и видимость каждого требования целиком
+    // (замыкание закрытости R08-02 и цитаты). Закрытое сейчас требование исключается, вход при этом не меняется.
     const source = (await reviewRunInput(ctx.pool, run.id))?.model_input;
     if (!source) return finishModel(ctx, run.id, 'error', 'вход модели не закреплён при запуске', {});
-    const input: IHypothesisInput = { requirements: source.requirements, positions: source.positions };
-    const counts = { requirements: input.requirements.length, positions: input.positions.length, restricted: source.restricted };
+    const requester = async (): Promise<{ ok: true; gate: RequirementGate } | { ok: false; reason: string }> => {
+      const access = await loadAccessContext(ctx.pool, run.requested_by, `review-model:${run.id}`);
+      if (!access) return { ok: false, reason: 'запустивший пользователь отключён или недоступен: гипотезы не построены' };
+      if (!tenderCapabilities(access.roles, memberRoleOf(access, run.tender_id)).includes('review.run')) {
+        return { ok: false, reason: 'запустивший больше не участник тендера: гипотезы не построены' };
+      }
+      return { ok: true, gate: requirementGateFor(ctx.pool, access, run.stage_id) };
+    };
+    type Requirement = IHypothesisInput['requirements'][number] & { requirementId?: string };
+    const gateItems = (rs: readonly Requirement[]) =>
+      rs.filter((r) => r.requirementId).map((r) => ({ requirementId: r.requirementId!, fragmentIds: r.fragments.map((f) => f.fragmentId) }));
+    const excluded = new Set<string>();
+    const allowedNow = async (rs: readonly Requirement[]): Promise<{ ok: true; requirements: Requirement[] } | { ok: false; reason: string }> => {
+      const who = await requester();
+      if (!who.ok) return who;
+      const visible = await who.gate(gateItems(rs));
+      for (const r of rs) if (!r.requirementId || !visible.has(r.requirementId)) excluded.add(r.code);
+      return { ok: true, requirements: rs.filter((r) => r.requirementId && visible.has(r.requirementId)) };
+    };
+    const pinned = source.requirements as Requirement[];
+    const counts = () => ({ requirements: sentCodes.size, positions: source.positions.length, restricted: source.restricted + excluded.size });
+    const sentCodes = new Set<string>();
+    const first = await allowedNow(pinned);
+    if (!first.ok) return finishModel(ctx, run.id, 'incomplete', first.reason, counts());
+    const input: IHypothesisInput = { requirements: first.requirements, positions: source.positions };
     if (input.requirements.length === 0) {
-      const reason = source.restricted > 0 ? 'все требования содержат цитаты, недоступные запустившему' : null;
-      return finishModel(ctx, run.id, source.restricted > 0 ? 'incomplete' : 'not_applicable', reason ?? 'нет подтверждённых требований для гипотез', counts);
+      const restricted = source.restricted + excluded.size;
+      return finishModel(ctx, run.id, restricted > 0 ? 'incomplete' : 'not_applicable', restricted > 0 ? 'все требования содержат основания, недоступные запустившему' : 'нет подтверждённых требований для гипотез', counts());
     }
     // Пачки по требованиям: позиции расчёта — в каждой пачке; пачка больше предела модели — пробел охвата, а не
     // молча усечённый вход.
@@ -149,21 +178,33 @@ export const reviewModelHandler: IJobHandlerSpec = {
     }
     batches.push(cur);
     const oversized = batches.filter((b) => reviewUserContent(b).length > chat.maxInputChars).length;
-    if (oversized > 0) return finishModel(ctx, run.id, 'incomplete', `вход превышает предел модели: пачек — ${oversized}`, { ...counts, batches: batches.length });
-    const fragments = new Set(input.requirements.flatMap((r) => r.fragments.map((f) => f.fragmentId)));
+    if (oversized > 0) return finishModel(ctx, run.id, 'incomplete', `вход превышает предел модели: пачек — ${oversized}`, { ...counts(), batches: batches.length });
     const positions = new Set(input.positions.map((p) => p.positionId));
     const items: Parameters<typeof insertSuggestions>[2][number][] = [];
     let dropped = 0;
     let invalid = 0;
+    let sentBatches = 0;
+    let accessLost: string | null = null;
     for (const b of batches) {
       ctx.throwIfStopped();
-      const res = await chat.complete({ task: 'review_hypotheses', system, user: reviewUserContent(b), signal: ctx.signal });
+      // Права — перед каждой пачкой: отзыв во время прогона исключает закрытые требования следующих пачек.
+      const now = await allowedNow(b.requirements as Requirement[]);
+      if (!now.ok) {
+        accessLost = now.reason;
+        break;
+      }
+      if (now.requirements.length === 0) continue;
+      const batch: IHypothesisInput = { requirements: now.requirements, positions: b.positions };
+      for (const r of now.requirements) sentCodes.add(r.code);
+      sentBatches += 1;
+      const res = await chat.complete({ task: 'review_hypotheses', system, user: reviewUserContent(batch), signal: ctx.signal });
       if (!res.ok) {
         const code = `model_${res.error.code.toLowerCase()}`;
         if (res.error.retryable) throw new RetryableJobError(code, res.error.message);
-        return finishModel(ctx, run.id, 'error', `отказ модели: ${res.error.code}`, counts);
+        return finishModel(ctx, run.id, 'error', `отказ модели: ${res.error.code}`, counts());
       }
-      const parsed = parseHypotheses(res.value.content, fragments, positions);
+      // Ссылки гипотез — только на цитаты требований этой пачки.
+      const parsed = parseHypotheses(res.value.content, new Set(batch.requirements.flatMap((r) => r.fragments.map((f) => f.fragmentId))), positions);
       if (!parsed.ok) {
         invalid += 1;
         continue;
@@ -178,9 +219,11 @@ export const reviewModelHandler: IJobHandlerSpec = {
       const savedIds = await insertSuggestions(client, fresh, items);
       await reconcileRunWithProcessedEvents(client, fresh, { findingIds: new Set(), suggestionIds: new Set(savedIds) });
       const saved = savedIds.length;
+      const restricted = source.restricted + excluded.size;
       const gaps = [
-        source.restricted > 0 ? `требований с цитатами, недоступными запустившему, — ${source.restricted}` : '',
-        invalid > 0 ? `ответов модели не прошли проверку — ${invalid} из ${batches.length}` : '',
+        accessLost ?? '',
+        restricted > 0 ? `требований с основаниями, недоступными запустившему, — ${restricted}` : '',
+        invalid > 0 ? `ответов модели не прошли проверку — ${invalid} из ${sentBatches}` : '',
       ].filter(Boolean);
       await finishWithModel(
         client,
@@ -188,9 +231,9 @@ export const reviewModelHandler: IJobHandlerSpec = {
         {
           outcome: gaps.length > 0 ? 'incomplete' : saved > 0 ? 'failed' : 'passed',
           reason: gaps.length > 0 ? gaps.join('; ') : null,
-          counts: { ...counts, batches: batches.length, hypotheses: saved, dropped, invalidOutputs: invalid },
+          counts: { ...counts(), batches: sentBatches, hypotheses: saved, dropped, invalidOutputs: invalid },
         },
-        { ...fresh.coverage, modelInputSha256: hypothesisInputSha256(input) },
+        { ...fresh.coverage, modelInputSha256: hypothesisInputSha256({ requirements: pinned, positions: source.positions }) },
       );
     });
   },

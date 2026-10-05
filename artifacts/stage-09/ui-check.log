@@ -1,4 +1,4 @@
-# ui-check — 2026-10-05T06:31:59.162Z, linux x64, Node v24.14.1, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker, MODEL_PROVIDER=fake, TenderHub — поддельный
+# ui-check — 2026-10-05T07:38:34.927Z, linux x64, Node v24.14.1, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker, MODEL_PROVIDER=fake, TenderHub — поддельный
 PASS  server + worker готовы
 PASS  вход администратора-руководителя
 PASS  ТЗ загружено и распознано (CSV, локально) — complete

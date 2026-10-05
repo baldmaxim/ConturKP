@@ -1,5 +1,5 @@
-# регрессия на коде 09-2: 2026-10-05T11:22:24+05:00, linux x64 Node v24.14.1, artifacts/stage-02/ui-check.mjs, exit 0
-# ui-check — 2026-10-05T06:22:24.086Z, Microsoft Edge headless, реальные server + worker
+# регрессия на коде 09-3: 2026-10-05T12:28:47+05:00, linux x64 Node v24.14.1, artifacts/stage-02/ui-check.mjs, exit 0
+# ui-check — 2026-10-05T07:28:47.589Z, Microsoft Edge headless, реальные server + worker
 PASS  server + worker готовы
 PASS  без входа открывается форма входа
 PASS  вход инженера через форму — список тендеров — 390 px

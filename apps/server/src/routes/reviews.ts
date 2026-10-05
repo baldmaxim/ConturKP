@@ -6,7 +6,7 @@ import { createChatModel } from '@kontur/adapters';
 import type { IAppConfig } from '@kontur/config';
 import { CreateFindingRequest, FindingTransitionRequest, PatchFindingRequest } from '@kontur/contracts';
 import { FINDING_KIND_META, formatEtag, HUMAN_FINDING_TRANSITIONS, type FindingStatus, type IEvidenceDraft } from '@kontur/core';
-import { createHumanFinding, createReviewRun, getFinding, getReviewRun, listFindings, listReviewRuns, lockTenderStages, patchFinding, readableFragments, transitionFinding, type Pool } from '@kontur/db';
+import { createHumanFinding, createReviewRun, getFinding, getReviewRun, listFindings, listReviewRuns, lockTenderStages, patchFinding, requirementGateFor, transitionFinding, type Pool } from '@kontur/db';
 import { Router } from 'express';
 import { command, parseBody, query, requireIfMatch, uuidParam, versionConflict } from '../http/command.ts';
 import { forbidden } from '../http/errors.ts';
@@ -36,7 +36,7 @@ export const reviewsRouter = (pool: Pool, config: IAppConfig): Router => {
           stageId: stage.id,
           userId: ctx.principal.userId,
           model: chat ? { providerId: chat.providerId, model: chat.model, version: chat.version } : null,
-          readable: (ids) => readableFragments(client, ctx, ids),
+          gate: requirementGateFor(client, ctx, stage.id),
         });
         if (!r.ok && r.reason === 'no_scope') throw conflict('у этапа нет снимка области: зафиксируйте снимок источников', 'no_scope', target);
         if (!r.ok) throw conflict('реестр или записи этапа менялись во время запуска: повторите запуск', 'inputs_changed', target);

@@ -20,7 +20,10 @@ import {
   type ReviewCheckCode,
   type ReviewRunStatus,
 } from '@kontur/core';
+import type { IAccessContext } from './access.ts';
 import { enqueueJob } from './jobs.ts';
+import { readableFragments } from './requirementAccess.ts';
+import { stageVisibility } from './requirementTaint.ts';
 import { loadReviewInput } from './reviewInputs.ts';
 import type { Queryable } from './pool.ts';
 
@@ -72,14 +75,24 @@ export interface IModelIdentity {
 
 export type CreateReviewRunResult = { ok: true; run: IReviewRunRow; created: boolean } | { ok: false; reason: 'no_scope' | 'inputs_changed' };
 
-export type ReadableFragments = (fragmentIds: readonly string[]) => Promise<ReadonlySet<string>>;
+// Требования, которые пользователь видит целиком сейчас: замыкание закрытости этапа (R08-02) и читаемость цитат.
+export type RequirementGate = (items: readonly { requirementId: string; fragmentIds: readonly string[] }[]) => Promise<ReadonlySet<string>>;
+
+export const requirementGateFor =
+  (db: Queryable, ctx: IAccessContext, stageId: string): RequirementGate =>
+  async (items) => {
+    if (items.length === 0) return new Set();
+    const vis = await stageVisibility(db, ctx, stageId);
+    const readable = await readableFragments(db, ctx, items.flatMap((i) => i.fragmentIds));
+    return new Set(items.filter((i) => vis.visible('requirement', i.requirementId) && i.fragmentIds.every((f) => readable.has(f))).map((i) => i.requirementId));
+  };
 
 // Запуск: активный прогон этапа (в очереди или выполняется) возвращается повторно — двойной запуск не плодит прогонов.
 // Вход закрепляется в транзакции запуска под блокировкой этапа (R09-02): содержимое реестра, покрытие, вход модели (только
 // читаемые запустившим цитаты), отпечаток содержимого этапа. Если содержимое изменилось во время сборки — отказ, повтор.
 export const createReviewRun = async (
   db: Queryable,
-  r: { tenderId: string; stageId: string; userId: string; model: IModelIdentity | null; readable: ReadableFragments },
+  r: { tenderId: string; stageId: string; userId: string; model: IModelIdentity | null; gate: RequirementGate },
 ): Promise<CreateReviewRunResult> => {
   const stage = (await db.query<{ input_version: number }>('SELECT input_version FROM tender_stage WHERE id = $1 FOR UPDATE', [r.stageId])).rows[0]!;
   const active = (await db.query<IReviewRunRow>("SELECT * FROM review_run WHERE stage_id = $1 AND status IN ('queued', 'running') ORDER BY created_at DESC LIMIT 1", [r.stageId])).rows[0];
@@ -115,7 +128,7 @@ export const createReviewRun = async (
   const run = ins.rows[0]!;
   const fingerprint = await stageContentFingerprint(db, r.stageId, run.registry_id);
   const { input } = await loadReviewInput(db, run);
-  const modelInput = run.model_provider ? await hypothesisSource(db, run, r.readable) : null;
+  const modelInput = run.model_provider ? await hypothesisSource(db, run, r.gate) : null;
   if ((await stageContentFingerprint(db, r.stageId, run.registry_id)) !== fingerprint) return { ok: false, reason: 'inputs_changed' };
   const json = serializeReviewInput(input);
   await db.query('INSERT INTO review_run_input (run_id, input, model_input, input_sha256, content_fingerprint) VALUES ($1, $2, $3, $4, $5)', [
@@ -131,7 +144,8 @@ export const createReviewRun = async (
 };
 
 export interface IHypothesisSource {
-  requirements: { code: string; statement: string; parameters: { name: string; value: string; unit: string | null }[]; fragments: { fragmentId: string; text: string }[] }[];
+  // `requirementId` — для проверки прав перед моделью (R09-04); у входов до 09-3 его нет — такое требование не отправляется.
+  requirements: { requirementId?: string; code: string; statement: string; parameters: { name: string; value: string; unit: string | null }[]; fragments: { fragmentId: string; text: string }[] }[];
   positions: { positionId: string; text: string; unit: string | null; volume: number | null }[];
   restricted: number;
 }
@@ -348,12 +362,12 @@ export const insertSuggestions = async (db: Queryable, run: IReviewRunRow, items
 export const hypothesisSource = async (
   db: Queryable,
   run: { registry_id: string | null; calculation_revision_id: string | null },
-  readable: ReadableFragments,
+  gate: RequirementGate,
 ): Promise<IHypothesisSource> => {
   if (!run.registry_id) return { requirements: [], positions: [], restricted: 0 };
   const rows = (
-    await db.query<{ code: string; statement: string; parameters: { name: string; value: string; unit: string | null }[]; fragment_id: string; text: string }>(
-      `SELECT q.code, v.statement, v.parameters, f.id AS fragment_id, f.text
+    await db.query<{ requirement_id: string; code: string; statement: string; parameters: { name: string; value: string; unit: string | null }[]; fragment_id: string; text: string }>(
+      `SELECT q.id AS requirement_id, q.code, v.statement, v.parameters, f.id AS fragment_id, f.text
          FROM requirement q JOIN requirement_revision v ON v.id = q.current_revision_id
          JOIN evidence_link l ON l.requirement_revision_id = v.id AND l.role = 'supports'
          JOIN evidence_fragment f ON f.id = l.fragment_id
@@ -362,17 +376,18 @@ export const hypothesisSource = async (
       [run.registry_id],
     )
   ).rows;
-  const ok = await readable(rows.map((r) => r.fragment_id));
-  const byCode = new Map<string, { code: string; statement: string; parameters: { name: string; value: string; unit: string | null }[]; fragments: { fragmentId: string; text: string }[]; blocked: boolean }>();
+  const byId = new Map<string, IHypothesisSource['requirements'][number]>();
   for (const r of rows) {
-    const cur = byCode.get(r.code) ?? { code: r.code, statement: r.statement, parameters: r.parameters, fragments: [], blocked: false };
-    if (ok.has(r.fragment_id)) cur.fragments.push({ fragmentId: r.fragment_id, text: r.text });
-    else cur.blocked = true;
-    byCode.set(r.code, cur);
+    const cur = byId.get(r.requirement_id) ?? { requirementId: r.requirement_id, code: r.code, statement: r.statement, parameters: r.parameters, fragments: [] };
+    cur.fragments.push({ fragmentId: r.fragment_id, text: r.text });
+    byId.set(r.requirement_id, cur);
   }
-  // Требование с недоступной запустившему цитатой в модель не уходит целиком (производный текст тоже закрыт, R08-02).
-  const requirements = [...byCode.values()].filter((r) => !r.blocked && r.fragments.length > 0).map(({ blocked: _b, ...r }) => r);
-  const restricted = [...byCode.values()].filter((r) => r.blocked).length;
+  // Требование уходит в модель, только если запустивший видит его целиком: замыкание закрытости R08-02 (основания любой
+  // роли и наследование текста) и все цитаты (R09-04).
+  const all = [...byId.values()];
+  const visible = await gate(all.map((r) => ({ requirementId: r.requirementId!, fragmentIds: r.fragments.map((f) => f.fragmentId) })));
+  const requirements = all.filter((r) => visible.has(r.requirementId!));
+  const restricted = all.length - requirements.length;
   const positions = run.calculation_revision_id
     ? (
         await db.query<{ external_position_id: string; text: string; unit_code: string | null; volume: string | null }>(

@@ -1,5 +1,5 @@
-# регрессия на коде 09-2: 2026-10-05T11:24:21+05:00, linux x64 Node v24.14.1, artifacts/stage-07/ui-check.mjs, exit 0
-# ui-check — 2026-10-05T06:24:21.893Z, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker
+# регрессия на коде 09-3: 2026-10-05T12:30:45+05:00, linux x64 Node v24.14.1, artifacts/stage-07/ui-check.mjs, exit 0
+# ui-check — 2026-10-05T07:30:45.101Z, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker
 PASS  server + worker готовы
 PASS  вход администратора-руководителя
 PASS  пункт «Почта» в шапке администратора ящиков

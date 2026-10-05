@@ -1,12 +1,12 @@
-# 2026-10-05T11:25:07+05:00, linux x64 Node v24.14.1, Ubuntu 26.04.1 LTS; PostgreSQL 18.6 + pgvector (контейнер kontur-pg, 127.0.0.1:55432)
+# 2026-10-05T12:31:34+05:00, linux x64 Node v24.14.1, Ubuntu 26.04.1 LTS; PostgreSQL 18.6 + pgvector (контейнер kontur-pg, 127.0.0.1:55432)
 # npx vitest run --maxWorkers=1 --fileParallelism=false
 
  RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
 
 
- Test Files  95 passed (95)
-      Tests  937 passed (937)
-   Start at  11:25:07
-   Duration  336.85s (tests 91%, import 8%, transform 1%)
+ Test Files  96 passed (96)
+      Tests  942 passed (942)
+   Start at  12:31:34
+   Duration  345.63s (tests 91%, import 8%, transform 1%)
 
 exit 0

@@ -37,7 +37,11 @@ export type TenderCapability =
   | 'review.run'
   | 'finding.write'
   | 'finding.accept_risk'
-  | 'source_priority.manage';
+  | 'source_priority.manage'
+  // Этап 10 (D-030): сравнение ревизий расчёта и подтверждение причин изменений — участник тендера.
+  // БД повторяет в tender_capabilities (миграция 0026).
+  | 'economics.compare'
+  | 'change_reason.confirm';
 
 export const ROLES: readonly Role[] = ['admin', 'manager', 'engineer'];
 export const MEMBER_ROLES: readonly MemberRole[] = ['engineer', 'manager'];
@@ -89,6 +93,7 @@ export const tenderCapabilities = (
   // не получает (OD-08-5).
   if (role) caps.push('requirement.read', 'requirement.create', 'analysis.run', 'fact.read', 'fact.create');
   if (role) caps.push('review.run', 'finding.write');
+  if (role) caps.push('economics.compare', 'change_reason.confirm');
   // Решения о неприменимости (элементы импорта, удержания) — только руководитель тендера (ADR-006 §3).
   if (role === 'manager') caps.push('stage.manage', 'hold.resolve');
   // Подтверждение, решение и ведение реестра — руководитель тендера (OD-08-5).

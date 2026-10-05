@@ -34,6 +34,7 @@
     "@napi-rs/canvas": "^0.1.100",
     "@tesseract.js-data/eng": "^1.0.0",
     "@tesseract.js-data/rus": "^1.0.0",
+    "decimal.js": "10.6.0",
     "express": "^5.2.1",
     "pdfjs-dist": "^5.7.284",
     "pg": "^8.23.0",

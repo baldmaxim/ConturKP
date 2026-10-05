@@ -406,6 +406,8 @@
 
 `comparison`: `computing` → `ready` / `failed`. `change_explanation.reason_status`: `hypothesis` (модель или правило) → `confirmed` (human с основанием) или `unknown`. Строка `unexplained_remainder` существует всегда; сумма вкладов равна итоговой разнице по зафиксированному методу разложения (I11, A20).
 
+Этап 10 (D-030): `calculation_comparison` — `computing` → `ready` | `failed` в одной транзакции создания, затем неизменно; «устарело» — вычисляемый признак (новые решения по парам после `lineage_seq`, изменившиеся основания причин). `change_explanation` — версии: `unknown` → `hypothesis` (человек, основание неполное) → `confirmed` (человек, основание своего вида); предложение модели — отдельный объект `change_reason_suggestion` (`open` → `accepted` | `rejected` | `expired`), в причину попадает только решением человека. `position_lineage` — append-only: `proposed` → `confirmed` / `rejected`; система подтверждает только `source_lineage` одного экземпляра, тендера и версии. Порядок подстановок: количество → цена в валюте → курс → доставка → коэффициент; совместный эффект — к более позднему фактору.
+
 ## 19. Статус интеграции (`integration_status`)
 
 | Статус | Когда ставится | Кем |

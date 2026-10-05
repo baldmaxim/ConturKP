@@ -6,6 +6,7 @@
 // Этап 08 (scripts/smoke-08.mjs): реестр требований, прогон поддельной модели, покрытие, полнота, права.
 // Этап 08a (scripts/smoke-08a.mjs): диалог, вопрос заданием gpu, ответ с цитатами, 409 второго вопроса, права.
 // Этап 09 (scripts/smoke-09.mjs): прогон проверки, 12 исходов, замечания, права на риск и приоритет; после перезапуска — из БД.
+// Этап 10 (scripts/smoke-10.mjs): отчёт ревизии, вторая ревизия, сравнение с парами системы и остатком; после перезапуска — из БД.
 // База kontur_kp_smoke_test создаётся заново и удаляется в конце. Пароль генерируется и не выводится.
 // Результат: artifacts/stage-02/smoke.log; код 0 только если все шаги PASS.
 import { spawn, spawnSync } from 'node:child_process';
@@ -21,6 +22,7 @@ import { smokeMail } from './smoke-07.mjs';
 import { smokeRequirements } from './smoke-08.mjs';
 import { smokeAnswers } from './smoke-08a.mjs';
 import { smokeReview } from './smoke-09.mjs';
+import { smokeEconomics } from './smoke-10.mjs';
 import { PRECISE_RATE, TH, standardTender, startFakeTenderHub } from './tenderhub-fake.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -61,6 +63,8 @@ const env = {
   ALLOWED_ORIGINS: BASE,
   TENDERHUB_URL: hub.url,
   TENDERHUB_API_KEY: SECRET_MARKER,
+  // Экземпляр TenderHub (D-030): пары source_lineage одной версии подтверждает система.
+  TENDERHUB_INSTANCE_ID: 'th-smoke',
   INTAKE_ROOTS: INTAKE_ROOT,
   INTAKE_STABILITY_SECONDS: '1',
   // Генеративная модель этапа 08 — поддельный провайдер: живой модели на машине разработки нет (U-08).
@@ -477,12 +481,22 @@ try {
   // ---- Этап 09: проверка и разногласия — scripts/smoke-09.mjs
   const rev09 = await smokeReview({ api, api2, record, waitFor, idem, json, tenderId: demo.id, stageId });
 
+  // ---- Этап 10: экономика — scripts/smoke-10.mjs
+  const econ10 = await smokeEconomics({ api, record, waitFor, idem, json, stageId, hub, standardTender, TH });
+
   await stopProc(server);
   server = startProc('server', 'apps/server/src/main.ts');
   ready = await waitReady(30_000);
   record('перезапуск server — /ready 200', ready.ok);
   const reqAfter = await api(`/requirements/${req08.requirementId}`);
-  record('этап 08: после перезапуска требование, ревизии и покрытие на месте', reqAfter.status === 200 && (await reqAfter.json()).coverageState === 'covered');
+  const reqAfterBody = reqAfter.status === 200 ? await reqAfter.json() : null;
+  // Вторая ревизия расчёта из шагов этапа 10 ставит покрытию needs_review (триггер БД этапа 08).
+  const coverageExpected = econ10.secondRevision ? 'needs_review' : 'covered';
+  record(
+    'этап 08: после перезапуска требование, ревизии и покрытие на месте (после новой ревизии расчёта — «требует проверки»)',
+    reqAfterBody?.coverageState === coverageExpected,
+    reqAfterBody ? `покрытие: ${reqAfterBody.coverageState}` : `HTTP ${reqAfter.status}`,
+  );
   const dialogAfter = await api(`/dialogs/${ans08a.dialogId}`);
   const dialogAfterBody = dialogAfter.status === 200 ? await dialogAfter.json() : null;
   record(
@@ -492,6 +506,8 @@ try {
   const runAfter = await api(`/review-runs/${rev09.runId}`);
   const runAfterBody = runAfter.status === 200 ? await runAfter.json() : null;
   record('этап 09: после перезапуска отчёт проверки — из PostgreSQL, итог прежний', runAfterBody?.status === rev09.status && runAfterBody?.checks?.length === 12);
+  const cmpAfter = econ10.comparisonId ? await (await api(`/comparisons/${econ10.comparisonId}`)).json() : null;
+  record('этап 10: после перезапуска сравнение — из PostgreSQL, тот же хэш результата', Boolean(econ10.resultSha256) && cmpAfter?.resultSha256 === econ10.resultSha256);
   const me = await fetch(`${BASE}/api/v1/me`, { headers: { Cookie: cookieHeader() } });
   record('перезапуск server — сессия действительна', me.status === 200);
 

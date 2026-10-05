@@ -44,8 +44,8 @@ export const CalculationRevisionView: FC<ICalculationRevisionViewProps> = ({ rev
       ) : null}
       {revision.kpTotal.value === null ? (
         <Notice tone="info">
-          Правило итога КП владелец ещё не задал (Q-05): портал итог КП не выводит. Ниже — значения TenderHub как есть; валюта сумм
-          источником не указана.
+          Портал итог КП не выводит (Q-05). Ниже — значения TenderHub как есть: себестоимость — в рублях, коммерческие суммы — в рублях как
+          вывод из формулы «себестоимость × коэффициент»; НДС неизвестен. Сверка и сравнение — на вкладке «Экономика».
         </Notice>
       ) : null}
       <dl className={form.details}>

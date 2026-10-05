@@ -2,6 +2,8 @@
 // получают единицы и статус той же функцией, что и новые; прежняя оценка «покрыто» с несовпадением единиц не
 // ломает миграцию и после обновления явно помечена; прежние конфликтующие требования видны как конфликт; новые
 // записи проходят проверки 0020. Данные этапа 08 до 0020 пишутся SQL в форме 0019 (код HEAD уже знает 0020).
+// Код выгрузки HEAD пишет и читает колонки экземпляра источника из 0026 (D-030): на старой схеме они добавляются
+// заранее в форме 0026 без проверок — к объектам 0020/0021 отношения не имеют, тест до 0026 не домигрирует.
 // R08-03: обновление 0020 → 0021 — ложный конфликт `100` / `100.0` исчезает, пояснение прежней ревизии остаётся в
 // истории; записи, равные только без внутренних пробелов (`5x10` / `5 x 10`), после 0021 показываются конфликтом.
 import { cpSync, mkdtempSync, readdirSync } from 'node:fs';
@@ -45,6 +47,9 @@ let calc1: string;
 beforeAll(async () => {
   await setupDatabase(ADMIN_URL, name);
   expect(await migrateTo(19)).toBe(19);
+  const m = new pg.Client({ connectionString: urlFor('kontur_migrator') });
+  await m.connect();
+  await m.query('ALTER TABLE calculation_capture ADD COLUMN source_instance_id text, ADD COLUMN source_origin text').finally(() => m.end());
   db = { name, appUrl: urlFor('kontur_app'), migratorUrl: urlFor('kontur_migrator'), pool: createPool(urlFor('kontur_app'), 5), drop: async () => undefined };
   hub = await startFakeTenderHub({ apiKey: TH_KEY });
   hub.tenders.set(TH.tender, standardTender());

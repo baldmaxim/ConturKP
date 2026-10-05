@@ -75,7 +75,8 @@ describe('выгрузка portal_capture → ревизия provisional (ADR-00
     expect(rev).toMatchObject({ seq: 1, kind: 'provisional', externalTenderId: TH.tender, externalVersion: 3, externalRevisionRef: null, counts: { positions: 4, lines: 3 } });
     // Итог КП не выводится (Q-05); cached_grand_total — значение источника.
     expect(rev.kpTotal).toMatchObject({ value: null, rule: null, semantics: { status: 'rule_not_set', question: 'Q-05' } });
-    expect(rev.source.grandTotal).toMatchObject({ amount: '1860.9', currency: 'UNKNOWN', vat: 'unknown', priceKind: 'commercial' });
+    // D-030: cached_grand_total — RUB как вывод из принятой формулы, НДС неизвестен.
+    expect(rev.source.grandTotal).toMatchObject({ amount: '1860.9', currency: 'RUB', vat: 'unknown', priceKind: 'commercial', source: { derivation: 'derived_from_formula' } });
     expect(rev.source.fxRates).toEqual({ USD: '90.5', EUR: '99.25', CNY: '12.75' });
     // Production gate: боевой выпуск с provisional-ревизией заблокирован.
     expect(rev.productionGate).toEqual({ mode: 'production', allowed: false, blockers: ['CALCULATION_PROVISIONAL'] });
@@ -93,13 +94,13 @@ describe('выгрузка portal_capture → ревизия provisional (ADR-00
   it('сырые ответы и манифест лежат в хранилище по SHA-256 с версией контракта', async () => {
     const caps = (await s.eng1.get(`/stages/${s.stageA}/calculation-captures`)).body.items;
     const cap = caps[0];
-    expect(cap.contractVersion).toBe('th-api-2026-09-02/adapter-1');
+    expect(cap.contractVersion).toBe('th-api-2026-09-02/adapter-2');
     const blob = await db.pool.query<{ size_bytes: number }>('SELECT size_bytes FROM blob WHERE sha256 = $1', [cap.rawBundleSha256]);
     expect(blob.rows).toHaveLength(1);
     const { readFile } = await import('node:fs/promises');
     const store = new BlobStore(base.storageRoot);
     const manifest = JSON.parse(await readFile(store.pathOf(cap.rawBundleSha256), 'utf8')) as { contractVersion: string; responses: { route: string; sha256: string; status: number }[] };
-    expect(manifest.contractVersion).toBe('th-api-2026-09-02/adapter-1');
+    expect(manifest.contractVersion).toBe('th-api-2026-09-02/adapter-2');
     expect(manifest.responses.map((r) => r.route)).toEqual(['overview', 'brief', 'positions', 'positions', 'positions_with_costs', 'boq_items_full', 'overview']);
     const boqRaw = await readFile(store.pathOf(manifest.responses.find((r) => r.route === 'boq_items_full')!.sha256), 'utf8');
     // Сырой ответ — ровно текст источника: лексема цены с 21 значащей цифрой сохранена.
@@ -117,14 +118,17 @@ describe('выгрузка portal_capture → ревизия provisional (ADR-00
     const page2 = await s.eng1.get(`/calculation-revisions/${rev.id}/positions?limit=2&cursor=${encodeURIComponent(page1.body.nextCursor)}`);
     expect(page2.body).toMatchObject({ hasMore: false, nextCursor: null });
     const all = [...page1.body.items, ...page2.body.items];
-    const byId: Record<string, { totals: { baseTotal: unknown } }> = Object.fromEntries(
-      all.map((p: { externalPositionId: string; totals: { baseTotal: unknown } }) => [p.externalPositionId, p]),
+    const byId: Record<string, { totals: { baseTotal: unknown; materialCostTotal: unknown; workCostTotal: unknown } }> = Object.fromEntries(
+      all.map((p: { externalPositionId: string; totals: { baseTotal: unknown; materialCostTotal: unknown; workCostTotal: unknown } }) => [p.externalPositionId, p]),
     );
     expect(byId[TH.p0]).toMatchObject({ isSection: true, lines: 0 });
     expect(byId[TH.p2]).toMatchObject({ isSection: false, lines: 0, itemsCount: 0 });
     expect(byId[TH.p3]).toMatchObject({ isAdditional: true, manualVolume: { value: '40', note: 'по факту вывоза', semantics: 'unconfirmed' }, volume: '1' });
     expect(byId[TH.p1]).toMatchObject({ dominantCostCategory: 'МОНОЛИТНЫЕ РАБОТЫ', markupPercentage: '20.0000000000001', lines: 2 });
-    expect(byId[TH.p1]!.totals.baseTotal).toMatchObject({ amount: '1500.75', priceKind: 'cost', currency: 'UNKNOWN' });
+    expect(byId[TH.p1]!.totals.baseTotal).toMatchObject({ amount: '1500.75', priceKind: 'cost', currency: 'RUB' });
+    // material_cost_total / work_cost_total — коммерческие колонки КП, а не себестоимость (D-030, п. 12).
+    expect(byId[TH.p1]!.totals.materialCostTotal).toMatchObject({ priceKind: 'commercial', currency: 'RUB' });
+    expect(byId[TH.p1]!.totals.workCostTotal).toMatchObject({ priceKind: 'commercial', currency: 'RUB' });
     const lines = await s.eng1.get(`/calculation-revisions/${rev.id}/lines?positionId=${TH.p1}`);
     expect(lines.body.items.map((l: { externalItemId: string }) => l.externalItemId)).toEqual([TH.l1, TH.l2]);
     const [work, material] = lines.body.items;
@@ -158,7 +162,8 @@ describe('выгрузка portal_capture → ревизия provisional (ADR-00
     // Строка в долларах несёт валюту источника; суммы без подтверждённой валюты — UNKNOWN.
     const usd = (await s.eng1.get(`/calculation-revisions/${rev.id}/lines?positionId=${TH.p3}`)).body.items[0];
     expect(usd.unitRate).toMatchObject({ amount: '12.5', currency: 'USD', unit: 'т' });
-    expect(usd.totalAmount).toMatchObject({ amount: '50', currency: 'UNKNOWN' });
+    expect(usd.totalAmount).toMatchObject({ amount: '50', currency: 'RUB' });
+    expect(usd.quoteDatesStatus).toBe('not_received');
   });
 
   it('сверка агрегатов записана: суммы строк сходятся с итогами позиций и с cached_grand_total', async () => {

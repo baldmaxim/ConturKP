@@ -400,8 +400,19 @@ CHECK 0014 требовал размеры у `pdf_page` только в ста�
 
 | Таблица | Класс | Ключевые колонки | Ограничения |
 |---|---|---|---|
-| `comparison` | frozen-after | `tender_id`, `left_release_id`, `right_release_id`, `method_version`, `decomposition_method`, `status` (`computing`/`ready`/`failed`) | обе стороны — выпуски, не текущие папки |
-| `change_explanation` | mutable | `comparison_id`, `subject_type`, `subject_ref`, `delta` (сумма, валюта, НДС, вид цены), `components` (объём/цена/курс по методике), `reason_kind` (`document`/`answer`/`supplier`/`internal_decision`/`unknown`), `reason_status` (`hypothesis`/`confirmed`/`unknown`), `evidence_refs`, `confirmed_by` | строка `unexplained_remainder` обязательна (I11, A20, A23) |
+| `comparison` | frozen-after | `tender_id`, `left_release_id`, `right_release_id`, `method_version`, `decomposition_method`, `status` (`computing`/`ready`/`failed`) | обе стороны — выпуски, не текущие папки; этап 15 — поверх `calculation_comparison` ревизий, закреплённых в выпусках |
+
+Этап 10 (миграция `0026`, D-030; проект `docs/architecture/10-economics-design.md` §2) — сравнение ревизий расчёта, на котором строится сравнение выпусков:
+
+| Таблица | Класс | Ключевые колонки | Ограничения |
+|---|---|---|---|
+| `revision_economics` | immutable | `revision_id`, `method_version`, `cost_total`, `commercial_total`, `grand_total`, `residual`, `tolerance`, `reconciliation_status`, допуск пересчёта строк, `report` | одна на (ревизия, метод); суммы сверяются с содержимым ревизии; пишется с пересчётом каждой строки |
+| `revision_line_check` | immutable | `economics_id`, `external_item_id`, `formula`, `recomputed_cost`, `deviation`, `within_tolerance`, `derived_quantity`, `flags` | только вместе с отчётом; отклонение = полученное − пересчитанное; исходные строки не меняются |
+| `calculation_comparison` | frozen-after | `tender_id`, `stage_id`, `left_revision_id`, `right_revision_id`, `method_version`, `decomposition_method` (`chain_substitution`), `method_description`, `tolerance`, `lineage_seq`, `status`, `totals`, `result_sha256` | одной транзакцией; итоговая проверка: покрытие позиций, суммы единиц по строкам, Σ вкладов = дельта |
+| `comparison_unit` | immutable | стороны (массивы позиций), `kind`, суммы и сопоставимость по мерам, дельты колонок, `column_shift` | единица — компонента связности подтверждённых пар |
+| `comparison_effect` | immutable | `unit_id` (null — тендер), `measure`, `component`, `amount`, `line_refs` | уровень тендера — ровно `incomparable_units` и `unexplained_remainder` на меру |
+| `change_explanation` | immutable (версии) | `comparison_id`, `unit_id`, `version`, `reason_kind`, `reason_status`, `rationale`, `suggestion_id`, `actor_user_id`; основания — `change_explanation_basis` | «подтверждена» — человек с правом, основание своего вида, события этапа обработаны (I11, A23) |
+| `reason_run`, `reason_run_input`, `change_reason_suggestion(_evidence)` | frozen-after / immutable | закреплённый вход прогона, гипотезы модели с цитатами | гипотеза — только предложение; принимает человек (I12) |
 
 ### 4.12. Сервисные
 

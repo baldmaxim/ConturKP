@@ -79,6 +79,8 @@ export interface ITenderHubConfig {
   maxResponseBytes: number;
   // Попыток одной выгрузки: изменение данных во время чтения, сеть, 429 после ожидания.
   captureAttempts: number;
+  // Стабильный идентификатор экземпляра TenderHub (D-030): без него пары source_lineage остаются предложениями.
+  instanceId: string | null;
 }
 
 // Локальное распознавание (этап 05a, D-014, D-024). OCR-движок — tesseract.js (WASM внутри worker,
@@ -301,6 +303,18 @@ const tenderHubUrlProblem = (raw: string): string | null => {
   return 'только https (http допустим лишь для loopback)';
 };
 
+// Идентификатор экземпляра задаётся явно и не меняется: адрес подключения идентичностью экземпляра не считается (D-030).
+const INSTANCE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
+const instanceIdFrom = (env: Env, problems: string[]): string | null => {
+  const raw = env.TENDERHUB_INSTANCE_ID?.trim();
+  if (!raw) return null;
+  if (!INSTANCE_ID_RE.test(raw)) {
+    problems.push('TENDERHUB_INSTANCE_ID: латиница, цифры, «.», «_», «-», до 64 символов');
+    return null;
+  }
+  return raw;
+};
+
 const tenderhubFrom = (env: Env, problems: string[]): ITenderHubConfig => {
   const baseUrl = env.TENDERHUB_URL || null;
   const apiKey = env.TENDERHUB_API_KEY || null;
@@ -316,6 +330,7 @@ const tenderhubFrom = (env: Env, problems: string[]): ITenderHubConfig => {
     rateLimitWindowMs: 60_000,
     maxResponseBytes: intFrom(env, 'TENDERHUB_MAX_RESPONSE_MB', 512, problems) * MIB,
     captureAttempts: intFrom(env, 'TENDERHUB_CAPTURE_ATTEMPTS', 3, problems),
+    instanceId: instanceIdFrom(env, problems),
   };
 };
 

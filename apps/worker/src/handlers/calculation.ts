@@ -188,10 +188,12 @@ const runCapture = async (ctx: IJobContext, captureId: string, startedAt: string
           headerLexemes: result.headerLexemes,
           kpTotalSemantics: { ...KP_TOTAL_RULE_NOT_SET },
           rawBundleSha256: bundle.sha256,
-          consistency: { ...result.consistency },
+          consistency: { ...result.consistency, commercialComponents: result.commercialComponents },
           sourceObserved: { ...result.observed },
           contractVersion: TENDERHUB_CONTRACT_VERSION,
           attempt,
+          sourceInstanceId: th.instanceId,
+          sourceOrigin: new URL(th.baseUrl!).origin,
         });
         await recordTenderHubStatus(client, {
           ok: true,

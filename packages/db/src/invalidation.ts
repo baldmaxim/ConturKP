@@ -144,6 +144,9 @@ export interface IInvalidationOutcome {
   decisions: number;
   axisEvents: number;
   suggestions: number;
+  // Этап 10: подтверждённые причины изменений с изменившимся основанием и погашенные гипотезы причин.
+  explanations: number;
+  reasonSuggestions: number;
 }
 
 // Объекты, к которым применяется изменение события: все (обработка события) или только записанные прогоном после
@@ -151,6 +154,7 @@ export interface IInvalidationOutcome {
 export interface IApplyScope {
   findingIds: ReadonlySet<string>;
   suggestionIds: ReadonlySet<string>;
+  reasonSuggestionIds?: ReadonlySet<string>;
 }
 
 // Применение изменения события: «устарело» с причиной, отметки решений и событий осей, «истекла» у гипотез. Идемпотентно.
@@ -183,7 +187,7 @@ const applyEventChange = async (db: Queryable, e: IStageEventRow, tenderId: stri
     );
     for (const x of r.rows) if (inScope(scope?.findingIds)(x.id)) findingIds.add(x.id);
   }
-  const out: IInvalidationOutcome = { mode: change.mode, reason, findings: 0, decisions: 0, axisEvents: 0, suggestions: 0 };
+  const out: IInvalidationOutcome = { mode: change.mode, reason, findings: 0, decisions: 0, axisEvents: 0, suggestions: 0, explanations: 0, reasonSuggestions: 0 };
   for (const id of [...findingIds].sort()) {
     const f = (await db.query<{ status: string }>('SELECT status FROM finding WHERE id = $1 FOR UPDATE', [id])).rows[0];
     if (!f) continue;
@@ -225,6 +229,29 @@ const applyEventChange = async (db: Queryable, e: IStageEventRow, tenderId: stri
       out.suggestions += 1;
     }
   }
+  // Этап 10 (D-029, D-030): версия причины с заменённым основанием получает отметку «основание изменилось» (сама не
+  // меняется); открытые гипотезы причин гаснут — по зависимостям, а при неопределённой области (новые документы и
+  // переписка) — все гипотезы прогонов на снимке старше события. Ревизии расчёта сравнения неизменны: событие расчёта
+  // их не гасит.
+  if (!scope) {
+    for (const id of await dependents('change_explanation')) if (await mark(db, e, tenderId, 'change_explanation', id, change.mode, reason)) out.explanations += 1;
+  }
+  const reasonIds = new Set((await dependents('change_reason_suggestion')).filter(inScope(scope?.reasonSuggestionIds)));
+  if (change.families.length > 0 && e.event_class !== 'calculation') {
+    const r = await db.query<{ id: string }>(
+      `SELECT s.id FROM change_reason_suggestion s JOIN reason_run r ON r.id = s.run_id JOIN evidence_scope sc ON sc.id = r.evidence_scope_id
+        WHERE s.stage_id = $1 AND s.status = 'open' AND sc.input_version < $2`,
+      [e.stage_id, e.seq],
+    );
+    for (const x of r.rows) if (inScope(scope?.reasonSuggestionIds)(x.id)) reasonIds.add(x.id);
+  }
+  for (const id of [...reasonIds].sort()) {
+    const upd = await db.query("UPDATE change_reason_suggestion SET status = 'expired', updated_at = now(), row_version = row_version + 1 WHERE id = $1 AND status = 'open'", [id]);
+    if ((upd.rowCount ?? 0) > 0) {
+      await mark(db, e, tenderId, 'change_reason_suggestion', id, change.mode, reason);
+      out.reasonSuggestions += 1;
+    }
+  }
   return out;
 };
 
@@ -248,7 +275,16 @@ export const processStageEvent = async (db: Queryable, eventId: string): Promise
     e.stage_id,
     change.mode,
     out.reason.slice(0, 1000),
-    JSON.stringify({ targets: change.targets.length, families: change.families, findings: out.findings, decisions: out.decisions, axisEvents: out.axisEvents, suggestions: out.suggestions }),
+    JSON.stringify({
+      targets: change.targets.length,
+      families: change.families,
+      findings: out.findings,
+      decisions: out.decisions,
+      axisEvents: out.axisEvents,
+      suggestions: out.suggestions,
+      explanations: out.explanations,
+      reasonSuggestions: out.reasonSuggestions,
+    }),
   ]);
   return out;
 };
@@ -298,3 +334,23 @@ export const eventsAfter = async (
       [stageId, version],
     )
   ).rows;
+
+// Сверка поздних гипотез причин (R09-01): события после снимка прогона, обработанные до записи гипотез, гасят записанные
+// сейчас гипотезы так же, как если бы они существовали при обработке. Вызывается под блокировкой этапа.
+export const reconcileReasonRunWithProcessedEvents = async (db: Queryable, run: { stage_id: string; tender_id: string; evidence_scope_id: string }, suggestionIds: ReadonlySet<string>): Promise<number> => {
+  if (suggestionIds.size === 0) return 0;
+  const version = Number((await db.query<{ v: string }>('SELECT input_version::text AS v FROM evidence_scope WHERE id = $1', [run.evidence_scope_id])).rows[0]?.v ?? 0);
+  const events = (
+    await db.query<IStageEventRow>(
+      `SELECT e.* FROM stage_input_event e JOIN stage_input_event_processing p ON p.event_id = e.id
+        WHERE e.stage_id = $1 AND e.seq > $2 ORDER BY e.seq`,
+      [run.stage_id, version],
+    )
+  ).rows;
+  let affected = 0;
+  for (const e of events) {
+    const out = await applyEventChange(db, e, run.tender_id, await analyzeEvent(db, e), { findingIds: new Set(), suggestionIds: new Set(), reasonSuggestionIds: suggestionIds });
+    affected += out.reasonSuggestions;
+  }
+  return affected;
+};

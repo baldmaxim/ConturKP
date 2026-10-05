@@ -13,6 +13,7 @@ import { DocumentsTab } from './sources/DocumentsTab';
 import { ImportBatchList } from './sources/ImportBatchList';
 import { DialogsTab } from './answers/DialogsTab';
 import { CalculationTab } from './calculation/CalculationTab';
+import { EconomicsTab } from './economics/EconomicsTab';
 import { RequirementsTab } from './requirements/RequirementsTab';
 import { FindingsTab } from './review/FindingsTab';
 import { ReviewTab } from './review/ReviewTab';
@@ -31,6 +32,7 @@ const TABS: ITab[] = [
   { id: 'search', label: 'Поиск', icon: 'search' },
   { id: 'answers', label: 'Вопросы', icon: 'message-square' },
   { id: 'calculation', label: 'Расчёт', icon: 'calculator' },
+  { id: 'economics', label: 'Экономика', icon: 'layers' },
   { id: 'requirements', label: 'Требования', icon: 'list-checks' },
   { id: 'review', label: 'Проверка', icon: 'scan-search' },
   { id: 'discrepancies', label: 'Разногласия', icon: 'file-exclamation-point' },
@@ -105,6 +107,7 @@ export const StagePage: FC = () => {
         {active === 'calculation' ? (
           <CalculationTab stageId={stage.id} canCapture={caps.includes('calculation.capture')} canAdmin={caps.includes('admin.tender')} />
         ) : null}
+        {active === 'economics' ? <EconomicsTab stageId={stage.id} caps={caps} /> : null}
         {active === 'requirements' ? <RequirementsTab stageId={stage.id} tenderId={stage.tenderId} caps={caps} /> : null}
         {active === 'review' ? <ReviewTab stageId={stage.id} caps={caps} onOpenFindings={() => selectTab('discrepancies')} /> : null}
         {active === 'discrepancies' ? <FindingsTab stageId={stage.id} tenderId={stage.tenderId} /> : null}

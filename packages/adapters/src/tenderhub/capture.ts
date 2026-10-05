@@ -4,13 +4,15 @@
 // между собой. Любое расхождение — попытка «inconsistent», ревизия из неё не создаётся.
 import {
   CALCULATION_NORMALIZATION_VERSION,
+  tenderHubApiComponents,
   type ICalcContent,
+  type ICommercialComponent,
   type ICalcLine,
   type ICalcPosition,
 } from '@kontur/core';
 import type { ITenderHubSource } from './reader.ts';
 import type { ISourceBoqItem, ISourceNumber, ISourceOverview, ISourcePositionCosts, ISourcePositionPaged } from './schema.ts';
-import { thError, type IRawResponse } from './types.ts';
+import { TENDERHUB_CONTRACT_VERSION, thError, type IRawResponse } from './types.ts';
 
 export interface ICaptureMarkers {
   updatedAt: string | null;
@@ -72,6 +74,8 @@ export interface IPortalCaptureResult {
   content: ICalcContent | null;
   // Исходные лексемы чисел шапки (второе чтение) — raw_lexemes содержимого.
   headerLexemes: Record<string, string>;
+  // Коммерческие составляющие, которых нет в данных транспорта (проект §5.6): статус и причина, без значения.
+  commercialComponents: ICommercialComponent[];
 }
 
 const MAX_REASONS = 20;
@@ -351,7 +355,8 @@ export const runPortalCapture = async (source: ITenderHubSource, tenderId: strin
     ['eur_rate', after.value.eurRate],
     ['cny_rate', after.value.cnyRate],
   ]);
-  if (consistency.outcome === 'inconsistent') return { transport: source.transport, consistency, observed, raws, content: null, headerLexemes };
+  const commercialComponents = tenderHubApiComponents(TENDERHUB_CONTRACT_VERSION);
+  if (consistency.outcome === 'inconsistent') return { transport: source.transport, consistency, observed, raws, content: null, headerLexemes, commercialComponents };
 
   for (const c of withCosts.value) {
     if (!c.positionNumber) throw thError('CONTRACT_MISMATCH', 'contract_mismatch', `позиция ${c.id} без position_number`, false);
@@ -370,5 +375,5 @@ export const runPortalCapture = async (source: ITenderHubSource, tenderId: strin
     positions: withCosts.value.map((c) => toPosition(paged.get(c.id)!, c)),
     lines: boq.value.map(toLine),
   };
-  return { transport: source.transport, consistency, observed, raws, content, headerLexemes };
+  return { transport: source.transport, consistency, observed, raws, content, headerLexemes, commercialComponents };
 };

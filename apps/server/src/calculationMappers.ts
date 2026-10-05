@@ -1,6 +1,7 @@
 // Представление расчёта TenderHub для API (portal-api §2.5, ADR-005 §4). Суммы — объект денег с
-// десятичной строкой; валюта и НДС, которых источник не подтверждает, — UNKNOWN / unknown: портал
-// семантику не додумывает. Итог КП не выводится, пока нет правила владельца (Q-05).
+// десятичной строкой. Семантика — D-030 (таблица семантики TenderHub §3, §3.1): себестоимость и её суммы — RUB;
+// коммерческие колонки и суммы — RUB как вывод из принятой формулы; цена единицы — в валюте строки; НДС —
+// неизвестен (Т-10-1); дата — дата наблюдения при выгрузке. Итог КП не выводится (Q-05, D-030 В-10-1).
 import { calculationProductionBlockers, formatEtag } from '@kontur/core';
 import type { ICalcRevisionView, ICalculationSourceRow, ICaptureRow, IIntegrationStatusRow, ILineRow, ILineageRow, IPositionRow } from '@kontur/db';
 
@@ -13,17 +14,20 @@ export interface IMoney {
   vat: 'unknown';
   priceKind: PriceKind;
   unit: string | null;
-  asOf: null;
-  source: { type: string; revisionId: string; externalId: string | null; field: string };
+  asOf: string | null;
+  source: { type: string; revisionId: string; externalId: string | null; field: string; derivation?: 'derived_from_formula' };
 }
 
 const money = (
   amount: string | null,
   priceKind: PriceKind,
   source: IMoney['source'],
-  o: { currency?: Currency; unit?: string | null } = {},
+  o: { currency?: Currency; unit?: string | null; asOf?: string | null } = {},
 ): IMoney | null =>
-  amount === null ? null : { amount, currency: o.currency ?? 'UNKNOWN', vat: 'unknown', priceKind, unit: o.unit ?? null, asOf: null, source };
+  amount === null ? null : { amount, currency: o.currency ?? 'UNKNOWN', vat: 'unknown', priceKind, unit: o.unit ?? null, asOf: o.asOf ?? null, source };
+
+// Коммерческие суммы — RUB как вывод из принятой формулы «total_amount в RUB × безразмерный коэффициент» (D-030).
+const derived = (src: IMoney['source']): IMoney['source'] => ({ ...src, derivation: 'derived_from_formula' });
 
 // ETag набора связей этапа: сумма row_version строк растёт при любом изменении (новая строка или правка).
 export const calculationSourcesEtag = (stageId: string, rows: ICalculationSourceRow[]): string =>
@@ -99,8 +103,12 @@ export const toRevision = (r: ICalcRevisionView) => {
       title: (observed.title as string | null | undefined) ?? null,
       submissionDeadline: (observed.submissionDeadline as string | null | undefined) ?? null,
       // cached_grand_total шапки TenderHub — значение источника; итогом КП портала не объявляется (Q-05).
-      grandTotal: money(r.source_grand_total, 'commercial', src('cached_grand_total')),
+      grandTotal: money(r.source_grand_total, 'commercial', derived(src('cached_grand_total')), { currency: 'RUB', asOf: r.observed_at?.toISOString() ?? null }),
       fxRates: { USD: r.usd_rate, EUR: r.eur_rate, CNY: r.cny_rate },
+      // Курс ревизии: дата наблюдения при выгрузке, не дата установления курса (D-030 В-10-6).
+      fxRatesObservedAt: r.observed_at?.toISOString() ?? null,
+      // Экземпляр TenderHub из конфигурации worker (D-030); у выгрузок до этапа 10 не записан.
+      instanceId: r.source_instance_id,
     },
     kpTotal: {
       value: r.kp_total === null ? null : money(r.kp_total, 'commercial', src('kp_total'), { currency: (r.kp_total_currency as Currency | null) ?? 'UNKNOWN' }),
@@ -141,12 +149,14 @@ export const toPosition = (revisionId: string, p: IPositionRow) => {
     itemsCount: p.items_count,
     lines: p.lines,
     totals: {
-      baseTotal: money(p.base_total, 'cost', src('base_total')),
-      commercialTotal: money(p.commercial_total, 'commercial', src('commercial_total')),
-      totalMaterial: money(p.total_material, 'cost', src('total_material')),
-      totalWorks: money(p.total_works, 'cost', src('total_works')),
-      materialCostTotal: money(p.material_cost_total, 'cost', src('material_cost_total')),
-      workCostTotal: money(p.work_cost_total, 'cost', src('work_cost_total')),
+      baseTotal: money(p.base_total, 'cost', src('base_total'), { currency: 'RUB' }),
+      commercialTotal: money(p.commercial_total, 'commercial', derived(src('commercial_total')), { currency: 'RUB' }),
+      totalMaterial: money(p.total_material, 'cost', src('total_material'), { currency: 'RUB' }),
+      totalWorks: money(p.total_works, 'cost', src('total_works'), { currency: 'RUB' }),
+      // Несмотря на имя — суммы коммерческих колонок КП «Материалы» и «Работы», а не себестоимость (D-030, п. 12).
+      materialCostTotal: money(p.material_cost_total, 'commercial', derived(src('material_cost_total')), { currency: 'RUB' }),
+      workCostTotal: money(p.work_cost_total, 'commercial', derived(src('work_cost_total')), { currency: 'RUB' }),
+      // Поля без писателя в источнике (п. 14): хранятся как получены, в экономике не используются; семантика не подтверждена.
       totalCommercialMaterial: money(p.total_commercial_material, 'commercial', src('total_commercial_material')),
       totalCommercialWork: money(p.total_commercial_work, 'commercial', src('total_commercial_work')),
       materialCostPerUnit: money(p.material_cost_per_unit, 'cost', src('material_cost_per_unit'), { unit: p.unit_code }),
@@ -175,19 +185,21 @@ export const toLine = (revisionId: string, l: ILineRow) => {
     baseQuantity: l.base_quantity,
     consumptionCoefficient: l.consumption_coefficient,
     conversionCoefficient: l.conversion_coefficient,
-    // Цена единицы — в валюте строки источника (currency_type), остальные суммы — без подтверждённой валюты.
-    unitRate: money(l.unit_rate, 'cost', src('unit_rate'), { currency: l.currency ?? 'UNKNOWN', unit: l.unit_code }),
+    // Цена единицы — цена сметы в валюте строки (п. 1, 2: пусто — RUB); quote_link не делает её ценой поставщика.
+    unitRate: money(l.unit_rate, 'cost', src('unit_rate'), { currency: l.currency ?? 'RUB', unit: l.unit_code }),
     currency: l.currency,
     deliveryPriceType: l.delivery_price_type,
-    deliveryAmount: money(l.delivery_amount, 'cost', src('delivery_amount')),
-    totalAmount: money(l.total_amount, 'cost', src('total_amount')),
+    // «Суммой» — RUB за единицу без курса (п. 6).
+    deliveryAmount: money(l.delivery_amount, 'cost', src('delivery_amount'), { currency: 'RUB', unit: l.unit_code }),
+    totalAmount: money(l.total_amount, 'cost', src('total_amount'), { currency: 'RUB' }),
     commercialMarkup: l.commercial_markup,
-    totalCommercialMaterial: money(l.total_commercial_material, 'commercial', src('total_commercial_material_cost')),
-    totalCommercialWork: money(l.total_commercial_work, 'commercial', src('total_commercial_work_cost')),
+    totalCommercialMaterial: money(l.total_commercial_material, 'commercial', derived(src('total_commercial_material_cost')), { currency: 'RUB' }),
+    totalCommercialWork: money(l.total_commercial_work, 'commercial', derived(src('total_commercial_work_cost')), { currency: 'RUB' }),
     quoteLink: l.quote_link,
-    // Даты источника цены маршрут boq-items-full не отдаёт.
+    // Даты цены и действия предложения маршрут boq-items-full не отдаёт: неизвестны; время выгрузки их не заменяет (п. 10).
     quotePriceDate: l.quote_price_date,
     quoteValidUntil: l.quote_valid_until,
+    quoteDatesStatus: l.quote_price_date === null && l.quote_valid_until === null ? ('not_received' as const) : ('received' as const),
     costCategory: l.cost_category,
     detailCostCategory: l.detail_cost_category,
     detailCostLocation: l.detail_cost_location,

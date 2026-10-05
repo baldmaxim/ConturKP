@@ -1,0 +1,15 @@
+# 2026-10-05T18:09:03+05:00, linux x64 Node v24.14.1, Ubuntu 26.04.1 LTS; PostgreSQL 18.6 + pgvector (контейнер kontur-pg, 127.0.0.1:55432)
+# npx vitest run --maxWorkers=1 --fileParallelism=false
+
+ RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
+
+
+ Test Files  101 passed (101)
+      Tests  991 passed (991)
+   Start at  18:09:04
+   Duration  405.87s (tests 91%, import 8%, transform 1%)
+
+    Isolate  101 workers spawned · ~104ms startup each (spawn + environment, per file)
+             at least ~10.39s faster with isolate: false — reuses workers across files instead of one per file
+
+exit=0

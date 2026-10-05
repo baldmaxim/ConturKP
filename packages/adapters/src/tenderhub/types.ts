@@ -2,7 +2,9 @@
 // API от 2026-09-02 (архив ApiTenderHub, SHA-256 сверен ревью 00-1) и OpenAPI archive.yaml 1.0.0.
 // Только чтение по X-API-Key (область tenders:read); Bearer не используется никогда.
 
-export const TENDERHUB_CONTRACT_VERSION = 'th-api-2026-09-02/adapter-1';
+// adapter-2 (этап 10, D-030): контракт отсутствующих коммерческих составляющих (commercialComponents) и экземпляр
+// источника в результате выгрузки; состав выгрузки и хэш содержимого не изменились.
+export const TENDERHUB_CONTRACT_VERSION = 'th-api-2026-09-02/adapter-2';
 
 export type TenderHubErrorCode =
   | 'AUTH_FAILED'

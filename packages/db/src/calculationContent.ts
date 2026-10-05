@@ -235,7 +235,7 @@ export const reconcileAggregates = async (db: Queryable, contentId: string): Pro
       positionsCommercialSum: t.sum,
       diff: t.diff,
       status: t.status,
-      note: 'cached_grand_total TenderHub включает страхование, которого API по ключу не отдаёт (docs/discovery.md §4.2); итог КП портала не выводится (Q-05)',
+      note: 'cached_grand_total — последнее наблюдаемое значение источника; остаток не объясняется: составляющие и статус пересчёта по ключу недоступны (D-030); итог КП портала не выводится (Q-05)',
     },
   };
 };
@@ -253,6 +253,9 @@ export interface ICompletePortalCapture {
   sourceObserved: Record<string, unknown> & { tenderNumber: string };
   contractVersion: string;
   attempt: Record<string, unknown>;
+  // Экземпляр TenderHub из конфигурации worker (D-030) и адрес подключения; идентификатор может быть не задан.
+  sourceInstanceId: string | null;
+  sourceOrigin: string | null;
 }
 
 export interface ICompleteResult {
@@ -322,7 +325,7 @@ export const completePortalCapture = async (db: Queryable, i: ICompletePortalCap
     `UPDATE calculation_capture
         SET status = 'complete', content_id = $2, revision_id = $3, raw_bundle_sha256 = $4, consistency = $5::jsonb,
             source_observed = $6::jsonb, contract_version = $7, attempts = attempts || jsonb_build_array($8::jsonb),
-            finished_at = now(), row_version = row_version + 1
+            source_instance_id = $9, source_origin = $10, finished_at = now(), row_version = row_version + 1
       WHERE id = $1`,
     [
       cap.id,
@@ -333,6 +336,8 @@ export const completePortalCapture = async (db: Queryable, i: ICompletePortalCap
       JSON.stringify(i.sourceObserved),
       i.contractVersion,
       JSON.stringify(i.attempt),
+      i.sourceInstanceId,
+      i.sourceOrigin,
     ],
   );
   return { revisionId, revisionCreated, contentId: content.id, contentCreated: content.created, aggregates };

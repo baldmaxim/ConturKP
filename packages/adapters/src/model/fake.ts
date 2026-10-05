@@ -85,6 +85,20 @@ const fakeHypotheses = (user: string): string => {
   return JSON.stringify({ hypotheses });
 };
 
+// Причины изменений поддельной модели (этап 10): первый фрагмент единицы, разделяющий с её наименованием основу слова, —
+// ответ заказчика (вопросы–ответы, письмо) или документ. Не качество модели, а исполнимый контракт.
+const fakeReasons = (user: string): string => {
+  const input = JSON.parse(user) as { units: { unitId: string; title: string; fragments: { fragmentId: string; origin: string; text: string }[] }[] };
+  const reasons = input.units.flatMap((u) => {
+    const stems = stemsOf(u.title);
+    const f = u.fragments.find((x) => [...stemsOf(x.text)].some((s) => stems.has(s)));
+    if (!f) return [];
+    const reasonKind = f.origin === 'qa_answer' || f.origin === 'email_body' ? 'answer' : 'document';
+    return [{ unitId: u.unitId, reasonKind, rationale: 'Поддельная модель: фрагмент разделяет слова с наименованием позиции', fragmentIds: [f.fragmentId] }];
+  });
+  return JSON.stringify({ reasons });
+};
+
 export class FakeChat implements IModelGatewayChat {
   readonly providerId = 'fake' as const;
   readonly model: string;
@@ -113,6 +127,13 @@ export class FakeChat implements IModelGatewayChat {
         return { ok: true, value: this.done(fakeHypotheses(input.user), startedAt) };
       } catch {
         return chatError('CONTRACT_MISMATCH', 'поддельная модель ждёт вход проверки', false);
+      }
+    }
+    if (input.task === 'change_reasons') {
+      try {
+        return { ok: true, value: this.done(fakeReasons(input.user), startedAt) };
+      } catch {
+        return chatError('CONTRACT_MISMATCH', 'поддельная модель ждёт вход причин изменений', false);
       }
     }
     if (input.task === 'answer_draft' || input.task === 'answer_verify') {

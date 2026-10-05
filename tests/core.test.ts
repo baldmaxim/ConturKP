@@ -28,6 +28,8 @@ describe('возможности', () => {
       'fact.create',
       'review.run',
       'finding.write',
+      'economics.compare',
+      'change_reason.confirm',
     ]);
   });
   it('руководитель-участник: управление этапами и журнал', () => {
@@ -43,6 +45,8 @@ describe('возможности', () => {
       'fact.create',
       'review.run',
       'finding.write',
+      'economics.compare',
+      'change_reason.confirm',
       'stage.manage',
       'hold.resolve',
       'requirement.confirm',

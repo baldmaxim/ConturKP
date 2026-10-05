@@ -110,7 +110,23 @@
 | `GET /calculation-revisions/{id}/lineage` | `tender.read` | — | записи сопоставления позиций в эту ревизию, `version` и `ETag: "<revisionId>:<число записей>"` (этап 06) |
 | `POST /calculation-revisions/{id}/lineage` | `calculation.capture` | IM | тело `{ fromRevisionId, links: [{ fromPositionId, toPositionId, status: 'confirmed' \| 'rejected' }] }` (1–500); решение человека, `method = manual`, только дописывание; ревизия-источник — другая ревизия того же тендера, иначе `400`; позиции проверяет БД. Автоматического сопоставления на этапе 06 нет (этап 10) |
 
-Суммы — объект денег ADR-005 §4; `amount` — каноническая десятичная строка без потери точности, исходная лексема источника — в `rawLexemes`. Валюта сумм TenderHub, кроме цены единицы строки, источником не подтверждена (`UNKNOWN`), НДС — `unknown` (Q-05). Курсоры выдаёт сервер и проверяет их форму до обращения к БД (`400 VALIDATION_FAILED`); ответы страниц содержат `hasMore` и `nextCursor`.
+Суммы — объект денег ADR-005 §4; `amount` — каноническая десятичная строка без потери точности, исходная лексема источника — в `rawLexemes`. С этапа 10 (D-030, таблица семантики §3, §3.1): себестоимость и её суммы — `cost`, RUB; коммерческие колонки и суммы — `commercial`, RUB как вывод из формулы (`source.derivation = derived_from_formula`); `unitRate` — валюта строки; НДС — `unknown` (Т-10-1); `materialCostTotal` / `workCostTotal` — коммерческие суммы (до этапа 10 ошибочно помечались `cost`); `source.fxRatesObservedAt` — дата наблюдения курса; `source.instanceId` — экземпляр TenderHub выгрузки; `quoteDatesStatus: not_received` — даты цены не получены. Курсоры выдаёт сервер и проверяет их форму до обращения к БД (`400 VALIDATION_FAILED`); ответы страниц содержат `hasMore` и `nextCursor`.
+
+#### Экономика (этап 10; D-030; `docs/architecture/10-economics-design.md` §7)
+
+| Метод и путь | Право | Ключи | Назначение |
+|---|---|---|---|
+| `GET /calculation-revisions/{id}/economics` | `tender.read` | — | отчёт ревизии (пишется при первом запросе, далее неизменен): `totals`, `linesWithoutCommercial`, `foreignCurrency`, `delivery`, `positionsUnitPriceUndefined`, `lineCheck` (метод и допуск десятичного пересчёта), `deviations` (по видам §5.9), `rates` (с датой наблюдения), `reconciliation` (цель `cached_grand_total`, подтверждённая часть, неподтверждённый остаток, допуск `0.01`, `isKpTotal: false`), `components` (контракт `adapter-2`) |
+| `GET /calculation-revisions/{id}/economics/deviations?flag=&after=&limit=` | `tender.read` | — | строки с отклонениями от ограничений источника: количество, выведенное количество (диагностика), себестоимость, пересчёт, флаги |
+| `POST /stages/{id}/comparisons` | `economics.compare` | IK | тело `{ leftRevisionId, rightRevisionId }` — две разные ревизии тендера этапа; одной транзакцией: предложения пар (система подтверждает только `source_lineage` одного экземпляра, тендера и версии), закреплённое сопоставление, разложение, `201` со статусом `ready` / `failed` и `proposals { systemConfirmed, proposed, ambiguous }` |
+| `GET /stages/{id}/comparisons`, `GET /comparisons/{id}` | `tender.read` | — | список; сравнение: метод (`order`, `jointEffectRule`), `totals`, `summary` вкладов по мерам и компонентам с уровнем тендера, `resultSha256`, вычисляемый признак `outdated` (новые решения по парам, изменившиеся основания причин) |
+| `GET /comparisons/{id}/units?kind=&changed=&after=&limit=` | `tender.read` | — | единицы: стороны, суммы и дельты по мерам, сопоставимость с причиной, вклады в порядке метода, действующая причина, гипотезы модели; производный текст — только при чтении всех оснований (`restricted`) |
+| `GET /comparisons/{id}/lineage` | `tender.read` | — | позиции обеих ревизий, действующие записи по парам (метод, статус, решение системы), неоднозначные группы, `ETag: "<comparisonId>:<lineage_seq>"` |
+| `POST /comparisons/{id}/lineage-decisions` | `calculation.capture` | IM | тело `{ decisions: [{ fromPositionId, toPositionId, status }] }` (1–2000); подтверждение предложения — его методом, ручная пара — `manual`; устаревший If-Match — `412` |
+| `GET /comparison-units/{id}/explanations` | `tender.read` | — | история версий причины |
+| `PUT /comparison-units/{id}/explanation` | `change_reason.confirm` | IM | тело `{ reasonKind, reasonStatus, rationale?, fragmentIds[], decisionIds[] }`; If-Match `"<unitId>:<версия>"`; «подтверждена» вида документ / ответ / поставщик — только с основанием подходящего происхождения (БД, `409`); основания должен читать автор |
+| `POST /comparisons/{id}/reason-runs`, `GET /comparisons/{id}/reason-runs`, `GET /reason-runs/{id}` | `economics.compare` / `tender.read` | IK | прогон гипотез причин: вход закрепляется при запуске (единицы и кандидаты-основания из снимка области); `409`: `no_scope`, `no_units`, `comparison_not_ready` |
+| `POST /change-reason-suggestions/{id}/accept`, `…/reject` | `change_reason.confirm` | IM | решение человека по гипотезе; принятие создаёт версию причины `confirmed` с основаниями гипотезы; `409`: `suggestion_expired`, `suggestion_decided`, `restricted_fragments` |
 
 ### 2.5a. Договорной контур (этап 06a; D-017, D-022, D-023)
 
@@ -259,8 +275,8 @@
 | `POST /releases/{id}/send-events` | `send.register` | IK | регистрация отправки с основанием; только для выпуска `mode = production`, иначе `RELEASE_IS_TEST`; под барьером актуальности |
 | `POST /releases/{id}/compliance-incidents` | `send.register` | IK | учёт недопустимой отправки, совершённой вне системы; не создаёт отправку |
 | `POST /send-events/{id}/verify` | `send.register` | IM, IK | сверка состава вложений с манифестом |
-| `POST /comparisons`, `GET /comparisons/{id}` | `tender.read` | IK | сравнение двух выпусков |
-| `POST /change-explanations/{id}/confirm` | `finding.write` | IM, IK | подтверждение причины изменения человеком |
+| `POST /comparisons`, `GET /comparisons/{id}` | `tender.read` | IK | сравнение двух выпусков — этап 15, поверх сравнения ревизий расчёта этапа 10 (§2.5) |
+| `POST /change-explanations/{id}/confirm` | `finding.write` | IM, IK | заменено этапом 10: причина — `PUT /comparison-units/{id}/explanation` и решение по гипотезе (§2.5) |
 | `GET /tenders/{id}/audit-events` | `audit.read` | — | журнал действий; руководитель тендера — все события, администратор без назначения — только действия с карточкой и участниками (R02-02) |
 
 ## 3. Правила ответов

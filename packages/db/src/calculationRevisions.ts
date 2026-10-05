@@ -23,6 +23,8 @@ export interface ICalcRevisionView extends ICalcRevisionRow {
   consistency: Record<string, unknown> | null;
   raw_bundle_sha256: string | null;
   contract_version: string | null;
+  observed_at: Date | null;
+  source_instance_id: string | null;
   statuses: { status: SourceStatus; observed_at: string; seq: number }[];
 }
 
@@ -30,7 +32,7 @@ const REVISION_VIEW = `
   SELECT r.*, c.normalization_version, c.source_grand_total::text AS source_grand_total, c.usd_rate::text AS usd_rate,
          c.eur_rate::text AS eur_rate, c.cny_rate::text AS cny_rate, c.kp_total::text AS kp_total, c.kp_total_currency,
          c.kp_total_rule, c.kp_total_semantics, c.content_hash, c.positions_count, c.lines_count,
-         k.source_observed, k.consistency, k.raw_bundle_sha256, k.contract_version,
+         k.source_observed, k.consistency, k.raw_bundle_sha256, k.contract_version, k.finished_at AS observed_at, k.source_instance_id,
          coalesce((SELECT jsonb_agg(jsonb_build_object('status', e.status, 'observed_at', e.observed_at, 'seq', e.seq) ORDER BY e.seq)
                      FROM calculation_revision_status_event e WHERE e.revision_id = r.id), '[]'::jsonb) AS statuses
     FROM calculation_revision r

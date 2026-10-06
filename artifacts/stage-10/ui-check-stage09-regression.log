@@ -1,5 +1,5 @@
-# регрессия на коде 10-1: 2026-10-05T18:22:48+05:00, linux x64 Node v24.14.1, artifacts/stage-09/ui-check.mjs, exit 0
-# ui-check — 2026-10-05T13:22:48.653Z, linux x64, Node v24.14.1, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker, MODEL_PROVIDER=fake, TenderHub — поддельный
+# регрессия на коде 10-2: 2026-10-06T10:46:00+05:00, linux x64 Node v24.14.1, artifacts/stage-09/ui-check.mjs, exit 0
+# ui-check — 2026-10-06T05:46:00.002Z, linux x64, Node v24.14.1, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker, MODEL_PROVIDER=fake, TenderHub — поддельный
 PASS  server + worker готовы
 PASS  вход администратора-руководителя
 PASS  ТЗ загружено и распознано (CSV, локально) — complete

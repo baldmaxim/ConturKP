@@ -15,19 +15,19 @@ dist/index.html                                      1.80 kB │ gzip:   0.78 kB
 dist/assets/pdf.worker.min-iDqQPrd3.mjs          1,232.30 kB
 dist/assets/index-C7yTZ_6k.css                      58.84 kB │ gzip:  10.03 kB
 dist/assets/workbox-window.prod.es5-Bd17z0YL.js      5.65 kB │ gzip:   2.20 kB
-dist/assets/pdf-P6-j_1j4.js                        409.76 kB │ gzip: 121.72 kB
-dist/assets/index-D0p7XQgC.js                      706.01 kB │ gzip: 197.86 kB
+dist/assets/pdf-DnnUn15J.js                        409.76 kB │ gzip: 121.72 kB
+dist/assets/index-Cq6GnJB7.js                      706.69 kB │ gzip: 198.11 kB
 
 [plugin builtin:vite-reporter] 
 (!) Some chunks are larger than 500 kB after minification. Consider:
 - Using dynamic import() to code-split the application
 - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
-✓ built in 792ms
+✓ built in 689ms
 
 PWA v1.3.0
 mode      generateSW
-precache  18 entries (1172.17 KiB)
+precache  18 entries (1172.85 KiB)
 files generated
   dist/sw.js
   dist/workbox-98f7a950.js

@@ -115,7 +115,8 @@ const lampLines = (pid: string, base: string, k0: number): ILineSpec[] => [
 ];
 
 // plasterQty — количество штукатурки: вторая выгрузка той же версии с другим количеством даёт новую ревизию того же тендера.
-export const v1Tender = (plasterQty = '100'): IFakeTender => {
+// plaster — единица и цена строки штукатурки (R10-02: та же строка в другой единице).
+export const v1Tender = (plasterQty = '100', plaster: { unit?: string; rate?: string } = {}): IFakeTender => {
   const t = E.v1;
   return buildTender(
     t,
@@ -131,7 +132,7 @@ export const v1Tender = (plasterQty = '100'): IFakeTender => {
       pos(t, E.p.F, '4', 'Светильники', { unit_code: 'шт', manual_volume: null }),
     ],
     [
-      { id: id('c', 1), pos: E.p.A, type: 'раб', desc: 'Штукатурка стен', wn: 'w-plaster', q: plasterQty, r: '10', k: '1.2' },
+      { id: id('c', 1), pos: E.p.A, type: 'раб', desc: 'Штукатурка стен', wn: 'w-plaster', unit: plaster.unit ?? 'м2', q: plasterQty, r: plaster.rate ?? '10', k: '1.2' },
       { id: id('c', 2), pos: E.p.B, type: 'раб', desc: 'Кладка наружная', wn: 'w-out', unit: 'м3', q: '10', r: '100' },
       { id: id('c', 3), pos: E.p.B, type: 'раб', desc: 'Кладка внутренняя', wn: 'w-in', unit: 'м3', q: '20', r: '100' },
       { id: id('c', 4), pos: E.p.C, type: 'раб', desc: 'Стяжка цементная', wn: 'w-screed', q: '50', r: '20' },

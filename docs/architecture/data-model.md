@@ -402,7 +402,7 @@ CHECK 0014 требовал размеры у `pdf_page` только в ста�
 |---|---|---|---|
 | `comparison` | frozen-after | `tender_id`, `left_release_id`, `right_release_id`, `method_version`, `decomposition_method`, `status` (`computing`/`ready`/`failed`) | обе стороны — выпуски, не текущие папки; этап 15 — поверх `calculation_comparison` ревизий, закреплённых в выпусках |
 
-Этап 10 (миграция `0026`, D-030; проект `docs/architecture/10-economics-design.md` §2) — сравнение ревизий расчёта, на котором строится сравнение выпусков:
+Этап 10 (миграции `0026`, `0027` — Review 10-1, R10-01; D-030; проект `docs/architecture/10-economics-design.md` §2, §13) — сравнение ревизий расчёта, на котором строится сравнение выпусков:
 
 | Таблица | Класс | Ключевые колонки | Ограничения |
 |---|---|---|---|
@@ -410,8 +410,8 @@ CHECK 0014 требовал размеры у `pdf_page` только в ста�
 | `revision_line_check` | immutable | `economics_id`, `external_item_id`, `formula`, `recomputed_cost`, `deviation`, `within_tolerance`, `derived_quantity`, `flags` | только вместе с отчётом; отклонение = полученное − пересчитанное; исходные строки не меняются |
 | `calculation_comparison` | frozen-after | `tender_id`, `stage_id`, `left_revision_id`, `right_revision_id`, `method_version`, `decomposition_method` (`chain_substitution`), `method_description`, `tolerance`, `lineage_seq`, `status`, `totals`, `result_sha256` | одной транзакцией; итоговая проверка: покрытие позиций, суммы единиц по строкам, Σ вкладов = дельта |
 | `comparison_unit` | immutable | стороны (массивы позиций), `kind`, суммы и сопоставимость по мерам, дельты колонок, `column_shift` | единица — компонента связности подтверждённых пар |
-| `comparison_effect` | immutable | `unit_id` (null — тендер), `measure`, `component`, `amount`, `line_refs` | уровень тендера — ровно `incomparable_units` и `unexplained_remainder` на меру |
-| `change_explanation` | immutable (версии) | `comparison_id`, `unit_id`, `version`, `reason_kind`, `reason_status`, `rationale`, `suggestion_id`, `actor_user_id`; основания — `change_explanation_basis` | «подтверждена» — человек с правом, основание своего вида, события этапа обработаны (I11, A23) |
+| `comparison_effect` | immutable | `unit_id` (null — тендер), `measure`, `component`, `amount`, `line_refs` (у «без разложения» — `notes[]` с причиной; R10-02) | уровень тендера — ровно `incomparable_units` и `unexplained_remainder` на меру; строка той же идентичности в другой единице — только «без разложения» (метод `compare/10-2`) |
+| `change_explanation` | immutable (версии) | `comparison_id`, `unit_id`, `version`, `reason_kind`, `reason_status`, `rationale`, `suggestion_id`, `actor_user_id`; основания — `change_explanation_basis` | «подтверждена» — человек с правом, основание своего вида, события этапа обработаны (I11, A23); основание новой версии — только действующее (0027 `change_basis_supersession`: при вставке и в конце транзакции; R10-01) |
 | `reason_run`, `reason_run_input`, `change_reason_suggestion(_evidence)` | frozen-after / immutable | закреплённый вход прогона, гипотезы модели с цитатами | гипотеза — только предложение; принимает человек (I12) |
 
 ### 4.12. Сервисные

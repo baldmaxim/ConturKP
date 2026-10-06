@@ -1,0 +1,188 @@
+# 2026-10-05T19:34:23+05:00, linux x64 Node v24.14.1; регрессии Review 10-1 на продукте 2424ad8 (исправления и миграция 0027 убраны на время прогона), однопоточно
+
+ RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
+
+ ✓ tests/reviewRegressions10.test.ts > R10-01 — новая причина по уже заменённому основанию > контроль: подтверждение по текущему фрагменту актуального снимка разрешено 33ms
+ × tests/reviewRegressions10.test.ts > R10-01 — новая причина по уже заменённому основанию > новая редакция документа, событие обработано заранее: подтверждение и гипотеза по старой цитате — 409, ничего не записано, история сохранена 143ms
+   → {"version":2,"explanation":{"id":"6025cb41-e6ca-4b10-8b2d-f6751364d0f6","version":2,"reasonKind":"document","reasonStatus":"confirmed","rationale":"площадь изменена по ТЗ","restricted":false,"suggestionId":null,"actor":{"id":"81419458-260b-4cff-9d7a-0040b2f6215d","name":"Инженер 1"},"createdAt":"2026-10-05T14:34:30.140Z","bases":[{"basisType":"fragment","fragmentId":"e8485b8f-494a-4329-a0b6-a7ebc5d03e0b","decisionId":null,"origin":"recognized_text","text":"Штукатурка стен: площадь увеличена до 110 м2, расценка штукатурки изменена."}],"basisChanged":false,"invalidations":[]}}: expected 200 to be 409 // Object.is equality
+ × tests/reviewRegressions10.test.ts > R10-01 — новая причина по уже заменённому основанию > новое распознавание той же редакции: старый фрагмент отвергается до и после обработки события; текущий — принимается 281ms
+   → {"version":4,"explanation":{"id":"0aeef82e-290b-4f0d-b1b9-6b01a06ddf85","version":4,"reasonKind":"document","reasonStatus":"confirmed","rationale":"площадь изменена по ТЗ","restricted":false,"suggestionId":null,"actor":{"id":"81419458-260b-4cff-9d7a-0040b2f6215d","name":"Инженер 1"},"createdAt":"2026-10-05T14:34:30.421Z","bases":[{"basisType":"fragment","fragmentId":"b35cf4a4-3cbd-4d02-9950-65e3c3004bc9","decisionId":null,"origin":"recognized_text","text":"Штукатурка стен: площадь увеличена до 110 м2, расценка штукатурки изменена."}],"basisChanged":false,"invalidations":[]}}: expected 200 to be 409 // Object.is equality
+ × tests/reviewRegressions10.test.ts > R10-01 — новая причина по уже заменённому основанию > вторая линия: прямая запись причины по заменённому основанию в обход API отвергается, действующей причины не остаётся 64ms
+   → запись должна быть отвергнута: expected null not to be null
+ × tests/reviewRegressions10.test.ts > R10-01 — исключение из состава источников > редакция, исключённая из состава источников этапа: новая причина по её фрагменту — 409; возвращённая в состав — принимается 453ms
+   → {"version":6,"explanation":{"id":"f1c10562-5fa6-4588-a219-5b9c564e4c26","version":6,"reasonKind":"document","reasonStatus":"confirmed","rationale":"площадь изменена по ТЗ","restricted":false,"suggestionId":null,"actor":{"id":"81419458-260b-4cff-9d7a-0040b2f6215d","name":"Инженер 1"},"createdAt":"2026-10-05T14:34:30.930Z","bases":[{"basisType":"fragment","fragmentId":"f883cc5e-4c12-45ab-850d-2c1b77a7c599","decisionId":null,"origin":"recognized_text","text":"Письмо подрядчика: площадь штукатурки уточнена по обмерам."}],"basisChanged":false,"invalidations":[]}}: expected 200 to be 409 // Object.is equality
+ × tests/reviewRegressions10.test.ts > R10-02 — смена единицы строки при том же UUID (ядро) > 1 м × 100 → 1000 мм × 0,1: вкладов «объём» и «цена» нет; пара — «без разложения» с причиной смены единицы 5ms
+   → expected { Object (volume, unit_rate) } to deeply equal { not_decomposable: '0' }
+ × tests/reviewRegressions10.test.ts > R10-02 — смена единицы строки при том же UUID (ядро) > смена единицы с изменением суммы: вся дельта пары — «без разложения», соседняя строка той же единицы раскладывается; Σ = Δ 2ms
+   → expected { volume: '100000', …(1) } to deeply equal { Object (volume, unit_rate, ...) }
+ ✓ tests/reviewRegressions10.test.ts > R10-02 — смена единицы строки при том же UUID (ядро) > контроль: неизменная единица 1 м × 100 → 2 м × 110 — объём +100, цена +20 (метод D-030) 1ms
+ × tests/reviewRegressions10.test.ts > R10-02 — смена единицы через выгрузку и API > 100 м2 × 10 → 1 000 000 см2 × 0,001 (суммы 1000 и 1200 те же): сохранённых вкладов «объём» и «цена» нет, причина видна 288ms
+   → expected [ …(4) ] to deeply equal [ [ 'cost', …(2) ], …(1) ]
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/reviewRegressions10.test.ts > R10-01 — новая причина по уже заменённому основанию > новая редакция документа, событие обработано заранее: подтверждение и гипотеза по старой цитате — 409, ничего не записано, история сохранена
+AssertionError: {"version":2,"explanation":{"id":"6025cb41-e6ca-4b10-8b2d-f6751364d0f6","version":2,"reasonKind":"document","reasonStatus":"confirmed","rationale":"площадь изменена по ТЗ","restricted":false,"suggestionId":null,"actor":{"id":"81419458-260b-4cff-9d7a-0040b2f6215d","name":"Инженер 1"},"createdAt":"2026-10-05T14:34:30.140Z","bases":[{"basisType":"fragment","fragmentId":"e8485b8f-494a-4329-a0b6-a7ebc5d03e0b","decisionId":null,"origin":"recognized_text","text":"Штукатурка стен: площадь увеличена до 110 м2, расценка штукатурки изменена."}],"basisChanged":false,"invalidations":[]}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/reviewRegressions10.test.ts:77:30
+     75|     await processEvents();
+     76|     const r = await put(await versionNow(), [frag.r1!]);
+     77|     expect(r.status, r.text).toBe(409);
+       |                              ^
+     78|     expect(r.body.current).toMatchObject({ reason: 'basis_superseded',…
+     79|     expect((await put(await versionNow(), [frag.r1!], 'hypothesis')).s…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  tests/reviewRegressions10.test.ts > R10-01 — новая причина по уже заменённому основанию > новое распознавание той же редакции: старый фрагмент отвергается до и после обработки события; текущий — принимается
+AssertionError: {"version":4,"explanation":{"id":"0aeef82e-290b-4f0d-b1b9-6b01a06ddf85","version":4,"reasonKind":"document","reasonStatus":"confirmed","rationale":"площадь изменена по ТЗ","restricted":false,"suggestionId":null,"actor":{"id":"81419458-260b-4cff-9d7a-0040b2f6215d","name":"Инженер 1"},"createdAt":"2026-10-05T14:34:30.421Z","bases":[{"basisType":"fragment","fragmentId":"b35cf4a4-3cbd-4d02-9950-65e3c3004bc9","decisionId":null,"origin":"recognized_text","text":"Штукатурка стен: площадь увеличена до 110 м2, расценка штукатурки изменена."}],"basisChanged":false,"invalidations":[]}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/reviewRegressions10.test.ts:97:40
+     95|     const kept = await versionNow();
+     96|     const before = await put(kept, [frag.r2!]);
+     97|     expect(before.status, before.text).toBe(409);
+       |                                        ^
+     98|     expect(before.body.current).toMatchObject({ reason: 'basis_superse…
+     99|     await processEvents();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  tests/reviewRegressions10.test.ts > R10-01 — новая причина по уже заменённому основанию > вторая линия: прямая запись причины по заменённому основанию в обход API отвергается, действующей причины не остаётся
+AssertionError: запись должна быть отвергнута: expected null not to be null
+ ❯ tests/reviewRegressions10.test.ts:135:56
+    133|     for (const f of [frag.r1!, frag.r2!]) {
+    134|       const err = await write(f);
+    135|       expect(err, 'запись должна быть отвергнута').not.toBeNull();
+       |                                                        ^
+    136|       expect(`${err!.code} ${err!.message}`).toMatch(/23514.*основание…
+    137|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  tests/reviewRegressions10.test.ts > R10-01 — исключение из состава источников > редакция, исключённая из состава источников этапа: новая причина по её фрагменту — 409; возвращённая в состав — принимается
+AssertionError: {"version":6,"explanation":{"id":"f1c10562-5fa6-4588-a219-5b9c564e4c26","version":6,"reasonKind":"document","reasonStatus":"confirmed","rationale":"площадь изменена по ТЗ","restricted":false,"suggestionId":null,"actor":{"id":"81419458-260b-4cff-9d7a-0040b2f6215d","name":"Инженер 1"},"createdAt":"2026-10-05T14:34:30.930Z","bases":[{"basisType":"fragment","fragmentId":"f883cc5e-4c12-45ab-850d-2c1b77a7c599","decisionId":null,"origin":"recognized_text","text":"Письмо подрядчика: площадь штукатурки уточнена по обмерам."}],"basisChanged":false,"invalidations":[]}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/reviewRegressions10.test.ts:153:30
+    151|     await processEvents();
+    152|     const r = await put(await versionNow(), [frag.x]);
+    153|     expect(r.status, r.text).toBe(409);
+       |                              ^
+    154|     expect(r.body.current).toMatchObject({ reason: 'basis_superseded',…
+    155|     await setWorkingSet(e.s.manager, e.s.stageA, [rev.r2!, x1], true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  tests/reviewRegressions10.test.ts > R10-02 — смена единицы строки при том же UUID (ядро) > 1 м × 100 → 1000 мм × 0,1: вкладов «объём» и «цена» нет; пара — «без разложения» с причиной смены единицы
+AssertionError: expected { Object (volume, unit_rate) } to deeply equal { not_decomposable: '0' }
+
+- Expected
++ Received
+
+  {
+-   "not_decomposable": "0",
++   "unit_rate": "-99900",
++   "volume": "99900",
+  }
+
+ ❯ tests/reviewRegressions10.test.ts:197:32
+    195|   it('1 м × 100 → 1000 мм × 0,1: вкладов «объём» и «цена» нет; пара — …
+    196|     const r = run([line('l1', 'p', 'м', '1', '100', '100')], [line('l1…
+    197|     expect(effects(r, 'cost')).toEqual({ not_decomposable: '0' });
+       |                                ^
+    198|     expect(effects(r, 'commercial')).toEqual({ not_decomposable: '0' }…
+    199|     const e0 = r.effects.find((x) => x.unitNo === 1 && x.measure === '…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  tests/reviewRegressions10.test.ts > R10-02 — смена единицы строки при том же UUID (ядро) > смена единицы с изменением суммы: вся дельта пары — «без разложения», соседняя строка той же единицы раскладывается; Σ = Δ
+AssertionError: expected { volume: '100000', …(1) } to deeply equal { Object (volume, unit_rate, ...) }
+
+- Expected
++ Received
+
+  {
+-   "not_decomposable": "20",
+-   "unit_rate": "20",
+-   "volume": "100",
++   "unit_rate": "-99860",
++   "volume": "100000",
+  }
+
+ ❯ tests/reviewRegressions10.test.ts:209:32
+    207|       [line('l1', 'p', 'мм', '1000', '0.12', '120'), line('l2', 'p', '…
+    208|     );
+    209|     expect(effects(r, 'cost')).toEqual({ volume: '100', unit_rate: '20…
+       |                                ^
+    210|     expect(r.effects.filter((x) => x.unitNo === 1 && x.measure === 'co…
+    211|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  tests/reviewRegressions10.test.ts > R10-02 — смена единицы через выгрузку и API > 100 м2 × 10 → 1 000 000 см2 × 0,001 (суммы 1000 и 1200 те же): сохранённых вкладов «объём» и «цена» нет, причина видна
+AssertionError: expected [ …(4) ] to deeply equal [ [ 'cost', …(2) ], …(1) ]
+
+- Expected
++ Received
+
+  [
+    [
+      "cost",
+-     "not_decomposable",
+-     "0",
++     "volume",
++     "9999000",
++   ],
++   [
++     "cost",
++     "unit_rate",
++     "-9999000",
++   ],
++   [
++     "commercial",
++     "volume",
++     "11998800",
+    ],
+    [
+      "commercial",
+-     "not_decomposable",
+-     "0",
++     "unit_rate",
++     "-11998800",
+    ],
+  ]
+
+ ❯ tests/reviewRegressions10.test.ts:243:65
+    241|     expect(A.commercial).toMatchObject({ left: '1200', right: '1200', …
+    242|     const view = A.effects as { measure: string; component: string; am…
+    243|     expect(view.map((x) => [x.measure, x.component, x.amount])).toEqua…
+       |                                                                 ^
+    244|       ['cost', 'not_decomposable', '0'],
+    245|       ['commercial', 'not_decomposable', '0'],
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 failed | 2 passed (9)
+   Start at  19:34:23
+   Duration  7.36s (tests 64%, transform 27%, import 9%)
+
+exit=1

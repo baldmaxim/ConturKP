@@ -73,6 +73,24 @@ export interface IExplanationInput {
   suggestionId: string | null;
 }
 
+export interface ISupersededBasis {
+  fragmentId: string | null;
+  decisionId: string | null;
+  cause: string;
+}
+
+// Заменённые основания новой причины (R10-01): то, что событие барьера сделало бы точной целью инвалидации, — по
+// текущему состоянию (функция 0027 change_basis_supersession), поэтому отказ не зависит от того, обработано ли событие.
+export const supersededBases = async (db: Queryable, stageId: string, fragmentIds: readonly string[], decisionIds: readonly string[]): Promise<ISupersededBasis[]> => {
+  const r = await db.query<{ fragment_id: string | null; decision_id: string | null; cause: string | null }>(
+    `SELECT x.fragment_id, x.decision_id, change_basis_supersession($1, x.fragment_id, x.decision_id) AS cause
+       FROM (SELECT f AS fragment_id, NULL::uuid AS decision_id FROM unnest($2::uuid[]) AS f
+             UNION ALL SELECT NULL::uuid, d FROM unnest($3::uuid[]) AS d) x`,
+    [stageId, [...new Set(fragmentIds)], [...new Set(decisionIds)]],
+  );
+  return r.rows.filter((x) => x.cause !== null).map((x) => ({ fragmentId: x.fragment_id, decisionId: x.decision_id, cause: x.cause! }));
+};
+
 // Новая версия причины с основаниями и зависимостями — одной транзакцией вызывающего (под блокировкой этапа).
 export const appendExplanation = async (db: Queryable, i: IExplanationInput): Promise<string> => {
   const version = (await explanationVersion(db, i.unitId)) + 1;

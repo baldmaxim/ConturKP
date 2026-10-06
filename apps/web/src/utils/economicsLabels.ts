@@ -18,6 +18,25 @@ export const COMPONENT_LABEL: Record<string, string> = {
   unexplained_remainder: 'Неподтверждённый остаток уровня тендера',
 };
 
+// Причина вклада «без разложения» (R10-02: смена единицы — пересчёт не подтверждён).
+export const NOT_DECOMPOSED_LABEL: Record<string, string> = {
+  unit_changed: 'смена единицы строки — пересчёт не подтверждён',
+  formula_differs: 'формула строки изменилась',
+  formula_not_applicable: 'формула строки неприменима',
+  fx_rate_missing: 'нет курса ревизии',
+  markup_missing: 'нет коэффициента строки',
+  cost_missing: 'нет себестоимости строки',
+};
+
+export const notDecomposedText = (notes: readonly { reason: string; fromUnit?: string | null; toUnit?: string | null }[] | undefined): string | null => {
+  if (!notes || notes.length === 0) return null;
+  const parts = notes.map((n) => {
+    const base = NOT_DECOMPOSED_LABEL[n.reason] ?? n.reason;
+    return n.reason === 'unit_changed' ? `${base} (${n.fromUnit ?? '—'} → ${n.toUnit ?? '—'})` : base;
+  });
+  return [...new Set(parts)].join('; ');
+};
+
 export const FACTOR_LABEL: Record<string, string> = {
   quantity: 'количество',
   unit_rate: 'цена в валюте',

@@ -132,6 +132,22 @@ export interface IMeasureView {
   reason: string | null;
 }
 
+// Почему пара строк не разложена (R10-02): смена единицы, формула, курс, коэффициент.
+export interface IDecompositionNote {
+  left: string;
+  right: string;
+  reason: string;
+  fromUnit?: string | null;
+  toUnit?: string | null;
+}
+
+export interface IUnitEffect {
+  measure: 'cost' | 'commercial';
+  component: string;
+  amount: string;
+  lineRefs?: { left: string[]; right: string[]; notes?: IDecompositionNote[] };
+}
+
 export interface IComparisonUnit {
   id: string;
   unitNo: number;
@@ -143,7 +159,7 @@ export interface IComparisonUnit {
   cost: IMeasureView;
   commercial: IMeasureView;
   columns: { materialDelta: string | null; workDelta: string | null; shift: boolean };
-  effects: { measure: 'cost' | 'commercial'; component: string; amount: string }[];
+  effects: IUnitEffect[];
   explanation: IExplanation | null;
   explanationVersion: number;
   suggestions: IReasonSuggestion[];

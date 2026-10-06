@@ -44,6 +44,7 @@ import {
   positionBriefs,
   readableFragments,
   revisionDeviationLines,
+  supersededBases,
   withTransaction,
   type IAccessContext,
   type IComparisonRow,
@@ -99,6 +100,15 @@ const loadUnit = async (db: Queryable, ctx: IAccessContext, id: string, cap: Par
 };
 
 const target = (c: IComparisonRow) => ({ tenderId: c.tender_id, entityType: 'calculation_comparison', entityId: c.id });
+
+// Новая версия причины — только по действующим основаниям (R10-01): заменённая редакция, распознавание, состав
+// источников или решение — отказ до записи; вторая линия — триггеры 0027.
+const rejectSupersededBases = async (db: Queryable, c: IComparisonRow, fragmentIds: readonly string[], decisionIds: readonly string[]): Promise<void> => {
+  const stale = await supersededBases(db, c.stage_id, fragmentIds, decisionIds);
+  if (stale.length > 0) {
+    throw conflict('основание заменено (новая редакция, распознавание, состав источников или решение): выберите действующее основание', 'basis_superseded', target(c), { superseded: stale });
+  }
+};
 
 // Производный текст причины и гипотезы — целиком, только если пользователь читает все основания (R08-02).
 const visibilityOf = async (db: Queryable, ctx: IAccessContext, fragmentIds: readonly string[]) => {
@@ -349,6 +359,7 @@ export const economicsRouter = (pool: Pool, config: IAppConfig): Router => {
         if (body.fragmentIds.some((f) => !readable.has(f.toLowerCase()))) {
           throw conflict('среди оснований есть фрагменты, которые вы не можете читать', 'restricted_fragments', target(comparison));
         }
+        await rejectSupersededBases(client, comparison, body.fragmentIds.map((f) => f.toLowerCase()), body.decisionIds.map((d) => d.toLowerCase()));
         const id = await appendExplanation(client, {
           tenderId: comparison.tender_id,
           stageId: comparison.stage_id,
@@ -471,6 +482,7 @@ export const economicsRouter = (pool: Pool, config: IAppConfig): Router => {
         if (fragments.some((f) => !readable.has(f))) throw conflict('среди оснований гипотезы есть то, что вы не можете читать', 'restricted_fragments', target(c));
         let explanationId: string | null = null;
         if (status === 'accepted') {
+          await rejectSupersededBases(client, c, fragments, []);
           explanationId = await appendExplanation(client, {
             tenderId: c.tender_id,
             stageId: c.stage_id,

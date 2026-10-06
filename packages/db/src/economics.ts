@@ -509,7 +509,7 @@ export interface IComparisonUnitRow {
   material_column_delta: string | null;
   work_column_delta: string | null;
   column_shift: boolean;
-  effects: { measure: string; component: string; amount: string; line_refs: { left: string[]; right: string[] } }[];
+  effects: { measure: string; component: string; amount: string; line_refs: { left: string[]; right: string[]; notes?: Record<string, unknown>[] } }[];
 }
 
 export const comparisonUnits = async (

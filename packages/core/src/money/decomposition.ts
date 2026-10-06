@@ -8,10 +8,11 @@ import { createHash } from 'node:crypto';
 import { canonicalJson } from '../requirements.ts';
 import { comparable, type IMoneyBasis } from './comparability.ts';
 import { add, dec, decOrNull, mul, str, strOrNull, sub, sum, ZERO, type Dec } from './decimal.ts';
-import { groupByKey, lineKey, type IPositionKeyInput } from './keys.ts';
+import { groupByKey, lineKey, normKeyText, type IPositionKeyInput } from './keys.ts';
 import { lineFactors, quantityBase, unitCost, type ILineInput, type IRates } from './lineCost.ts';
 
-export const COMPARISON_METHOD_VERSION = 'compare/10-1' as const;
+// compare/10-2 (R10-02): строка той же идентичности в другой единице не раскладывается на объём и цену.
+export const COMPARISON_METHOD_VERSION = 'compare/10-2' as const;
 export const DECOMPOSITION_METHOD = 'chain_substitution' as const;
 export const FACTOR_ORDER = ['quantity', 'unit_rate', 'fx_rate', 'delivery', 'coefficient'] as const;
 export const COLUMN_SHIFT_TOLERANCE = '0.01';
@@ -24,6 +25,8 @@ export const METHOD_DESCRIPTION = {
   jointEffectRule: 'совместный эффект относится к более позднему фактору порядка (метод цепных подстановок)',
   anchors: 'опора — полученные total_amount и коммерческие колонки; хвост между полученным и пересчитанным значением — отдельный вклад',
   rates: 'курсы — из содержимого своих ревизий (дата наблюдения при выгрузке)',
+  unitChange:
+    'строка той же идентичности в другой единице не раскладывается на объём и цену: пересчёт единиц не подтверждён ни идентичностью строки, ни подтверждением пары — дельта пары «без разложения» с причиной; исходные количества и суммы не меняются',
   coefficient: 'вклад «коэффициент строки (наценки, тактика, раскладка)»; изменением НДС не называется без подтверждённого основания',
   tenderLevel: 'остаток уровня тендера и несопоставимые единицы — отдельные строки, по единицам не распределяются',
 } as const;
@@ -79,12 +82,23 @@ export interface IConfirmedPair {
   to: string;
 }
 
+// Почему пара строк не разложена (вклад «без разложения»): видно в сравнении, а не только суммой.
+export type NotDecomposedReason = 'unit_changed' | 'formula_differs' | 'formula_not_applicable' | 'fx_rate_missing' | 'markup_missing' | 'cost_missing';
+
+export interface IDecompositionNote {
+  left: string;
+  right: string;
+  reason: NotDecomposedReason;
+  fromUnit?: string | null;
+  toUnit?: string | null;
+}
+
 export interface IEffect {
   unitNo: number | null;
   measure: Measure;
   component: EffectComponent;
   amount: Dec;
-  lineRefs: { left: string[]; right: string[] };
+  lineRefs: { left: string[]; right: string[]; notes?: IDecompositionNote[] };
 }
 
 export interface IMeasureView {
@@ -184,7 +198,12 @@ const planLines = (left: readonly ILineInput[], right: readonly ILineInput[], le
 interface IPairEffects {
   cost: [EffectComponent, Dec][];
   commercial: [EffectComponent, Dec][] | null;
+  // Причина «без разложения» по мере (только когда вклад «без разложения» есть).
+  costNote: NotDecomposedReason | null;
+  commercialNote: NotDecomposedReason | null;
 }
+
+const sameUnit = (a: ILineInput, b: ILineInput): boolean => normKeyText(a.unitCode) === normKeyText(b.unitCode);
 
 const decomposePair = (l0: ILineInput, l1: ILineInput, rates0: IRates, rates1: IRates): IPairEffects => {
   const c0 = dec(l0.totalAmount!);
@@ -194,10 +213,17 @@ const decomposePair = (l0: ILineInput, l1: ILineInput, rates0: IRates, rates1: I
   const x0 = lineFactors(l0, rates0);
   const x1 = lineFactors(l1, rates1);
   const commercialWhole = (): [EffectComponent, Dec][] | null => (m0 !== null && m1 !== null ? [['not_decomposable', sub(m1, m0)]] : null);
+  const whole = (reason: NotDecomposedReason): IPairEffects => {
+    const commercial = commercialWhole();
+    return { cost: [['not_decomposable', sub(c1, c0)]], commercial, costNote: reason, commercialNote: commercial ? reason : null };
+  };
+  // Строка той же идентичности в другой единице (R10-02, ADR-005 §5): количество и цена разных единиц в одну цепочку не
+  // подставляются — коэффициент пересчёта не подтверждён ни UUID строки, ни подтверждением пары позиций.
+  if (!sameUnit(l0, l1)) return whole('unit_changed');
   // Формула разная или неприменима, нет курса ревизии — пара не раскладывается: вся дельта — «без разложения».
-  if (x0.formula !== x1.formula || x0.formula === 'not_applicable' || x0.f === null || x1.f === null) {
-    return { cost: [['not_decomposable', sub(c1, c0)]], commercial: commercialWhole() };
-  }
+  if (x0.formula !== x1.formula) return whole('formula_differs');
+  if (x0.formula === 'not_applicable') return whole('formula_not_applicable');
+  if (x0.f === null || x1.f === null) return whole('fx_rate_missing');
   const f0 = x0.f;
   const f1 = x1.f;
   const qk0 = quantityBase(x0);
@@ -218,15 +244,15 @@ const decomposePair = (l0: ILineInput, l1: ILineInput, rates0: IRates, rates1: I
   const s4 = mul(qk1, unitCost(x1.formula, x1.r, f1, x1.delivery, x1.deliveryAmount));
   cost.push(['delivery', sub(s4, s3)]);
   cost.push(['source_tail', sub(sub(c1, s4), sub(c0, model0))]);
-  if (m0 === null || m1 === null) return { cost, commercial: null };
+  if (m0 === null || m1 === null) return { cost, commercial: null, costNote: null, commercialNote: null };
   const k0 = decOrNull(l0.commercialMarkup);
   const k1 = decOrNull(l1.commercialMarkup);
-  if (k0 === null || k1 === null) return { cost, commercial: commercialWhole() };
+  if (k0 === null || k1 === null) return { cost, commercial: commercialWhole(), costNote: null, commercialNote: 'markup_missing' };
   // Коммерческая мера M = C·k: вклады себестоимости по старому коэффициенту, затем вклад коэффициента и хвост.
   const commercial: [EffectComponent, Dec][] = cost.map(([c, a]) => [c, mul(a, k0)]);
   commercial.push(['coefficient', mul(c1, sub(k1, k0))]);
   commercial.push(['source_tail', sub(sub(m1, mul(c1, k1)), sub(m0, mul(c0, k0)))]);
-  return { cost, commercial };
+  return { cost, commercial, costNote: null, commercialNote: null };
 };
 
 // ---------------------------------------------------------------- Сравнение
@@ -310,25 +336,31 @@ export const compareRevisions = (left: ICompareSide, right: ICompareSide, pairs:
       columns: { materialDelta, workDelta, shift },
     });
 
-    const local: Record<Measure, Map<string, { amount: Dec; left: string[]; right: string[] }>> = { cost: new Map(), commercial: new Map() };
-    const push = (measure: Measure, component: EffectComponent, amount: Dec, refs: { left: string[]; right: string[] }) => {
+    const local: Record<Measure, Map<string, { amount: Dec; left: string[]; right: string[]; notes: IDecompositionNote[] }>> = { cost: new Map(), commercial: new Map() };
+    const push = (measure: Measure, component: EffectComponent, amount: Dec, refs: { left: string[]; right: string[] }, note: IDecompositionNote | null = null) => {
       const cur = local[measure].get(component);
       if (cur) {
         cur.amount = add(cur.amount, amount);
         cur.left.push(...refs.left);
         cur.right.push(...refs.right);
-      } else local[measure].set(component, { amount, left: [...refs.left], right: [...refs.right] });
+        if (note) cur.notes.push(note);
+      } else local[measure].set(component, { amount, left: [...refs.left], right: [...refs.right], notes: note ? [note] : [] });
     };
+    const noteOf = (a: ILineInput, b: ILineInput, reason: NotDecomposedReason | null): IDecompositionNote | null =>
+      reason === null
+        ? null
+        : { left: a.externalItemId, right: b.externalItemId, reason, ...(reason === 'unit_changed' ? { fromUnit: a.unitCode, toUnit: b.unitCode } : {}) };
     const plan = planLines(ll, rl, leftAll, rightAll);
     for (const [a, b] of plan.pairs) {
       const refs = { left: [a.externalItemId], right: [b.externalItemId] };
       if (cost.comparable || commercial.comparable) {
         const e = cost.comparable ? decomposePair(a, b, left.rates, right.rates) : null;
-        if (e) for (const [c, amt] of e.cost) push('cost', c, amt, refs);
+        if (e) for (const [c, amt] of e.cost) push('cost', c, amt, refs, c === 'not_decomposable' ? noteOf(a, b, e.costNote) : null);
         if (commercial.comparable) {
           const ce = e ?? (a.totalAmount !== null && b.totalAmount !== null ? decomposePair(a, b, left.rates, right.rates) : null);
           const parts = ce?.commercial ?? [['not_decomposable', sub(commercialOf(b)!, commercialOf(a)!)] as [EffectComponent, Dec]];
-          for (const [c, amt] of parts) push('commercial', c, amt, refs);
+          const reason = ce?.commercial ? ce.commercialNote : 'cost_missing';
+          for (const [c, amt] of parts) push('commercial', c, amt, refs, c === 'not_decomposable' ? noteOf(a, b, reason) : null);
         }
       }
     }
@@ -355,8 +387,12 @@ export const compareRevisions = (left: ICompareSide, right: ICompareSide, pairs:
       if (!total.eq(sub(view.right!, view.left!))) throw new ComparisonInvariantError(`единица ${unitNo}: Σ вкладов ${measure} не равна дельте`);
       for (const c of EFFECT_COMPONENTS) {
         const v = local[measure].get(c);
-        // Нулевой вклад не записывается: Σ от этого не меняется, а отчёт не засоряется.
-        if (v && !v.amount.isZero()) effects.push({ unitNo, measure, component: c, amount: v.amount, lineRefs: { left: [...new Set(v.left)].sort(), right: [...new Set(v.right)].sort() } });
+        // Нулевой вклад не записывается: Σ от этого не меняется, а отчёт не засоряется. Исключение — «без разложения» с
+        // причиной (R10-02): смена единицы при неизменной сумме видна в сравнении, а не пропадает.
+        if (!v || (v.amount.isZero() && v.notes.length === 0)) continue;
+        const refs = { left: [...new Set(v.left)].sort(), right: [...new Set(v.right)].sort() };
+        const notes = [...v.notes].sort((x, y) => (x.left + x.right < y.left + y.right ? -1 : x.left + x.right > y.left + y.right ? 1 : 0));
+        effects.push({ unitNo, measure, component: c, amount: v.amount, lineRefs: notes.length > 0 ? { ...refs, notes } : refs });
       }
     }
   });

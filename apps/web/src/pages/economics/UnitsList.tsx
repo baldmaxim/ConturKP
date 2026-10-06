@@ -9,7 +9,7 @@ import { LoadingState } from '../../components/LoadingState';
 import { useApiResource } from '../../hooks/useApiResource';
 import { useToast } from '../../hooks/useToast';
 import { formatDecimal } from '../../utils/calculationLabels';
-import { COMPONENT_LABEL, REASON_KIND_LABEL, REASON_STATUS_LABEL, signed, UNIT_KIND_LABEL } from '../../utils/economicsLabels';
+import { COMPONENT_LABEL, notDecomposedText, REASON_KIND_LABEL, REASON_STATUS_LABEL, signed, UNIT_KIND_LABEL } from '../../utils/economicsLabels';
 import form from '../../styles/form.module.css';
 import { ReasonDialog } from './ReasonDialog';
 import styles from './Economics.module.css';
@@ -109,12 +109,15 @@ export const UnitsList: FC<IUnitsListProps> = ({ comparisonId, canConfirm, refre
             {u.columns.shift ? <p className={styles.muted}>Сумма колонок КП не изменилась, но изменилась раскладка между «Материалами» и «Работами».</p> : null}
             {u.effects.length > 0 ? (
               <ul className={styles.effects} aria-label="Вклады">
-                {u.effects.map((e) => (
-                  <li key={`${e.measure}:${e.component}`} className={styles.effect}>
-                    <span>{`${e.measure === 'cost' ? 'себест.' : 'коммерч.'} · ${COMPONENT_LABEL[e.component] ?? e.component}`}</span>
-                    <span className={styles.effectAmount}>{signed(e.amount)}</span>
-                  </li>
-                ))}
+                {u.effects.map((e) => {
+                  const why = notDecomposedText(e.lineRefs?.notes);
+                  return (
+                    <li key={`${e.measure}:${e.component}`} className={styles.effect}>
+                      <span>{`${e.measure === 'cost' ? 'себест.' : 'коммерч.'} · ${COMPONENT_LABEL[e.component] ?? e.component}${why ? `: ${why}` : ''}`}</span>
+                      <span className={styles.effectAmount}>{signed(e.amount)}</span>
+                    </li>
+                  );
+                })}
               </ul>
             ) : null}
             <div className={styles.reason}>

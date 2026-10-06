@@ -90,11 +90,15 @@ const stageObservations = async (db: Queryable, stageId: string, tenderId: strin
   return { observations, references };
 };
 
+// «Устарело»: отметка инвалидации версии (у копии без подтверждения — и её источников) или проблема основания сейчас —
+// собственного или версий-источников скопированного значения (R11-05).
+const versionStale = (v: IFieldVersionRow): boolean => v.invalidations.length > 0 || v.chain_invalidated || v.bases.some((b) => b.problem !== null) || v.inherited_problem !== null;
+
 // Комментарий обсуждения — текст о значении: показывается только тому, кто видит версию (R11-02).
 const statusOf = (v: IFieldVersionRow | null, visible: (versionId: string) => boolean): IFieldStatus => ({
   value: valueOfVersion(v),
   state: v?.state ?? null,
-  stale: v ? v.invalidations.length > 0 || v.bases.some((b) => b.problem !== null) : false,
+  stale: v ? versionStale(v) : false,
   comment: v && visible(v.id) ? v.comment : null,
   responsibleName: v?.responsible_name ?? null,
 });
@@ -144,7 +148,8 @@ const versionView = (v: IFieldVersionRow, visible: boolean) => ({
   createdAt: v.created_at.toISOString(),
   bases: v.bases.map((b) => ({ ...b, text: visible ? b.text : null, quote: visible ? b.quote : null, problemText: b.problem ? (BASIS_PROBLEM_TEXT[b.problem] ?? b.problem) : null })),
   invalidations: v.invalidations,
-  stale: v.invalidations.length > 0 || v.bases.some((b) => b.problem !== null),
+  inheritedProblem: v.inherited_problem ? { cause: v.inherited_problem, text: BASIS_PROBLEM_TEXT[v.inherited_problem] ?? v.inherited_problem } : null,
+  stale: versionStale(v),
 });
 
 export const visibilityFor = async (db: Queryable, ctx: IAccessContext, fragmentIds: readonly string[]) => {

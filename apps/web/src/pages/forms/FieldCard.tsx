@@ -113,6 +113,7 @@ export const FieldCard: FC<IFieldCardProps> = ({ draftId, tenderId, field: f, ca
               {b.quote ?? b.text ?? (b.basisType === 'evidence_fact' ? 'Факт из документа' : 'Основание')}
             </p>
           ))}
+          {v?.inheritedProblem ? <p className={styles.quote}>{`Основание исходного значения заменено: ${v.inheritedProblem.text}. Подтвердите значение по действующему основанию.`}</p> : null}
           {v?.invalidations.length ? <p className={styles.muted}>{`Основание изменилось: ${v.invalidations[v.invalidations.length - 1]!.reason}`}</p> : null}
         </>
       )}

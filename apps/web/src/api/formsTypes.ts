@@ -79,6 +79,8 @@ export interface IFieldVersion {
   createdAt: string;
   bases: IFieldBasis[];
   invalidations: { reason: string; at: string }[];
+  // Основание версии, значение которой повторено, заменено (обсуждение, перенос): копия тоже «устарела».
+  inheritedProblem: { cause: string; text: string } | null;
   stale: boolean;
 }
 

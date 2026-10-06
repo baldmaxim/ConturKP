@@ -172,6 +172,8 @@ export const recordRequirementDecision = async (
      VALUES ($1, $2, $3, 'requirement', $4, 'requirement_decision', $5, $6, $7, $8)`,
     [id, r.tenderId, r.stageId, r.requirementId, r.statement, r.rationale, r.userId, r.supersedesId],
   );
+  // Решение опирается на текущую ревизию требования — она закрепляется (актуальность основания поля, R11-03; 0031).
+  await db.query('INSERT INTO decision_requirement_revision (decision_id, requirement_revision_id) SELECT $1, current_revision_id FROM requirement WHERE id = $2', [id, r.requirementId]);
   await insertEvidenceLinks(db, 'decision_id', id, r.tenderId, r.userId, r.evidence);
   return id;
 };

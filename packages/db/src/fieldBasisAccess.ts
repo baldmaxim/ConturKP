@@ -18,32 +18,35 @@ export interface IBasisRef {
   decisionId: string | null;
   requirementRevisionId: string | null;
   evidenceFactId: string | null;
+  quote?: string | null;
 }
 
 export const basisRefId = (b: IBasisRef): string | null => b.fragmentId ?? b.decisionId ?? b.requirementRevisionId ?? b.evidenceFactId;
 
-// Основания версий вместе с основаниями версий-источников скопированного значения (по всей цепочке).
+// Основания версий вместе с основаниями версий-источников скопированного значения (по всей цепочке; ближние — первыми).
+// Это и «действующие основания значения» версии: подтверждение копии повторяет их и проверяет (R11-05).
 export const versionBasisClosure = async (db: Queryable, versionIds: readonly string[]): Promise<Map<string, IBasisRef[]>> => {
   const ids = [...new Set(versionIds)];
   const out = new Map<string, IBasisRef[]>(ids.map((id) => [id, []]));
   if (ids.length === 0) return out;
-  const r = await db.query<{ root: string; basis_type: IBasisRef['basisType']; fragment_id: string | null; decision_id: string | null; requirement_revision_id: string | null; evidence_fact_id: string | null }>(
-    `WITH RECURSIVE chain(root, vid) AS (
-       SELECT v.id, v.id FROM draft_field_version v WHERE v.id = ANY($1::uuid[])
+  const r = await db.query<{ root: string; basis_type: IBasisRef['basisType']; fragment_id: string | null; decision_id: string | null; requirement_revision_id: string | null; evidence_fact_id: string | null; quote: string | null; depth: number }>(
+    `WITH RECURSIVE chain(root, vid, depth) AS (
+       SELECT v.id, v.id, 0 FROM draft_field_version v WHERE v.id = ANY($1::uuid[])
        UNION
        SELECT c.root, coalesce(v.value_from_version_id,
                                CASE WHEN v.state = 'carried_over' THEN v.carried_from_version_id
-                                    WHEN v.state = 'needs_discussion' AND v.value IS NOT NULL THEN v.previous_version_id END)
+                                    WHEN v.state = 'needs_discussion' AND v.value IS NOT NULL THEN v.previous_version_id END), c.depth + 1
          FROM chain c JOIN draft_field_version v ON v.id = c.vid
         WHERE coalesce(v.value_from_version_id,
                        CASE WHEN v.state = 'carried_over' THEN v.carried_from_version_id
                             WHEN v.state = 'needs_discussion' AND v.value IS NOT NULL THEN v.previous_version_id END) IS NOT NULL)
-     SELECT c.root, b.basis_type, b.fragment_id, b.decision_id, b.requirement_revision_id, b.evidence_fact_id
-       FROM chain c JOIN draft_field_basis b ON b.field_version_id = c.vid`,
+     SELECT c.root, b.basis_type, b.fragment_id, b.decision_id, b.requirement_revision_id, b.evidence_fact_id, b.quote, c.depth
+       FROM chain c JOIN draft_field_basis b ON b.field_version_id = c.vid
+      ORDER BY c.root, c.depth, b.id`,
     [ids],
   );
   for (const x of r.rows) {
-    out.get(x.root)!.push({ basisType: x.basis_type, fragmentId: x.fragment_id, decisionId: x.decision_id, requirementRevisionId: x.requirement_revision_id, evidenceFactId: x.evidence_fact_id });
+    out.get(x.root)!.push({ basisType: x.basis_type, fragmentId: x.fragment_id, decisionId: x.decision_id, requirementRevisionId: x.requirement_revision_id, evidenceFactId: x.evidence_fact_id, quote: x.quote });
   }
   return out;
 };

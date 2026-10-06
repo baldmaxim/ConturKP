@@ -308,6 +308,10 @@ export interface IFieldVersionRow {
   created_at: Date;
   bases: IFieldBasisRow[];
   invalidations: { reason: string; at: string }[];
+  // Проблема основания версий-источников скопированного значения сейчас (R11-05); null — действуют.
+  inherited_problem: string | null;
+  // Отметка «основание изменилось» у версии или у источников копии без подтверждения (R11-05).
+  chain_invalidated: boolean;
 }
 
 const VERSION_SELECT = (stageExpr: string) => `
@@ -322,7 +326,9 @@ const VERSION_SELECT = (stageExpr: string) => `
                                     ORDER BY b.id)
                      FROM draft_field_basis b LEFT JOIN evidence_fragment f ON f.id = b.fragment_id WHERE b.field_version_id = v.id), '[]'::jsonb) AS bases,
          coalesce((SELECT jsonb_agg(jsonb_build_object('reason', i.reason, 'at', i.created_at) ORDER BY i.created_at)
-                     FROM evidence_invalidation i WHERE i.dependent_type = 'draft_field_version' AND i.dependent_id = v.id), '[]'::jsonb) AS invalidations
+                     FROM evidence_invalidation i WHERE i.dependent_type = 'draft_field_version' AND i.dependent_id = v.id), '[]'::jsonb) AS invalidations,
+         field_version_basis_problem(${stageExpr}, draft_field_value_source(v.id)) AS inherited_problem,
+         field_version_invalidated(v.id) AS chain_invalidated
     FROM draft_field_version v
     JOIN app_user u ON u.id = v.actor_user_id
     LEFT JOIN app_user ru ON ru.id = v.responsible_user_id
@@ -424,22 +430,42 @@ export const appendFieldVersion = async (db: Queryable, i: IFieldVersionInput): 
       ],
     );
   }
-  // Зависимости — от исходных фрагментов каждого основания (требование, решение, факт — до фрагментов, R11-03).
-  const sourceFragments = i.bases.length
+  // Зависимости — от исходных фрагментов каждого основания (требование, решение, факт — до фрагментов, R11-03) и
+  // от оснований версий-источников скопированного значения (R11-05); решение — и от закреплённой им ревизии требования.
+  const inherited = i.valueFromVersionId
     ? (
-        await db.query<{ fragment_id: string }>(
-          `SELECT DISTINCT f.id AS fragment_id
+        await db.query<{ t: IBasisInput['basisType']; id: string }>(
+          `WITH RECURSIVE chain(vid) AS (
+             SELECT $1::uuid
+             UNION
+             SELECT draft_field_value_source(c.vid) FROM chain c WHERE draft_field_value_source(c.vid) IS NOT NULL)
+           SELECT b.basis_type AS t, coalesce(b.fragment_id, b.decision_id, b.requirement_revision_id, b.evidence_fact_id) AS id
+             FROM chain c JOIN draft_field_basis b ON b.field_version_id = c.vid`,
+          [i.valueFromVersionId],
+        )
+      ).rows
+    : [];
+  const all = [...i.bases.map((b) => ({ t: b.basisType, id: b.id })), ...inherited];
+  const sources = all.length
+    ? (
+        await db.query<{ fragment_id: string | null; requirement_revision_id: string | null }>(
+          `SELECT DISTINCT f.id AS fragment_id, NULL::uuid AS requirement_revision_id
              FROM unnest($1::text[], $2::uuid[]) AS x(t, id),
                   LATERAL field_basis_source_fragments(CASE WHEN x.t = 'fragment' THEN x.id END, CASE WHEN x.t = 'decision' THEN x.id END,
-                                                       CASE WHEN x.t = 'requirement_revision' THEN x.id END, CASE WHEN x.t = 'evidence_fact' THEN x.id END) AS f(id)`,
-          [i.bases.map((b) => b.basisType), i.bases.map((b) => b.id)],
+                                                       CASE WHEN x.t = 'requirement_revision' THEN x.id END, CASE WHEN x.t = 'evidence_fact' THEN x.id END) AS f(id)
+           UNION
+           SELECT NULL, decision_requirement_revision_of(x.id) FROM unnest($1::text[], $2::uuid[]) AS x(t, id) WHERE x.t = 'decision'`,
+          [all.map((b) => b.t), all.map((b) => b.id)],
         )
-      ).rows.map((r) => r.fragment_id)
+      ).rows
     : [];
   const refs = [
-    ...(await dependenciesOf(db, sourceFragments.map((fragmentId) => ({ side: 'context' as const, objectType: 'fragment' as const, fragmentId })))),
-    ...i.bases.filter((b) => b.basisType === 'decision').map((b) => ({ type: 'decision', id: b.id })),
-    ...i.bases.filter((b) => b.basisType === 'requirement_revision').map((b) => ({ type: 'requirement_revision', id: b.id })),
+    ...(await dependenciesOf(db, sources.flatMap((r) => (r.fragment_id ? [{ side: 'context' as const, objectType: 'fragment' as const, fragmentId: r.fragment_id }] : [])))),
+    ...[...new Set(all.filter((b) => b.t === 'decision').map((b) => b.id))].map((id) => ({ type: 'decision', id })),
+    ...[...new Set([...all.filter((b) => b.t === 'requirement_revision').map((b) => b.id), ...sources.flatMap((r) => (r.requirement_revision_id ? [r.requirement_revision_id] : []))])].map((id) => ({
+      type: 'requirement_revision',
+      id,
+    })),
   ];
   await insertDependencies(db, { tenderId: i.tenderId, stageId: i.stageId, dependentType: 'draft_field_version', dependentId: id, refs });
   await emitStageEvents(db, { tenderId: i.tenderId, stageIds: [i.stageId], eventType: 'draft_field_changed', refType: 'draft_field_version', refId: id, actorUserId: i.userId });

@@ -9,6 +9,8 @@ import { CreateDraftRequest, FieldActionRequest, MigrateDraftRequest } from '@ko
 import { allFields, fieldMap, formatEtag, planMigration, validateValue, valueFromFactText, type FieldValue, type IField } from '@kontur/core';
 import {
   appendFieldVersion,
+  basisRefId,
+  versionBasisClosure,
   createDraft,
   draftFields,
   fieldBasisProblems,
@@ -161,11 +163,16 @@ const runFieldAction = async (client: PoolClient, ctx: IAccessContext, req: Requ
       if (!latest || latest.value === null || latest.state === 'cleared') throw conflict('нечего подтверждать: значения нет', 'nothing_to_confirm', draftTarget(d));
       // Подтверждается только значение, которое пользователь видит целиком (вместе с источниками скопированного значения).
       if (!(await fieldVersionVisibility(client, ctx, [latest.id]))(latest.id)) throw restricted(d);
-      const bases: IBasisInput[] = latest.bases.map((b) => ({
-        basisType: b.basisType,
-        id: (b.fragmentId ?? b.decisionId ?? b.requirementRevisionId ?? b.evidenceFactId)!,
-        quote: b.quote,
-      }));
+      // Основания значения — собственные и версий-источников копии (обсуждение, перенос): подтверждение повторяет их
+      // и только по действующим (R11-05); неизменённый текст по заменённому основанию текущим не становится.
+      const seen = new Set<string>();
+      const bases: IBasisInput[] = [];
+      for (const b of (await versionBasisClosure(client, [latest.id])).get(latest.id) ?? []) {
+        const id = basisRefId(b)!;
+        if (seen.has(`${b.basisType}:${id}`)) continue;
+        seen.add(`${b.basisType}:${id}`);
+        bases.push({ basisType: b.basisType, id, quote: b.quote ?? null });
+      }
       await requireUsableBases(client, ctx, d, bases);
       const keepWording = latest.origin === 'approved_wording' && latest.wording_version_id ? await getWordingVersion(client, latest.wording_version_id) : null;
       const wording = keepWording && keepWording.status === 'approved' ? keepWording.version_id : null;

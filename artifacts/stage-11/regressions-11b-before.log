@@ -1,0 +1,210 @@
+# 2026-10-06T17:16:26+05:00, linux x64 Node v24.14.1; регрессии Review 11-2 на продукте 4604b16 (до исправления), однопоточно
+
+ RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
+
+ ✓ tests/reviewRegressions11b.test.ts > R11-03 — решение по требованию без собственных цитат > контроль: до замены ТЗ значение по решению записывается, «устарело» нет 64ms
+ × tests/reviewRegressions11b.test.ts > R11-03 — решение по требованию без собственных цитат > новая редакция ТЗ до обработки события: запись по решению — 409 basis_superseded; прежнее значение «устарело»; прямая запись — 23514 132ms
+   → {"draft":{"id":"12beafa1-47d6-4a2a-a4f7-158b5a6a3bf5","status":"in_progress","etag":"\"12beafa1-47d6-4a2a-a4f7-158b5a6a3bf5:1\"","blocking":1,"issues":[{"kind":"required_empty","fieldKey":"condition","label":"Условие оплаты","blocking":true,"message":"обязательное поле не заполнено"}]},"field":{"fieldId":"2123561a-d335-42f3-af3a-9a17d8c8b410","key":"decision_text","definition":{"key":"decision_text","type":"text","label":"Условие по решению","multiline":true},"applicable":true,"required":false,"version":2,"etag":"\"2123561a-d335-42f3-af3a-9a17d8c8b410:2\"","latest":{"id":"17366ba3-969d-4842-b104-456e156fe2c4","version":2,"value":"Фасад — клинкер","state":"edited","origin":"manual","restricted":false,"wording":null,"suggestionId":null,"previousVersionId":"639f1087-aefb-4e48-904f-f8ead882b7b2","carriedFromVersionId":null,"valueFromVersionId":null,"comment":null,"responsible":null,"customerQuestionId":null,"actor":{"id":"5b8d94dc-d577-49a4-960e-8a824b186779","name":"Инженер 1"},"createdAt":"2026-10-06T12:16:33.356Z","bases":[{"text":null,"quote":null,"origin":null,"problem":null,"basisType":"decision","decisionId":"45c19efa-e3ee-41af-865d-19051eb03c19","fragmentId":null,"evidenceFactId":null,"requirementRevisionId":null,"problemText":null}],"invalidations":[],"stale":false},"systemProposals":[],"conflictingFacts":[],"suggestions":[]}}: expected 200 to be 409 // Object.is equality
+ × tests/reviewRegressions11b.test.ts > R11-03 — решение по требованию без собственных цитат > после обработки события — 409; значение по решению получило отметку инвалидации (зависимость от исходного документа) 123ms
+   → {"draft":{"id":"12beafa1-47d6-4a2a-a4f7-158b5a6a3bf5","status":"in_progress","etag":"\"12beafa1-47d6-4a2a-a4f7-158b5a6a3bf5:1\"","blocking":1,"issues":[{"kind":"required_empty","fieldKey":"condition","label":"Условие оплаты","blocking":true,"message":"обязательное поле не заполнено"}]},"field":{"fieldId":"2123561a-d335-42f3-af3a-9a17d8c8b410","key":"decision_text","definition":{"key":"decision_text","type":"text","label":"Условие по решению","multiline":true},"applicable":true,"required":false,"version":3,"etag":"\"2123561a-d335-42f3-af3a-9a17d8c8b410:3\"","latest":{"id":"d33d427b-63f4-4395-b644-a9fd62b8ecfe","version":3,"value":"Фасад — клинкер","state":"edited","origin":"manual","restricted":false,"wording":null,"suggestionId":null,"previousVersionId":"17366ba3-969d-4842-b104-456e156fe2c4","carriedFromVersionId":null,"valueFromVersionId":null,"comment":null,"responsible":null,"customerQuestionId":null,"actor":{"id":"5b8d94dc-d577-49a4-960e-8a824b186779","name":"Инженер 1"},"createdAt":"2026-10-06T12:16:33.485Z","bases":[{"text":null,"quote":null,"origin":null,"problem":null,"basisType":"decision","decisionId":"45c19efa-e3ee-41af-865d-19051eb03c19","fragmentId":null,"evidenceFactId":null,"requirementRevisionId":null,"problemText":null}],"invalidations":[],"stale":false},"systemProposals":[],"conflictingFacts":[],"suggestions":[]}}: expected 200 to be 409 // Object.is equality
+ × tests/reviewRegressions11b.test.ts > R11-03 — решение по требованию без собственных цитат > решение закрепляет ревизию требования: после изменения требования прежнее решение не подтверждает значение, новое решение — подтверждает 246ms
+   → {"draft":{"id":"12beafa1-47d6-4a2a-a4f7-158b5a6a3bf5","status":"in_progress","etag":"\"12beafa1-47d6-4a2a-a4f7-158b5a6a3bf5:1\"","blocking":1,"issues":[{"kind":"required_empty","fieldKey":"condition","label":"Условие оплаты","blocking":true,"message":"обязательное поле не заполнено"}]},"field":{"fieldId":"2123561a-d335-42f3-af3a-9a17d8c8b410","key":"decision_text","definition":{"key":"decision_text","type":"text","label":"Условие по решению","multiline":true},"applicable":true,"required":false,"version":5,"etag":"\"2123561a-d335-42f3-af3a-9a17d8c8b410:5\"","latest":{"id":"8730bed0-0226-436c-a760-f7a267677e79","version":5,"value":"Кровля — профнастил","state":"edited","origin":"manual","restricted":false,"wording":null,"suggestionId":null,"previousVersionId":"eefab81b-d7d0-425c-8e6b-91f28dc7b172","carriedFromVersionId":null,"valueFromVersionId":null,"comment":null,"responsible":null,"customerQuestionId":null,"actor":{"id":"5b8d94dc-d577-49a4-960e-8a824b186779","name":"Инженер 1"},"createdAt":"2026-10-06T12:16:33.718Z","bases":[{"text":null,"quote":null,"origin":null,"problem":null,"basisType":"decision","decisionId":"69cfb2dc-5628-4c18-9d3b-6ad496dc0b52","fragmentId":null,"evidenceFactId":null,"requirementRevisionId":null,"problemText":null}],"invalidations":[],"stale":false},"systemProposals":[],"conflictingFacts":[],"suggestions":[]}}: expected 200 to be 409 // Object.is equality
+ × tests/reviewRegressions11b.test.ts > R11-05 — скопированное значение сохраняет актуальность оснований > обсуждение, затем замена документа: копия «устарела», «Подтвердить» и «заполнено» отвергаются; прямая запись подтверждения — 23514 157ms
+   → expected { …(19) } to match object { state: 'needs_discussion', …(2) }
+(18 matching properties omitted from actual)
+ × tests/reviewRegressions11b.test.ts > R11-05 — скопированное значение сохраняет актуальность оснований > несколько обсуждений подряд, затем замена документа: «устарело» у последней копии; подтверждение отвергается 314ms
+   → expected { …(19) } to match object { …(2) }
+(19 matching properties omitted from actual)
+ × tests/reviewRegressions11b.test.ts > R11-05 — скопированное значение сохраняет актуальность оснований > замена документа до обсуждения: копия сразу «устарела», подтверждение отвергается 131ms
+   → expected { …(19) } to match object { state: 'needs_discussion', …(1) }
+(19 matching properties omitted from actual)
+ × tests/reviewRegressions11b.test.ts > R11-05 — скопированное значение сохраняет актуальность оснований > перенос значения по заменённому документу: перенесённое значение «устарело», подтверждение и «заполнено» отвергаются 174ms
+   → expected { …(19) } to match object { state: 'carried_over', …(2) }
+(18 matching properties omitted from actual)
+ ✓ tests/reviewRegressions11b.test.ts > R11-05 — скопированное значение сохраняет актуальность оснований > контроль: обсуждение и подтверждение по действующему основанию — основания значения восстановлены, «заполнено» проходит 194ms
+ × tests/reviewRegressions11b.test.ts > R11-05 — скопированное значение сохраняет актуальность оснований > подтверждение копии восстанавливает основания исходной версии 18ms
+   → expected [] to deeply equal [ ObjectContaining{…} ]
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/reviewRegressions11b.test.ts > R11-03 — решение по требованию без собственных цитат > новая редакция ТЗ до обработки события: запись по решению — 409 basis_superseded; прежнее значение «устарело»; прямая запись — 23514
+AssertionError: {"draft":{"id":"12beafa1-47d6-4a2a-a4f7-158b5a6a3bf5","status":"in_progress","etag":"\"12beafa1-47d6-4a2a-a4f7-158b5a6a3bf5:1\"","blocking":1,"issues":[{"kind":"required_empty","fieldKey":"condition","label":"Условие оплаты","blocking":true,"message":"обязательное поле не заполнено"}]},"field":{"fieldId":"2123561a-d335-42f3-af3a-9a17d8c8b410","key":"decision_text","definition":{"key":"decision_text","type":"text","label":"Условие по решению","multiline":true},"applicable":true,"required":false,"version":2,"etag":"\"2123561a-d335-42f3-af3a-9a17d8c8b410:2\"","latest":{"id":"17366ba3-969d-4842-b104-456e156fe2c4","version":2,"value":"Фасад — клинкер","state":"edited","origin":"manual","restricted":false,"wording":null,"suggestionId":null,"previousVersionId":"639f1087-aefb-4e48-904f-f8ead882b7b2","carriedFromVersionId":null,"valueFromVersionId":null,"comment":null,"responsible":null,"customerQuestionId":null,"actor":{"id":"5b8d94dc-d577-49a4-960e-8a824b186779","name":"Инженер 1"},"createdAt":"2026-10-06T12:16:33.356Z","bases":[{"text":null,"quote":null,"origin":null,"problem":null,"basisType":"decision","decisionId":"45c19efa-e3ee-41af-865d-19051eb03c19","fragmentId":null,"evidenceFactId":null,"requirementRevisionId":null,"problemText":null}],"invalidations":[],"stale":false},"systemProposals":[],"conflictingFacts":[],"suggestions":[]}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/reviewRegressions11b.test.ts:154:30
+    152|     const before = await versions(draft.dec!.id, 'decision_text');
+    153|     const r = await put(draft.dec!.id, 'decision_text', { action: 'set…
+    154|     expect(r.status, r.text).toBe(409);
+       |                              ^
+    155|     expect(r.body.current).toMatchObject({ reason: 'basis_superseded',…
+    156|     expect(await versions(draft.dec!.id, 'decision_text')).toBe(before…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  tests/reviewRegressions11b.test.ts > R11-03 — решение по требованию без собственных цитат > после обработки события — 409; значение по решению получило отметку инвалидации (зависимость от исходного документа)
+AssertionError: {"draft":{"id":"12beafa1-47d6-4a2a-a4f7-158b5a6a3bf5","status":"in_progress","etag":"\"12beafa1-47d6-4a2a-a4f7-158b5a6a3bf5:1\"","blocking":1,"issues":[{"kind":"required_empty","fieldKey":"condition","label":"Условие оплаты","blocking":true,"message":"обязательное поле не заполнено"}]},"field":{"fieldId":"2123561a-d335-42f3-af3a-9a17d8c8b410","key":"decision_text","definition":{"key":"decision_text","type":"text","label":"Условие по решению","multiline":true},"applicable":true,"required":false,"version":3,"etag":"\"2123561a-d335-42f3-af3a-9a17d8c8b410:3\"","latest":{"id":"d33d427b-63f4-4395-b644-a9fd62b8ecfe","version":3,"value":"Фасад — клинкер","state":"edited","origin":"manual","restricted":false,"wording":null,"suggestionId":null,"previousVersionId":"17366ba3-969d-4842-b104-456e156fe2c4","carriedFromVersionId":null,"valueFromVersionId":null,"comment":null,"responsible":null,"customerQuestionId":null,"actor":{"id":"5b8d94dc-d577-49a4-960e-8a824b186779","name":"Инженер 1"},"createdAt":"2026-10-06T12:16:33.485Z","bases":[{"text":null,"quote":null,"origin":null,"problem":null,"basisType":"decision","decisionId":"45c19efa-e3ee-41af-865d-19051eb03c19","fragmentId":null,"evidenceFactId":null,"requirementRevisionId":null,"problemText":null}],"invalidations":[],"stale":false},"systemProposals":[],"conflictingFacts":[],"suggestions":[]}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/reviewRegressions11b.test.ts:176:30
+    174|     await processEvents();
+    175|     const r = await put(draft.dec!.id, 'decision_text', { action: 'set…
+    176|     expect(r.status, r.text).toBe(409);
+       |                              ^
+    177|     expect(r.body.current.reason).toBe('basis_superseded');
+    178|     const latest = (await fieldNow(s.eng1, draft.dec!.id, 'decision_te…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  tests/reviewRegressions11b.test.ts > R11-03 — решение по требованию без собственных цитат > решение закрепляет ревизию требования: после изменения требования прежнее решение не подтверждает значение, новое решение — подтверждает
+AssertionError: {"draft":{"id":"12beafa1-47d6-4a2a-a4f7-158b5a6a3bf5","status":"in_progress","etag":"\"12beafa1-47d6-4a2a-a4f7-158b5a6a3bf5:1\"","blocking":1,"issues":[{"kind":"required_empty","fieldKey":"condition","label":"Условие оплаты","blocking":true,"message":"обязательное поле не заполнено"}]},"field":{"fieldId":"2123561a-d335-42f3-af3a-9a17d8c8b410","key":"decision_text","definition":{"key":"decision_text","type":"text","label":"Условие по решению","multiline":true},"applicable":true,"required":false,"version":5,"etag":"\"2123561a-d335-42f3-af3a-9a17d8c8b410:5\"","latest":{"id":"8730bed0-0226-436c-a760-f7a267677e79","version":5,"value":"Кровля — профнастил","state":"edited","origin":"manual","restricted":false,"wording":null,"suggestionId":null,"previousVersionId":"eefab81b-d7d0-425c-8e6b-91f28dc7b172","carriedFromVersionId":null,"valueFromVersionId":null,"comment":null,"responsible":null,"customerQuestionId":null,"actor":{"id":"5b8d94dc-d577-49a4-960e-8a824b186779","name":"Инженер 1"},"createdAt":"2026-10-06T12:16:33.718Z","bases":[{"text":null,"quote":null,"origin":null,"problem":null,"basisType":"decision","decisionId":"69cfb2dc-5628-4c18-9d3b-6ad496dc0b52","fragmentId":null,"evidenceFactId":null,"requirementRevisionId":null,"problemText":null}],"invalidations":[],"stale":false},"systemProposals":[],"conflictingFacts":[],"suggestions":[]}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/reviewRegressions11b.test.ts:190:34
+    188|     expect(changed.revisionId).not.toBe(req.note.revisionId);
+    189|     const old = await put(draft.dec!.id, 'decision_text', { action: 's…
+    190|     expect(old.status, old.text).toBe(409);
+       |                                  ^
+    191|     expect(old.body.current).toMatchObject({ reason: 'basis_superseded…
+    192|     const fresh = await recordDecision(req.note.requirementId, 'Принят…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  tests/reviewRegressions11b.test.ts > R11-05 — скопированное значение сохраняет актуальность оснований > обсуждение, затем замена документа: копия «устарела», «Подтвердить» и «заполнено» отвергаются; прямая запись подтверждения — 23514
+AssertionError: expected { …(19) } to match object { state: 'needs_discussion', …(2) }
+(18 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "stale": true,
++   "stale": false,
+    "state": "needs_discussion",
+    "value": "Условие 1: оплата выполненных работ в течение 30 рабочих дней.",
+  }
+
+ ❯ tests/reviewRegressions11b.test.ts:206:22
+    204|     await replaceDoc(DOCS[0]);
+    205|     const f = await fieldNow(s.eng1, d.id, 'condition');
+    206|     expect(f.latest).toMatchObject({ state: 'needs_discussion', value:…
+       |                      ^
+    207|     expect((await history(d.id, 'condition')).map((v) => [v.state, v.s…
+    208|       ['needs_discussion', true],
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  tests/reviewRegressions11b.test.ts > R11-05 — скопированное значение сохраняет актуальность оснований > несколько обсуждений подряд, затем замена документа: «устарело» у последней копии; подтверждение отвергается
+AssertionError: expected { …(19) } to match object { …(2) }
+(19 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "stale": true,
++   "stale": false,
+    "value": "Условие 2: оплата выполненных работ в течение 30 рабочих дней.",
+  }
+
+ ❯ tests/reviewRegressions11b.test.ts:238:22
+    236|     await processEvents();
+    237|     const f = await fieldNow(s.eng1, d.id, 'condition');
+    238|     expect(f.latest).toMatchObject({ value: TEXT(2), stale: true });
+       |                      ^
+    239|     expect((await act(s.eng1, d.id, 'condition', f.etag, { action: 'co…
+    240|     expect((await complete(d.id)).status).toBe(409);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  tests/reviewRegressions11b.test.ts > R11-05 — скопированное значение сохраняет актуальность оснований > замена документа до обсуждения: копия сразу «устарела», подтверждение отвергается
+AssertionError: expected { …(19) } to match object { state: 'needs_discussion', …(1) }
+(19 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "stale": true,
++   "stale": false,
+    "state": "needs_discussion",
+  }
+
+ ❯ tests/reviewRegressions11b.test.ts:249:22
+    247|     expect((await put(d.id, 'condition', { action: 'discuss', comment:…
+    248|     const f = await fieldNow(s.eng1, d.id, 'condition');
+    249|     expect(f.latest).toMatchObject({ state: 'needs_discussion', stale:…
+       |                      ^
+    250|     const c = await act(s.eng1, d.id, 'condition', f.etag, { action: '…
+    251|     expect(c.status, c.text).toBe(409);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  tests/reviewRegressions11b.test.ts > R11-05 — скопированное значение сохраняет актуальность оснований > перенос значения по заменённому документу: перенесённое значение «устарело», подтверждение и «заполнено» отвергаются
+AssertionError: expected { …(19) } to match object { state: 'carried_over', …(2) }
+(18 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "stale": true,
++   "stale": false,
+    "state": "carried_over",
+    "value": "Условие 4: оплата выполненных работ в течение 30 рабочих дней.",
+  }
+
+ ❯ tests/reviewRegressions11b.test.ts:266:22
+    264|     expect(m.body.migration.droppedBases).toEqual([expect.objectContai…
+    265|     const f = await fieldNow(s.eng1, m.body.id, 'condition');
+    266|     expect(f.latest).toMatchObject({ state: 'carried_over', value: TEX…
+       |                      ^
+    267|     const c = await act(s.eng1, m.body.id, 'condition', f.etag, { acti…
+    268|     expect(c.status, c.text).toBe(409);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  tests/reviewRegressions11b.test.ts > R11-05 — скопированное значение сохраняет актуальность оснований > подтверждение копии восстанавливает основания исходной версии
+AssertionError: expected [] to deeply equal [ ObjectContaining{…} ]
+
+- Expected
++ Received
+
+- [
+-   ObjectContaining {
+-     "basisType": "fragment",
+-     "fragmentId": "7a8d12a3-5649-4fee-b710-6f35bc3032ec",
+-   },
+- ]
++ []
+
+ ❯ tests/reviewRegressions11b.test.ts:286:26
+    284|   it('подтверждение копии восстанавливает основания исходной версии', …
+    285|     const latest = (await fieldNow(s.eng1, draft.ok!.id, 'condition'))…
+    286|     expect(latest.bases).toEqual([expect.objectContaining({ basisType:…
+       |                          ^
+    287|   });
+    288| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  8 failed | 2 passed (10)
+   Start at  17:16:27
+   Duration  7.84s (tests 67%, transform 25%, import 9%)
+

@@ -35,6 +35,7 @@
 | события аудита | `forms.template.create`, `forms.template_revision.create|approve|retire`, `forms.sample.upload`, `forms.wording.propose|decide`, `forms.draft.create|complete|migrate`, `forms.field.set`, `forms.suggestion_run.request`, `forms.suggestion.accept|reject`; чтения и отказы |
 | тесты этапа | 43 в 5 файлах: `forms` 15, `formsApi` 13, `formsSuggestions` 7, `formsMigration` 3, `formsSchema` 5 |
 | smoke / интерфейс | `scripts/smoke-11.mjs`; `artifacts/stage-11/ui-check.mjs` |
+| загрузчик форм | `scripts/forms-load.mjs` — шаблон (ревизия-черновик) и формулировки из файлов вне Git через API; пароль — из stdin |
 | демонстрационные формы | `docs/forms/demo-key-conditions.forms.json`, `docs/forms/demo-kp-letter.forms.json` |
 
 Не реализовано / внешние зависимости:
@@ -121,7 +122,7 @@
 
 - Прогон на Windows — `NOT_RUN` на машине разработки; выполняет ревьюер.
 - Живая генеративная модель — `NOT_RUN`; поддельная модель подтверждает механизм предложений и гейт цитат, а не качество.
-- Схемы реальных форм компании построены не в этом коммите и в Git не входят; их загрузка и проверка — у владельца (Q-08).
+- Схема реальной формы «Ключевые условия генподряда» (76 полей, 26 формулировок компании, SHA схемы `a874284c…`) построена вне Git (`pilot-forms/schemas/`), проходит проверку ядра и загружена загрузчиком `scripts/forms-load.mjs` во временную БД с настоящим server; содержание схемы и формулировок владелец не проверял — Q-08 и `TEMPLATE_DEMO` остаются (D-031 В-11-1). Остальные файлы архива (письмо КП, методики, расчёт содержания площадки) схемами не размечены.
 - Полнота кандидатов-оснований для предложений на реальных документах не измерялась.
 
 ## Решения и отклонения

@@ -9,7 +9,7 @@ export type TPrincipalKind = 'human' | 'model_via_mcp' | 'integration' | 'system
 export type TAuditOutcome = 'allowed' | 'denied' | 'failed';
 
 /** Глобальные возможности пользователя. */
-export type TGlobalCapability = 'admin.users' | 'admin.tender' | 'admin.audit' | 'admin.intake' | 'admin.contract';
+export type TGlobalCapability = 'admin.users' | 'admin.tender' | 'admin.audit' | 'admin.intake' | 'admin.contract' | 'admin.mailbox' | 'admin.templates' | 'wording.approve';
 
 /** Возможности пользователя в конкретном тендере. */
 export type TTenderCapability =
@@ -33,7 +33,11 @@ export type TTenderCapability =
   | 'review.run'
   | 'finding.write'
   | 'finding.accept_risk'
-  | 'source_priority.manage';
+  | 'source_priority.manage'
+  | 'economics.compare'
+  | 'change_reason.confirm'
+  | 'application.fill'
+  | 'template.manage';
 
 export interface IMembership {
   tenderId: string;

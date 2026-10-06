@@ -123,6 +123,10 @@ export const analyzeEvent = async (db: Queryable, e: IStageEventRow): Promise<IE
     }
     case 'import_accepted':
       return exact('импорт принят: входы этапа меняются событиями регистрации редакций и состава источников');
+    // Этап 11: новая версия значения поля приложения — вход барьера выпуска (класс content), не основание проверок,
+    // причин и других полей: точная обработка без целей.
+    case 'draft_field_changed':
+      return exact('изменено поле приложения: проверки, причины и другие поля не затронуты');
     default:
       return conservative(`событие «${e.event_type}»: область влияния не определена`, RULE_KINDS);
   }
@@ -147,6 +151,9 @@ export interface IInvalidationOutcome {
   // Этап 10: подтверждённые причины изменений с изменившимся основанием и погашенные гипотезы причин.
   explanations: number;
   reasonSuggestions: number;
+  // Этап 11: версии значений полей с изменившимся основанием и погашенные предложения модели.
+  fieldVersions: number;
+  fieldSuggestions: number;
 }
 
 // Объекты, к которым применяется изменение события: все (обработка события) или только записанные прогоном после
@@ -155,6 +162,7 @@ export interface IApplyScope {
   findingIds: ReadonlySet<string>;
   suggestionIds: ReadonlySet<string>;
   reasonSuggestionIds?: ReadonlySet<string>;
+  fieldSuggestionIds?: ReadonlySet<string>;
 }
 
 // Применение изменения события: «устарело» с причиной, отметки решений и событий осей, «истекла» у гипотез. Идемпотентно.
@@ -187,7 +195,7 @@ const applyEventChange = async (db: Queryable, e: IStageEventRow, tenderId: stri
     );
     for (const x of r.rows) if (inScope(scope?.findingIds)(x.id)) findingIds.add(x.id);
   }
-  const out: IInvalidationOutcome = { mode: change.mode, reason, findings: 0, decisions: 0, axisEvents: 0, suggestions: 0, explanations: 0, reasonSuggestions: 0 };
+  const out: IInvalidationOutcome = { mode: change.mode, reason, findings: 0, decisions: 0, axisEvents: 0, suggestions: 0, explanations: 0, reasonSuggestions: 0, fieldVersions: 0, fieldSuggestions: 0 };
   for (const id of [...findingIds].sort()) {
     const f = (await db.query<{ status: string }>('SELECT status FROM finding WHERE id = $1 FOR UPDATE', [id])).rows[0];
     if (!f) continue;
@@ -252,6 +260,28 @@ const applyEventChange = async (db: Queryable, e: IStageEventRow, tenderId: stri
       out.reasonSuggestions += 1;
     }
   }
+  // Этап 11 (D-031 В-11-5, В-11-6): версия значения поля с заменённым основанием получает отметку «устарело» (сама не
+  // меняется, текст не перезаписывается); открытые предложения модели гаснут — по зависимостям, а при неопределённой
+  // области (новые документы и переписка) — все предложения прогонов на снимке старше события.
+  if (!scope) {
+    for (const id of await dependents('draft_field_version')) if (await mark(db, e, tenderId, 'draft_field_version', id, change.mode, reason)) out.fieldVersions += 1;
+  }
+  const fieldSuggestionIds = new Set((await dependents('field_suggestion')).filter(inScope(scope?.fieldSuggestionIds)));
+  if (change.families.length > 0 && e.event_class !== 'calculation') {
+    const r = await db.query<{ id: string }>(
+      `SELECT s.id FROM field_suggestion s JOIN field_suggestion_run r ON r.id = s.run_id JOIN evidence_scope sc ON sc.id = r.evidence_scope_id
+        WHERE s.stage_id = $1 AND s.status = 'open' AND sc.input_version < $2`,
+      [e.stage_id, e.seq],
+    );
+    for (const x of r.rows) if (inScope(scope?.fieldSuggestionIds)(x.id)) fieldSuggestionIds.add(x.id);
+  }
+  for (const id of [...fieldSuggestionIds].sort()) {
+    const upd = await db.query("UPDATE field_suggestion SET status = 'expired', updated_at = now(), row_version = row_version + 1 WHERE id = $1 AND status = 'open'", [id]);
+    if ((upd.rowCount ?? 0) > 0) {
+      await mark(db, e, tenderId, 'field_suggestion', id, change.mode, reason);
+      out.fieldSuggestions += 1;
+    }
+  }
   return out;
 };
 
@@ -284,6 +314,8 @@ export const processStageEvent = async (db: Queryable, eventId: string): Promise
       suggestions: out.suggestions,
       explanations: out.explanations,
       reasonSuggestions: out.reasonSuggestions,
+      fieldVersions: out.fieldVersions,
+      fieldSuggestions: out.fieldSuggestions,
     }),
   ]);
   return out;
@@ -351,6 +383,30 @@ export const reconcileReasonRunWithProcessedEvents = async (db: Queryable, run: 
   for (const e of events) {
     const out = await applyEventChange(db, e, run.tender_id, await analyzeEvent(db, e), { findingIds: new Set(), suggestionIds: new Set(), reasonSuggestionIds: suggestionIds });
     affected += out.reasonSuggestions;
+  }
+  return affected;
+};
+
+// Сверка поздних предложений полей (R09-01): события после снимка прогона, обработанные до записи предложений, гасят
+// записанные сейчас предложения так же, как если бы они существовали при обработке. Вызывается под блокировкой этапа.
+export const reconcileFieldSuggestionRunWithProcessedEvents = async (
+  db: Queryable,
+  run: { stage_id: string; tender_id: string; evidence_scope_id: string },
+  suggestionIds: ReadonlySet<string>,
+): Promise<number> => {
+  if (suggestionIds.size === 0) return 0;
+  const version = Number((await db.query<{ v: string }>('SELECT input_version::text AS v FROM evidence_scope WHERE id = $1', [run.evidence_scope_id])).rows[0]?.v ?? 0);
+  const events = (
+    await db.query<IStageEventRow>(
+      `SELECT e.* FROM stage_input_event e JOIN stage_input_event_processing p ON p.event_id = e.id
+        WHERE e.stage_id = $1 AND e.seq > $2 ORDER BY e.seq`,
+      [run.stage_id, version],
+    )
+  ).rows;
+  let affected = 0;
+  for (const e of events) {
+    const out = await applyEventChange(db, e, run.tender_id, await analyzeEvent(db, e), { findingIds: new Set(), suggestionIds: new Set(), fieldSuggestionIds: suggestionIds });
+    affected += out.fieldSuggestions;
   }
   return affected;
 };

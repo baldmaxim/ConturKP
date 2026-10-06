@@ -11,3 +11,4 @@ export * from './answers/index.ts';
 export * from './facts/index.ts';
 export * from './review/index.ts';
 export * from './money/index.ts';
+export * from './forms/index.ts';

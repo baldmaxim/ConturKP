@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "forms/1",
+  "title": "Демонстрационная форма — письмо коммерческого предложения (не для выпуска)",
+  "sections": [
+    {
+      "key": "letter",
+      "title": "Реквизиты письма",
+      "help": "Демонстрационная форма с вымышленным текстом. Структура повторяет письмо коммерческого предложения к оферте.",
+      "fields": [
+        { "key": "letter_date", "type": "date", "label": "Дата письма", "required": true },
+        { "key": "letter_number", "type": "text", "label": "Исходящий номер", "required": true, "maxLength": 100 },
+        { "key": "addressee", "type": "text", "label": "Адресат", "required": true, "maxLength": 500 },
+        { "key": "subject", "type": "text", "label": "Предмет тендера", "required": true, "multiline": true, "maxLength": 4000 }
+      ]
+    },
+    {
+      "key": "terms",
+      "title": "Условия предложения",
+      "fields": [
+        { "key": "materials_price_date", "type": "date", "label": "Дата стоимости материалов и оборудования", "meaning": "custom:materials_price_date", "required": true },
+        { "key": "advance_percent", "type": "number", "label": "Общий аванс", "unit": "%", "scale": 2, "min": "0", "max": "100", "meaning": "fact:advance_percent", "required": true },
+        { "key": "retention_percent", "type": "number", "label": "Гарантийное удержание", "unit": "%", "scale": 2, "min": "0", "max": "100", "meaning": "fact:retention_percent" },
+        { "key": "duration_months", "type": "number", "label": "Срок выполнения работ до заключения о соответствии", "unit": "мес.", "scale": 0, "min": "1", "meaning": "custom:duration_to_zos", "required": true },
+        { "key": "warranty_months", "type": "number", "label": "Гарантийный срок на общестроительные работы", "unit": "мес.", "scale": 0, "min": "0", "meaning": "fact:warranty_period" },
+        { "key": "inflation_threshold", "type": "number", "label": "Порог накопленной инфляции для компенсации", "unit": "%", "scale": 2, "min": "0", "meaning": "custom:inflation_threshold" },
+        { "key": "validity_days", "type": "number", "label": "Срок действия предложения", "unit": "кал. дн.", "scale": 0, "min": "1", "required": true },
+        { "key": "conditions_text", "type": "text", "label": "Прочие условия предложения", "multiline": true, "maxLength": 100000 }
+      ]
+    },
+    {
+      "key": "missing",
+      "title": "Исходные данные",
+      "fields": [
+        {
+          "key": "missing_data",
+          "type": "table",
+          "label": "Не предоставленные исходные данные",
+          "maxRows": 200,
+          "columns": [ { "key": "item", "label": "Документ", "type": "text", "required": true, "maxLength": 2000 } ]
+        }
+      ]
+    }
+  ]
+}

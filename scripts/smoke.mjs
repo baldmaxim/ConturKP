@@ -23,6 +23,7 @@ import { smokeRequirements } from './smoke-08.mjs';
 import { smokeAnswers } from './smoke-08a.mjs';
 import { smokeReview } from './smoke-09.mjs';
 import { smokeEconomics } from './smoke-10.mjs';
+import { smokeForms } from './smoke-11.mjs';
 import { PRECISE_RATE, TH, standardTender, startFakeTenderHub } from './tenderhub-fake.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -484,6 +485,9 @@ try {
   // ---- Этап 10: экономика — scripts/smoke-10.mjs
   const econ10 = await smokeEconomics({ api, record, waitFor, idem, json, stageId, hub, standardTender, TH });
 
+  // ---- Этап 11: приложения — scripts/smoke-11.mjs
+  const forms11 = await smokeForms({ root: ROOT, api, api2, record, idem, json, stageId });
+
   await stopProc(server);
   server = startProc('server', 'apps/server/src/main.ts');
   ready = await waitReady(30_000);
@@ -508,6 +512,12 @@ try {
   record('этап 09: после перезапуска отчёт проверки — из PostgreSQL, итог прежний', runAfterBody?.status === rev09.status && runAfterBody?.checks?.length === 12);
   const cmpAfter = econ10.comparisonId ? await (await api(`/comparisons/${econ10.comparisonId}`)).json() : null;
   record('этап 10: после перезапуска сравнение — из PostgreSQL, тот же хэш результата', Boolean(econ10.resultSha256) && cmpAfter?.resultSha256 === econ10.resultSha256);
+  const draftAfter = forms11.draftId ? await (await api(`/application-drafts/${forms11.draftId}`)).json() : null;
+  const advanceAfter = draftAfter?.sections?.flatMap((x) => x.fields).find((f) => f.key === 'advance_percent');
+  record(
+    'этап 11: после перезапуска приложение, версия поля и список незавершённых — из PostgreSQL',
+    advanceAfter?.latest?.value === '30' && advanceAfter?.latest?.version === 1 && draftAfter?.blocking === forms11.blocking,
+  );
   const me = await fetch(`${BASE}/api/v1/me`, { headers: { Cookie: cookieHeader() } });
   record('перезапуск server — сессия действительна', me.status === 200);
 

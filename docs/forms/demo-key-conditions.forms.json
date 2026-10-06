@@ -1,0 +1,398 @@
+{
+  "schemaVersion": "forms/1",
+  "title": "Демонстрационная форма — ключевые условия (не для выпуска)",
+  "sections": [
+    {
+      "key": "general",
+      "title": "Общие условия",
+      "help": "Демонстрационная форма с вымышленным текстом. Структура повторяет таблицу существенных условий: предложение компании и позиция заказчика.",
+      "fields": [
+        {
+          "key": "price_kind",
+          "type": "choice",
+          "label": "Цена договора",
+          "required": true,
+          "options": [
+            {
+              "value": "firm",
+              "label": "Твёрдая договорная цена"
+            },
+            {
+              "value": "approximate",
+              "label": "Приблизительная цена с уточнением по рабочей документации"
+            }
+          ]
+        },
+        {
+          "key": "estimate_units",
+          "type": "text",
+          "label": "Единицы измерения в сметной документации",
+          "required": true,
+          "multiline": true,
+          "wordingTags": [
+            "сметы"
+          ]
+        },
+        {
+          "key": "site_upkeep_month",
+          "type": "number",
+          "label": "Компенсация содержания площадки за дополнительный месяц",
+          "unit": "млн руб.",
+          "currency": "RUB",
+          "scale": 2,
+          "min": "0",
+          "meaning": "custom:site_upkeep_month",
+          "required": true
+        },
+        {
+          "key": "duration_months",
+          "type": "number",
+          "label": "Срок выполнения работ до заключения о соответствии",
+          "unit": "мес.",
+          "scale": 0,
+          "min": "1",
+          "meaning": "custom:duration_to_zos",
+          "required": true
+        },
+        {
+          "key": "handover_months",
+          "type": "number",
+          "label": "Срок передачи объекта и подписания итогового акта",
+          "unit": "мес.",
+          "scale": 0,
+          "min": "0"
+        }
+      ]
+    },
+    {
+      "key": "payments",
+      "title": "Авансы и расчёты",
+      "fields": [
+        {
+          "key": "advance_percent",
+          "type": "number",
+          "label": "Общий аванс",
+          "unit": "%",
+          "scale": 2,
+          "min": "0",
+          "max": "100",
+          "meaning": "fact:advance_percent",
+          "required": true
+        },
+        {
+          "key": "advance_security",
+          "type": "choice",
+          "label": "Обеспечение аванса",
+          "options": [
+            {
+              "value": "none",
+              "label": "Без банковской гарантии"
+            },
+            {
+              "value": "bank_guarantee",
+              "label": "Банковская гарантия на аванс"
+            }
+          ],
+          "applicableWhen": {
+            "field": "advance_percent",
+            "op": "notEmpty"
+          },
+          "required": {
+            "field": "advance_percent",
+            "op": "ne",
+            "value": "0"
+          }
+        },
+        {
+          "key": "retention_percent",
+          "type": "number",
+          "label": "Гарантийное удержание",
+          "unit": "%",
+          "scale": 2,
+          "min": "0",
+          "max": "100",
+          "meaning": "fact:retention_percent"
+        },
+        {
+          "key": "payment_days",
+          "type": "number",
+          "label": "Оплата выполненных работ после подписания актов",
+          "unit": "раб. дн.",
+          "scale": 0,
+          "min": "1",
+          "meaning": "custom:payment_term_days"
+        }
+      ]
+    },
+    {
+      "key": "compensation",
+      "title": "Компенсация роста стоимости материалов",
+      "fields": [
+        {
+          "key": "compensation_mechanism",
+          "type": "choice",
+          "label": "Механизм компенсации",
+          "required": true,
+          "options": [
+            {
+              "value": "inflation_and_basket",
+              "label": "Индексация по накопленной инфляции и отдельный расчёт по корзине материалов"
+            },
+            {
+              "value": "inflation",
+              "label": "Индексация по накопленной инфляции сверх порога"
+            },
+            {
+              "value": "basket",
+              "label": "Перерасчёт по базовой стоимости материалов сверх коридора"
+            },
+            {
+              "value": "none",
+              "label": "Без компенсации"
+            }
+          ]
+        },
+        {
+          "key": "inflation_threshold",
+          "type": "number",
+          "label": "Порог накопленной инфляции",
+          "unit": "%",
+          "scale": 2,
+          "min": "0",
+          "meaning": "custom:inflation_threshold",
+          "applicableWhen": {
+            "field": "compensation_mechanism",
+            "op": "in",
+            "value": [
+              "inflation_and_basket",
+              "inflation"
+            ]
+          },
+          "required": true
+        },
+        {
+          "key": "basket_corridor",
+          "type": "number",
+          "label": "Коридор базовой стоимости материалов",
+          "unit": "%",
+          "scale": 2,
+          "min": "0",
+          "applicableWhen": {
+            "field": "compensation_mechanism",
+            "op": "in",
+            "value": [
+              "inflation_and_basket",
+              "basket"
+            ]
+          },
+          "required": true
+        },
+        {
+          "key": "methodology_variant",
+          "type": "choice",
+          "label": "Вариант методики определения стоимости ресурсов",
+          "applicableWhen": {
+            "all": [
+              {
+                "field": "compensation_mechanism",
+                "op": "notEmpty"
+              },
+              {
+                "field": "compensation_mechanism",
+                "op": "ne",
+                "value": "none"
+              }
+            ]
+          },
+          "required": true,
+          "options": [
+            {
+              "value": "inflation_only",
+              "label": "Методика: только инфляция"
+            },
+            {
+              "value": "basket_only",
+              "label": "Методика: только корзина материалов"
+            },
+            {
+              "value": "inflation_and_basket",
+              "label": "Методика: инфляция и корзина материалов"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "warranty",
+      "title": "Гарантии",
+      "fields": [
+        {
+          "key": "warranty_months",
+          "type": "number",
+          "label": "Гарантийный срок на общестроительные работы",
+          "unit": "мес.",
+          "scale": 0,
+          "min": "0",
+          "meaning": "fact:warranty_period",
+          "required": true
+        },
+        {
+          "key": "warranty_finishing_months",
+          "type": "number",
+          "label": "Гарантийный срок на отделку и благоустройство",
+          "unit": "мес.",
+          "scale": 0,
+          "min": "0",
+          "meaning": "custom:warranty_finishing"
+        }
+      ]
+    },
+    {
+      "key": "customer",
+      "title": "Позиция заказчика",
+      "help": "Позиция заказчика — другой предмет: с предложением компании не сравнивается как противоречие.",
+      "fields": [
+        {
+          "key": "customer_advance_percent",
+          "type": "number",
+          "label": "Аванс по позиции заказчика",
+          "unit": "%",
+          "scale": 2,
+          "min": "0",
+          "max": "100",
+          "meaning": "fact:advance_percent",
+          "context": {
+            "subject": "позиция заказчика"
+          }
+        },
+        {
+          "key": "customer_notes",
+          "type": "text",
+          "label": "Позиция заказчика по остальным условиям",
+          "multiline": true,
+          "maxLength": 50000
+        }
+      ]
+    },
+    {
+      "key": "lists",
+      "title": "Перечни",
+      "fields": [
+        {
+          "key": "not_included",
+          "type": "table",
+          "label": "Работы, не предусмотренные договором",
+          "maxRows": 300,
+          "columns": [
+            {
+              "key": "item",
+              "label": "Работа",
+              "type": "text",
+              "required": true,
+              "maxLength": 2000
+            },
+            {
+              "key": "note",
+              "label": "Примечание",
+              "type": "text",
+              "maxLength": 2000
+            }
+          ]
+        },
+        {
+          "key": "attention",
+          "type": "table",
+          "label": "К вниманию заказчика",
+          "maxRows": 300,
+          "columns": [
+            {
+              "key": "item",
+              "label": "Условие",
+              "type": "text",
+              "required": true,
+              "maxLength": 4000
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "constraints": [
+    {
+      "id": "advance_security_zero",
+      "when": {
+        "all": [
+          {
+            "field": "advance_percent",
+            "op": "eq",
+            "value": "0"
+          },
+          {
+            "field": "advance_security",
+            "op": "eq",
+            "value": "bank_guarantee"
+          }
+        ]
+      },
+      "message": "Банковская гарантия на аванс несовместима с нулевым авансом"
+    },
+    {
+      "id": "methodology_matches_mechanism",
+      "when": {
+        "all": [
+          {
+            "field": "methodology_variant",
+            "op": "notEmpty"
+          },
+          {
+            "any": [
+              {
+                "all": [
+                  {
+                    "field": "compensation_mechanism",
+                    "op": "eq",
+                    "value": "inflation"
+                  },
+                  {
+                    "field": "methodology_variant",
+                    "op": "ne",
+                    "value": "inflation_only"
+                  }
+                ]
+              },
+              {
+                "all": [
+                  {
+                    "field": "compensation_mechanism",
+                    "op": "eq",
+                    "value": "basket"
+                  },
+                  {
+                    "field": "methodology_variant",
+                    "op": "ne",
+                    "value": "basket_only"
+                  }
+                ]
+              },
+              {
+                "all": [
+                  {
+                    "field": "compensation_mechanism",
+                    "op": "eq",
+                    "value": "inflation_and_basket"
+                  },
+                  {
+                    "field": "methodology_variant",
+                    "op": "ne",
+                    "value": "inflation_and_basket"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "message": "Вариант методики не соответствует выбранному механизму компенсации"
+    }
+  ]
+}

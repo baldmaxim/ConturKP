@@ -374,6 +374,19 @@ CHECK 0014 требовал размеры у `pdf_page` только в ста�
 | `draft_field_value` | mutable | `draft_id`, `field_key`, `value`, `value_origin` (`approved_wording`/`model_suggestion`/`manual`/`decision`), `basis_refs`, `status` (`empty`/`suggested`/`accepted`/`edited`/`needs_discussion`/`stale`) | ручной текст не стирается при `stale` |
 | `draft_field_event` | append-only | `field_value_id`, `from_status`, `to_status`, `old_value`, `new_value`, `actor_user_id` или `principal_id` | история правок (A09) |
 
+Этап 11 (миграция `0029`, D-031; проект `docs/architecture/11-forms-design.md` §2, §13) уточняет заготовку: значение поля — неизменяемая версия, история правок — сами версии, «устарело» — отметка инвалидации или заменённое основание по текущему состоянию; `draft_field_value` и `draft_field_event` не создаются.
+
+| Таблица | Класс | Ключевые колонки | Ограничения |
+|---|---|---|---|
+| `application_template` | mutable (имя, архив) | `owner_kind` (`company`/`customer`), `tender_id`, `name`, `is_demo` | компании — роль «руководитель», заказчика — `template.manage`; владелец и демо-признак неизменны |
+| `template_revision` | frozen-after | `template_id`, `seq`, `field_schema` (forms/1), `schema_sha256`, `field_keys`, `required_keys`, `sample_blob_sha256`, `status` (`draft`/`approved`/`retired`), основание, `approved_by` | содержание неизменно с создания; заказчика — утверждение только с основанием тендера (D-031 В-11-9) |
+| `wording`, `wording_version` | immutable / frozen-after | `scope_tender_id`, `title`; версия: `text`, `tags`, `status` (`proposed`/`approved`/`retired`) | текст версии неизменен; утверждает тот, кто ведёт шаблоны владельца |
+| `application_draft` | mutable (статус) | `stage_id`, `template_revision_id`, `status` (`in_progress`/`complete`/`superseded`), `migrated_from_draft_id`, `migration_report` | по утверждённой ревизии; «заполнено» — без пустых безусловно обязательных, перенесённых, обсуждаемых и с заменённым основанием (`draft_completion_problem`); «заменено» — только переносом |
+| `draft_field` | immutable | `draft_id`, `field_key` | якорь версий поля (ETag); создаётся вместе с приложением по ключам ревизии |
+| `draft_field_version` | immutable | `field_id`, `version`, `value`, `state` (`accepted`/`edited`/`needs_discussion`/`cleared`/`carried_over`), `origin` (`manual`/`approved_wording`/`model_suggestion`/`system_suggestion`/`carried_over`), `previous_version_id`, `comment`, `customer_question_id`, `actor_user_id` | следующая версия поля; автор — участник с `application.fill`; перенос — только в транзакции переноса |
+| `draft_field_basis` | immutable | фрагмент, решение, ревизия требования или факт графа D-018; `quote` | основание действующее (`field_basis_problem`) при вставке и в конце транзакции; принятое предложение — с основанием |
+| `field_suggestion_run`, `field_suggestion_run_input`, `field_suggestion(_evidence)` | frozen-after / immutable | закреплённый вход прогона, предложения модели с цитатами | пишет только выполняющийся прогон; цитата — фрагмент входа поля; принимает человек с версией поля по предложению |
+
 ### 4.9. Выпуск
 
 | Таблица | Класс | Ключевые колонки | Ограничения |

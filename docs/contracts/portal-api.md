@@ -223,10 +223,21 @@
 
 | Метод и путь | Право | Ключи | Назначение |
 |---|---|---|---|
-| `GET /template-revisions`, `POST /template-revisions` | `tender.read` / `admin.templates` | IK | версии форм компании и заказчика |
-| `POST /stages/{id}/application-drafts` | `application.write` | IK | создать заполнение |
-| `PATCH /draft-field-values/{id}` | `application.write` | IM | значение, принятие предложения, ручная правка |
-| `GET /application-drafts/{id}` | `tender.read` | — | поля, происхождение, устаревшие подтверждения |
+| `GET /application-templates?tenderId=`, `POST /application-templates` | содержательная роль / `admin.templates` (компании), `template.manage` (заказчика) | IK | шаблоны компании и заказчиков своих тендеров; `isDemo` неизменен (этап 11, D-031) |
+| `GET /application-templates/{id}`, `POST /application-templates/{id}/revisions` | то же | IK | ревизии; тело `{ schema, sample? }` — схема forms/1 проверяется ядром (`400` с перечнем), образец — по SHA загруженного файла |
+| `GET /template-revisions/{id}`, `POST /template-revisions/{id}/approve`, `…/retire` | то же | IM | схема, отличия от прежней ревизии (добавленные, удалённые, изменённые поля); утверждение (прежняя утверждённая выбывает); заказчика — только с основанием (`409 basis_required`) |
+| `POST /form-samples?name=&tenderId=` | `admin.templates` / `template.manage` | IK | образец формы (`application/octet-stream`) → `{ sha256, name, sizeBytes }` |
+| `GET /approved-wordings?tenderId=&q=&tag=&status=`, `POST /approved-wordings`, `GET /approved-wordings/{id}`, `POST /approved-wordings/{id}/versions` | содержательная роль; заказчика — `application.fill` | IK | библиотека формулировок: последние версии, история, предложение новой версии |
+| `POST /wording-versions/{id}/decision` | `wording.approve` (компании) / `template.manage` (заказчика) | IM | `{ status: approved | retired }`; новая утверждённая выводит прежнюю |
+| `GET /stages/{id}/application-drafts`, `POST /stages/{id}/application-drafts` | `tender.read` / `application.fill` | IK | приложения этапа с прогрессом и числом незавершённых пунктов; создание по утверждённой ревизии |
+| `GET /application-drafts/{id}` | `tender.read` | — | разделы и поля: определение, применимость и обязательность, последняя версия (происхождение, основания с проблемами, «устарело»), предложения системы из фактов и модели; список незавершённых пунктов; производный текст — только при чтении всех оснований |
+| `PUT /application-drafts/{id}/fields/{key}` | `application.fill` | IM `"<fieldId>:<версия>"` | действие: `set` (значение и основания), `choose_wording`, `accept_fact`, `confirm`, `discuss` (комментарий, ответственный, черновик вопроса заказчику), `clear`; `412` — поле изменил другой; `409`: `basis_superseded`, `basis_conflict`, `restricted_fragments`, `draft_superseded`, `wording_not_approved`, `fact_not_applicable` |
+| `GET /application-drafts/{id}/fields/{key}/history` | `tender.read` | — | версии поля: автор, время, происхождение, состояние, основания |
+| `POST /application-drafts/{id}/complete` | `application.fill` | IM | «заполнено» только без блокирующих пунктов (`409 incomplete` с перечнем); вторая линия — БД |
+| `POST /application-drafts/{id}/migrate` | `application.fill` | IM | перенос на новую ревизию (D-031 В-11-8): новый черновик, значения «перенесено — подтвердите», отчёт переноса |
+| `GET /stages/{id}/application-issues` | `tender.read` | — | незавершённые пункты всех действующих приложений этапа |
+| `POST /application-drafts/{id}/suggestion-runs`, `GET …/suggestion-runs`, `GET /field-suggestion-runs/{id}` | `application.fill` / `tender.read` | IK | прогон предложений модели с закреплённым входом; охват: предложения, отброшенные гейтом цитат («ложная цитата») |
+| `POST /field-suggestions/{id}/accept`, `…/reject` | `application.fill` | IM | решение человека; принятие — версия поля с цитатами-основаниями; `409`: `suggestion_expired`, `suggestion_decided`, `basis_superseded` |
 
 ### 2.9. Кандидат, согласование, выпуск
 

@@ -2,6 +2,7 @@ import { useEffect, type FC } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { watchSystemTheme } from '../hooks/themeStore';
 import { AdminPage } from '../pages/AdminPage';
+import { FormsLibraryPage } from '../pages/forms/FormsLibraryPage';
 import { ContractDocumentPage } from '../pages/contracts/ContractDocumentPage';
 import { ContractPage } from '../pages/contracts/ContractPage';
 import { ContractsPage } from '../pages/contracts/ContractsPage';
@@ -54,6 +55,7 @@ export const App: FC = () => {
             <Route path="mailboxes/:mailboxId" element={<MailboxPage />} />
             <Route path="mail-messages/:messageId" element={<MailMessagePage />} />
             <Route path="negotiation-sessions/:sessionId" element={<NegotiationSessionPage />} />
+            <Route path="forms" element={<FormsLibraryPage />} />
             <Route path="admin" element={<AdminPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>

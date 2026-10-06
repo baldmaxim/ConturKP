@@ -30,6 +30,7 @@ describe('возможности', () => {
       'finding.write',
       'economics.compare',
       'change_reason.confirm',
+      'application.fill',
     ]);
   });
   it('руководитель-участник: управление этапами и журнал', () => {
@@ -47,6 +48,7 @@ describe('возможности', () => {
       'finding.write',
       'economics.compare',
       'change_reason.confirm',
+      'application.fill',
       'stage.manage',
       'hold.resolve',
       'requirement.confirm',
@@ -55,6 +57,7 @@ describe('возможности', () => {
       'fact.confirm',
       'finding.accept_risk',
       'source_priority.manage',
+      'template.manage',
       'audit.read',
     ]);
   });
@@ -66,7 +69,9 @@ describe('возможности', () => {
     expect(tenderCapabilities(roles('admin'), null)).toEqual(['audit.read', 'admin.tender']);
     expect(canSeeTenderCard(roles('admin'), null)).toBe(true);
     expect(globalCapabilities(roles('admin'))).toEqual(['admin.users', 'admin.tender', 'admin.audit', 'admin.intake', 'admin.contract', 'admin.mailbox']);
-    expect(globalCapabilities(roles('manager', 'engineer'))).toEqual([]);
+    // Этап 11 (D-031 В-11-3): шаблоны компании и формулировки — роль «руководитель», без доступа к содержимому тендеров.
+    expect(globalCapabilities(roles('manager', 'engineer'))).toEqual(['admin.templates', 'wording.approve']);
+    expect(globalCapabilities(roles('engineer'))).toEqual([]);
   });
 });
 

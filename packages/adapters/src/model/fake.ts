@@ -99,6 +99,33 @@ const fakeReasons = (user: string): string => {
   return JSON.stringify({ reasons });
 };
 
+// Предложения полей приложения (этап 11): для поля — первое предложение фрагмента, разделяющее основу слова с подписью;
+// число и дата — записанные в этом предложении, вариант — с общей основой подписи. Цитата — само предложение.
+const fakeFormSuggestions = (user: string): string => {
+  const input = JSON.parse(user) as {
+    fields: { fieldKey: string; label: string; type: string; unit: string | null; options: { value: string; label: string }[] | null; fragments: { label: string; text: string }[] }[];
+  };
+  const fields = input.fields.flatMap((f) => {
+    const stems = stemsOf(f.label);
+    for (const fr of f.fragments) {
+      const sentence = fr.text.split(/(?<=[.!?;])\s+/u).find((x) => [...stemsOf(x)].some((w) => stems.has(w)));
+      if (!sentence) continue;
+      const quote = sentence.trim().slice(0, 400);
+      let value: string | null = null;
+      if (f.type === 'number') value = /(?<![\d.,])(\d+(?:[.,]\d+)?)\s*(?:%|мес|дн|лет|год|руб|млн)/u.exec(quote)?.[1]?.replace(',', '.') ?? null;
+      else if (f.type === 'date') {
+        const m = /(\d{2})\.(\d{2})\.(\d{4})/u.exec(quote);
+        value = m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+      } else if (f.type === 'choice') value = f.options?.find((o) => [...stemsOf(o.label)].some((w) => stemsOf(quote).has(w)))?.value ?? null;
+      else value = quote;
+      if (value === null) continue;
+      return [{ fieldKey: f.fieldKey, value, rationale: 'Поддельная модель: предложение разделяет слова с подписью поля', citations: [{ evidence: fr.label, quote }] }];
+    }
+    return [];
+  });
+  return JSON.stringify({ fields });
+};
+
 export class FakeChat implements IModelGatewayChat {
   readonly providerId = 'fake' as const;
   readonly model: string;
@@ -127,6 +154,13 @@ export class FakeChat implements IModelGatewayChat {
         return { ok: true, value: this.done(fakeHypotheses(input.user), startedAt) };
       } catch {
         return chatError('CONTRACT_MISMATCH', 'поддельная модель ждёт вход проверки', false);
+      }
+    }
+    if (input.task === 'form_suggestions') {
+      try {
+        return { ok: true, value: this.done(fakeFormSuggestions(input.user), startedAt) };
+      } catch {
+        return chatError('CONTRACT_MISMATCH', 'поддельная модель ждёт вход полей приложения', false);
       }
     }
     if (input.task === 'change_reasons') {

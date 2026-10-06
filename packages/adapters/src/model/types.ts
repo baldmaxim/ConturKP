@@ -24,7 +24,7 @@ export interface IChatCompletion {
 // Задачи шлюза: извлечение кандидатов (этап 08) и ответное ядро (этап 08a) — черновик и необязательная проверка.
 // Этап 09: гипотезы расхождений (C12) — только предложения человеку.
 // Этап 10: гипотезы причин изменений стоимости — только предложения человеку.
-export type ChatTask = AnalysisTask | 'answer_draft' | 'answer_verify' | 'review_hypotheses' | 'change_reasons';
+export type ChatTask = AnalysisTask | 'answer_draft' | 'answer_verify' | 'review_hypotheses' | 'change_reasons' | 'form_suggestions';
 
 export interface IChatCompleteInput {
   task: ChatTask;

@@ -14,6 +14,7 @@ import { ImportBatchList } from './sources/ImportBatchList';
 import { DialogsTab } from './answers/DialogsTab';
 import { CalculationTab } from './calculation/CalculationTab';
 import { EconomicsTab } from './economics/EconomicsTab';
+import { ApplicationsTab } from './forms/ApplicationsTab';
 import { RequirementsTab } from './requirements/RequirementsTab';
 import { FindingsTab } from './review/FindingsTab';
 import { ReviewTab } from './review/ReviewTab';
@@ -36,6 +37,7 @@ const TABS: ITab[] = [
   { id: 'requirements', label: 'Требования', icon: 'list-checks' },
   { id: 'review', label: 'Проверка', icon: 'scan-search' },
   { id: 'discrepancies', label: 'Разногласия', icon: 'file-exclamation-point' },
+  { id: 'applications', label: 'Приложения', icon: 'file-signature' },
 ];
 
 export const StagePage: FC = () => {
@@ -111,6 +113,7 @@ export const StagePage: FC = () => {
         {active === 'requirements' ? <RequirementsTab stageId={stage.id} tenderId={stage.tenderId} caps={caps} /> : null}
         {active === 'review' ? <ReviewTab stageId={stage.id} caps={caps} onOpenFindings={() => selectTab('discrepancies')} /> : null}
         {active === 'discrepancies' ? <FindingsTab stageId={stage.id} tenderId={stage.tenderId} /> : null}
+        {active === 'applications' ? <ApplicationsTab stageId={stage.id} tenderId={stage.tenderId} caps={caps} /> : null}
       </div>
     </>
   );

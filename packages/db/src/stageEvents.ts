@@ -15,7 +15,9 @@ export type StageEventType =
   | 'transcript_revision_added'
   | 'qa_form_added'
   // Этап 08: решение по требованию (state-machines §1.1, И-08-9); значение есть в CHECK с миграции 0002.
-  | 'decision_recorded';
+  | 'decision_recorded'
+  // Этап 11: новая версия значения поля приложения (класс content); значение есть в CHECK с миграции 0002.
+  | 'draft_field_changed';
 
 const CLASS_OF: Record<StageEventType, 'source' | 'calculation' | 'content'> = {
   import_accepted: 'source',
@@ -27,6 +29,7 @@ const CLASS_OF: Record<StageEventType, 'source' | 'calculation' | 'content'> = {
   transcript_revision_added: 'source',
   qa_form_added: 'source',
   decision_recorded: 'content',
+  draft_field_changed: 'content',
 };
 
 export interface IStageEventInput {

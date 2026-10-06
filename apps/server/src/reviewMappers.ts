@@ -14,6 +14,7 @@ import {
 } from '@kontur/core';
 import {
   axisEvents,
+  stageEventClass,
   currentAxes,
   decisionsFor,
   eventsAfter,
@@ -95,7 +96,9 @@ export interface IRunFreshness {
 // Прогон устарел (§3.1): после снимка поступили источники, после запуска — расчёт, или изменились реестр и записи этапа.
 export const runFreshness = async (db: Queryable, run: IReviewRunRow): Promise<IRunFreshness> => {
   const events = await eventsAfter(db, run.stage_id, run.scope_input_version);
-  const classOf = (t: string) => (t === 'calculation_revision_added' ? 'calculation' : t === 'decision_recorded' ? 'content' : 'source');
+  // Классы событий — из общего списка барьера (S12-01): правка поля приложения (draft_field_changed, класс content) —
+  // не новый источник; изменения содержимого этапа, от которых зависит проверка, ловит отпечаток содержимого ниже.
+  const classOf = stageEventClass;
   const source = events.filter((e) => classOf(e.event_type) === 'source');
   const calc = events.filter((e) => classOf(e.event_type) === 'calculation' && e.seq > run.stage_input_version);
   const reasons: string[] = [];

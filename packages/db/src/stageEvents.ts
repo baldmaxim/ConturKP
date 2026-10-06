@@ -32,6 +32,9 @@ const CLASS_OF: Record<StageEventType, 'source' | 'calculation' | 'content'> = {
   draft_field_changed: 'content',
 };
 
+// Класс события по типу; неизвестный тип — «источник» (консервативно: неизвестное считается затрагивающим вход).
+export const stageEventClass = (type: string): 'source' | 'calculation' | 'content' => (CLASS_OF as Record<string, 'source' | 'calculation' | 'content'>)[type] ?? 'source';
+
 export interface IStageEventInput {
   tenderId: string;
   // null — все активные этапы тендера (неизвестная применимость означает «затрагивает»).

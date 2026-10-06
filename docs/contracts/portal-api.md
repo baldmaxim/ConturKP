@@ -253,6 +253,27 @@
 | `GET /stages/{id}/holds`, `POST /holds/{id}/resolve` | `tender.read` / `hold.resolve` | IM, IK | удержания по событиям входов для конкретного кандидата: «не влияет» или «требуется новый кандидат» (I04, R01-03) |
 | `GET /releases/{id}`, `GET /releases/{id}/manifest` | `tender.read` | — | выпуск и манифест |
 
+#### 2.9.1. Реализация этапа 12 (D-032; ADR-013; миграция 0032)
+
+Согласование, возврат, отзыв, выпуск и удержания — этап 13; в этапе 12 — сборка, чтение, файлы и библиотека вложений. Видимость содержимого кандидата (В-12-7): пользователь читает все закреплённые версии полей с их источниками; проверяется при каждом запросе (карточка, манифест, файл, превью, ZIP). Без видимости — оболочка `restricted: true` без входов, файлов, проверок и манифеста; файл, манифест и ZIP — `404`.
+
+| Метод и путь | Право | Ключи | Назначение |
+|---|---|---|---|
+| `POST /form-samples?name=` | `admin.templates` / `template.manage` | IK | загрузка байтов образца или вложения (`application/octet-stream`); `201` — `{ sha256, name, sizeBytes }` (этап 11; в этапе 12 — и для размеченной копии и вложений). Аудит `forms.sample.upload` |
+| `POST /application-templates/{id}/revisions` | ведёт шаблон | IK | (дополнение этапа 12) `markedSample: { sha256, name }` — размеченная копия рядом с оригиналом `sample`; `audience` (`customer`/`internal`); формат (`docx`/`xlsx`) — по содержимому; разметка проверяется по схеме ревизии и записывается в `markup` (`ok`, `printed`, `blocks`, `loops`, `notPrinted`, `issues[]` с кодом и местом) |
+| `POST /template-revisions/{id}/approve` | ведёт шаблон | IM | (дополнение) ревизия с размеченной копией и ошибками разметки — `409 markup_invalid` |
+| `POST /template-markup-check` | `admin.templates` / `template.manage` | — | пробная проверка разметки без ревизии: `{ schema, markedSample: { sha256 }, tenderId? }` → `{ outputFormat, markup }`. Аудит `forms.markup.check` |
+| `GET /standard-attachments` | вход в систему | — | ревизии вложений компании и тендеров, видимых пользователю: название, файл, размер, SHA-256, аудитория, статус, `canManage`; `canCreateCompany` |
+| `POST /standard-attachments` | компании — `admin.templates`; тендера — `template.manage` | IK | `{ title, scopeTenderId? }`. Аудит `release.attachment.create` |
+| `POST /standard-attachments/{id}/revisions` | как у вложения | IK | `{ sha256, fileName, audience }`; DOCX, XLSX, DOC, PDF по содержимому файла, иначе `400`. Аудит `release.attachment.revision.create` |
+| `POST /standard-attachment-revisions/{id}/approve` | как у вложения | IM | утверждение; прежняя утверждённая ревизия вложения — `retired`. Аудит `release.attachment.revision.approve` |
+| `POST /stages/{id}/release-candidates` | `candidate.create` | IK | `{ mode, draftIds[], attachmentRevisionIds[] }`; `201` — карточка кандидата (`assembling`). `409`: `nothing_selected`, `candidate_assembling`, `no_calculation_revision`, `no_scope`, `drafts_not_complete`, `markup_missing`, `attachment_not_approved`, `restricted_inputs`. Аудит `release.candidate.create` |
+| `GET /stages/{id}/release-candidates` | `tender.read` | — | список: номер, режим, статус, автор, время, `restricted`, `current` (нет событий после базы, касающихся кандидата), код провала; `canCreate` |
+| `GET /release-candidates/{id}` | `tender.read` + видимость | — | карточка: `inputs` (ревизия расчёта, снимок, прогон проверок, число решений и версий полей, приложения, вложения, базы, `inputsSha256`), `failure`, `converterVersion`, `contentHash`, `checks[]`, `files[]` (`path`, `role`, `audience`, `mediaType`, `sizeBytes`, `sha256`, `previewFileId`), `previews[]` (`pages`, `fonts`), `notes[]`, `knownProductionBlockers[]`, `eventsAfter[]` (`type`, `at`, `affects`), `current`. Чтение не пересобирает и не ставит заданий |
+| `GET /release-candidates/{id}/manifest` | `tender.read` + видимость | — | байты манифеста (`kontur-manifest/1`); `X-Content-SHA256` = `contentHash` |
+| `GET /candidate-files/{id}/content` | `tender.read` + видимость | — | точные байты файла по ID (путь хранения не раскрывается): `X-Content-SHA256`, `Cache-Control: no-store`, `nosniff`, CSP-песочница; PDF — `inline`, остальные — `attachment`. Аудит `release.candidate.file.read` |
+| `GET /release-candidates/{id}/archive?set=customer\|all` | `tender.read` + видимость | — | детерминированный ZIP файлов кандидата: `customer` — файлы заказчику, `all` — все файлы с превью и манифестом. Аудит `release.candidate.archive` |
+
 ### 2.11. Диалоги и ответное ядро (этап 08a; D-019, D-027)
 
 Контекст диалога — контекст поиска `POST /search` (§2.4): права и область разрешаются тем же кодом. Диалог, его сообщения и ходы видит только автор; чужой диалог и прогон — `404` (существование не раскрывается), в том числе администратору. Стриминга нет: ответ получают опросом прогона.

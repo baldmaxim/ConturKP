@@ -3,7 +3,7 @@
 // основаниями. Значение — неизменяемая версия; «устарело» — отметка инвалидации или заменённое основание по текущему
 // состоянию (функция БД field_basis_problem). Предложение системы и модели становится значением только явным
 // действием человека. Права шаблонов компании и формулировок доступа к содержимому тендеров не дают (D-031 В-11-3).
-import { schemaKeys, schemaSha256, type FieldValue, type IFormSchema } from '@kontur/core';
+import { schemaKeys, schemaSha256, type FieldValue, type IFormSchema, type IMarkupResult } from '@kontur/core';
 import type { IAccessContext } from './access.ts';
 import { contentTenderIds } from './access.ts';
 import type { Queryable } from './pool.ts';
@@ -68,6 +68,12 @@ export interface ITemplateRevisionRow {
   required_keys: string[];
   sample_blob_sha256: string | null;
   sample_name: string | null;
+  // Этап 12 (D-032 В-12-3): размеченная копия образца, формат генерации, аудитория и итог проверки разметки.
+  output_format: 'docx' | 'xlsx' | null;
+  audience: 'customer' | 'internal';
+  marked_sample_blob_sha256: string | null;
+  marked_sample_name: string | null;
+  markup: IMarkupResult | null;
   status: 'draft' | 'approved' | 'retired';
   basis_fragment_ids: string[];
   basis_decision_id: string | null;
@@ -94,15 +100,27 @@ export const listTemplateRevisions = async (db: Queryable, templateId: string): 
 
 export const createTemplateRevision = async (
   db: Queryable,
-  r: { templateId: string; tenderId: string | null; schema: IFormSchema; sample: { sha256: string; name: string } | null; userId: string },
+  r: {
+    templateId: string;
+    tenderId: string | null;
+    schema: IFormSchema;
+    sample: { sha256: string; name: string } | null;
+    marked?: { sha256: string; name: string; format: 'docx' | 'xlsx'; markup: IMarkupResult } | null;
+    audience?: 'customer' | 'internal';
+    userId: string;
+  },
 ): Promise<string> => {
   await db.query("SELECT pg_advisory_xact_lock(hashtext('template_revision'), hashtext($1::text))", [r.templateId]);
   const keys = schemaKeys(r.schema);
   return (
     await db.query<{ id: string }>(
-      `INSERT INTO template_revision (template_id, tender_id, seq, schema_version, field_schema, schema_sha256, field_keys, required_keys, sample_blob_sha256, sample_name, created_by)
-       VALUES ($1, $2, (SELECT coalesce(max(seq), 0) + 1 FROM template_revision WHERE template_id = $1), $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
-      [r.templateId, r.tenderId, r.schema.schemaVersion, JSON.stringify(r.schema), schemaSha256(r.schema), keys.fieldKeys, keys.requiredKeys, r.sample?.sha256 ?? null, r.sample?.name ?? null, r.userId],
+      `INSERT INTO template_revision (template_id, tender_id, seq, schema_version, field_schema, schema_sha256, field_keys, required_keys, sample_blob_sha256, sample_name,
+                                      output_format, audience, marked_sample_blob_sha256, marked_sample_name, markup, created_by)
+       VALUES ($1, $2, (SELECT coalesce(max(seq), 0) + 1 FROM template_revision WHERE template_id = $1), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id`,
+      [
+        r.templateId, r.tenderId, r.schema.schemaVersion, JSON.stringify(r.schema), schemaSha256(r.schema), keys.fieldKeys, keys.requiredKeys, r.sample?.sha256 ?? null, r.sample?.name ?? null,
+        r.marked?.format ?? null, r.audience ?? 'customer', r.marked?.sha256 ?? null, r.marked?.name ?? null, r.marked ? JSON.stringify(r.marked.markup) : null, r.userId,
+      ],
     )
   ).rows[0]!.id;
 };

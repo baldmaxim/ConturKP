@@ -32,3 +32,8 @@ export * from './model/types.ts';
 export * from './model/openaiCompatible.ts';
 export * from './model/fake.ts';
 export * from './model/factory.ts';
+export * from './office/ooxml.ts';
+export * from './office/render.ts';
+export * from './office/fonts.ts';
+export * from './office/converterTypes.ts';
+export * from './office/pdf.ts';

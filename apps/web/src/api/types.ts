@@ -37,7 +37,8 @@ export type TTenderCapability =
   | 'economics.compare'
   | 'change_reason.confirm'
   | 'application.fill'
-  | 'template.manage';
+  | 'template.manage'
+  | 'candidate.create';
 
 export interface IMembership {
   tenderId: string;

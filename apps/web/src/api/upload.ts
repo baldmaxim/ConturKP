@@ -162,3 +162,9 @@ export const uploadManifest = <K extends 'qa' | 'negotiation'>(
   const params = new URLSearchParams({ name: file.name, ...(stageId ? { stageId } : {}) });
   return xhrUpload(`${API_BASE}/tenders/${encodeURIComponent(tenderId)}/${kind}-imports?${params.toString()}`, file, idempotencyKey, onProgress);
 };
+
+/** Файл образца шаблона или стандартного вложения (этап 12): ответ — SHA-256 файла в хранилище. */
+export const uploadFormSample = (file: File, idempotencyKey: string, tenderId: string | null = null): IUploadHandle<{ sha256: string; name: string; sizeBytes: number }> => {
+  const params = new URLSearchParams({ name: file.name, ...(tenderId ? { tenderId } : {}) });
+  return xhrUpload<{ sha256: string; name: string; sizeBytes: number }>(`${API_BASE}/form-samples?${params.toString()}`, file, idempotencyKey, () => undefined);
+};

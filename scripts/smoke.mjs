@@ -24,6 +24,7 @@ import { smokeAnswers } from './smoke-08a.mjs';
 import { smokeReview } from './smoke-09.mjs';
 import { smokeEconomics } from './smoke-10.mjs';
 import { smokeForms } from './smoke-11.mjs';
+import { smokeRelease } from './smoke-12.mjs';
 import { PRECISE_RATE, TH, standardTender, startFakeTenderHub } from './tenderhub-fake.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -488,6 +489,9 @@ try {
   // ---- Этап 11: приложения — scripts/smoke-11.mjs
   const forms11 = await smokeForms({ root: ROOT, api, api2, record, idem, json, stageId });
 
+  // ---- Этап 12: комплект-кандидат — scripts/smoke-12.mjs
+  const release12 = await smokeRelease({ root: ROOT, api, api2, record, waitFor, idem, json, stageId });
+
   await stopProc(server);
   server = startProc('server', 'apps/server/src/main.ts');
   ready = await waitReady(30_000);
@@ -518,6 +522,8 @@ try {
     'этап 11: после перезапуска приложение, версия поля и список незавершённых — из PostgreSQL',
     advanceAfter?.latest?.value === '30' && advanceAfter?.latest?.version === 1 && draftAfter?.blocking === forms11.blocking,
   );
+  const candAfter = release12.candidateId ? await (await api(`/release-candidates/${release12.candidateId}`)).json() : null;
+  record('этап 12: после перезапуска комплект — из PostgreSQL, тот же content_hash', Boolean(release12.contentHash) && candAfter?.contentHash === release12.contentHash);
   const me = await fetch(`${BASE}/api/v1/me`, { headers: { Cookie: cookieHeader() } });
   record('перезапуск server — сессия действительна', me.status === 200);
 

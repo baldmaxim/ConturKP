@@ -26,8 +26,12 @@ export const getTemplate = (id: string, signal?: AbortSignal) => apiGet<ITemplat
 export const createTemplate = (body: { ownerKind: 'company' | 'customer'; tenderId?: string | null; name: string; isDemo: boolean }, idempotencyKey: string) =>
   apiPost<ITemplateBrief>('/application-templates', { body, idempotencyKey });
 
-export const createTemplateRevision = (templateId: string, schema: unknown, idempotencyKey: string) =>
-  apiPost<ITemplateRevision>(`/application-templates/${enc(templateId)}/revisions`, { body: { schema }, idempotencyKey });
+export const createTemplateRevision = (
+  templateId: string,
+  schema: unknown,
+  idempotencyKey: string,
+  extra: { sample?: { sha256: string; name: string } | null; markedSample?: { sha256: string; name: string } | null; audience?: 'customer' | 'internal' } = {},
+) => apiPost<ITemplateRevision>(`/application-templates/${enc(templateId)}/revisions`, { body: { schema, ...extra }, idempotencyKey });
 
 export const approveTemplateRevision = (r: ITemplateRevision, basisFragmentIds: string[]) =>
   apiPost<ITemplateRevision>(`/template-revisions/${enc(r.id)}/approve`, { body: { basisFragmentIds }, ifMatch: r.etag });

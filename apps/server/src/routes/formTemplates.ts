@@ -10,6 +10,7 @@ import {
   CreateTemplateRevisionRequest,
   CreateWordingRequest,
   DecideWordingRequest,
+  MarkupCheckRequest,
   WordingsQuery,
 } from '@kontur/contracts';
 import { allFields, fieldChanges, formatEtag, globalCapabilities, hasContentRole, validateSchema, type IFormSchema } from '@kontur/core';
@@ -43,6 +44,7 @@ import { command, parseBody, query, requireIfMatch, uuidParam, versionConflict }
 import { requireCtx } from '../http/context.ts';
 import { forbidden, HttpError, notFound } from '../http/errors.ts';
 import { receiveUpload, uploadedBlob, uploadName } from '../http/upload.ts';
+import { analyzeMarkedSample } from '../releaseMarkup.ts';
 import { conflict } from './reviewScope.ts';
 import { hasTenderCap } from './scope.ts';
 
@@ -97,6 +99,10 @@ const toRevision = (r: ITemplateRevisionRow, withSchema: boolean) => ({
   fieldCount: r.field_keys.length,
   requiredKeys: r.required_keys,
   sample: r.sample_blob_sha256 ? { sha256: r.sample_blob_sha256, name: r.sample_name } : null,
+  markedSample: r.marked_sample_blob_sha256 ? { sha256: r.marked_sample_blob_sha256, name: r.marked_sample_name } : null,
+  outputFormat: r.output_format,
+  audience: r.audience,
+  markup: r.markup,
   basis: { fragmentIds: r.basis_fragment_ids, decisionId: r.basis_decision_id, note: r.basis_note },
   createdAt: r.created_at.toISOString(),
   approvedAt: r.approved_at?.toISOString() ?? null,
@@ -203,7 +209,22 @@ export const formTemplatesRouter = (pool: Pool, store: BlobStore, config: IAppCo
         if (body.sample && !(await client.query('SELECT 1 FROM blob WHERE sha256 = $1', [body.sample.sha256])).rowCount) {
           throw new HttpError(400, 'VALIDATION_FAILED', 'образец формы не загружен');
         }
-        const id = await createTemplateRevision(client, { templateId: t.id, tenderId: t.tender_id, schema: checked.schema, sample: body.sample ?? null, userId: ctx.principal.userId });
+        // Размеченная копия образца (D-032 В-12-3): формат, теги и проверка по схеме — до записи; итог — в ревизии.
+        let marked = null;
+        if (body.markedSample) {
+          if (!(await client.query('SELECT 1 FROM blob WHERE sha256 = $1', [body.markedSample.sha256])).rowCount) throw new HttpError(400, 'VALIDATION_FAILED', 'размеченный образец не загружен');
+          const a = await analyzeMarkedSample(store, body.markedSample.sha256, checked.schema);
+          marked = { sha256: body.markedSample.sha256, name: body.markedSample.name, format: a.format, markup: a.markup };
+        }
+        const id = await createTemplateRevision(client, {
+          templateId: t.id,
+          tenderId: t.tender_id,
+          schema: checked.schema,
+          sample: body.sample ?? null,
+          marked,
+          audience: body.audience ?? 'customer',
+          userId: ctx.principal.userId,
+        });
         const r = (await getTemplateRevision(client, id))!;
         return {
           status: 201,
@@ -212,6 +233,21 @@ export const formTemplatesRouter = (pool: Pool, store: BlobStore, config: IAppCo
           audit: [{ action: 'forms.template_revision.create', entityType: 'template_revision', entityId: id, tenderId: t.tender_id, details: { templateId: t.id, seq: r.seq, schemaSha256: r.schema_sha256 } }],
         };
       },
+    }),
+  );
+
+  // Пробная проверка разметки без создания ревизии (для правки образца до загрузки).
+  router.post(
+    '/template-markup-check',
+    query(pool, 'forms.markup.check', 'template_revision', async (ctx, req, res) => {
+      const body = parseBody(MarkupCheckRequest, req.body);
+      const tenderId = body.tenderId?.toLowerCase() ?? null;
+      if (tenderId && !hasTenderCap(ctx, tenderId, 'tender.read')) throw notFound({ entityType: 'tender', entityId: tenderId });
+      if (!canManage(ctx, tenderId)) throw forbidden(tenderId ? 'template.manage' : 'admin.templates', { entityType: 'template_revision' });
+      const checked = validateSchema(body.schema);
+      if (!checked.ok) throw new HttpError(400, 'VALIDATION_FAILED', 'схема полей не прошла проверку', { errors: checked.issues.slice(0, 100).map((i) => ({ path: i.path, message: i.message })) });
+      const a = await analyzeMarkedSample(store, body.markedSample.sha256, checked.schema);
+      res.json({ outputFormat: a.format, markup: a.markup });
     }),
   );
 
@@ -235,6 +271,8 @@ export const formTemplatesRouter = (pool: Pool, store: BlobStore, config: IAppCo
         if (requireIfMatch(req, r.id) !== r.row_version) throw versionConflict({ rowVersion: r.row_version });
         const tgt = { tenderId: r.tender_id ?? '', entityType: 'template_revision', entityId: r.id };
         if (r.status !== 'draft') throw conflict('утвердить можно только черновик ревизии', 'revision_not_draft', tgt);
+        // Размеченный образец с ошибками разметки не утверждается (D-032 В-12-3; вторая линия — 0032).
+        if (r.markup && !r.markup.ok) throw conflict('в разметке образца есть ошибки: исправьте копию образца и загрузите новую ревизию', 'markup_invalid', tgt, { issues: r.markup.issues });
         const body = parseBody(ApproveTemplateRevisionRequest, req.body);
         const fragments = body.basisFragmentIds.map((f) => f.toLowerCase());
         if (r.tender_id && fragments.length === 0 && !body.basisDecisionId) {

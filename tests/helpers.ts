@@ -109,6 +109,8 @@ export const testConfig = (overrides: Partial<IAppConfig> = {}): IAppConfig => (
   // Генеративная модель этапа 08: в тестах — поддельный провайдер, сценарии задаёт тест.
   chatModel: { provider: 'fake', baseUrl: null, model: 'fake-chat', revision: 'test', apiKey: null, timeoutMs: 5000, maxInputChars: 4000, maxOutputTokens: 1024, jsonMode: 'none' },
   answer: { verifierMode: 'off', maxRepairs: 1, packetLimit: 12 },
+  // Этап 12: конвертер LibreOffice обязателен (D-032 В-12-2) — путь из KONTUR_TEST_SOFFICE или поиск в PATH.
+  office: { sofficePath: process.env.KONTUR_TEST_SOFFICE ?? null, convertTimeoutMs: 120_000 },
   ...overrides,
 });
 
@@ -188,6 +190,21 @@ export class TestClient {
 
   get(path: string, o?: IRequestOptions) {
     return this.req('get', `/api/v1${path}`, o);
+  }
+  // Двоичный ответ целиком (файлы комплекта, этап 12): тело — Buffer независимо от типа содержимого.
+  async getBuffer(path: string): Promise<request.Response> {
+    let r = request(this.app)
+      .get(`/api/v1${path}`)
+      .buffer(true)
+      .parse((res, cb) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => cb(null, Buffer.concat(chunks)));
+      });
+    if (this.cookies.size > 0) r = r.set('Cookie', [...this.cookies].map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('; '));
+    const res = await r;
+    this.absorb(res);
+    return res;
   }
   post(path: string, body?: unknown, o: IRequestOptions = {}) {
     return this.req('post', `/api/v1${path}`, { ...o, body });

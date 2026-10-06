@@ -31,6 +31,7 @@ describe('возможности', () => {
       'economics.compare',
       'change_reason.confirm',
       'application.fill',
+      'candidate.create',
     ]);
   });
   it('руководитель-участник: управление этапами и журнал', () => {
@@ -49,6 +50,7 @@ describe('возможности', () => {
       'economics.compare',
       'change_reason.confirm',
       'application.fill',
+      'candidate.create',
       'stage.manage',
       'hold.resolve',
       'requirement.confirm',

@@ -15,6 +15,7 @@ import { DialogsTab } from './answers/DialogsTab';
 import { CalculationTab } from './calculation/CalculationTab';
 import { EconomicsTab } from './economics/EconomicsTab';
 import { ApplicationsTab } from './forms/ApplicationsTab';
+import { CandidatesTab } from './release/CandidatesTab';
 import { RequirementsTab } from './requirements/RequirementsTab';
 import { FindingsTab } from './review/FindingsTab';
 import { ReviewTab } from './review/ReviewTab';
@@ -38,6 +39,7 @@ const TABS: ITab[] = [
   { id: 'review', label: 'Проверка', icon: 'scan-search' },
   { id: 'discrepancies', label: 'Разногласия', icon: 'file-exclamation-point' },
   { id: 'applications', label: 'Приложения', icon: 'file-signature' },
+  { id: 'release', label: 'Комплект', icon: 'archive' },
 ];
 
 export const StagePage: FC = () => {
@@ -114,6 +116,7 @@ export const StagePage: FC = () => {
         {active === 'review' ? <ReviewTab stageId={stage.id} caps={caps} onOpenFindings={() => selectTab('discrepancies')} /> : null}
         {active === 'discrepancies' ? <FindingsTab stageId={stage.id} tenderId={stage.tenderId} /> : null}
         {active === 'applications' ? <ApplicationsTab stageId={stage.id} tenderId={stage.tenderId} caps={caps} /> : null}
+        {active === 'release' ? <CandidatesTab stageId={stage.id} /> : null}
       </div>
     </>
   );

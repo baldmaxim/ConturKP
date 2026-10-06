@@ -82,7 +82,8 @@ const auditFailure = async (pool: Pool, req: Request, action: string, entityType
     action,
     entityType: err.target.entityType ?? entityType,
     entityId: err.target.entityId ?? null,
-    tenderId: err.target.tenderId ?? null,
+    // Цель без тендера (шаблон компании) передаёт пустую строку: в журнал — null, иначе отказ становился 500 (S12-02).
+    tenderId: err.target.tenderId || null,
     requestId: state.requestId,
     outcome: err.status === 401 || err.status === 403 || err.status === 404 ? 'denied' : 'failed',
     details: { code: err.code, method: req.method, path: req.originalUrl.split('?')[0], ...err.target.details },

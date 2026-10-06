@@ -1,0 +1,5 @@
+# page-review — 2026-10-06T15:30:16.697Z, linux x64, Node v24.14.1, LibreOffice 26.2.5.2 620(Build:2)
+PASS  demo-kp-letter.docx: страниц 2, PNG 2; разметка ok; остатки разметки 0; шрифты Liberation Serif → встроены BAAAAA+LiberationSerif, CAAAAA+LiberationSerif-Bold; подмена нет
+PASS  demo-key-conditions.xlsx: страниц 1, PNG 1; разметка ok; остатки разметки 0; шрифты Liberation Sans → встроены BAAAAA+LiberationSans-Bold, CAAAAA+LiberationSans; подмена нет
+Просмотр человеком: PNG страниц — в каталоге запуска; что проверено глазами — в отчёте этапа (§ просмотр страниц).
+Итог: PASS

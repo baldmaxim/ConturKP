@@ -20,6 +20,17 @@ export const CreateTemplateRevisionRequest = z
   .object({
     schema: z.unknown(),
     sample: z.object({ sha256: z.string().regex(/^[0-9a-f]{64}$/u), name: text(300) }).strict().nullable().optional(),
+    // Этап 12 (D-032 В-12-3): размеченная копия образца и аудитория файла; оригинал — `sample`.
+    markedSample: z.object({ sha256: z.string().regex(/^[0-9a-f]{64}$/u), name: text(300) }).strict().nullable().optional(),
+    audience: z.enum(['customer', 'internal']).optional(),
+  })
+  .strict();
+
+export const MarkupCheckRequest = z
+  .object({
+    schema: z.unknown(),
+    markedSample: z.object({ sha256: z.string().regex(/^[0-9a-f]{64}$/u) }).strict(),
+    tenderId: z.uuid().nullable().optional(),
   })
   .strict();
 

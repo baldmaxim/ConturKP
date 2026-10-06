@@ -187,6 +187,23 @@ export interface ITemplateRevision {
   fieldCount: number;
   etag: string;
   createdAt: string;
+  // Этап 12 (D-032 В-12-3): размеченная копия образца, формат, аудитория, итог проверки разметки.
+  sample?: { sha256: string; name: string } | null;
+  markedSample?: { sha256: string; name: string } | null;
+  outputFormat?: 'docx' | 'xlsx' | null;
+  audience?: 'customer' | 'internal';
+  markup?: IMarkupResult | null;
+}
+
+export interface IMarkupResult {
+  ok: boolean;
+  format: 'docx' | 'xlsx';
+  printed: string[];
+  blocks: string[];
+  loops: { key: string; columns: string[] }[];
+  notPrinted: string[];
+  tags: number;
+  issues: { code: string; key: string | null; where: string | null; message: string }[];
 }
 
 export interface IWording {

@@ -46,7 +46,10 @@ export type TenderCapability =
   | 'change_reason.confirm'
   // Этап 11 (D-031): заполнение приложений — участник; шаблон заказчика — руководитель тендера (миграция 0029).
   | 'application.fill'
-  | 'template.manage';
+  | 'template.manage'
+  // Этап 12 (D-032 В-12-7): сборка комплекта-кандидата — участник тендера (руководитель или инженер); только human,
+  // модель и MCP не получают (I12). БД повторяет в tender_capabilities (миграция 0032).
+  | 'candidate.create';
 
 export const ROLES: readonly Role[] = ['admin', 'manager', 'engineer'];
 export const MEMBER_ROLES: readonly MemberRole[] = ['engineer', 'manager'];
@@ -102,6 +105,7 @@ export const tenderCapabilities = (
   if (role) caps.push('review.run', 'finding.write');
   if (role) caps.push('economics.compare', 'change_reason.confirm');
   if (role) caps.push('application.fill');
+  if (role) caps.push('candidate.create');
   // Решения о неприменимости (элементы импорта, удержания) — только руководитель тендера (ADR-006 §3).
   if (role === 'manager') caps.push('stage.manage', 'hold.resolve');
   // Подтверждение, решение и ведение реестра — руководитель тендера (OD-08-5).

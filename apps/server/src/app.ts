@@ -28,6 +28,7 @@ import { economicsRouter } from './routes/economics.ts';
 import { formDraftsRouter } from './routes/formDrafts.ts';
 import { formSuggestionsRouter } from './routes/formSuggestions.ts';
 import { formTemplatesRouter } from './routes/formTemplates.ts';
+import { releaseCandidatesRouter } from './routes/releaseCandidates.ts';
 import { communicationsRouter } from './routes/communications.ts';
 import { requirementCandidatesRouter } from './routes/requirementCandidates.ts';
 import { requirementItemsRouter } from './routes/requirementItems.ts';
@@ -93,6 +94,7 @@ export const createApp = (deps: IAppDeps): express.Express => {
   api.use(formTemplatesRouter(pool, store, config));
   api.use(formDraftsRouter(pool));
   api.use(formSuggestionsRouter(pool, config));
+  api.use(releaseCandidatesRouter(pool, store));
   api.use(mailboxesRouter(pool, store, config));
   api.use(mailMessagesRouter(pool, store));
   api.use(communicationsRouter(pool, store, config));

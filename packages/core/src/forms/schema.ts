@@ -59,6 +59,10 @@ export interface ITextField extends IFieldBase {
   wordingTags?: string[];
 }
 
+// Величины расчёта, с которыми число приложения сверяется при сборке комплекта (этап 12; D-032 В-12-6; release/calc.ts).
+export const CALC_QUANTITY_KEYS = ['source_grand_total', 'commercial_total'] as const;
+export type CalcQuantity = (typeof CALC_QUANTITY_KEYS)[number];
+
 export interface INumberField extends IFieldBase {
   type: 'number';
   unit?: string;
@@ -66,6 +70,8 @@ export interface INumberField extends IFieldBase {
   scale?: number;
   min?: string;
   max?: string;
+  // Явная связь с величиной закреплённой ревизии расчёта; единица и валюта — поля.
+  calc?: { quantity: CalcQuantity };
 }
 
 export interface IDateField extends IFieldBase {
@@ -181,6 +187,12 @@ const checkNumberProps = (f: Record<string, unknown>, path: string, out: ISchema
   for (const k of ['min', 'max'] as const) if (f[k] !== undefined && !(typeof f[k] === 'string' && isDecimalLexeme(f[k] as string))) out.push({ path: `${path}.${k}`, message: `${k} — десятичная строка` });
   if (f.unit !== undefined && !isStr(f.unit, 40)) out.push({ path: `${path}.unit`, message: 'единица — строка до 40 символов' });
   if (f.currency !== undefined && !['RUB', 'USD', 'EUR', 'CNY'].includes(String(f.currency))) out.push({ path: `${path}.currency`, message: 'валюта — RUB, USD, EUR, CNY' });
+  if (f.calc !== undefined) {
+    const c = f.calc as { quantity?: unknown } | null;
+    if (!isObj(c) || !CALC_QUANTITY_KEYS.includes(c.quantity as CalcQuantity)) out.push({ path: `${path}.calc`, message: `связь с расчётом — { quantity: ${CALC_QUANTITY_KEYS.join(' | ')} }` });
+    // Величины расчёта — в рублях (D-030): валюта поля задаётся явно (D-032 В-12-6).
+    if (f.currency !== 'RUB') out.push({ path: `${path}.currency`, message: 'поле, связанное с расчётом, — с валютой RUB' });
+  }
 };
 
 // Проверка схемы до утверждения: структура, уникальность ключей, условия, отсутствие циклов применимости.

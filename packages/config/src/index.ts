@@ -123,6 +123,13 @@ export interface IChatModelConfig {
 // Ответное ядро (этап 08a, D-027 AD-08a-6): проверяющий — необязательный (off — уровень «правила»; same_model —
 // отдельный прогон того же шлюза), исправление черновика — не больше двух (по умолчанию одно), пакет — не больше
 // ANSWER_PACKET_LIMIT оснований.
+// Конвертер в PDF для превью файлов выпуска (этап 12; D-032 В-12-2; ADR-013): LibreOffice без интерфейса.
+// sofficePath null — поиск soffice в PATH и в стандартном каталоге установки Windows.
+export interface IOfficeConfig {
+  sofficePath: string | null;
+  convertTimeoutMs: number;
+}
+
 export interface IAnswerConfig {
   verifierMode: 'off' | 'same_model';
   maxRepairs: number;
@@ -163,6 +170,7 @@ export interface IAppConfig {
   mail: IMailConfig;
   chatModel: IChatModelConfig;
   answer: IAnswerConfig;
+  office: IOfficeConfig;
 }
 
 interface IConfigKey {
@@ -237,6 +245,8 @@ export const CONFIG_KEYS: IConfigKey[] = [
   { name: 'ANSWER_MAX_REPAIRS', secret: false, required: false, purpose: 'исправлений черновика ответа, 0–1 (AD-08a-6), по умолчанию 1' },
   { name: 'ANSWER_PACKET_LIMIT', secret: false, required: false, purpose: 'оснований в пакете ответа, 1–30, по умолчанию 12' },
   { name: 'SEARCH_SEMANTIC_DEADLINE_SECONDS', secret: false, required: false, purpose: 'срок смысловой ветки поиска, по умолчанию 60' },
+  { name: 'SOFFICE_PATH', secret: false, required: false, purpose: 'путь к soffice LibreOffice для PDF-превью комплекта (этап 12); без него — поиск в PATH и в каталоге установки Windows' },
+  { name: 'OFFICE_CONVERT_TIMEOUT_SECONDS', secret: false, required: false, purpose: 'предел конвертации одного файла в PDF, по умолчанию 120' },
   { name: 'MAILHUB_URL', secret: false, required: false, purpose: 'интеграция MailHub (этап 07)' },
   { name: 'MAILHUB_TOKEN', secret: true, required: false, purpose: 'интеграция MailHub (этап 07)' },
   { name: 'YANDEX_DISK_TOKEN', secret: true, required: false, purpose: 'размещение на Яндекс Диске (этап 14)' },
@@ -499,6 +509,7 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
     },
     chatModel: chatModelFrom(env, problems),
     answer: answerFrom(env, problems),
+    office: { sofficePath: env.SOFFICE_PATH?.trim() || null, convertTimeoutMs: intFrom(env, 'OFFICE_CONVERT_TIMEOUT_SECONDS', 120, problems) * 1000 },
   };
   for (const root of config.intakeRoots) {
     if (!isAbsolute(root)) problems.push(`INTAKE_ROOTS: «${root}» должен быть абсолютным путём`);

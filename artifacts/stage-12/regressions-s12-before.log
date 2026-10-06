@@ -1,0 +1,56 @@
+# 2026-10-06T19:58:37+05:00, linux x64 Node v24.14.1; регрессии S12-01, S12-02 на продукте 49ab92e (все правки этапа 12 убраны на время прогона), однопоточно
+
+ RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
+
+ × tests/reviewRegressionsS12.test.ts > S12-01 — свежесть прогона проверок и события барьера > отрицательная: правка поля приложения этапа не делает прогон устаревшим 244ms
+   → после снимка области поступили источники — событий 1: expected true to be false // Object.is equality
+ ✓ tests/reviewRegressionsS12.test.ts > S12-01 — свежесть прогона проверок и события барьера > положительная: новая редакция документа — прогон устарел, «поступили источники» 69ms
+ × tests/reviewRegressionsS12.test.ts > S12-02 — конфликт команды над шаблоном компании > повторное утверждение ревизии шаблона компании — 409 revision_not_draft, отказ в журнале без тендера 56ms
+   → {"type":"about:blank","title":"Внутренняя ошибка","status":500,"code":"INTERNAL","detail":"внутренняя ошибка; см. журнал по requestId","requestId":"7b319735-968b-413e-b873-ffab864149b4"}: expected 500 to be 409 // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/reviewRegressionsS12.test.ts > S12-01 — свежесть прогона проверок и события барьера > отрицательная: правка поля приложения этапа не делает прогон устаревшим
+AssertionError: после снимка области поступили источники — событий 1: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/reviewRegressionsS12.test.ts:42:46
+     40|     await drain(st.worker);
+     41|     const f = await freshness();
+     42|     expect(f.outdated, f.reasons.join('; ')).toBe(false);
+       |                                              ^
+     43|   });
+     44|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/reviewRegressionsS12.test.ts > S12-02 — конфликт команды над шаблоном компании > повторное утверждение ревизии шаблона компании — 409 revision_not_draft, отказ в журнале без тендера
+AssertionError: {"type":"about:blank","title":"Внутренняя ошибка","status":500,"code":"INTERNAL","detail":"внутренняя ошибка; см. журнал по requestId","requestId":"7b319735-968b-413e-b873-ffab864149b4"}: expected 500 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 500
+
+ ❯ tests/reviewRegressionsS12.test.ts:59:38
+     57|     expect(r.body.status).toBe('approved');
+     58|     const again = await st.s.manager.post(`/template-revisions/${t.rev…
+     59|     expect(again.status, again.text).toBe(409);
+       |                                      ^
+     60|     expect(again.body.current.reason).toBe('revision_not_draft');
+     61|     const rows = await auditRows(db.pool, "action = 'forms.template_re…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  19:58:38
+   Duration  5.95s (tests 51%, transform 37%, import 11%)
+

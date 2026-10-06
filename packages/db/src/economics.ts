@@ -3,6 +3,7 @@
 // данные ревизий не меняются; результаты пишутся один раз и неизменны (вторая линия — миграция 0026).
 import {
   buildRevisionEconomics,
+  CHANGE_NOTE_REASONS,
   compareRevisions,
   ComparisonInvariantError,
   COMPARISON_METHOD_VERSION,
@@ -512,6 +513,12 @@ export interface IComparisonUnitRow {
   effects: { measure: string; component: string; amount: string; line_refs: { left: string[]; right: string[]; notes?: Record<string, unknown>[] } }[];
 }
 
+// Единица изменилась, даже если суммы равны: у вклада «без разложения» есть причина-изменение строки (смена единицы,
+// формула; R10-04). Список причин — CHANGE_NOTE_REASONS ядра (packages/core/src/money/decomposition.ts).
+export const CHANGE_NOTE_REASONS_SQL = (unitAlias: string): string =>
+  `EXISTS (SELECT 1 FROM comparison_effect ce CROSS JOIN LATERAL jsonb_array_elements(coalesce(ce.line_refs -> 'notes', '[]'::jsonb)) note
+            WHERE ce.unit_id = ${unitAlias}.id AND note ->> 'reason' IN (${CHANGE_NOTE_REASONS.map((r) => `'${r}'`).join(', ')}))`;
+
 export const comparisonUnits = async (
   db: Queryable,
   comparisonId: string,
@@ -530,7 +537,7 @@ export const comparisonUnits = async (
          FROM comparison_unit u
         WHERE u.comparison_id = $1 AND ($2::text IS NULL OR u.kind = $2) AND u.unit_no > $3
           AND (NOT $4 OR u.kind <> 'matched' OR NOT u.cost_comparable OR NOT u.commercial_comparable
-               OR u.cost_left <> u.cost_right OR u.commercial_left <> u.commercial_right)
+               OR u.cost_left <> u.cost_right OR u.commercial_left <> u.commercial_right OR ${CHANGE_NOTE_REASONS_SQL('u')})
         ORDER BY u.unit_no LIMIT $5`,
       [comparisonId, o.kind, o.afterNo, o.changedOnly, o.limit],
     )

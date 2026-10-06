@@ -12,7 +12,8 @@ import { groupByKey, lineKey, normKeyText, type IPositionKeyInput } from './keys
 import { lineFactors, quantityBase, unitCost, type ILineInput, type IRates } from './lineCost.ts';
 
 // compare/10-2 (R10-02): строка той же идентичности в другой единице не раскладывается на объём и цену.
-export const COMPARISON_METHOD_VERSION = 'compare/10-2' as const;
+// compare/10-3 (R10-04): причина «без разложения» и нулевой вклад — только у пары, которая изменилась.
+export const COMPARISON_METHOD_VERSION = 'compare/10-3' as const;
 export const DECOMPOSITION_METHOD = 'chain_substitution' as const;
 export const FACTOR_ORDER = ['quantity', 'unit_rate', 'fx_rate', 'delivery', 'coefficient'] as const;
 export const COLUMN_SHIFT_TOLERANCE = '0.01';
@@ -84,6 +85,11 @@ export interface IConfirmedPair {
 
 // Почему пара строк не разложена (вклад «без разложения»): видно в сравнении, а не только суммой.
 export type NotDecomposedReason = 'unit_changed' | 'formula_differs' | 'formula_not_applicable' | 'fx_rate_missing' | 'markup_missing' | 'cost_missing';
+
+// Причины, которые сами означают изменение строки (единица, формула): видны и при неизменной сумме, а единица попадает
+// в список изменившихся (R10-04; тот же список — CHANGE_NOTE_REASONS_SQL в packages/db/src/economics.ts). Остальные
+// причины объясняют, почему изменившаяся пара не разложена, и у неизменной пары не записываются.
+export const CHANGE_NOTE_REASONS: readonly NotDecomposedReason[] = ['unit_changed', 'formula_differs'];
 
 export interface IDecompositionNote {
   left: string;
@@ -346,8 +352,9 @@ export const compareRevisions = (left: ICompareSide, right: ICompareSide, pairs:
         if (note) cur.notes.push(note);
       } else local[measure].set(component, { amount, left: [...refs.left], right: [...refs.right], notes: note ? [note] : [] });
     };
-    const noteOf = (a: ILineInput, b: ILineInput, reason: NotDecomposedReason | null): IDecompositionNote | null =>
-      reason === null
+    // Причина пары — только у изменившейся пары (ненулевая дельта меры) или у причины-изменения (единица, формула).
+    const noteOf = (a: ILineInput, b: ILineInput, reason: NotDecomposedReason | null, amount: Dec): IDecompositionNote | null =>
+      reason === null || (amount.isZero() && !CHANGE_NOTE_REASONS.includes(reason))
         ? null
         : { left: a.externalItemId, right: b.externalItemId, reason, ...(reason === 'unit_changed' ? { fromUnit: a.unitCode, toUnit: b.unitCode } : {}) };
     const plan = planLines(ll, rl, leftAll, rightAll);
@@ -355,12 +362,12 @@ export const compareRevisions = (left: ICompareSide, right: ICompareSide, pairs:
       const refs = { left: [a.externalItemId], right: [b.externalItemId] };
       if (cost.comparable || commercial.comparable) {
         const e = cost.comparable ? decomposePair(a, b, left.rates, right.rates) : null;
-        if (e) for (const [c, amt] of e.cost) push('cost', c, amt, refs, c === 'not_decomposable' ? noteOf(a, b, e.costNote) : null);
+        if (e) for (const [c, amt] of e.cost) push('cost', c, amt, refs, c === 'not_decomposable' ? noteOf(a, b, e.costNote, amt) : null);
         if (commercial.comparable) {
           const ce = e ?? (a.totalAmount !== null && b.totalAmount !== null ? decomposePair(a, b, left.rates, right.rates) : null);
           const parts = ce?.commercial ?? [['not_decomposable', sub(commercialOf(b)!, commercialOf(a)!)] as [EffectComponent, Dec]];
           const reason = ce?.commercial ? ce.commercialNote : 'cost_missing';
-          for (const [c, amt] of parts) push('commercial', c, amt, refs, c === 'not_decomposable' ? noteOf(a, b, reason) : null);
+          for (const [c, amt] of parts) push('commercial', c, amt, refs, c === 'not_decomposable' ? noteOf(a, b, reason, amt) : null);
         }
       }
     }
@@ -388,7 +395,7 @@ export const compareRevisions = (left: ICompareSide, right: ICompareSide, pairs:
       for (const c of EFFECT_COMPONENTS) {
         const v = local[measure].get(c);
         // Нулевой вклад не записывается: Σ от этого не меняется, а отчёт не засоряется. Исключение — «без разложения» с
-        // причиной (R10-02): смена единицы при неизменной сумме видна в сравнении, а не пропадает.
+        // причиной изменившейся пары (R10-02, R10-04): смена единицы при неизменной сумме видна в сравнении.
         if (!v || (v.amount.isZero() && v.notes.length === 0)) continue;
         const refs = { left: [...new Set(v.left)].sort(), right: [...new Set(v.right)].sort() };
         const notes = [...v.notes].sort((x, y) => (x.left + x.right < y.left + y.right ? -1 : x.left + x.right > y.left + y.right ? 1 : 0));

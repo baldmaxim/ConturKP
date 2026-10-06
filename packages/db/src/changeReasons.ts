@@ -5,6 +5,7 @@
 // гасит открытые гипотезы (D-029) — заданием инвалидации.
 import { canonicalJson, REASON_PROMPT_VERSION, reasonSystemPrompt, sha256Hex, type IParsedReason, type ReasonKind } from '@kontur/core';
 import type { IAccessContext } from './access.ts';
+import { CHANGE_NOTE_REASONS_SQL } from './economics.ts';
 import { enqueueJob } from './jobs.ts';
 import type { Queryable } from './pool.ts';
 import { readableFragments } from './requirementAccess.ts';
@@ -185,7 +186,8 @@ export const createReasonRun = async (
         WHERE u.comparison_id = $1
           AND ($2::uuid[] IS NULL OR u.id = ANY($2::uuid[]))
           AND ($2::uuid[] IS NOT NULL OR (
-                (u.kind <> 'matched' OR u.cost_left IS DISTINCT FROM u.cost_right OR u.commercial_left IS DISTINCT FROM u.commercial_right)
+                (u.kind <> 'matched' OR u.cost_left IS DISTINCT FROM u.cost_right OR u.commercial_left IS DISTINCT FROM u.commercial_right
+                 OR ${CHANGE_NOTE_REASONS_SQL('u')})
                 AND NOT EXISTS (SELECT 1 FROM change_explanation x WHERE x.unit_id = u.id AND x.reason_status = 'confirmed'
                                    AND x.version = (SELECT max(y.version) FROM change_explanation y WHERE y.unit_id = u.id))))
         ORDER BY u.unit_no`,

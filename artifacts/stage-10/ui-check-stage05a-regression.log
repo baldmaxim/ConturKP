@@ -1,5 +1,5 @@
-# регрессия на коде 10-2: 2026-10-06T10:44:18+05:00, linux x64 Node v24.14.1, artifacts/stage-05a/ui-check.mjs, exit 0
-# ui-check — 2026-10-06T05:44:18.885Z, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker
+# регрессия на коде 10-3: 2026-10-06T11:44:55+05:00, linux x64 Node v24.14.1, artifacts/stage-05a/ui-check.mjs, exit 0
+# ui-check — 2026-10-06T06:44:55.717Z, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker
 PASS  server + worker готовы
 PASS  вход администратора-руководителя
 PASS  XLSX распознан автоматически worker — итог complete

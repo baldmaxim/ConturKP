@@ -1,0 +1,210 @@
+# 2026-10-06T11:34:57+05:00, linux x64 Node v24.14.1; регрессии Review 10-2 на продукте 469a03c (исправления и миграция 0028 убраны на время прогона), однопоточно
+
+ RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
+
+ ✓ tests/reviewRegressions10b.test.ts > R10-03 — заменённый ответ заказчика > контроль: подтверждение по действующему ответу разрешено 37ms
+ × tests/reviewRegressions10b.test.ts > R10-03 — заменённый ответ заказчика > новая редакция ответа: старый ответ — 409 до и после обработки события; новый ответ принимается; история сохранена 100ms
+   → {"version":2,"explanation":{"id":"a95d45ed-947a-48b6-8038-e8db11f1a343","version":2,"reasonKind":"answer","reasonStatus":"confirmed","rationale":"площадь изменена по ответу заказчика","restricted":false,"suggestionId":null,"actor":{"id":"edbbfb7a-2263-4a24-b07e-30e34d7e7769","name":"Инженер 1"},"createdAt":"2026-10-06T06:35:04.399Z","bases":[{"basisType":"fragment","fragmentId":"456d3c05-5e1e-4f71-a2a6-53552c275313","decisionId":null,"origin":"qa_answer","text":"Заказчик подтверждает увеличение площади штукатурки до 110 м2."}],"basisChanged":false,"invalidations":[]}}: expected 200 to be 409 // Object.is equality
+ × tests/reviewRegressions10b.test.ts > R10-03 — заменённый ответ заказчика > вторая линия: прямая запись причины по заменённому ответу в обход API отвергается (23514), версия не создаётся 13ms
+   → запись должна быть отвергнута: expected null not to be null
+ × tests/reviewRegressions10b.test.ts > R10-03 — заменённый ответ заказчика > функция актуальности покрывает каждый тип источника фрагмента из ограничения evidence_fragment 7ms
+   → ветка замены для qa_item_revision: expected 'CREATE OR REPLACE FUNCTION public.cha…' to contain 'f.source_unit_type = \'qa_item_revisi…'
+ × tests/reviewRegressions10b.test.ts > R10-04 — нулевые вклады только у изменений (ядро) > неизменные строки с неприменимой формулой и без курса ревизии вкладов не дают 4ms
+   → expected [ { unitNo: 1, …(4) }, …(1) ] to deeply equal []
+ × tests/reviewRegressions10b.test.ts > R10-04 — смена единицы в списке изменившихся > нулевая денежная дельта: позиция со сменой единицы — в changed=true; неизменные позиции — нет и без вкладов 357ms
+   → expected [ Array(1) ] to deeply equal [ …(2) ]
+ ✓ tests/reviewRegressions10b.test.ts > R10-04 — смена единицы в списке изменившихся > ненулевая денежная дельта: позиция в changed=true, вся дельта пары — «без разложения» с причиной 354ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/reviewRegressions10b.test.ts > R10-03 — заменённый ответ заказчика > новая редакция ответа: старый ответ — 409 до и после обработки события; новый ответ принимается; история сохранена
+AssertionError: {"version":2,"explanation":{"id":"a95d45ed-947a-48b6-8038-e8db11f1a343","version":2,"reasonKind":"answer","reasonStatus":"confirmed","rationale":"площадь изменена по ответу заказчика","restricted":false,"suggestionId":null,"actor":{"id":"edbbfb7a-2263-4a24-b07e-30e34d7e7769","name":"Инженер 1"},"createdAt":"2026-10-06T06:35:04.399Z","bases":[{"basisType":"fragment","fragmentId":"456d3c05-5e1e-4f71-a2a6-53552c275313","decisionId":null,"origin":"qa_answer","text":"Заказчик подтверждает увеличение площади штукатурки до 110 м2."}],"basisChanged":false,"invalidations":[]}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/reviewRegressions10b.test.ts:87:40
+     85|     const kept = await versionNow();
+     86|     const before = await put([frag.qa1!]);
+     87|     expect(before.status, before.text).toBe(409);
+       |                                        ^
+     88|     expect(before.body.current).toMatchObject({ reason: 'basis_superse…
+     89|     await fixScope(e.s.manager, e.s.stageA);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  tests/reviewRegressions10b.test.ts > R10-03 — заменённый ответ заказчика > вторая линия: прямая запись причины по заменённому ответу в обход API отвергается (23514), версия не создаётся
+AssertionError: запись должна быть отвергнута: expected null not to be null
+ ❯ tests/reviewRegressions10b.test.ts:128:54
+    126|       c.release();
+    127|     }
+    128|     expect(err, 'запись должна быть отвергнута').not.toBeNull();
+       |                                                      ^
+    129|     expect(`${err!.code} ${err!.message}`).toMatch(/23514.*основание з…
+    130|     expect(await versionNow()).toBe(kept);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  tests/reviewRegressions10b.test.ts > R10-03 — заменённый ответ заказчика > функция актуальности покрывает каждый тип источника фрагмента из ограничения evidence_fragment
+AssertionError: ветка замены для qa_item_revision: expected 'CREATE OR REPLACE FUNCTION public.cha…' to contain 'f.source_unit_type = \'qa_item_revisi…'
+
+- Expected
++ Received
+
+- f.source_unit_type = 'qa_item_revision'
++ CREATE OR REPLACE FUNCTION public.change_basis_supersession(p_stage uuid, p_fragment uuid, p_decision uuid)
++  RETURNS text
++  LANGUAGE sql
++  STABLE
++ AS $function$
++   SELECT CASE
++     WHEN p_fragment IS NOT NULL THEN (
++       SELECT CASE
++         WHEN f.document_revision_id IS NOT NULL
++              AND EXISTS (SELECT 1 FROM document_revision n WHERE n.supersedes_revision_id = f.document_revision_id)
++           THEN 'document_revision_superseded'
++         WHEN f.source_unit_type = 'recognition_run'
++              AND EXISTS (SELECT 1 FROM recognition_run n WHERE n.supersedes_run_id = f.source_unit_id AND n.status IN ('complete', 'partial'))
++           THEN 'recognition_run_superseded'
++         WHEN f.source_unit_type = 'mail_message_revision'
++              AND EXISTS (SELECT 1 FROM mail_message_revision n WHERE n.supersedes_revision_id = f.source_unit_id)
++           THEN 'mail_message_revision_superseded'
++         WHEN f.source_unit_type = 'transcript_revision'
++              AND EXISTS (SELECT 1 FROM transcript_revision n WHERE n.supersedes_revision_id = f.source_unit_id)
++           THEN 'transcript_revision_superseded'
++         WHEN f.document_revision_id IS NOT NULL AND EXISTS (
++                SELECT 1 FROM source_set s
++                  JOIN LATERAL (SELECT r.id, r.seq FROM source_set_revision r WHERE r.source_set_id = s.id ORDER BY r.seq DESC LIMIT 1) last ON true
++                 WHERE s.stage_id = p_stage
++                   AND EXISTS (SELECT 1 FROM source_set_revision r JOIN source_set_item i ON i.source_set_revision_id = r.id
++                                WHERE r.source_set_id = s.id AND r.seq < last.seq AND i.document_revision_id = f.document_revision_id
++                                  AND i.inclusion <> 'excluded_not_applicable')
++                   AND NOT EXISTS (SELECT 1 FROM source_set_item i WHERE i.source_set_revision_id = last.id
++                                    AND i.document_revision_id = f.document_revision_id AND i.inclusion <> 'excluded_not_applicable'))
++           THEN 'excluded_from_source_set'
++       END
++       FROM evidence_fragment f WHERE f.id = p_fragment)
++     WHEN p_decision IS NOT NULL AND EXISTS (SELECT 1 FROM decision n WHERE n.supersedes_decision_id = p_decision)
++       THEN 'decision_superseded'
++   END
++ $function$
++
+
+ ❯ tests/reviewRegressions10b.test.ts:138:64
+    136|     expect(types).toEqual(expect.arrayContaining(['recognition_run', '…
+    137|     const fn = (await db.pool.query<{ def: string }>("SELECT pg_get_fu…
+    138|     for (const t of types) expect(fn, `ветка замены для ${t}`).toConta…
+       |                                                                ^
+    139|   });
+    140| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  tests/reviewRegressions10b.test.ts > R10-04 — нулевые вклады только у изменений (ядро) > неизменные строки с неприменимой формулой и без курса ревизии вкладов не дают
+AssertionError: expected [ { unitNo: 1, …(4) }, …(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "amount": "0",
++     "component": "not_decomposable",
++     "lineRefs": {
++       "left": [
++         "a",
++         "b",
++       ],
++       "notes": [
++         {
++           "left": "a",
++           "reason": "formula_not_applicable",
++           "right": "a",
++         },
++         {
++           "left": "b",
++           "reason": "fx_rate_missing",
++           "right": "b",
++         },
++       ],
++       "right": [
++         "a",
++         "b",
++       ],
++     },
++     "measure": "cost",
++     "unitNo": 1,
++   },
++   {
++     "amount": "0",
++     "component": "not_decomposable",
++     "lineRefs": {
++       "left": [
++         "a",
++         "b",
++       ],
++       "notes": [
++         {
++           "left": "a",
++           "reason": "formula_not_applicable",
++           "right": "a",
++         },
++         {
++           "left": "b",
++           "reason": "fx_rate_missing",
++           "right": "b",
++         },
++       ],
++       "right": [
++         "a",
++         "b",
++       ],
++     },
++     "measure": "commercial",
++     "unitNo": 1,
++   },
++ ]
+
+ ❯ tests/reviewRegressions10b.test.ts:181:53
+    179|     const same = [line('a', 'прочее'), line('b', 'раб', { currency: 'U…
+    180|     const r = compareRevisions(side(same), side(same), [{ lineageId: '…
+    181|     expect(r.effects.filter((x) => x.unitNo === 1)).toEqual([]);
+       |                                                     ^
+    182|   });
+    183| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  tests/reviewRegressions10b.test.ts > R10-04 — смена единицы в списке изменившихся > нулевая денежная дельта: позиция со сменой единицы — в changed=true; неизменные позиции — нет и без вкладов
+AssertionError: expected [ Array(1) ] to deeply equal [ …(2) ]
+
+- Expected
++ Received
+
+  [
+    "4774a522-4315-48de-a11a-61b0de713329",
+-   "c9108e46-c9fb-4331-a0a5-bb66f46f6801",
+  ]
+
+ ❯ expectChanged tests/reviewRegressions10b.test.ts:207:42
+    205|     const all = await units(e.s.eng1, comparisonId);
+    206|     const incomparable = (u: IUnitView) => !u.cost.comparable || !u.co…
+    207|     expect(list.map((u) => u.id).sort()).toEqual(all.filter((u) => u.l…
+       |                                          ^
+    208|     const plain = all.filter((u) => !u.leftPositions.includes(E.p.A) &…
+    209|     expect(plain.length).toBeGreaterThan(0);
+ ❯ tests/reviewRegressions10b.test.ts:223:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 2 passed (7)
+   Start at  11:34:57
+   Duration  7.55s (tests 61%, transform 29%, import 10%)
+
+exit=1

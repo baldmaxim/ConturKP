@@ -100,7 +100,11 @@ export const FieldCard: FC<IFieldCardProps> = ({ draftId, tenderId, field: f, ca
       ) : (
         <>
           <p className={styles.value}>{v?.restricted ? 'Значение скрыто: среди оснований есть закрытые для вас материалы.' : formatFieldValue(d, v && v.state !== 'cleared' ? v.value : null)}</p>
-          {v ? <p className={styles.muted}>{`${ORIGIN_LABEL[v.origin]}${v.wording ? ` «${v.wording.title}», версия ${v.wording.version}` : ''} · ${v.actor.name} · ${formatDateTime(v.createdAt)}`}</p> : null}
+          {v ? (
+            <p className={styles.muted}>
+              {`${ORIGIN_LABEL[v.origin]}${v.wording ? ` «${v.wording.title}», версия ${v.wording.version}` : ''}${v.valueFromVersionId && v.state !== 'carried_over' ? ' · значение прежней версии' : ''} · ${v.actor.name} · ${formatDateTime(v.createdAt)}`}
+            </p>
+          ) : null}
           {v?.wording?.newerApproved ? <p className={styles.muted}>В библиотеке есть новая редакция этой формулировки.</p> : null}
           {v?.comment ? <p className={styles.muted}>{`Обсуждение: ${v.comment}${v.responsible ? ` (ответственный — ${v.responsible.name})` : ''}`}</p> : null}
           {v?.bases.map((b, i) => (
@@ -163,9 +167,11 @@ export const FieldCard: FC<IFieldCardProps> = ({ draftId, tenderId, field: f, ca
               Подтвердить
             </Button>
           ) : null}
-          <Button icon="message-square" onClick={() => setMode('discuss')} disabled={busy}>
-            Обсудить
-          </Button>
+          {v?.restricted ? null : (
+            <Button icon="message-square" onClick={() => setMode('discuss')} disabled={busy}>
+              Обсудить
+            </Button>
+          )}
           <Button variant="ghost" icon="list-checks" aria-expanded={history} onClick={() => setHistory(!history)}>
             История
           </Button>

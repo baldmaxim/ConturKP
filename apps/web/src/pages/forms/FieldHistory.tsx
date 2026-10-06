@@ -26,6 +26,7 @@ export const FieldHistory: FC<IFieldHistoryProps> = ({ draftId, definition, toke
       {items.map((v, i) => {
         const prev = items[i + 1];
         const afterModel = v.origin === 'manual' && v.state === 'edited' && prev?.origin === 'model_suggestion';
+        const source = v.valueFromVersionId && v.state !== 'carried_over' ? items.find((x) => x.id === v.valueFromVersionId) : undefined;
         return (
           <li key={v.id} className={styles.historyItem}>
             <div className={styles.badges}>
@@ -33,7 +34,7 @@ export const FieldHistory: FC<IFieldHistoryProps> = ({ draftId, definition, toke
               <Badge label={STATE_LABEL[v.state].label} icon={STATE_LABEL[v.state].icon} tone={STATE_LABEL[v.state].tone} />
               {v.stale ? <Badge label="Устарело" icon="clock-alert" tone="warning" dashed /> : null}
             </div>
-            <p className={styles.muted}>{`${v.actor.name} · ${formatDateTime(v.createdAt)} · ${ORIGIN_LABEL[v.origin]}${afterModel ? ' · изменено вручную после предложения модели' : ''}`}</p>
+            <p className={styles.muted}>{`${v.actor.name} · ${formatDateTime(v.createdAt)} · ${ORIGIN_LABEL[v.origin]}${afterModel ? ' · изменено вручную после предложения модели' : ''}${source ? ` · значение версии ${source.version}` : ''}`}</p>
             <p className={styles.value}>{v.restricted ? 'Значение скрыто: среди оснований есть закрытые для вас материалы.' : formatFieldValue(definition, v.value)}</p>
             {v.comment ? <p className={styles.muted}>{`Комментарий: ${v.comment}`}</p> : null}
           </li>

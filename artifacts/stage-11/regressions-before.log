@@ -1,0 +1,506 @@
+# 2026-10-06T16:18:22+05:00, linux x64 Node v24.14.1; регрессии Review 11-1 на продукте bf4d44f (исправления и миграция 0030 убраны на время прогона), однопоточно
+
+ RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
+
+ ✓ tests/reviewRegressions11.test.ts > R11-01 — косвенное основание наследует права источника > контроль: прямое закрытое основание скрывает значение и запрещает запись без mail.read 100ms
+ × tests/reviewRegressions11.test.ts > R11-01 — косвенное основание наследует права источника > значение по ревизии требования из закрытого письма скрыто в приложении и истории, как само требование 78ms
+   → expected { …(18) } to match object { restricted: true, value: null }
+(18 matching properties omitted from actual)
+ × tests/reviewRegressions11.test.ts > R11-01 — косвенное основание наследует права источника > подтверждение такого значения инженером без доступа отвергается без раскрытия текста; версия не создаётся 49ms
+   → {"draft":{"id":"bcc898df-00ca-42e7-93b7-9b718aa4c2cc","status":"in_progress","etag":"\"bcc898df-00ca-42e7-93b7-9b718aa4c2cc:1\"","blocking":0,"issues":[]},"field":{"fieldId":"79bec103-e81c-4b2c-a7a5-a6c39edf404b","key":"req_text","definition":{"key":"req_text","type":"text","label":"Условие по требованию","multiline":true},"applicable":true,"required":false,"version":2,"etag":"\"79bec103-e81c-4b2c-a7a5-a6c39edf404b:2\"","latest":{"id":"6e8848f3-3f55-4d31-86e6-fdd134ef46ac","version":2,"value":"Секретное условие по письму заказчика: аванс сорок процентов.","state":"accepted","origin":"manual","restricted":false,"wording":null,"suggestionId":null,"previousVersionId":"82afc53f-d1d3-437d-b0c6-f454d7ffc88a","carriedFromVersionId":null,"comment":null,"responsible":null,"customerQuestionId":null,"actor":{"id":"34168fe9-5b59-4f6a-addc-1981137d7951","name":"Инженер 1"},"createdAt":"2026-10-06T11:18:09.360Z","bases":[{"text":null,"quote":null,"origin":null,"problem":null,"basisType":"requirement_revision","decisionId":null,"fragmentId":null,"evidenceFactId":null,"requirementRevisionId":"0ffc5424-0aba-474c-84d6-25de97e53e47","problemText":null}],"invalidations":[],"stale":false},"systemProposals":[],"conflictingFacts":[],"suggestions":[]}}: expected 200 to be 409 // Object.is equality
+ × tests/reviewRegressions11.test.ts > R11-01 — косвенное основание наследует права источника > новая запись по невидимой ревизии требования отвергается 35ms
+   → expected 200 to be 409 // Object.is equality
+ × tests/reviewRegressions11.test.ts > R11-01 — косвенное основание наследует права источника > решение по закрытому требованию наследует закрытость: значение скрыто, подтверждение отвергается 41ms
+   → expected { …(18) } to match object { restricted: true, value: null }
+(18 matching properties omitted from actual)
+ × tests/reviewRegressions11.test.ts > R11-01 — косвенное основание наследует права источника > руководитель с доступом видит значение по требованию и решению; попытки инженера его не изменили 12ms
+   → expected { …(18) } to match object { restricted: false, …(1) }
+(18 matching properties omitted from actual)
+ × tests/reviewRegressions11.test.ts > R11-02 — «обсудить» не раскрывает скрытое значение > инженер без доступа: «обсудить» отвергается, текст не копируется и не возвращается 37ms
+   → {"draft":{"id":"bcc898df-00ca-42e7-93b7-9b718aa4c2cc","status":"in_progress","etag":"\"bcc898df-00ca-42e7-93b7-9b718aa4c2cc:1\"","blocking":1,"issues":[{"kind":"needs_discussion","fieldKey":"mail_text","label":"Условие по письму","blocking":true,"message":"требует обсуждения (ответственный — Инженер 1): Прошу обсудить условие"}]},"field":{"fieldId":"723a7b0f-63d6-4296-9271-17476b95cb0e","key":"mail_text","definition":{"key":"mail_text","type":"text","label":"Условие по письму","multiline":true},"applicable":true,"required":false,"version":2,"etag":"\"723a7b0f-63d6-4296-9271-17476b95cb0e:2\"","latest":{"id":"398bef7d-3a83-48c8-ba3f-d6ef3a7f6cf5","version":2,"value":"Закрытое условие письма: аванс сорок процентов после подписания.","state":"needs_discussion","origin":"manual","restricted":false,"wording":null,"suggestionId":null,"previousVersionId":"c0482df8-e3eb-4119-963b-b454918db177","carriedFromVersionId":null,"comment":"Прошу обсудить условие","responsible":{"id":"34168fe9-5b59-4f6a-addc-1981137d7951","name":"Инженер 1"},"customerQuestionId":null,"actor":{"id":"34168fe9-5b59-4f6a-addc-1981137d7951","name":"Инженер 1"},"createdAt":"2026-10-06T11:18:09.491Z","bases":[],"invalidations":[],"stale":false},"systemProposals":[],"conflictingFacts":[],"suggestions":[]}}: expected 200 to be 409 // Object.is equality
+ × tests/reviewRegressions11.test.ts > R11-02 — «обсудить» не раскрывает скрытое значение > обсуждение руководителем сохраняет ограничение: для инженера версия, комментарий и пункт списка скрыты 52ms
+   → expected { …(18) } to match object { state: 'needs_discussion', …(3) }
+(18 matching properties omitted from actual)
+ × tests/reviewRegressions11.test.ts > R11-02 — «обсудить» не раскрывает скрытое значение > отзыв права после создания версии: обсуждение скрыто и от самого автора 47ms
+   → expected { …(18) } to match object { restricted: true, value: null }
+(20 matching properties omitted from actual)
+ × tests/reviewRegressions11.test.ts > R11-02 — «обсудить» не раскрывает скрытое значение > перенос на новую ревизию: перенесённые значения сохраняют ограничения исходных версий 92ms
+   → mail_text: expected { …(18) } to match object { state: 'carried_over', …(2) }
+(17 matching properties omitted from actual)
+ × tests/reviewRegressions11.test.ts > R11-04 — сумма из факта сохраняет единицу, масштаб и валюту > ядро: точный перевод масштаба; другая валюта и неизвестный контекст — без предложения 4ms
+   → expected '25000000' to be '25' // Object.is equality
+ × tests/reviewRegressions11.test.ts > R11-04 — сумма из факта сохраняет единицу, масштаб и валюту > ядро: гейт модели и сверка с фактом учитывают валюту и масштаб 2ms
+   → expected true to be false // Object.is equality
+ × tests/reviewRegressions11.test.ts > R11-04 — сумма из факта сохраняет единицу, масштаб и валюту > API: предложения из факта «25 000 000 руб.» — 25 для «млн руб.», 25000000 для «руб.», для USD предложения нет 18ms
+   → expected [ '25000000' ] to deeply equal [ '25' ]
+ × tests/reviewRegressions11.test.ts > R11-04 — сумма из факта сохраняет единицу, масштаб и валюту > API: принять факт в поле USD нельзя; в поле «млн руб.» принимается 25 62ms
+   → {"draft":{"id":"36de60cc-95ad-4ee7-9686-b76b5b45a705","status":"in_progress","etag":"\"36de60cc-95ad-4ee7-9686-b76b5b45a705:1\"","blocking":0,"issues":[{"kind":"unverified","fieldKey":"price_usd","label":"Цена, USD","blocking":false,"message":"не сверено — «Цена, USD» в приложении «Закрытые основания»: значение одного из полей неизвестно"}]},"field":{"fieldId":"cb323ac3-4baf-444e-b37f-104499b73eb6","key":"price_usd","definition":{"key":"price_usd","type":"number","unit":"USD","label":"Цена, USD","scale":2,"meaning":"fact:contract_price","currency":"USD"},"applicable":true,"required":false,"version":1,"etag":"\"cb323ac3-4baf-444e-b37f-104499b73eb6:1\"","latest":{"id":"8bc588f6-6c1b-4680-9cc7-8f4288455131","version":1,"value":"25000000","state":"accepted","origin":"system_suggestion","restricted":false,"wording":null,"suggestionId":null,"previousVersionId":null,"carriedFromVersionId":null,"comment":null,"responsible":null,"customerQuestionId":null,"actor":{"id":"34168fe9-5b59-4f6a-addc-1981137d7951","name":"Инженер 1"},"createdAt":"2026-10-06T11:18:09.761Z","bases":[{"text":null,"quote":null,"origin":null,"problem":null,"basisType":"evidence_fact","decisionId":null,"fragmentId":null,"evidenceFactId":"53199d4d-414c-488c-aff4-a7dce59dacde","requirementRevisionId":null,"problemText":null}],"invalidations":[],"stale":false},"systemProposals":[{"evidenceFactId":"53199d4d-414c-488c-aff4-a7dce59dacde","title":"Цена договора","text":"Цена договора составляет 25 000 000","value":"25000000","restricted":false}],"conflictingFacts":[],"suggestions":[]}}: expected 200 to be 409 // Object.is equality
+ × tests/reviewRegressions11.test.ts > R11-04 — сумма из факта сохраняет единицу, масштаб и валюту > API: сверка — USD-значение «не сверено», а не совпадение; 25 в поле «руб.» — противоречие 83ms
+   → expected [] to deeply equal [ 'unverified' ]
+ ✓ tests/reviewRegressions11.test.ts > R11-03 — заменённый исходный документ требования, решения и факта не подтверждает значение > контроль: до новой редакции ТЗ значение по требованию и решению записывается 37ms
+ × tests/reviewRegressions11.test.ts > R11-03 — заменённый исходный документ требования, решения и факта не подтверждает значение > новая редакция ТЗ до обработки события: запись по ревизии требования и по решению — 409 basis_superseded 90ms
+   → {"draft":{"id":"36de60cc-95ad-4ee7-9686-b76b5b45a705","status":"in_progress","etag":"\"36de60cc-95ad-4ee7-9686-b76b5b45a705:1\"","blocking":1,"issues":[{"kind":"contradiction","fieldKey":"price_rub","label":"Цена, руб.","blocking":true,"message":"противоречие — факт «Цена договора»: значение расходится с действующим фактом"},{"kind":"unverified","fieldKey":"price_rub","label":"Цена, руб.","blocking":false,"message":"не сверено — «Цена, руб.» в приложении «Закрытые основания»: значение одного из полей неизвестно"},{"kind":"unverified","fieldKey":"price_usd","label":"Цена, USD","blocking":false,"message":"не сверено — «Цена, USD» в приложении «Закрытые основания»: значение одного из полей неизвестно"}]},"field":{"fieldId":"20a2bf4e-ca5c-4e15-ac1e-6715b5c78dad","key":"tz_text","definition":{"key":"tz_text","type":"text","label":"Условие по ТЗ","multiline":true},"applicable":true,"required":false,"version":2,"etag":"\"20a2bf4e-ca5c-4e15-ac1e-6715b5c78dad:2\"","latest":{"id":"f15256d3-5e42-496f-917f-1606f5438177","version":2,"value":"Кровля — профнастил С-44","state":"edited","origin":"manual","restricted":false,"wording":null,"suggestionId":null,"previousVersionId":"2cc7e4ed-75a5-4734-8fc7-e47eba8fda3b","carriedFromVersionId":null,"comment":null,"responsible":null,"customerQuestionId":null,"actor":{"id":"34168fe9-5b59-4f6a-addc-1981137d7951","name":"Инженер 1"},"createdAt":"2026-10-06T11:18:09.973Z","bases":[{"text":null,"quote":null,"origin":null,"problem":null,"basisType":"requirement_revision","decisionId":null,"fragmentId":null,"evidenceFactId":null,"requirementRevisionId":"7e4b44a2-b3b6-482d-8375-0869f371a9ae","problemText":null}],"invalidations":[],"stale":false},"systemProposals":[],"conflictingFacts":[],"suggestions":[]}}: expected 200 to be 409 // Object.is equality
+ × tests/reviewRegressions11.test.ts > R11-03 — заменённый исходный документ требования, решения и факта не подтверждает значение > после обработки события — по-прежнему 409; значение «устарело», текст сохранён 263ms
+   → {"draft":{"id":"36de60cc-95ad-4ee7-9686-b76b5b45a705","status":"in_progress","etag":"\"36de60cc-95ad-4ee7-9686-b76b5b45a705:1\"","blocking":1,"issues":[{"kind":"contradiction","fieldKey":"price_rub","label":"Цена, руб.","blocking":true,"message":"противоречие — факт «Цена договора»: значение расходится с действующим фактом"},{"kind":"unverified","fieldKey":"price_rub","label":"Цена, руб.","blocking":false,"message":"не сверено — «Цена, руб.» в приложении «Закрытые основания»: значение одного из полей неизвестно"},{"kind":"unverified","fieldKey":"price_usd","label":"Цена, USD","blocking":false,"message":"не сверено — «Цена, USD» в приложении «Закрытые основания»: значение одного из полей неизвестно"}]},"field":{"fieldId":"20a2bf4e-ca5c-4e15-ac1e-6715b5c78dad","key":"tz_text","definition":{"key":"tz_text","type":"text","label":"Условие по ТЗ","multiline":true},"applicable":true,"required":false,"version":3,"etag":"\"20a2bf4e-ca5c-4e15-ac1e-6715b5c78dad:3\"","latest":{"id":"31a01987-3ce8-4a1b-a2bb-39b44f230e02","version":3,"value":"Кровля — профнастил С-44","state":"edited","origin":"manual","restricted":false,"wording":null,"suggestionId":null,"previousVersionId":"f15256d3-5e42-496f-917f-1606f5438177","carriedFromVersionId":null,"comment":null,"responsible":null,"customerQuestionId":null,"actor":{"id":"34168fe9-5b59-4f6a-addc-1981137d7951","name":"Инженер 1"},"createdAt":"2026-10-06T11:18:10.246Z","bases":[{"text":null,"quote":null,"origin":null,"problem":null,"basisType":"requirement_revision","decisionId":null,"fragmentId":null,"evidenceFactId":null,"requirementRevisionId":"7e4b44a2-b3b6-482d-8375-0869f371a9ae","problemText":null}],"invalidations":[],"stale":false},"systemProposals":[],"conflictingFacts":[],"suggestions":[]}}: expected 200 to be 409 // Object.is equality
+ × tests/reviewRegressions11.test.ts > R11-03 — заменённый исходный документ требования, решения и факта не подтверждает значение > вторая линия: прямая запись версии по ревизии требования на заменённом ТЗ отвергается (23514) 15ms
+   → запись должна быть отвергнута: expected null not to be null
+ × tests/reviewRegressions11.test.ts > R11-03 — заменённый исходный документ требования, решения и факта не подтверждает значение > новая редакция договора до перестроения графа: прежний факт не предлагается и не принимается; прямая запись — 23514 80ms
+   → expected [ { …(5) } ] to deeply equal []
+ × tests/reviewRegressions11.test.ts > R11-03, R11-01, R11-02 — другие цепочки и вторая линия 0030 > новая редакция письма: значение по требованию из письма — 409 basis_superseded (mail_message_revision_superseded) 68ms
+   → {"draft":{"id":"36de60cc-95ad-4ee7-9686-b76b5b45a705","status":"in_progress","etag":"\"36de60cc-95ad-4ee7-9686-b76b5b45a705:1\"","blocking":1,"issues":[{"kind":"contradiction","fieldKey":"price_rub","label":"Цена, руб.","blocking":true,"message":"противоречие — факт «Цена договора»: значение расходится с действующим фактом"},{"kind":"unverified","fieldKey":"price_rub","label":"Цена, руб.","blocking":false,"message":"не сверено — «Цена, руб.» в приложении «Закрытые основания»: значение одного из полей неизвестно"},{"kind":"unverified","fieldKey":"price_usd","label":"Цена, USD","blocking":false,"message":"не сверено — «Цена, USD» в приложении «Закрытые основания»: значение одного из полей неизвестно"}]},"field":{"fieldId":"71278b75-37b3-402f-9fc5-391c8e34c26b","key":"req_text","definition":{"key":"req_text","type":"text","label":"Условие по требованию","multiline":true},"applicable":true,"required":false,"version":1,"etag":"\"71278b75-37b3-402f-9fc5-391c8e34c26b:1\"","latest":{"id":"266d4d4a-853f-4540-a4ec-fd7143bed23a","version":1,"value":"Секретное условие по письму заказчика: аванс сорок процентов.","state":"edited","origin":"manual","restricted":false,"wording":null,"suggestionId":null,"previousVersionId":null,"carriedFromVersionId":null,"comment":null,"responsible":null,"customerQuestionId":null,"actor":{"id":"38459201-3a9d-4f9b-8519-529ee2c88259","name":"Руководитель"},"createdAt":"2026-10-06T11:18:10.413Z","bases":[{"text":null,"quote":null,"origin":null,"problem":null,"basisType":"requirement_revision","decisionId":null,"fragmentId":null,"evidenceFactId":null,"requirementRevisionId":"0ffc5424-0aba-474c-84d6-25de97e53e47","problemText":null}],"invalidations":[],"stale":false},"systemProposals":[],"conflictingFacts":[],"suggestions":[]}}: expected 200 to be 409 // Object.is equality
+ × tests/reviewRegressions11.test.ts > R11-03, R11-01, R11-02 — другие цепочки и вторая линия 0030 > функция актуальности раскрывает каждое основание тендера до исходных фрагментов 2ms
+   → function field_basis_source_fragments(unknown, unknown, uuid, unknown) does not exist
+ × tests/reviewRegressions11.test.ts > R11-03, R11-01, R11-02 — другие цепочки и вторая линия 0030 > вторая линия: обсуждение со значением без ссылки на источник и с подменённым значением отвергается (23514) 30ms
+   → expected 'undefined' to be '23514' // Object.is equality
+ × tests/reviewRegressions11.test.ts > R11-03, R11-01, R11-02 — другие цепочки и вторая линия 0030 > решение не по требованию основанием поля не принимается: API — 409, БД — 23514 39ms
+   → {"draft":{"id":"36de60cc-95ad-4ee7-9686-b76b5b45a705","status":"in_progress","etag":"\"36de60cc-95ad-4ee7-9686-b76b5b45a705:1\"","blocking":1,"issues":[{"kind":"contradiction","fieldKey":"price_rub","label":"Цена, руб.","blocking":true,"message":"противоречие — факт «Цена договора»: значение расходится с действующим фактом"},{"kind":"unverified","fieldKey":"price_rub","label":"Цена, руб.","blocking":false,"message":"не сверено — «Цена, руб.» в приложении «Закрытые основания»: значение одного из полей неизвестно"},{"kind":"unverified","fieldKey":"price_usd","label":"Цена, USD","blocking":false,"message":"не сверено — «Цена, USD» в приложении «Закрытые основания»: значение одного из полей неизвестно"}]},"field":{"fieldId":"687578cf-fe44-4c7b-8224-37adcb0ef044","key":"decision_text","definition":{"key":"decision_text","type":"text","label":"Условие по решению","multiline":true},"applicable":true,"required":false,"version":1,"etag":"\"687578cf-fe44-4c7b-8224-37adcb0ef044:1\"","latest":{"id":"dba1f935-fce2-4f5c-a373-bb94f92b6728","version":1,"value":"по решению импорта","state":"edited","origin":"manual","restricted":false,"wording":null,"suggestionId":null,"previousVersionId":null,"carriedFromVersionId":null,"comment":null,"responsible":null,"customerQuestionId":null,"actor":{"id":"38459201-3a9d-4f9b-8519-529ee2c88259","name":"Руководитель"},"createdAt":"2026-10-06T11:18:10.478Z","bases":[{"text":null,"quote":null,"origin":null,"problem":null,"basisType":"decision","decisionId":"5e678db3-6442-401c-bd23-7154709595a1","fragmentId":null,"evidenceFactId":null,"requirementRevisionId":null,"problemText":null}],"invalidations":[],"stale":false},"systemProposals":[],"conflictingFacts":[],"suggestions":[]}}: expected 200 to be 409 // Object.is equality
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 22 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-01 — косвенное основание наследует права источника > значение по ревизии требования из закрытого письма скрыто в приложении и истории, как само требование
+AssertionError: expected { …(18) } to match object { restricted: true, value: null }
+(18 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "restricted": true,
+-   "value": null,
++   "restricted": false,
++   "value": "Секретное условие по письму заказчика: аванс сорок процентов.",
+  }
+
+ ❯ tests/reviewRegressions11.test.ts:179:65
+    177|     const view = await s.eng1.get(`/application-drafts/${draftA.id}`);
+    178|     expect(view.status, view.text).toBe(200);
+    179|     expect(fieldOf(view.body as IDraftView, 'req_text').latest).toMatc…
+       |                                                                 ^
+    180|     expect(view.text).not.toContain(SECRET_REQ);
+    181|     const h = await s.eng1.get(`/application-drafts/${draftA.id}/field…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/22]⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-01 — косвенное основание наследует права источника > подтверждение такого значения инженером без доступа отвергается без раскрытия текста; версия не создаётся
+AssertionError: {"draft":{"id":"bcc898df-00ca-42e7-93b7-9b718aa4c2cc","status":"in_progress","etag":"\"bcc898df-00ca-42e7-93b7-9b718aa4c2cc:1\"","blocking":0,"issues":[]},"field":{"fieldId":"79bec103-e81c-4b2c-a7a5-a6c39edf404b","key":"req_text","definition":{"key":"req_text","type":"text","label":"Условие по требованию","multiline":true},"applicable":true,"required":false,"version":2,"etag":"\"79bec103-e81c-4b2c-a7a5-a6c39edf404b:2\"","latest":{"id":"6e8848f3-3f55-4d31-86e6-fdd134ef46ac","version":2,"value":"Секретное условие по письму заказчика: аванс сорок процентов.","state":"accepted","origin":"manual","restricted":false,"wording":null,"suggestionId":null,"previousVersionId":"82afc53f-d1d3-437d-b0c6-f454d7ffc88a","carriedFromVersionId":null,"comment":null,"responsible":null,"customerQuestionId":null,"actor":{"id":"34168fe9-5b59-4f6a-addc-1981137d7951","name":"Инженер 1"},"createdAt":"2026-10-06T11:18:09.360Z","bases":[{"text":null,"quote":null,"origin":null,"problem":null,"basisType":"requirement_revision","decisionId":null,"fragmentId":null,"evidenceFactId":null,"requirementRevisionId":"0ffc5424-0aba-474c-84d6-25de97e53e47","problemText":null}],"invalidations":[],"stale":false},"systemProposals":[],"conflictingFacts":[],"suggestions":[]}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/reviewRegressions11.test.ts:191:30
+    189|     const f = await fieldNow(s.eng1, draftA.id, 'req_text');
+    190|     const r = await act(s.eng1, draftA.id, 'req_text', f.etag, { actio…
+    191|     expect(r.status, r.text).toBe(409);
+       |                              ^
+    192|     expect(r.body.current.reason).toBe('restricted_fragments');
+    193|     expect(r.text).not.toContain(SECRET_REQ);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/22]⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-01 — косвенное основание наследует права источника > новая запись по невидимой ревизии требования отвергается
+AssertionError: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/reviewRegressions11.test.ts:203:22
+    201|       bases: [{ type: 'requirement_revision', id: req.mail.revisionId …
+    202|     });
+    203|     expect(r.status).toBe(409);
+       |                      ^
+    204|     expect(r.body.current.reason).toBe('restricted_fragments');
+    205|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/22]⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-01 — косвенное основание наследует права источника > решение по закрытому требованию наследует закрытость: значение скрыто, подтверждение отвергается
+AssertionError: expected { …(18) } to match object { restricted: true, value: null }
+(18 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "restricted": true,
+-   "value": null,
++   "restricted": false,
++   "value": "Секретное условие по письму заказчика: аванс сорок процентов.",
+  }
+
+ ❯ tests/reviewRegressions11.test.ts:211:22
+    209|     expect(set.status, set.text).toBe(200);
+    210|     const f = await fieldNow(s.eng1, draftA.id, 'decision_text');
+    211|     expect(f.latest).toMatchObject({ restricted: true, value: null });
+       |                      ^
+    212|     expect((await history(s.eng1, draftA.id, 'decision_text')).every((…
+    213|     const r = await act(s.eng1, draftA.id, 'decision_text', f.etag, { …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/22]⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-01 — косвенное основание наследует права источника > руководитель с доступом видит значение по требованию и решению; попытки инженера его не изменили
+AssertionError: expected { …(18) } to match object { restricted: false, …(1) }
+(18 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "restricted": false,
+-   "value": "Секретное условие по письму заказчика: аванс сорок процентов.",
++   "value": "ссылка на чужое",
+  }
+
+ ❯ tests/reviewRegressions11.test.ts:219:71
+    217|
+    218|   it('руководитель с доступом видит значение по требованию и решению; …
+    219|     expect((await fieldNow(s.manager, draftA.id, 'req_text')).latest).…
+       |                                                                       ^
+    220|     expect((await fieldNow(s.manager, draftA.id, 'decision_text')).lat…
+    221|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/22]⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-02 — «обсудить» не раскрывает скрытое значение > инженер без доступа: «обсудить» отвергается, текст не копируется и не возвращается
+AssertionError: {"draft":{"id":"bcc898df-00ca-42e7-93b7-9b718aa4c2cc","status":"in_progress","etag":"\"bcc898df-00ca-42e7-93b7-9b718aa4c2cc:1\"","blocking":1,"issues":[{"kind":"needs_discussion","fieldKey":"mail_text","label":"Условие по письму","blocking":true,"message":"требует обсуждения (ответственный — Инженер 1): Прошу обсудить условие"}]},"field":{"fieldId":"723a7b0f-63d6-4296-9271-17476b95cb0e","key":"mail_text","definition":{"key":"mail_text","type":"text","label":"Условие по письму","multiline":true},"applicable":true,"required":false,"version":2,"etag":"\"723a7b0f-63d6-4296-9271-17476b95cb0e:2\"","latest":{"id":"398bef7d-3a83-48c8-ba3f-d6ef3a7f6cf5","version":2,"value":"Закрытое условие письма: аванс сорок процентов после подписания.","state":"needs_discussion","origin":"manual","restricted":false,"wording":null,"suggestionId":null,"previousVersionId":"c0482df8-e3eb-4119-963b-b454918db177","carriedFromVersionId":null,"comment":"Прошу обсудить условие","responsible":{"id":"34168fe9-5b59-4f6a-addc-1981137d7951","name":"Инженер 1"},"customerQuestionId":null,"actor":{"id":"34168fe9-5b59-4f6a-addc-1981137d7951","name":"Инженер 1"},"createdAt":"2026-10-06T11:18:09.491Z","bases":[],"invalidations":[],"stale":false},"systemProposals":[],"conflictingFacts":[],"suggestions":[]}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/reviewRegressions11.test.ts:230:30
+    228|     expect(f.latest).toMatchObject({ restricted: true, value: null });
+    229|     const r = await act(s.eng1, draftA.id, 'mail_text', f.etag, { acti…
+    230|     expect(r.status, r.text).toBe(409);
+       |                              ^
+    231|     expect(r.body.current.reason).toBe('restricted_fragments');
+    232|     expect(r.text).not.toContain(SECRET_LETTER);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/22]⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-02 — «обсудить» не раскрывает скрытое значение > обсуждение руководителем сохраняет ограничение: для инженера версия, комментарий и пункт списка скрыты
+AssertionError: expected { …(18) } to match object { state: 'needs_discussion', …(3) }
+(18 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "comment": null,
+-   "restricted": true,
++   "comment": "Комментарий руководителя по письму",
++   "restricted": false,
+    "state": "needs_discussion",
+-   "value": null,
++   "value": "Закрытое условие письма: аванс сорок процентов после подписания.",
+  }
+
+ ❯ tests/reviewRegressions11.test.ts:242:66
+    240|     expect(r.body.field.latest).toMatchObject({ state: 'needs_discussi…
+    241|     const view = await s.eng1.get(`/application-drafts/${draftA.id}`);
+    242|     expect(fieldOf(view.body as IDraftView, 'mail_text').latest).toMat…
+       |                                                                  ^
+    243|     expect(view.text).not.toContain(SECRET_LETTER);
+    244|     expect(view.text).not.toContain('Комментарий руководителя по письм…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/22]⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-02 — «обсудить» не раскрывает скрытое значение > отзыв права после создания версии: обсуждение скрыто и от самого автора
+AssertionError: expected { …(18) } to match object { restricted: true, value: null }
+(20 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "restricted": true,
+-   "value": null,
++   "restricted": false,
++   "value": "Закрытое условие письма: аванс сорок процентов после подписания.",
+  }
+
+ ❯ tests/reviewRegressions11.test.ts:257:74
+    255|     await setMailAccess(s.admin, box, s.ids.manager, []);
+    256|     try {
+    257|       expect((await fieldNow(s.manager, draftA.id, 'mail_text')).lates…
+       |                                                                          ^
+    258|       expect((await history(s.manager, draftA.id, 'mail_text')).every(…
+    259|       const f = await fieldNow(s.manager, draftA.id, 'mail_text');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/22]⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-02 — «обсудить» не раскрывает скрытое значение > перенос на новую ревизию: перенесённые значения сохраняют ограничения исходных версий
+AssertionError: mail_text: expected { …(18) } to match object { state: 'carried_over', …(2) }
+(17 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "restricted": true,
++   "restricted": false,
+    "state": "carried_over",
+-   "value": null,
++   "value": "Закрытое условие письма: аванс сорок процентов после подписания.",
+  }
+
+ ❯ tests/reviewRegressions11.test.ts:278:125
+    276|     const view = await s.eng1.get(`/application-drafts/${m.body.id}`);
+    277|     expect(view.status, view.text).toBe(200);
+    278|     for (const key of ['mail_text', 'req_text', 'decision_text']) expe…
+       |                                                                                                                             ^
+    279|     expect(view.text).not.toContain(SECRET_LETTER);
+    280|     expect(view.text).not.toContain(SECRET_REQ);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/22]⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-04 — сумма из факта сохраняет единицу, масштаб и валюту > ядро: точный перевод масштаба; другая валюта и неизвестный контекст — без предложения
+AssertionError: expected '25000000' to be '25' // Object.is equality
+
+Expected: "25"
+Received: "25000000"
+
+ ❯ tests/reviewRegressions11.test.ts:289:76
+    287|
+    288|   it('ядро: точный перевод масштаба; другая валюта и неизвестный конте…
+    289|     expect(valueFromFactText(money('млн руб.', 'RUB'), '25 000 000 руб…
+       |                                                                            ^
+    290|     expect(valueFromFactText(money('руб.', 'RUB'), '25 млн руб.')).toB…
+    291|     expect(valueFromFactText(money('USD', 'USD'), '100 руб.')).toBeNul…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/22]⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-04 — сумма из факта сохраняет единицу, масштаб и валюту > ядро: гейт модели и сверка с фактом учитывают валюту и масштаб
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/reviewRegressions11.test.ts:301:24
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/22]⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-04 — сумма из факта сохраняет единицу, масштаб и валюту > API: предложения из факта «25 000 000 руб.» — 25 для «млн руб.», 25000000 для «руб.», для USD предложения нет
+AssertionError: expected [ '25000000' ] to deeply equal [ '25' ]
+
+- Expected
++ Received
+
+  [
+-   "25",
++   "25000000",
+  ]
+
+ ❯ tests/reviewRegressions11.test.ts:326:73
+    324|   it('API: предложения из факта «25 000 000 руб.» — 25 для «млн руб.»,…
+    325|     const d = await draftOf(s.eng1, draftB.id);
+    326|     expect(fieldOf(d, 'price_mln').systemProposals.map((p) => p.value)…
+       |                                                                         ^
+    327|     expect(fieldOf(d, 'price_rub').systemProposals.map((p) => p.value)…
+    328|     expect(fieldOf(d, 'price_usd').systemProposals).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/22]⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-04 — сумма из факта сохраняет единицу, масштаб и валюту > API: принять факт в поле USD нельзя; в поле «млн руб.» принимается 25
+AssertionError: {"draft":{"id":"36de60cc-95ad-4ee7-9686-b76b5b45a705","status":"in_progress","etag":"\"36de60cc-95ad-4ee7-9686-b76b5b45a705:1\"","blocking":0,"issues":[{"kind":"unverified","fieldKey":"price_usd","label":"Цена, USD","blocking":false,"message":"не сверено — «Цена, USD» в приложении «Закрытые основания»: значение одного из полей неизвестно"}]},"field":{"fieldId":"cb323ac3-4baf-444e-b37f-104499b73eb6","key":"price_usd","definition":{"key":"price_usd","type":"number","unit":"USD","label":"Цена, USD","scale":2,"meaning":"fact:contract_price","currency":"USD"},"applicable":true,"required":false,"version":1,"etag":"\"cb323ac3-4baf-444e-b37f-104499b73eb6:1\"","latest":{"id":"8bc588f6-6c1b-4680-9cc7-8f4288455131","version":1,"value":"25000000","state":"accepted","origin":"system_suggestion","restricted":false,"wording":null,"suggestionId":null,"previousVersionId":null,"carriedFromVersionId":null,"comment":null,"responsible":null,"customerQuestionId":null,"actor":{"id":"34168fe9-5b59-4f6a-addc-1981137d7951","name":"Инженер 1"},"createdAt":"2026-10-06T11:18:09.761Z","bases":[{"text":null,"quote":null,"origin":null,"problem":null,"basisType":"evidence_fact","decisionId":null,"fragmentId":null,"evidenceFactId":"53199d4d-414c-488c-aff4-a7dce59dacde","requirementRevisionId":null,"problemText":null}],"invalidations":[],"stale":false},"systemProposals":[{"evidenceFactId":"53199d4d-414c-488c-aff4-a7dce59dacde","title":"Цена договора","text":"Цена договора составляет 25 000 000","value":"25000000","restricted":false}],"conflictingFacts":[],"suggestions":[]}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/reviewRegressions11.test.ts:335:34
+    333|     const before = await versions(draftB.id, 'price_usd');
+    334|     const usd = await act(s.eng1, draftB.id, 'price_usd', (await field…
+    335|     expect(usd.status, usd.text).toBe(409);
+       |                                  ^
+    336|     expect(usd.body.current.reason).toBe('fact_value_unavailable');
+    337|     expect(await versions(draftB.id, 'price_usd')).toBe(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/22]⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-04 — сумма из факта сохраняет единицу, масштаб и валюту > API: сверка — USD-значение «не сверено», а не совпадение; 25 в поле «руб.» — противоречие
+AssertionError: expected [] to deeply equal [ 'unverified' ]
+
+- Expected
++ Received
+
+- [
+-   "unverified",
+- ]
++ []
+
+ ❯ tests/reviewRegressions11.test.ts:349:32
+    347|     // Только сверка с фактом (сравнения с пустыми полями других прило…
+    348|     const kinds = (key: string) => d.issues.filter((i) => i.fieldKey =…
+    349|     expect(kinds('price_usd')).toEqual(['unverified']);
+       |                                ^
+    350|     expect(kinds('price_rub')).toEqual(['contradiction']);
+    351|     expect(kinds('price_mln')).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/22]⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-03 — заменённый исходный документ требования, решения и факта не подтверждает значение > новая редакция ТЗ до обработки события: запись по ревизии требования и по решению — 409 basis_superseded
+AssertionError: {"draft":{"id":"36de60cc-95ad-4ee7-9686-b76b5b45a705","status":"in_progress","etag":"\"36de60cc-95ad-4ee7-9686-b76b5b45a705:1\"","blocking":1,"issues":[{"kind":"contradiction","fieldKey":"price_rub","label":"Цена, руб.","blocking":true,"message":"противоречие — факт «Цена договора»: значение расходится с действующим фактом"},{"kind":"unverified","fieldKey":"price_rub","label":"Цена, руб.","blocking":false,"message":"не сверено — «Цена, руб.» в приложении «Закрытые основания»: значение одного из полей неизвестно"},{"kind":"unverified","fieldKey":"price_usd","label":"Цена, USD","blocking":false,"message":"не сверено — «Цена, USD» в приложении «Закрытые основания»: значение одного из полей неизвестно"}]},"field":{"fieldId":"20a2bf4e-ca5c-4e15-ac1e-6715b5c78dad","key":"tz_text","definition":{"key":"tz_text","type":"text","label":"Условие по ТЗ","multiline":true},"applicable":true,"required":false,"version":2,"etag":"\"20a2bf4e-ca5c-4e15-ac1e-6715b5c78dad:2\"","latest":{"id":"f15256d3-5e42-496f-917f-1606f5438177","version":2,"value":"Кровля — профнастил С-44","state":"edited","origin":"manual","restricted":false,"wording":null,"suggestionId":null,"previousVersionId":"2cc7e4ed-75a5-4734-8fc7-e47eba8fda3b","carriedFromVersionId":null,"comment":null,"responsible":null,"customerQuestionId":null,"actor":{"id":"34168fe9-5b59-4f6a-addc-1981137d7951","name":"Инженер 1"},"createdAt":"2026-10-06T11:18:09.973Z","bases":[{"text":null,"quote":null,"origin":null,"problem":null,"basisType":"requirement_revision","decisionId":null,"fragmentId":null,"evidenceFactId":null,"requirementRevisionId":"7e4b44a2-b3b6-482d-8375-0869f371a9ae","problemText":null}],"invalidations":[],"stale":false},"systemProposals":[],"conflictingFacts":[],"suggestions":[]}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/reviewRegressions11.test.ts:367:30
+    365|     const before = await versions(draftB.id, 'tz_text');
+    366|     const r = await put(s.eng1, draftB.id, 'tz_text', { action: 'set',…
+    367|     expect(r.status, r.text).toBe(409);
+       |                              ^
+    368|     expect(r.body.current).toMatchObject({ reason: 'basis_superseded',…
+    369|     const d = await put(s.eng1, draftB.id, 'tz_text', { action: 'set',…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/22]⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-03 — заменённый исходный документ требования, решения и факта не подтверждает значение > после обработки события — по-прежнему 409; значение «устарело», текст сохранён
+AssertionError: {"draft":{"id":"36de60cc-95ad-4ee7-9686-b76b5b45a705","status":"in_progress","etag":"\"36de60cc-95ad-4ee7-9686-b76b5b45a705:1\"","blocking":1,"issues":[{"kind":"contradiction","fieldKey":"price_rub","label":"Цена, руб.","blocking":true,"message":"противоречие — факт «Цена договора»: значение расходится с действующим фактом"},{"kind":"unverified","fieldKey":"price_rub","label":"Цена, руб.","blocking":false,"message":"не сверено — «Цена, руб.» в приложении «Закрытые основания»: значение одного из полей неизвестно"},{"kind":"unverified","fieldKey":"price_usd","label":"Цена, USD","blocking":false,"message":"не сверено — «Цена, USD» в приложении «Закрытые основания»: значение одного из полей неизвестно"}]},"field":{"fieldId":"20a2bf4e-ca5c-4e15-ac1e-6715b5c78dad","key":"tz_text","definition":{"key":"tz_text","type":"text","label":"Условие по ТЗ","multiline":true},"applicable":true,"required":false,"version":3,"etag":"\"20a2bf4e-ca5c-4e15-ac1e-6715b5c78dad:3\"","latest":{"id":"31a01987-3ce8-4a1b-a2bb-39b44f230e02","version":3,"value":"Кровля — профнастил С-44","state":"edited","origin":"manual","restricted":false,"wording":null,"suggestionId":null,"previousVersionId":"f15256d3-5e42-496f-917f-1606f5438177","carriedFromVersionId":null,"comment":null,"responsible":null,"customerQuestionId":null,"actor":{"id":"34168fe9-5b59-4f6a-addc-1981137d7951","name":"Инженер 1"},"createdAt":"2026-10-06T11:18:10.246Z","bases":[{"text":null,"quote":null,"origin":null,"problem":null,"basisType":"requirement_revision","decisionId":null,"fragmentId":null,"evidenceFactId":null,"requirementRevisionId":"7e4b44a2-b3b6-482d-8375-0869f371a9ae","problemText":null}],"invalidations":[],"stale":false},"systemProposals":[],"conflictingFacts":[],"suggestions":[]}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/reviewRegressions11.test.ts:381:30
+    379|     await processEvents();
+    380|     const r = await put(s.eng1, draftB.id, 'tz_text', { action: 'set',…
+    381|     expect(r.status, r.text).toBe(409);
+       |                              ^
+    382|     expect(r.body.current.reason).toBe('basis_superseded');
+    383|     const d = await draftOf(s.eng1, draftB.id);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/22]⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-03 — заменённый исходный документ требования, решения и факта не подтверждает значение > вторая линия: прямая запись версии по ревизии требования на заменённом ТЗ отвергается (23514)
+AssertionError: запись должна быть отвергнута: expected null not to be null
+ ❯ tests/reviewRegressions11.test.ts:391:54
+    389|     const before = await versions(draftB.id, 'tz_direct');
+    390|     const err = await directWrite(draftB, 'tz_direct', { column: 'requ…
+    391|     expect(err, 'запись должна быть отвергнута').not.toBeNull();
+       |                                                      ^
+    392|     expect(`${err!.code} ${err!.message}`).toMatch(/23514.*document_re…
+    393|     expect(await versions(draftB.id, 'tz_direct')).toBe(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/22]⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-03 — заменённый исходный документ требования, решения и факта не подтверждает значение > новая редакция договора до перестроения графа: прежний факт не предлагается и не принимается; прямая запись — 23514
+AssertionError: expected [ { …(5) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "evidenceFactId": "fcc351a0-ed9c-48d7-acf9-ff3f01854bcf",
++     "restricted": false,
++     "text": "Гарантийный срок составляет 36 месяцев",
++     "title": "Гарантийный срок",
++     "value": "36",
++   },
++ ]
+
+ ❯ tests/reviewRegressions11.test.ts:403:31
+    401|     expect((await db.pool.query("SELECT status FROM fact_state WHERE e…
+    402|     const f = await fieldNow(s.eng1, draftB.id, 'warranty');
+    403|     expect(f.systemProposals).toEqual([]);
+       |                               ^
+    404|     const r = await act(s.eng1, draftB.id, 'warranty', f.etag, { actio…
+    405|     expect(r.status, r.text).toBe(409);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/22]⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-03, R11-01, R11-02 — другие цепочки и вторая линия 0030 > новая редакция письма: значение по требованию из письма — 409 basis_superseded (mail_message_revision_superseded)
+AssertionError: {"draft":{"id":"36de60cc-95ad-4ee7-9686-b76b5b45a705","status":"in_progress","etag":"\"36de60cc-95ad-4ee7-9686-b76b5b45a705:1\"","blocking":1,"issues":[{"kind":"contradiction","fieldKey":"price_rub","label":"Цена, руб.","blocking":true,"message":"противоречие — факт «Цена договора»: значение расходится с действующим фактом"},{"kind":"unverified","fieldKey":"price_rub","label":"Цена, руб.","blocking":false,"message":"не сверено — «Цена, руб.» в приложении «Закрытые основания»: значение одного из полей неизвестно"},{"kind":"unverified","fieldKey":"price_usd","label":"Цена, USD","blocking":false,"message":"не сверено — «Цена, USD» в приложении «Закрытые основания»: значение одного из полей неизвестно"}]},"field":{"fieldId":"71278b75-37b3-402f-9fc5-391c8e34c26b","key":"req_text","definition":{"key":"req_text","type":"text","label":"Условие по требованию","multiline":true},"applicable":true,"required":false,"version":1,"etag":"\"71278b75-37b3-402f-9fc5-391c8e34c26b:1\"","latest":{"id":"266d4d4a-853f-4540-a4ec-fd7143bed23a","version":1,"value":"Секретное условие по письму заказчика: аванс сорок процентов.","state":"edited","origin":"manual","restricted":false,"wording":null,"suggestionId":null,"previousVersionId":null,"carriedFromVersionId":null,"comment":null,"responsible":null,"customerQuestionId":null,"actor":{"id":"38459201-3a9d-4f9b-8519-529ee2c88259","name":"Руководитель"},"createdAt":"2026-10-06T11:18:10.413Z","bases":[{"text":null,"quote":null,"origin":null,"problem":null,"basisType":"requirement_revision","decisionId":null,"fragmentId":null,"evidenceFactId":null,"requirementRevisionId":"0ffc5424-0aba-474c-84d6-25de97e53e47","problemText":null}],"invalidations":[],"stale":false},"systemProposals":[],"conflictingFacts":[],"suggestions":[]}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/reviewRegressions11.test.ts:419:30
+    417|     expect(again.createdRevision, JSON.stringify(again)).toBe(true);
+    418|     const r = await put(s.manager, draftB.id, 'req_text', { action: 's…
+    419|     expect(r.status, r.text).toBe(409);
+       |                              ^
+    420|     expect(r.body.current).toMatchObject({ reason: 'basis_superseded',…
+    421|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/22]⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-03, R11-01, R11-02 — другие цепочки и вторая линия 0030 > функция актуальности раскрывает каждое основание тендера до исходных фрагментов
+error: function field_basis_source_fragments(unknown, unknown, uuid, unknown) does not exist
+ ❯ node_modules/pg-pool/index.js:45:11
+ ❯ tests/reviewRegressions11.test.ts:424:15
+    422|
+    423|   it('функция актуальности раскрывает каждое основание тендера до исхо…
+    424|     const r = await db.pool.query<{ kind: string; id: string; problem:…
+       |               ^
+    425|       `WITH b AS (
+    426|          SELECT 'requirement_revision' AS kind, id, field_basis_proble…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { length: 255, severity: 'ERROR', code: '42883', detail: undefined, hint: 'No function matches the given name and argument types. You might need to add explicit type casts.', position: '199', internalPosition: undefined, internalQuery: undefined, where: undefined, schema: undefined, table: undefined, dataType: undefined, constraint: undefined, file: 'parse_func.c', routine: 'ParseFuncOrColumn' }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/22]⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-03, R11-01, R11-02 — другие цепочки и вторая линия 0030 > вторая линия: обсуждение со значением без ссылки на источник и с подменённым значением отвергается (23514)
+AssertionError: expected 'undefined' to be '23514' // Object.is equality
+
+Expected: "23514"
+Received: "undefined"
+
+ ❯ tests/reviewRegressions11.test.ts:466:51
+    464|       }
+    465|     };
+    466|     expect(`${(await write('25', false))?.code}`).toBe('23514');
+       |                                                   ^
+    467|     expect(`${(await write('26', true))?.code}`).toBe('23514');
+    468|     expect(await write('25', true)).toBeNull();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/22]⎯
+
+ FAIL  tests/reviewRegressions11.test.ts > R11-03, R11-01, R11-02 — другие цепочки и вторая линия 0030 > решение не по требованию основанием поля не принимается: API — 409, БД — 23514
+AssertionError: {"draft":{"id":"36de60cc-95ad-4ee7-9686-b76b5b45a705","status":"in_progress","etag":"\"36de60cc-95ad-4ee7-9686-b76b5b45a705:1\"","blocking":1,"issues":[{"kind":"contradiction","fieldKey":"price_rub","label":"Цена, руб.","blocking":true,"message":"противоречие — факт «Цена договора»: значение расходится с действующим фактом"},{"kind":"unverified","fieldKey":"price_rub","label":"Цена, руб.","blocking":false,"message":"не сверено — «Цена, руб.» в приложении «Закрытые основания»: значение одного из полей неизвестно"},{"kind":"unverified","fieldKey":"price_usd","label":"Цена, USD","blocking":false,"message":"не сверено — «Цена, USD» в приложении «Закрытые основания»: значение одного из полей неизвестно"}]},"field":{"fieldId":"687578cf-fe44-4c7b-8224-37adcb0ef044","key":"decision_text","definition":{"key":"decision_text","type":"text","label":"Условие по решению","multiline":true},"applicable":true,"required":false,"version":1,"etag":"\"687578cf-fe44-4c7b-8224-37adcb0ef044:1\"","latest":{"id":"dba1f935-fce2-4f5c-a373-bb94f92b6728","version":1,"value":"по решению импорта","state":"edited","origin":"manual","restricted":false,"wording":null,"suggestionId":null,"previousVersionId":null,"carriedFromVersionId":null,"comment":null,"responsible":null,"customerQuestionId":null,"actor":{"id":"38459201-3a9d-4f9b-8519-529ee2c88259","name":"Руководитель"},"createdAt":"2026-10-06T11:18:10.478Z","bases":[{"text":null,"quote":null,"origin":null,"problem":null,"basisType":"decision","decisionId":"5e678db3-6442-401c-bd23-7154709595a1","fragmentId":null,"evidenceFactId":null,"requirementRevisionId":null,"problemText":null}],"invalidations":[],"stale":false},"systemProposals":[],"conflictingFacts":[],"suggestions":[]}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/reviewRegressions11.test.ts:480:30
+    478|     ).rows[0]!.id;
+    479|     const r = await put(s.manager, draftB.id, 'decision_text', { actio…
+    480|     expect(r.status, r.text).toBe(409);
+       |                              ^
+    481|     expect(r.body.current.reason).toBe('decision_basis_unsupported');
+    482|     const err = await directWrite(draftB, 'decision_text', { column: '…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/22]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  22 failed | 2 passed (24)
+   Start at  16:18:03
+   Duration  7.16s (tests 59%, transform 31%, import 10%)
+

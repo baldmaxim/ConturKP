@@ -298,6 +298,7 @@ export interface IFieldVersionRow {
   suggestion_id: string | null;
   previous_version_id: string | null;
   carried_from_version_id: string | null;
+  value_from_version_id: string | null;
   comment: string | null;
   responsible_user_id: string | null;
   responsible_name: string | null;
@@ -312,7 +313,7 @@ export interface IFieldVersionRow {
 const VERSION_SELECT = (stageExpr: string) => `
   SELECT v.id, v.field_id, v.version, v.value, v.state, v.origin, v.wording_version_id, wv.version AS wording_version, w.title AS wording_title,
          coalesce(EXISTS (SELECT 1 FROM wording_version n WHERE n.wording_id = wv.wording_id AND n.status = 'approved' AND n.version > wv.version), false) AS wording_newer_approved,
-         v.suggestion_id, v.previous_version_id, v.carried_from_version_id, v.comment, v.responsible_user_id, ru.display_name AS responsible_name,
+         v.suggestion_id, v.previous_version_id, v.carried_from_version_id, v.value_from_version_id, v.comment, v.responsible_user_id, ru.display_name AS responsible_name,
          v.customer_question_id, v.actor_user_id, u.display_name AS actor_name, v.created_at,
          coalesce((SELECT jsonb_agg(jsonb_build_object('basisType', b.basis_type, 'fragmentId', b.fragment_id, 'decisionId', b.decision_id,
                                                        'requirementRevisionId', b.requirement_revision_id, 'evidenceFactId', b.evidence_fact_id, 'quote', b.quote,
@@ -376,6 +377,8 @@ export interface IFieldVersionInput {
   wordingVersionId?: string | null;
   suggestionId?: string | null;
   carriedFromVersionId?: string | null;
+  // Версия, значение которой повторяет новая (обсуждение, подтверждение, перенос): права и происхождение — по ней (R11-02).
+  valueFromVersionId?: string | null;
   comment?: string | null;
   responsibleUserId?: string | null;
   customerQuestionId?: string | null;
@@ -402,11 +405,12 @@ export const appendFieldVersion = async (db: Queryable, i: IFieldVersionInput): 
   const id = (
     await db.query<{ id: string }>(
       `INSERT INTO draft_field_version (field_id, draft_id, tender_id, version, value, state, origin, wording_version_id, suggestion_id, previous_version_id,
-                                        carried_from_version_id, comment, responsible_user_id, customer_question_id, actor_user_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id`,
+                                        carried_from_version_id, value_from_version_id, comment, responsible_user_id, customer_question_id, actor_user_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id`,
       [
         i.fieldId, i.draftId, i.tenderId, prev.version + 1, i.value === null ? null : JSON.stringify(i.value), i.state, i.origin, i.wordingVersionId ?? null,
-        i.suggestionId ?? null, prev.id, i.carriedFromVersionId ?? null, i.comment ?? null, i.responsibleUserId ?? null, i.customerQuestionId ?? null, i.userId,
+        i.suggestionId ?? null, prev.id, i.carriedFromVersionId ?? null, i.valueFromVersionId ?? null, i.comment ?? null, i.responsibleUserId ?? null,
+        i.customerQuestionId ?? null, i.userId,
       ],
     )
   ).rows[0]!.id;
@@ -420,12 +424,20 @@ export const appendFieldVersion = async (db: Queryable, i: IFieldVersionInput): 
       ],
     );
   }
-  const fragmentIds = i.bases.filter((b) => b.basisType === 'fragment').map((b) => b.id);
-  const factFragments = (
-    await db.query<{ fragment_id: string }>('SELECT fragment_id FROM evidence_fact_fragment WHERE evidence_fact_id = ANY($1::uuid[])', [i.bases.filter((b) => b.basisType === 'evidence_fact').map((b) => b.id)])
-  ).rows.map((r) => r.fragment_id);
+  // Зависимости — от исходных фрагментов каждого основания (требование, решение, факт — до фрагментов, R11-03).
+  const sourceFragments = i.bases.length
+    ? (
+        await db.query<{ fragment_id: string }>(
+          `SELECT DISTINCT f.id AS fragment_id
+             FROM unnest($1::text[], $2::uuid[]) AS x(t, id),
+                  LATERAL field_basis_source_fragments(CASE WHEN x.t = 'fragment' THEN x.id END, CASE WHEN x.t = 'decision' THEN x.id END,
+                                                       CASE WHEN x.t = 'requirement_revision' THEN x.id END, CASE WHEN x.t = 'evidence_fact' THEN x.id END) AS f(id)`,
+          [i.bases.map((b) => b.basisType), i.bases.map((b) => b.id)],
+        )
+      ).rows.map((r) => r.fragment_id)
+    : [];
   const refs = [
-    ...(await dependenciesOf(db, [...fragmentIds, ...factFragments].map((fragmentId) => ({ side: 'context' as const, objectType: 'fragment' as const, fragmentId })))),
+    ...(await dependenciesOf(db, sourceFragments.map((fragmentId) => ({ side: 'context' as const, objectType: 'fragment' as const, fragmentId })))),
     ...i.bases.filter((b) => b.basisType === 'decision').map((b) => ({ type: 'decision', id: b.id })),
     ...i.bases.filter((b) => b.basisType === 'requirement_revision').map((b) => ({ type: 'requirement_revision', id: b.id })),
   ];
@@ -466,21 +478,29 @@ export interface IActiveFactRow {
   fact_type: string;
   title: string;
   raw_value: string;
+  // Фраза факта с продолжением во фрагменте источника (валюта и масштаб после числа, R11-04); null — не найдена.
+  source_context: string | null;
   status: 'active' | 'conflict';
+  // Проблема основания сейчас (R11-03): исходный документ заменён, хотя граф ещё не перестроен; null — действует.
+  problem: string | null;
   fragment_ids: string[];
 }
 
-// Действующие и конфликтующие факты графа D-018 тендера по типам (смысл `fact:<тип>`).
-export const tenderFactsByType = async (db: Queryable, tenderId: string, types: readonly string[]): Promise<IActiveFactRow[]> => {
+// Действующие и конфликтующие факты графа D-018 тендера по типам (смысл `fact:<тип>`); проблема — относительно этапа.
+export const tenderFactsByType = async (db: Queryable, tenderId: string, types: readonly string[], stageId: string | null = null): Promise<IActiveFactRow[]> => {
   if (types.length === 0) return [];
   return (
     await db.query<IActiveFactRow>(
       `SELECT e.id AS evidence_fact_id, e.fact_type, t.title, e.raw_value, s.status,
+              (SELECT substr(fr.text, strpos(fr.text, e.raw_value), length(e.raw_value) + 160)
+                 FROM evidence_fact_fragment ff JOIN evidence_fragment fr ON fr.id = ff.fragment_id
+                WHERE ff.evidence_fact_id = e.id AND strpos(fr.text, e.raw_value) > 0 ORDER BY ff.ordinal LIMIT 1) AS source_context,
+              field_basis_problem($3::uuid, NULL, NULL, NULL, e.id) AS problem,
               coalesce((SELECT array_agg(ff.fragment_id ORDER BY ff.ordinal) FROM evidence_fact_fragment ff WHERE ff.evidence_fact_id = e.id), '{}') AS fragment_ids
          FROM fact_state s JOIN evidence_fact e ON e.id = s.evidence_fact_id JOIN evidence_fact_type t ON t.code = e.fact_type
         WHERE s.tender_id = $1 AND s.status IN ('active', 'conflict') AND e.fact_type = ANY($2::text[])
         ORDER BY e.fact_type, e.created_at`,
-      [tenderId, [...types]],
+      [tenderId, [...types], stageId],
     )
   ).rows;
 };

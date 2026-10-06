@@ -2,10 +2,13 @@
 // поля (`fact:<тип>`, `custom:<ключ>`) и решение, на котором основано значение. Сравниваются только поля одного
 // контекста — предмет, период, единица, валюта: разный контекст — не противоречие и не совпадение; неизвестный
 // контекст или неизвестное значение — «не сверено», а не совпадение. Противоречие показывается, а не исправляется.
+// Число сверяется с фактом в единицах поля: единица, масштаб и валюта факта определены и переводятся точно, иначе —
+// «не сверено» (R11-04).
 import { compareQuantities } from '../answers/claimNumbers.ts';
 import { canonicalJson } from '../requirements.ts';
 import { dec } from '../money/decimal.ts';
-import { isEmptyValue, type FieldValue } from './values.ts';
+import { factValueInFieldUnits } from './quantity.ts';
+import { isEmptyValue, normalizeNumber, type FieldValue } from './values.ts';
 import type { FieldType, IField } from './schema.ts';
 
 export interface IFieldContextValue {
@@ -34,6 +37,8 @@ export interface IReferenceValue {
   id: string;
   title: string;
   text: string;
+  // Фраза факта с продолжением во фрагменте источника (валюта и масштаб после числа); null — не найдена.
+  context?: string | null;
   status: 'active' | 'conflict';
 }
 
@@ -137,6 +142,13 @@ export const checkConsistency = (observations: readonly IFieldObservation[], ref
         }
         const text = valueText(o);
         if (text === null) continue;
+        const own = o.type === 'number' && typeof o.value === 'string' ? normalizeNumber(o.value) : null;
+        if (own !== null) {
+          const expected = factValueInFieldUnits({ unit: o.unit, currency: o.context.currency || null }, r.text, r.context ?? null);
+          if (expected === null) out.push({ ...base, kind: 'unverified', reason: 'единица, масштаб или валюта факта не определены или отличаются от поля' });
+          else if (!dec(expected).eq(dec(own))) out.push({ ...base, kind: 'contradiction', reason: 'значение расходится с действующим фактом' });
+          continue;
+        }
         const cmp = compareQuantities(text, [r.text]);
         if (cmp.length === 0) {
           if (o.type === 'text' && normText(r.text).includes(normText(text))) continue;

@@ -1,5 +1,5 @@
-# регрессия на коде 11-1: 2026-10-06T14:41:22+05:00, linux x64 Node v24.14.1, artifacts/stage-08a/ui-check.mjs, exit 0
-# ui-check — 2026-10-06T09:41:22.083Z, linux x64, Node v24.14.1, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker, MODEL_PROVIDER=fake
+# регрессия на коде 11-2: 2026-10-06T16:33:03+05:00, linux x64 Node v24.14.1, artifacts/stage-08a/ui-check.mjs, exit 0
+# ui-check — 2026-10-06T11:33:03.155Z, linux x64, Node v24.14.1, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker, MODEL_PROVIDER=fake
 PASS  server + worker готовы
 PASS  вход администратора-руководителя
 PASS  документ ТЗ загружен штатным импортом

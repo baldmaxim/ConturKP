@@ -2,11 +2,13 @@
 // из закреплённого входа; гейт проверяет каждую цитату до записи: фраза — дословная подстрока фрагмента, фрагмент —
 // письменного происхождения (AD-08a-7), число и дата — встречаются в цитате (I10: модель не считает). Не прошедшее
 // гейт не показывается как предложение и считается «ложной цитатой». Значением поля предложение становится только
-// явным принятием человека. Текст фрагментов — недоверенные данные (I16).
+// явным принятием человека. Число — в единицах поля: валюта и масштаб цитаты совпадают или переводятся точно (R11-04).
+// Текст фрагментов — недоверенные данные (I16).
 import { compareQuantities, extractQuantities } from '../answers/claimNumbers.ts';
 import { DOCUMENTARY_ORIGINS } from '../answers/claimChecks.ts';
+import { factValueInFieldUnits, numberInQuotes } from './quantity.ts';
 import type { IField } from './schema.ts';
-import { normalizeNumber, validateValue, type FieldValue } from './values.ts';
+import { validateValue, type FieldValue } from './values.ts';
 import { valueText } from './consistency.ts';
 
 export const FORM_SUGGEST_PROMPT_VERSION = 'form-suggest/11-1';
@@ -79,8 +81,11 @@ export const gateSuggestion = (
   const check = validateValue(field, raw.value);
   const value = check.ok ? check.value : null;
   if (!check.ok) issues.push({ code: 'invalid_value', detail: check.errors.join('; ') });
-  if (value !== null && quotes.length > 0 && (field.type === 'number' || field.type === 'date')) {
-    const text = valueText({ type: field.type, unit: field.type === 'number' ? (field.unit ?? null) : null, value });
+  if (value !== null && quotes.length > 0 && field.type === 'number' && typeof value === 'string') {
+    if (!numberInQuotes(field, value, quotes)) issues.push({ code: 'value_not_in_quote', detail: `${value} ${field.unit ?? ''}`.trim() });
+  }
+  if (value !== null && quotes.length > 0 && field.type === 'date') {
+    const text = valueText({ type: field.type, unit: null, value });
     const cmp = text ? compareQuantities(text, quotes) : [];
     if (cmp.length === 0 || cmp.some((x) => x.status !== 'ok')) issues.push({ code: 'value_not_in_quote', detail: String(text) });
   }
@@ -125,34 +130,22 @@ export const parseFormSuggestions = (
 
 // ---------------------------------------------------------------- Предложение системы из факта
 
-const UNIT_HINTS: [RegExp, string[]][] = [
-  [/^%$/u, ['percent']],
-  [/^мес/u, ['month']],
-  [/^(раб\.?\s*)?дн|^кал\.?\s*дн|^дн/u, ['day']],
-  [/^нед/u, ['week']],
-  [/^(лет|год)/u, ['year']],
-];
-
-// Значение поля из фразы действующего факта того же смысла (правило, не модель; D-031 В-11-6): число — из записи
-// величины без вычислений, дата — из даты фразы, текст — сама фраза. Становится значением только принятием человека.
-export const valueFromFactText = (field: IField, text: string): FieldValue | null => {
+// Значение поля из фразы действующего факта того же смысла (правило, не модель; D-031 В-11-6): число — в единицах поля
+// с проверкой единицы, масштаба и валюты источника (R11-04; `context` — фраза с продолжением во фрагменте), дата — из
+// даты фразы, текст — сама фраза. Становится значением только принятием человека.
+export const valueFromFactText = (field: IField, text: string, context: string | null = null): FieldValue | null => {
   if (field.type === 'text') {
     const check = validateValue(field, text);
     return check.ok ? check.value : null;
   }
-  if (field.type !== 'number' && field.type !== 'date') return null;
-  const quantities = extractQuantities(text);
   if (field.type === 'date') {
-    const d = quantities.find((q) => q.unit === 'date');
+    const d = extractQuantities(text).find((q) => q.unit === 'date');
     if (!d || typeof d.value !== 'string') return null;
     const check = validateValue(field, d.value);
     return check.ok ? check.value : null;
   }
-  const unit = field.unit?.trim().toLowerCase() ?? '';
-  const allowed = UNIT_HINTS.find(([re]) => re.test(unit))?.[1] ?? ['number', 'currency'];
-  const q = quantities.find((x) => allowed.includes(x.unit));
-  const raw = q ? /-?\d[\d\s ]*(?:[.,]\d+)?/u.exec(q.raw)?.[0] : undefined;
-  const n = raw ? normalizeNumber(raw) : null;
+  if (field.type !== 'number') return null;
+  const n = factValueInFieldUnits(field, text, context);
   if (n === null) return null;
   const check = validateValue(field, n);
   return check.ok ? check.value : null;

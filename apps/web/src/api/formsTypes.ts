@@ -70,6 +70,8 @@ export interface IFieldVersion {
   wording: { versionId: string; version: number; title: string; newerApproved: boolean } | null;
   suggestionId: string | null;
   previousVersionId: string | null;
+  // Версия, значение которой повторено (обсуждение, подтверждение, перенос): права и происхождение — по ней.
+  valueFromVersionId: string | null;
   comment: string | null;
   responsible: { id: string; name: string } | null;
   customerQuestionId: string | null;

@@ -1,4 +1,4 @@
-# ui-check — 2026-10-06T09:38:30.194Z, linux x64, Node v24.14.1, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker, демонстрационные формы
+# ui-check — 2026-10-06T11:29:18.921Z, linux x64, Node v24.14.1, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker, демонстрационные формы
 PASS  server + worker готовы
 PASS  вход руководителя
 PASS  руководитель создал демонстрационный шаблон компании, загрузил схему forms/1 файлом и утвердил ревизию

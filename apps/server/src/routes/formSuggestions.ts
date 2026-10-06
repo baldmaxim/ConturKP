@@ -4,7 +4,7 @@
 import { createChatModel } from '@kontur/adapters';
 import type { IAppConfig } from '@kontur/config';
 import { DecideFieldSuggestionRequest, StartFieldSuggestionRunRequest } from '@kontur/contracts';
-import { fieldMap, formatEtag, validateValue } from '@kontur/core';
+import { fieldMap, formatEtag, numberInQuotes, validateValue } from '@kontur/core';
 import {
   appendFieldVersion,
   createFieldSuggestionRun,
@@ -115,6 +115,10 @@ export const formSuggestionsRouter = (pool: Pool, config: IAppConfig): Router =>
           const f = fieldMap(d.field_schema).get(s.field_key);
           const check = f ? validateValue(f, s.value) : null;
           if (!f || !check?.ok) throw conflict('предложение не проходит схему поля', 'suggestion_invalid', draftTarget(d));
+          // Число — из цитаты в единицах поля (валюта и масштаб совпадают или переводятся точно; R11-04, I10).
+          if (f.type === 'number' && typeof check.value === 'string' && !numberInQuotes(f, check.value, s.evidence.map((e) => e.quote))) {
+            throw conflict('числа предложения нет в цитатах в единицах поля', 'suggestion_invalid', draftTarget(d));
+          }
           const bases = s.evidence.map((e) => ({ basisType: 'fragment' as const, id: e.fragmentId, quote: e.quote }));
           await requireUsableBases(client, ctx, d, bases);
           await client.query("SELECT pg_advisory_xact_lock(hashtext('draft_field_version'), hashtext($1::text))", [s.field_id]);

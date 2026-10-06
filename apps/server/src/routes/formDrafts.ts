@@ -2,7 +2,9 @@
 // мастер заполнения, быстрые действия с полем (ввести, выбрать формулировку, принять предложение системы, подтвердить
 // заново, обсудить, очистить), история версий, «заполнено», перенос на новую ревизию. Значение — новая версия с
 // If-Match по версии поля: второй редактор по старой версии получает 412. Заменённые и конфликтующие основания
-// значение не подтверждают (409 basis_superseded / basis_conflict).
+// значение не подтверждают (409 basis_superseded / basis_conflict), в том числе через исходный документ требования,
+// решения или факта (R11-03). Основание и значение, источник которых пользователь не читает целиком, команда не
+// принимает и не копирует (409 restricted_fragments; R11-01, R11-02); скопированное значение ссылается на источник.
 import { CreateDraftRequest, FieldActionRequest, MigrateDraftRequest } from '@kontur/contracts';
 import { allFields, fieldMap, formatEtag, planMigration, validateValue, valueFromFactText, type FieldValue, type IField } from '@kontur/core';
 import {
@@ -10,13 +12,14 @@ import {
   createDraft,
   draftFields,
   fieldBasisProblems,
+  fieldBasisVisibility,
   fieldHistory,
+  fieldVersionVisibility,
   fieldVersionNumber,
   getDraft,
   getTemplateRevision,
   getWordingVersion,
   listDrafts,
-  readableFragments,
   setDraftStatus,
   tenderFactsByType,
   type IAccessContext,
@@ -51,11 +54,26 @@ const keyParam = (req: Request): string => {
   return k;
 };
 
-// Основания новой версии — читаемые автором и действующие (иначе 409 с перечнем и причиной).
+const basisRef = (b: IBasisInput) => ({
+  basisType: b.basisType,
+  fragmentId: b.basisType === 'fragment' ? b.id : null,
+  decisionId: b.basisType === 'decision' ? b.id : null,
+  requirementRevisionId: b.basisType === 'requirement_revision' ? b.id : null,
+  evidenceFactId: b.basisType === 'evidence_fact' ? b.id : null,
+});
+
+const restricted = (d: IDraftRow) => conflict('среди оснований есть то, что вы не можете читать', 'restricted_fragments', draftTarget(d));
+
+// Основания новой версии — решение по требованию, читаемые автором целиком (каждый источник каждого основания) и
+// действующие вместе с исходными документами (иначе 409 с перечнем и причиной).
 export const requireUsableBases = async (db: Queryable, ctx: IAccessContext, d: IDraftRow, bases: readonly IBasisInput[]): Promise<void> => {
-  const fragments = bases.filter((b) => b.basisType === 'fragment').map((b) => b.id);
-  const readable = await readableFragments(db, ctx, fragments);
-  if (fragments.some((f) => !readable.has(f))) throw conflict('среди оснований есть фрагменты, которые вы не можете читать', 'restricted_fragments', draftTarget(d));
+  const decisions = bases.filter((b) => b.basisType === 'decision').map((b) => b.id);
+  if (decisions.length > 0) {
+    const kinds = await db.query<{ id: string }>("SELECT id FROM decision WHERE id = ANY($1::uuid[]) AND decision_type = 'requirement_decision' AND tender_id = $2", [decisions, d.tender_id]);
+    if (kinds.rowCount !== new Set(decisions).size) throw conflict('основанием поля служит решение по требованию этого тендера', 'decision_basis_unsupported', draftTarget(d));
+  }
+  const visible = await fieldBasisVisibility(db, ctx, bases.map(basisRef));
+  if (bases.some((b) => !visible(basisRef(b)))) throw restricted(d);
   const problems = await fieldBasisProblems(db, d.stage_id, bases);
   if (problems.length > 0) {
     const conflicting = problems.some((p) => p.cause === 'fact_conflict');
@@ -129,19 +147,20 @@ const runFieldAction = async (client: PoolClient, ctx: IAccessContext, req: Requ
     }
     case 'accept_fact': {
       const type = f.meaning?.startsWith('fact:') ? f.meaning.slice(5) : null;
-      const fact = type ? (await tenderFactsByType(client, d.tender_id, [type])).find((x) => x.evidence_fact_id === body.evidenceFactId.toLowerCase()) : undefined;
+      const fact = type ? (await tenderFactsByType(client, d.tender_id, [type], d.stage_id)).find((x) => x.evidence_fact_id === body.evidenceFactId.toLowerCase()) : undefined;
       if (!fact) throw conflict('факт не относится к смыслу поля или к этому тендеру', 'fact_not_applicable', draftTarget(d));
-      const readable = await readableFragments(client, ctx, fact.fragment_ids);
-      if (fact.fragment_ids.some((x) => !readable.has(x))) throw conflict('основания факта вы не можете читать', 'restricted_fragments', draftTarget(d));
       const bases: IBasisInput[] = [{ basisType: 'evidence_fact', id: fact.evidence_fact_id }];
       await requireUsableBases(client, ctx, d, bases);
-      const value = valueFromFactText(f, fact.raw_value);
+      // Число — в единицах поля: единица, масштаб и валюта источника определены и переводятся точно (R11-04).
+      const value = valueFromFactText(f, fact.raw_value, fact.source_context);
       if (value === null) throw conflict('из фразы факта нельзя взять значение этого поля', 'fact_value_unavailable', draftTarget(d));
       input = { ...base, value, state: 'accepted', origin: 'system_suggestion', bases };
       break;
     }
     case 'confirm': {
       if (!latest || latest.value === null || latest.state === 'cleared') throw conflict('нечего подтверждать: значения нет', 'nothing_to_confirm', draftTarget(d));
+      // Подтверждается только значение, которое пользователь видит целиком (вместе с источниками скопированного значения).
+      if (!(await fieldVersionVisibility(client, ctx, [latest.id]))(latest.id)) throw restricted(d);
       const bases: IBasisInput[] = latest.bases.map((b) => ({
         basisType: b.basisType,
         id: (b.fragmentId ?? b.decisionId ?? b.requirementRevisionId ?? b.evidenceFactId)!,
@@ -151,10 +170,14 @@ const runFieldAction = async (client: PoolClient, ctx: IAccessContext, req: Requ
       const keepWording = latest.origin === 'approved_wording' && latest.wording_version_id ? await getWordingVersion(client, latest.wording_version_id) : null;
       const wording = keepWording && keepWording.status === 'approved' ? keepWording.version_id : null;
       const origin = wording ? 'approved_wording' : latest.origin === 'system_suggestion' ? 'system_suggestion' : 'manual';
-      input = { ...base, value: checkedValue(f, latest.value), state: 'accepted', origin, wordingVersionId: wording, bases };
+      input = { ...base, value: checkedValue(f, latest.value), state: 'accepted', origin, wordingVersionId: wording, valueFromVersionId: latest.id, bases };
       break;
     }
     case 'discuss': {
+      // Обсуждение повторяет текущее значение — только видимое пользователю целиком; ограничения и происхождение
+      // значения наследуются по ссылке на версию-источник (R11-02).
+      const copied = latest && latest.state !== 'cleared' && latest.value !== null ? latest : null;
+      if (copied && !(await fieldVersionVisibility(client, ctx, [copied.id]))(copied.id)) throw restricted(d);
       if (body.responsibleUserId && !(await client.query('SELECT 1 FROM tender_member WHERE tender_id = $1 AND user_id = $2 AND removed_at IS NULL', [d.tender_id, body.responsibleUserId])).rowCount) {
         throw conflict('ответственный — участник тендера', 'responsible_not_member', draftTarget(d));
       }
@@ -170,7 +193,8 @@ const runFieldAction = async (client: PoolClient, ctx: IAccessContext, req: Requ
       }
       input = {
         ...base,
-        value: latest && latest.state !== 'cleared' ? latest.value : null,
+        value: copied ? copied.value : null,
+        valueFromVersionId: copied ? copied.id : null,
         state: 'needs_discussion',
         origin: 'manual',
         comment: body.comment,
@@ -201,7 +225,7 @@ export const formDraftsRouter = (pool: Pool): Router => {
       const items = [];
       for (const d of drafts) {
         const fields = await draftFields(pool, d);
-        const issues = d.status === 'superseded' ? null : await issuesForDraft(pool, d, fields);
+        const issues = d.status === 'superseded' ? null : await issuesForDraft(pool, ctx, d, fields);
         const required = allFields(d.field_schema).length;
         items.push({
           id: d.id,
@@ -295,7 +319,7 @@ export const formDraftsRouter = (pool: Pool): Router => {
         const d = await loadDraft(client, ctx, uuidParam(req, 'id', 'application_draft'), 'application.fill', true);
         if (requireIfMatch(req, d.id) !== d.row_version) throw versionConflict({ rowVersion: d.row_version });
         if (d.status !== 'in_progress') throw conflict(d.status === 'complete' ? 'приложение уже заполнено' : 'приложение заменено', 'draft_not_in_progress', draftTarget(d));
-        const issues = await issuesForDraft(client, d);
+        const issues = await issuesForDraft(client, ctx, d);
         if (issues.blocking > 0) throw conflict('остались незавершённые пункты', 'incomplete', draftTarget(d), { issues: issues.issues.filter((i) => i.blocking) });
         await setDraftStatus(client, { draftId: d.id, status: 'complete', userId: ctx.principal.userId });
         const after = (await getDraft(client, d.id))!;
@@ -355,6 +379,7 @@ export const formDraftsRouter = (pool: Pool): Router => {
             state: 'carried_over',
             origin: 'carried_over',
             carriedFromVersionId: src.sourceId,
+            valueFromVersionId: src.sourceId,
             userId: ctx.principal.userId,
             bases: src.bases,
           });
@@ -376,7 +401,7 @@ export const formDraftsRouter = (pool: Pool): Router => {
     query(pool, 'forms.issues.read', 'tender_stage', async (ctx, req, res) => {
       const stage = await loadStage(pool, ctx, uuidParam(req, 'id', 'tender_stage'));
       if (!hasTenderCap(ctx, stage.tender_id, 'tender.read')) throw notFound({ entityType: 'tender_stage', entityId: stage.id });
-      res.json({ items: await stageIssues(pool, stage.id) });
+      res.json({ items: await stageIssues(pool, ctx, stage.id) });
     }),
   );
 

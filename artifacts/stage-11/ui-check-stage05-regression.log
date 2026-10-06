@@ -1,5 +1,5 @@
-# регрессия на коде 11-1: 2026-10-06T14:39:32+05:00, linux x64 Node v24.14.1, artifacts/stage-05/ui-check.mjs, exit 0
-# ui-check — 2026-10-06T09:39:32.855Z, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker
+# регрессия на коде 11-2: 2026-10-06T16:31:11+05:00, linux x64 Node v24.14.1, artifacts/stage-05/ui-check.mjs, exit 0
+# ui-check — 2026-10-06T11:31:11.384Z, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker
 PASS  server + worker готовы
 PASS  вход инженера
 PASS  оригинал, экспорт RDWeb и замороженный состав этапа

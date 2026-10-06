@@ -1,7 +1,9 @@
 // Представление приложения этапа 11 (D-031; проект §3, §5): поля с последней версией, происхождением, основаниями,
 // «устарело» (отметка инвалидации или заменённое основание сейчас), предложения системы из фактов и модели, список
-// незавершённых пунктов со сверкой полей одного смысла в одном контексте по всем приложениям этапа. Производный текст
-// — только при чтении всех оснований (R08-02).
+// незавершённых пунктов со сверкой полей одного смысла в одном контексте по всем приложениям этапа. Значение версии и
+// её комментарий — только при чтении всех источников всех оснований, включая версии, из которых значение скопировано
+// (R08-02; Review 11-1 R11-01, R11-02; fieldBasisAccess.ts). Факт, исходный документ которого заменён, не предлагается и
+// не сверяется (R11-03); число факта — в единицах поля (R11-04).
 import {
   allFields,
   applicability,
@@ -19,6 +21,7 @@ import {
 } from '@kontur/core';
 import {
   draftFields,
+  fieldVersionVisibility,
   listDrafts,
   listFieldSuggestions,
   readableFragments,
@@ -81,16 +84,18 @@ const stageObservations = async (db: Queryable, stageId: string, tenderId: strin
       });
     }
   }
-  const facts = await tenderFactsByType(db, tenderId, [...factTypes]);
-  const references: IReferenceValue[] = facts.map((x) => ({ groupKey: `fact:${x.fact_type}`, kind: 'fact', id: x.evidence_fact_id, title: x.title, text: x.raw_value, status: x.status }));
+  // Действующие факты; факт с заменённым исходным документом (граф ещё не перестроен) — не действующий (R11-03).
+  const facts = (await tenderFactsByType(db, tenderId, [...factTypes], stageId)).filter((x) => x.status === 'conflict' || x.problem === null);
+  const references: IReferenceValue[] = facts.map((x) => ({ groupKey: `fact:${x.fact_type}`, kind: 'fact', id: x.evidence_fact_id, title: x.title, text: x.raw_value, context: x.source_context, status: x.status }));
   return { observations, references };
 };
 
-const statusOf = (v: IFieldVersionRow | null): IFieldStatus => ({
+// Комментарий обсуждения — текст о значении: показывается только тому, кто видит версию (R11-02).
+const statusOf = (v: IFieldVersionRow | null, visible: (versionId: string) => boolean): IFieldStatus => ({
   value: valueOfVersion(v),
   state: v?.state ?? null,
   stale: v ? v.invalidations.length > 0 || v.bases.some((b) => b.problem !== null) : false,
-  comment: v?.comment ?? null,
+  comment: v && visible(v.id) ? v.comment : null,
   responsibleName: v?.responsible_name ?? null,
 });
 
@@ -100,20 +105,21 @@ export interface IDraftIssuesResult {
 }
 
 // Список незавершённых пунктов приложения: правила схемы, состояния полей и сверка по этапу.
-export const issuesForDraft = async (db: Queryable, draft: IDraftRow, fields?: Awaited<ReturnType<typeof draftFields>>): Promise<IDraftIssuesResult> => {
+export const issuesForDraft = async (db: Queryable, ctx: IAccessContext, draft: IDraftRow, fields?: Awaited<ReturnType<typeof draftFields>>): Promise<IDraftIssuesResult> => {
   const list = fields ?? (await draftFields(db, draft));
-  const statuses = new Map(list.map((f) => [f.field_key, statusOf(f.latest)]));
+  const visible = await fieldVersionVisibility(db, ctx, list.flatMap((f) => (f.latest ? [f.latest.id] : [])));
+  const statuses = new Map(list.map((f) => [f.field_key, statusOf(f.latest, visible)]));
   const { observations, references } = await stageObservations(db, draft.stage_id, draft.tender_id);
   const findings = checkConsistency(observations, references);
   const issues = draftIssues(draft.field_schema, statuses, findings, draft.id);
   return { issues, blocking: issues.filter((i) => i.blocking).length };
 };
 
-export const stageIssues = async (db: Queryable, stageId: string) => {
+export const stageIssues = async (db: Queryable, ctx: IAccessContext, stageId: string) => {
   const drafts = (await listDrafts(db, stageId)).filter((d) => d.status !== 'superseded');
   const out = [];
   for (const d of drafts) {
-    const r = await issuesForDraft(db, d);
+    const r = await issuesForDraft(db, ctx, d);
     out.push({ draftId: d.id, title: d.title, status: d.status, isDemo: d.is_demo, blocking: r.blocking, issues: r.issues });
   }
   return out;
@@ -130,6 +136,7 @@ const versionView = (v: IFieldVersionRow, visible: boolean) => ({
   suggestionId: v.suggestion_id,
   previousVersionId: v.previous_version_id,
   carriedFromVersionId: v.carried_from_version_id,
+  valueFromVersionId: v.value_from_version_id,
   comment: visible ? v.comment : null,
   responsible: v.responsible_user_id ? { id: v.responsible_user_id, name: v.responsible_name } : null,
   customerQuestionId: v.customer_question_id,
@@ -146,24 +153,21 @@ export const visibilityFor = async (db: Queryable, ctx: IAccessContext, fragment
 };
 
 export const historyView = async (db: Queryable, ctx: IAccessContext, rows: readonly IFieldVersionRow[]) => {
-  const visible = await visibilityFor(db, ctx, rows.flatMap((v) => v.bases.map((b) => b.fragmentId).filter((x): x is string => !!x)));
-  return rows.map((v) => versionView(v, visible(v.bases.map((b) => b.fragmentId))));
+  const visible = await fieldVersionVisibility(db, ctx, rows.map((v) => v.id));
+  return rows.map((v) => versionView(v, visible(v.id)));
 };
 
 // Полное представление приложения для мастера.
 export const draftView = async (db: Queryable, ctx: IAccessContext, draft: IDraftRow) => {
   const fields = await draftFields(db, draft);
   const suggestions = await listFieldSuggestions(db, draft.id);
-  const facts = await tenderFactsByType(db, draft.tender_id, factTypesOf(draft.field_schema));
-  const fragmentIds = [
-    ...fields.flatMap((f) => f.latest?.bases.map((b) => b.fragmentId).filter((x): x is string => !!x) ?? []),
-    ...suggestions.flatMap((s) => s.evidence.map((e) => e.fragmentId)),
-    ...facts.flatMap((x) => x.fragment_ids),
-  ];
+  const facts = await tenderFactsByType(db, draft.tender_id, factTypesOf(draft.field_schema), draft.stage_id);
+  const fragmentIds = [...suggestions.flatMap((s) => s.evidence.map((e) => e.fragmentId)), ...facts.flatMap((x) => x.fragment_ids)];
   const visible = await visibilityFor(db, ctx, fragmentIds);
+  const versionVisible = await fieldVersionVisibility(db, ctx, fields.flatMap((f) => (f.latest ? [f.latest.id] : [])));
   const values = new Map(fields.map((f) => [f.field_key, valueOfVersion(f.latest)]));
   const app = applicability(draft.field_schema, values);
-  const issues = await issuesForDraft(db, draft, fields);
+  const issues = await issuesForDraft(db, ctx, draft, fields);
   const byKey = new Map(fields.map((f) => [f.field_key, f]));
   const sections = draft.field_schema.sections.map((s) => ({
     key: s.key,
@@ -173,10 +177,17 @@ export const draftView = async (db: Queryable, ctx: IAccessContext, draft: IDraf
       const f = byKey.get(def.key)!;
       const latest = f.latest;
       const meaningType = def.meaning?.startsWith('fact:') && !def.context?.subject && !def.context?.period ? def.meaning.slice(5) : null;
+      // Предложение — из действующего факта с действующим исходным документом; число — в единицах поля, иначе нет.
       const proposals = meaningType
         ? facts
-            .filter((x) => x.fact_type === meaningType && x.status === 'active')
-            .map((x) => ({ evidenceFactId: x.evidence_fact_id, title: x.title, text: visible(x.fragment_ids) ? x.raw_value : null, value: visible(x.fragment_ids) ? valueFromFactText(def, x.raw_value) : null, restricted: !visible(x.fragment_ids) }))
+            .filter((x) => x.fact_type === meaningType && x.status === 'active' && x.problem === null)
+            .map((x) => ({
+              evidenceFactId: x.evidence_fact_id,
+              title: x.title,
+              text: visible(x.fragment_ids) ? x.raw_value : null,
+              value: visible(x.fragment_ids) ? valueFromFactText(def, x.raw_value, x.source_context) : null,
+              restricted: !visible(x.fragment_ids),
+            }))
             .filter((p) => p.restricted || p.value !== null)
         : [];
       return {
@@ -187,7 +198,7 @@ export const draftView = async (db: Queryable, ctx: IAccessContext, draft: IDraf
         required: app.required.has(def.key),
         version: latest?.version ?? 0,
         etag: formatEtag(f.field_id, latest?.version ?? 0),
-        latest: latest ? versionView(latest, visible(latest.bases.map((b) => b.fragmentId))) : null,
+        latest: latest ? versionView(latest, versionVisible(latest.id)) : null,
         systemProposals: proposals,
         conflictingFacts: meaningType ? facts.filter((x) => x.fact_type === meaningType && x.status === 'conflict').map((x) => ({ evidenceFactId: x.evidence_fact_id, title: x.title })) : [],
         suggestions: suggestions

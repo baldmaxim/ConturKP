@@ -7,7 +7,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import PizZip from 'pizzip';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { compareWithCalculation, DEMO_MARK, TEST_MARK } from '../packages/core/src/index.ts';
 import { inspectPdf } from '../packages/adapters/src/index.ts';
 import { buildEcon, closeEcon, type IEcon } from './economicsFixtures.ts';
@@ -17,6 +17,10 @@ import { createMailbox, eml, importEml, linkMail, setMailAccess } from './mailFi
 import { completeDraft, requireConverter, SAMPLES, templateWithMarkedSample, uploadSample, uploadSampleFile, type ICandidateView } from './releaseFixtures.ts';
 import { workerWithChat } from './requirementFixtures.ts';
 import { fixScope, fragmentIdOf, seedEvidenceRun, setWorkingSet, uploadDocument } from './searchFixtures.ts';
+
+// Сборки и конвертации LibreOffice на Windows под нагрузкой дольше 30 с (Review 12-1: тест двух сборок превысил предел,
+// следующий получил `candidate_assembling`): предел теста — с запасом, ожидания не меняются.
+vi.setConfig({ testTimeout: 300_000, hookTimeout: 300_000 });
 
 const MAIL_ACCESS = ['mail.read', 'mail.import', 'mail.link'];
 const SECRET = 'Закрытое условие письма для комплекта';

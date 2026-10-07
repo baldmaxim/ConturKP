@@ -116,6 +116,18 @@ export const plannedFieldVersionIds = async (db: Queryable, drafts: readonly IDr
   return out;
 };
 
+// Версии полей, которые нельзя закрепить (R12-02): проблема основания по всей цепочке копий (0031) или отметка
+// инвалидации у версии и у источников неподтверждённой копии — то же «устарело», что видит пользователь.
+export const staleFieldVersions = async (db: Queryable, stageId: string, ids: readonly string[]): Promise<string[]> =>
+  ids.length === 0
+    ? []
+    : (
+        await db.query<{ id: string }>(
+          'SELECT v.id FROM unnest($2::uuid[]) AS v(id) WHERE field_version_basis_problem($1, v.id) IS NOT NULL OR field_version_invalidated(v.id)',
+          [stageId, ids],
+        )
+      ).rows.map((r) => r.id);
+
 export const createCandidate = async (db: Queryable, i: ICreateCandidateInput): Promise<CreateCandidateResult> => {
   await lockTenderStages(db, i.tenderId, [i.stageId]);
   if (i.draftIds.length === 0 && i.attachmentRevisionIds.length === 0) return { ok: false, reason: 'nothing_selected' };
@@ -163,6 +175,9 @@ export const createCandidate = async (db: Queryable, i: ICreateCandidateInput): 
     await db.query<{ id: string }>('SELECT d.id FROM decision d WHERE d.stage_id = $1 AND NOT EXISTS (SELECT 1 FROM decision n WHERE n.supersedes_decision_id = d.id) ORDER BY d.created_at, d.id', [i.stageId])
   ).rows.map((r) => r.id);
   const fieldVersions = await plannedFieldVersionIds(db, drafts);
+  // «Заполнено» в статусе не значит «актуально сейчас»: основание могло быть заменено после отметки (R12-02).
+  const stale = await staleFieldVersions(db, i.stageId, fieldVersions);
+  if (stale.length > 0) return { ok: false, reason: 'drafts_not_complete', detail: { staleFieldVersionIds: stale } };
   const inputs: { kind: ICandidateInputRow['kind']; ids: string[] }[] = [
     { kind: 'review_run', ids: run ? [run.id] : [] },
     { kind: 'decision', ids: decisions },
@@ -202,23 +217,39 @@ export interface ICandidateEvent {
   affects: boolean;
 }
 
-export const candidateEventsAfter = async (db: Queryable, c: IReleaseCandidateRow): Promise<ICandidateEvent[]> => {
+// Событие касается кандидата (D-032 В-12-9): любое, кроме правки поля; правка поля — только приложения кандидата.
+const AFFECTS_SQL = `(e.event_type <> 'draft_field_changed'
+   OR EXISTS (SELECT 1 FROM draft_field_version v JOIN candidate_input ci ON ci.candidate_id = $3 AND ci.kind = 'application_draft' AND ci.ref_id = v.draft_id
+               WHERE v.id = e.ref_id))`;
+const baselineOf = (c: IReleaseCandidateRow): number => Math.min(c.calculation_baseline_version, c.content_baseline_version);
+
+// События после базы для показа: не больше `limit`, касающиеся кандидата — в первую очередь, затем по порядку.
+// Актуальность по ним не считается (R12-03) — для неё `candidateIsCurrent`.
+export const candidateEventsAfter = async (db: Queryable, c: IReleaseCandidateRow, limit = 200): Promise<ICandidateEvent[]> => {
   const rows = (
-    await db.query<{ seq: number; event_type: string; created_at: Date; ref_id: string; draft_id: string | null }>(
-      `SELECT e.seq, e.event_type, e.created_at, e.ref_id,
-              CASE WHEN e.event_type = 'draft_field_changed' THEN (SELECT v.draft_id FROM draft_field_version v WHERE v.id = e.ref_id) END AS draft_id
-         FROM stage_input_event e WHERE e.stage_id = $1 AND e.seq > $2 ORDER BY e.seq LIMIT 200`,
-      [c.stage_id, Math.min(c.calculation_baseline_version, c.content_baseline_version)],
+    await db.query<{ seq: number; event_type: string; created_at: Date; affects: boolean }>(
+      `SELECT e.seq, e.event_type, e.created_at, ${AFFECTS_SQL} AS affects
+         FROM stage_input_event e WHERE e.stage_id = $1 AND e.seq > $2 ORDER BY affects DESC, e.seq LIMIT $4`,
+      [c.stage_id, baselineOf(c), c.id, limit],
     )
   ).rows;
-  const drafts = new Set((await db.query<{ ref_id: string }>("SELECT ref_id FROM candidate_input WHERE candidate_id = $1 AND kind = 'application_draft'", [c.id])).rows.map((r) => r.ref_id));
-  return rows.map((r) => ({
-    seq: Number(r.seq),
-    type: r.event_type,
-    createdAt: r.created_at,
-    affects: r.event_type === 'draft_field_changed' ? r.draft_id !== null && drafts.has(r.draft_id) : true,
-  }));
+  return rows.map((r) => ({ seq: Number(r.seq), type: r.event_type, createdAt: r.created_at, affects: r.affects })).sort((a, b) => a.seq - b.seq);
 };
+
+// Кандидат актуален, если после базы нет ни одного касающегося его события — по всем событиям, без ограничения списка
+// (R12-03: после 200 правок чужого приложения правка своего поля терялась).
+export const candidateIsCurrent = async (db: Queryable, c: IReleaseCandidateRow): Promise<boolean> =>
+  !(
+    await db.query<{ affected: boolean }>(`SELECT EXISTS (SELECT 1 FROM stage_input_event e WHERE e.stage_id = $1 AND e.seq > $2 AND ${AFFECTS_SQL}) AS affected`, [
+      c.stage_id,
+      baselineOf(c),
+      c.id,
+    ])
+  ).rows[0]!.affected;
+
+// Число событий после базы (для пометки «показаны не все»).
+export const candidateEventsAfterCount = async (db: Queryable, c: IReleaseCandidateRow): Promise<number> =>
+  (await db.query<{ n: number }>('SELECT count(*)::int AS n FROM stage_input_event WHERE stage_id = $1 AND seq > $2', [c.stage_id, baselineOf(c)])).rows[0]!.n;
 
 // ---------------------------------------------------------------- Завершение сборки
 

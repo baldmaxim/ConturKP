@@ -150,7 +150,7 @@ export const CandidateDetail: FC<ICandidateDetailProps> = ({ candidateId, onChan
       ) : null}
       {(c.eventsAfter ?? []).length ? (
         <details className={styles.details} open={c.current === false}>
-          <summary>{`События после сборки: ${c.eventsAfter!.length}`}</summary>
+          <summary>{`События после сборки: ${c.eventsAfterTotal ?? c.eventsAfter!.length}${(c.eventsAfterTotal ?? 0) > c.eventsAfter!.length ? ` (показаны ${c.eventsAfter!.length}, касающиеся комплекта — первыми)` : ''}`}</summary>
           <ul className={styles.notes}>
             {c.eventsAfter!.map((e) => (
               <li key={e.seq} className={e.affects ? undefined : styles.muted}>

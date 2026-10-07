@@ -245,7 +245,7 @@ export const CONFIG_KEYS: IConfigKey[] = [
   { name: 'ANSWER_MAX_REPAIRS', secret: false, required: false, purpose: 'исправлений черновика ответа, 0–1 (AD-08a-6), по умолчанию 1' },
   { name: 'ANSWER_PACKET_LIMIT', secret: false, required: false, purpose: 'оснований в пакете ответа, 1–30, по умолчанию 12' },
   { name: 'SEARCH_SEMANTIC_DEADLINE_SECONDS', secret: false, required: false, purpose: 'срок смысловой ветки поиска, по умолчанию 60' },
-  { name: 'SOFFICE_PATH', secret: false, required: false, purpose: 'путь к soffice LibreOffice для PDF-превью комплекта (этап 12); без него — поиск в PATH и в каталоге установки Windows' },
+  { name: 'SOFFICE_PATH', secret: false, required: false, purpose: 'путь к soffice LibreOffice для PDF-превью комплекта (этап 12; на Windows — soffice.com); без него — поиск в PATH и в каталоге установки Windows' },
   { name: 'OFFICE_CONVERT_TIMEOUT_SECONDS', secret: false, required: false, purpose: 'предел конвертации одного файла в PDF, по умолчанию 120' },
   { name: 'MAILHUB_URL', secret: false, required: false, purpose: 'интеграция MailHub (этап 07)' },
   { name: 'MAILHUB_TOKEN', secret: true, required: false, purpose: 'интеграция MailHub (этап 07)' },

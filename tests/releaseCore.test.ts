@@ -2,7 +2,7 @@
 // поля, таблицы, условные блоки), вывод значений, генерация DOCX/XLSX по размеченной копии, конвертация LibreOffice,
 // разбор PDF (текст, кириллица, шрифты), подмена шрифтов, детерминированность, сверка чисел с расчётом, манифест.
 import { readFileSync } from 'node:fs';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   checkMarkup,
   compareWithCalculation,
@@ -33,6 +33,10 @@ import {
 } from '../packages/adapters/src/index.ts';
 import { demoSchema } from './formsFixtures.ts';
 import { requireConverter } from './releaseFixtures.ts';
+
+// Сборки и конвертации LibreOffice на Windows под нагрузкой дольше 30 с (Review 12-1: тест двух сборок превысил предел,
+// следующий получил `candidate_assembling`): предел теста — с запасом, ожидания не меняются.
+vi.setConfig({ testTimeout: 300_000, hookTimeout: 300_000 });
 
 const letterMarked = readFileSync('docs/forms/samples/demo-kp-letter.marked.docx');
 const letterOriginal = readFileSync('docs/forms/samples/demo-kp-letter.original.docx');

@@ -6,20 +6,37 @@ import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { delimiter, join } from 'node:path';
+import { join, posix, win32 } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { OfficeError, type IOfficeConverter } from '@kontur/adapters';
 
-const WINDOWS_DEFAULTS = ['C:\\Program Files\\LibreOffice\\program\\soffice.exe', 'C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe'];
+// Windows: консольный вход `soffice.com` — у оконного `soffice.exe` определение версии не завершалось (R12-01: 120 с
+// тайм-аута на LibreOffice 26.8.0.3, через `soffice.com` того же пакета — около 2,5 с). Поэтому `.com` выбирается и в
+// PATH, и в стандартном каталоге, и вместо настроенного `soffice.exe`, если рядом есть `soffice.com`.
+const WINDOWS_DIRS = ['C:\\Program Files\\LibreOffice\\program', 'C:\\Program Files (x86)\\LibreOffice\\program'];
+
+export interface ISofficeEnv {
+  platform: NodeJS.Platform;
+  pathEnv: string;
+  exists: (path: string) => boolean;
+}
+
+const hostEnv = (): ISofficeEnv => ({ platform: process.platform, pathEnv: process.env.PATH ?? '', exists: existsSync });
 
 // Путь к soffice: настройка, затем PATH, затем стандартный каталог установки Windows.
-export const findSoffice = (configured: string | null): string | null => {
-  if (configured) return existsSync(configured) ? configured : null;
-  const names = process.platform === 'win32' ? ['soffice.exe', 'soffice.com'] : ['soffice', 'libreoffice'];
-  for (const dir of (process.env.PATH ?? '').split(delimiter).filter(Boolean)) {
-    for (const n of names) if (existsSync(join(dir, n))) return join(dir, n);
+export const findSoffice = (configured: string | null, env: ISofficeEnv = hostEnv()): string | null => {
+  const p = env.platform === 'win32' ? win32 : posix;
+  const preferCom = (file: string): string => {
+    if (env.platform !== 'win32' || !/soffice\.exe$/iu.test(file)) return file;
+    const com = p.join(p.dirname(file), 'soffice.com');
+    return env.exists(com) ? com : file;
+  };
+  if (configured) return env.exists(configured) ? preferCom(configured) : null;
+  const names = env.platform === 'win32' ? ['soffice.com', 'soffice.exe'] : ['soffice', 'libreoffice'];
+  const dirs = [...env.pathEnv.split(p.delimiter).filter(Boolean), ...(env.platform === 'win32' ? WINDOWS_DIRS : [])];
+  for (const dir of dirs) {
+    for (const n of names) if (env.exists(p.join(dir, n))) return p.join(dir, n);
   }
-  if (process.platform === 'win32') return WINDOWS_DEFAULTS.find((p) => existsSync(p)) ?? null;
   return null;
 };
 

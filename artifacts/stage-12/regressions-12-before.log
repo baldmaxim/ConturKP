@@ -1,0 +1,194 @@
+# 2026-10-07T12:13:40+05:00, linux x64 Node v24.14.1; регрессии Review 12-1 на продукте fedca66 (исправления R12-01…R12-03 и миграция 0033 убраны на время прогона; HEAD 4d35752 — запись ревью), однопоточно; ожидается: R12-01…R12-03 FAIL, контроль R12-02 PASS
+
+ RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
+
+ × tests/reviewRegressions12.test.ts > R12-01 — вход LibreOffice на Windows > в PATH есть и soffice.exe, и soffice.com — выбирается soffice.com 13ms
+   → expected '/usr/bin/soffice' to be 'C:\LO\program\soffice.com' // Object.is equality
+ × tests/reviewRegressions12.test.ts > R12-01 — вход LibreOffice на Windows > настройка указывает на soffice.exe, рядом есть soffice.com — используется soffice.com 8ms
+   → expected null to be 'C:\LO\program\soffice.com' // Object.is equality
+ × tests/reviewRegressions12.test.ts > R12-01 — вход LibreOffice на Windows > стандартный каталог установки без PATH — soffice.com 6ms
+   → expected '/usr/bin/soffice' to be 'C:\Program Files\LibreOffice\program\…' // Object.is equality
+ × tests/reviewRegressions12.test.ts > R12-01 — вход LibreOffice на Windows > Linux — soffice из PATH; на Windows без соседнего soffice.com — остаётся настроенный файл 5ms
+   → expected null to be 'C:\LO\program\soffice.exe' // Object.is equality
+ ✓ tests/reviewRegressions12.test.ts > R12-02 — комплект не собирается по устаревшему значению > контроль: новая редакция документа, который не является основанием, сборке не мешает 1601ms
+ × tests/reviewRegressions12.test.ts > R12-02 — комплект не собирается по устаревшему значению > прямое основание заменено: приложение «заполнено», значение «устарело» — 409; новое значение по новой редакции и «заполнено» — собирается 580ms
+   → {"id":"de0b8567-bab6-46f1-97bf-94d09003ae21","stageId":"770c0df9-f398-401a-b02c-cdfae6ee7520","tenderId":"4ea7d729-0b6f-4a84-adf0-ee964f4e1a32","seq":2,"mode":"test","status":"assembling","createdAt":"2026-10-07T07:13:49.217Z","finishedAt":null,"createdBy":{"id":"b36033af-0c9f-45fa-b454-4094cb680802","name":"Инженер 1"},"supersededBy":null,"restricted":false,"inputs":{"calculationRevision":{"id":"d24c0357-291b-48b0-bd93-5cc6c97bba9f","seq":2,"kind":"provisional"},"evidenceScopeId":"3df64d0e-d674-475e-a2b8-fdca0e1b856e","reviewRun":null,"decisions":0,"drafts":[{"id":"623a0894-e5a2-464a-95cf-073a93940244","title":"Прямое основание","templateName":"Письмо КП (Review 12-1)","revisionSeq":1,"isDemo":true}],"attachments":[],"fieldVersions":8,"baselines":{"calculation":33,"content":33},"inputsSha256":"61a282e156e622212b4f183485af0c5c16a3e31dc92f3e239ec7a4f358fc98ac"},"failure":null,"converterVersion":null,"contentHash":null,"checks":[],"files":[],"previews":[],"notes":[],"knownProductionBlockers":[],"eventsAfter":[],"current":true}: expected 201 to be 409 // Object.is equality
+ × tests/reviewRegressions12.test.ts > R12-02 — комплект не собирается по устаревшему значению > косвенное основание (R11-03): решение по требованию, исходный документ требования заменён — 409 1654ms
+   → {"id":"f49f4388-863e-4b57-89bd-4a13c597a420","stageId":"770c0df9-f398-401a-b02c-cdfae6ee7520","tenderId":"4ea7d729-0b6f-4a84-adf0-ee964f4e1a32","seq":3,"mode":"test","status":"assembling","createdAt":"2026-10-07T07:13:50.865Z","finishedAt":null,"createdBy":{"id":"b36033af-0c9f-45fa-b454-4094cb680802","name":"Инженер 1"},"supersededBy":null,"restricted":false,"inputs":{"calculationRevision":{"id":"d24c0357-291b-48b0-bd93-5cc6c97bba9f","seq":2,"kind":"provisional"},"evidenceScopeId":"3df64d0e-d674-475e-a2b8-fdca0e1b856e","reviewRun":null,"decisions":1,"drafts":[{"id":"4b899438-de76-4585-9e6c-5821cda5dee5","title":"Решение по требованию","templateName":"Письмо КП (Review 12-1)","revisionSeq":1,"isDemo":true}],"attachments":[],"fieldVersions":8,"baselines":{"calculation":44,"content":44},"inputsSha256":"50a68eae25bd119ae2cd6c4750db00711eefbb8f33ff411598be288373a576b3"},"failure":null,"converterVersion":null,"contentHash":null,"checks":[],"files":[],"previews":[],"notes":[],"knownProductionBlockers":[],"eventsAfter":[],"current":true}: expected 201 to be 409 // Object.is equality
+ × tests/reviewRegressions12.test.ts > R12-02 — комплект не собирается по устаревшему значению > подтверждённая копия (R11-05): «Подтвердить» значения по фрагменту, документ заменён — 409 1363ms
+   → {"id":"d987ca8a-8781-49d9-8a91-afdc1487788f","stageId":"770c0df9-f398-401a-b02c-cdfae6ee7520","tenderId":"4ea7d729-0b6f-4a84-adf0-ee964f4e1a32","seq":4,"mode":"test","status":"assembling","createdAt":"2026-10-07T07:13:52.229Z","finishedAt":null,"createdBy":{"id":"b36033af-0c9f-45fa-b454-4094cb680802","name":"Инженер 1"},"supersededBy":null,"restricted":false,"inputs":{"calculationRevision":{"id":"d24c0357-291b-48b0-bd93-5cc6c97bba9f","seq":2,"kind":"provisional"},"evidenceScopeId":"3df64d0e-d674-475e-a2b8-fdca0e1b856e","reviewRun":null,"decisions":1,"drafts":[{"id":"f11da0b5-c875-45a4-8879-948bdde795eb","title":"Подтверждённая копия","templateName":"Письмо КП (Review 12-1)","revisionSeq":1,"isDemo":true}],"attachments":[],"fieldVersions":8,"baselines":{"calculation":55,"content":55},"inputsSha256":"36036559bdee20b32495dc1e083717922c9846172798668cf5af088647e6e63e"},"failure":null,"converterVersion":null,"contentHash":null,"checks":[],"files":[],"previews":[],"notes":[],"knownProductionBlockers":[],"eventsAfter":[],"current":true}: expected 201 to be 409 // Object.is equality
+ × tests/reviewRegressions12.test.ts > R12-02 — комплект не собирается по устаревшему значению > вторая линия БД: вход-версия с заменённым основанием и приложение с ней в транзакции создания — 23514 815ms
+   → expected 'ok' to be '23514' // Object.is equality
+ × tests/reviewRegressions12.test.ts > R12-03 — актуальность по всем событиям после базы > 200 правок чужого приложения — комплект актуален (контроль); затем правка использованного поля — неактуален в карточке и списке 8186ms
+   → expected true to be false // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/reviewRegressions12.test.ts > R12-01 — вход LibreOffice на Windows > в PATH есть и soffice.exe, и soffice.com — выбирается soffice.com
+AssertionError: expected '/usr/bin/soffice' to be 'C:\LO\program\soffice.com' // Object.is equality
+
+Expected: "C:\LO\program\soffice.com"
+Received: "/usr/bin/soffice"
+
+ ❯ tests/reviewRegressions12.test.ts:118:106
+    116|
+    117|   it('в PATH есть и soffice.exe, и soffice.com — выбирается soffice.co…
+    118|     expect(findSoffice(null, win([`${DIR}\\soffice.exe`, `${DIR}\\soff…
+       |                                                                                                          ^
+    119|   });
+    120|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  tests/reviewRegressions12.test.ts > R12-01 — вход LibreOffice на Windows > настройка указывает на soffice.exe, рядом есть soffice.com — используется soffice.com
+AssertionError: expected null to be 'C:\LO\program\soffice.com' // Object.is equality
+
+- Expected:
+"C:\\LO\\program\\soffice.com"
+
++ Received:
+null
+
+ ❯ tests/reviewRegressions12.test.ts:122:101
+    120|
+    121|   it('настройка указывает на soffice.exe, рядом есть soffice.com — исп…
+    122|     expect(findSoffice(`${DIR}\\soffice.exe`, win([`${DIR}\\soffice.ex…
+       |                                                                                                     ^
+    123|   });
+    124|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  tests/reviewRegressions12.test.ts > R12-01 — вход LibreOffice на Windows > стандартный каталог установки без PATH — soffice.com
+AssertionError: expected '/usr/bin/soffice' to be 'C:\Program Files\LibreOffice\program\…' // Object.is equality
+
+Expected: "C:\Program Files\LibreOffice\program\soffice.com"
+Received: "/usr/bin/soffice"
+
+ ❯ tests/reviewRegressions12.test.ts:126:84
+    124|
+    125|   it('стандартный каталог установки без PATH — soffice.com', () => {
+    126|     expect(findSoffice(null, win([`${DEF}\\soffice.exe`, `${DEF}\\soff…
+       |                                                                                    ^
+    127|   });
+    128|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ FAIL  tests/reviewRegressions12.test.ts > R12-01 — вход LibreOffice на Windows > Linux — soffice из PATH; на Windows без соседнего soffice.com — остаётся настроенный файл
+AssertionError: expected null to be 'C:\LO\program\soffice.exe' // Object.is equality
+
+- Expected:
+"C:\\LO\\program\\soffice.exe"
+
++ Received:
+null
+
+ ❯ tests/reviewRegressions12.test.ts:131:78
+    129|   it('Linux — soffice из PATH; на Windows без соседнего soffice.com — …
+    130|     expect(findSoffice(null, { platform: 'linux', pathEnv: '/usr/local…
+    131|     expect(findSoffice(`${DIR}\\soffice.exe`, win([`${DIR}\\soffice.ex…
+       |                                                                              ^
+    132|   });
+    133| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+
+ FAIL  tests/reviewRegressions12.test.ts > R12-02 — комплект не собирается по устаревшему значению > прямое основание заменено: приложение «заполнено», значение «устарело» — 409; новое значение по новой редакции и «заполнено» — собирается
+AssertionError: {"id":"de0b8567-bab6-46f1-97bf-94d09003ae21","stageId":"770c0df9-f398-401a-b02c-cdfae6ee7520","tenderId":"4ea7d729-0b6f-4a84-adf0-ee964f4e1a32","seq":2,"mode":"test","status":"assembling","createdAt":"2026-10-07T07:13:49.217Z","finishedAt":null,"createdBy":{"id":"b36033af-0c9f-45fa-b454-4094cb680802","name":"Инженер 1"},"supersededBy":null,"restricted":false,"inputs":{"calculationRevision":{"id":"d24c0357-291b-48b0-bd93-5cc6c97bba9f","seq":2,"kind":"provisional"},"evidenceScopeId":"3df64d0e-d674-475e-a2b8-fdca0e1b856e","reviewRun":null,"decisions":0,"drafts":[{"id":"623a0894-e5a2-464a-95cf-073a93940244","title":"Прямое основание","templateName":"Письмо КП (Review 12-1)","revisionSeq":1,"isDemo":true}],"attachments":[],"fieldVersions":8,"baselines":{"calculation":33,"content":33},"inputsSha256":"61a282e156e622212b4f183485af0c5c16a3e31dc92f3e239ec7a4f358fc98ac"},"failure":null,"converterVersion":null,"contentHash":null,"checks":[],"files":[],"previews":[],"notes":[],"knownProductionBlockers":[],"eventsAfter":[],"current":true}: expected 201 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 201
+
+ ❯ tests/reviewRegressions12.test.ts:153:30
+    151|     expect(fieldOf(view, 'addressee').latest).toMatchObject({ stale: t…
+    152|     const r = await assemble([d]);
+    153|     expect(r.status, r.text).toBe(409);
+       |                              ^
+    154|     expect(r.body.current.reason).toBe('drafts_not_complete');
+    155|     // Штатный путь: новая редакция распознана, включена в состав исто…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/9]⎯
+
+ FAIL  tests/reviewRegressions12.test.ts > R12-02 — комплект не собирается по устаревшему значению > косвенное основание (R11-03): решение по требованию, исходный документ требования заменён — 409
+AssertionError: {"id":"f49f4388-863e-4b57-89bd-4a13c597a420","stageId":"770c0df9-f398-401a-b02c-cdfae6ee7520","tenderId":"4ea7d729-0b6f-4a84-adf0-ee964f4e1a32","seq":3,"mode":"test","status":"assembling","createdAt":"2026-10-07T07:13:50.865Z","finishedAt":null,"createdBy":{"id":"b36033af-0c9f-45fa-b454-4094cb680802","name":"Инженер 1"},"supersededBy":null,"restricted":false,"inputs":{"calculationRevision":{"id":"d24c0357-291b-48b0-bd93-5cc6c97bba9f","seq":2,"kind":"provisional"},"evidenceScopeId":"3df64d0e-d674-475e-a2b8-fdca0e1b856e","reviewRun":null,"decisions":1,"drafts":[{"id":"4b899438-de76-4585-9e6c-5821cda5dee5","title":"Решение по требованию","templateName":"Письмо КП (Review 12-1)","revisionSeq":1,"isDemo":true}],"attachments":[],"fieldVersions":8,"baselines":{"calculation":44,"content":44},"inputsSha256":"50a68eae25bd119ae2cd6c4750db00711eefbb8f33ff411598be288373a576b3"},"failure":null,"converterVersion":null,"contentHash":null,"checks":[],"files":[],"previews":[],"notes":[],"knownProductionBlockers":[],"eventsAfter":[],"current":true}: expected 201 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 201
+
+ ❯ tests/reviewRegressions12.test.ts:186:30
+    184|     expect(fieldOf(await draftOf(e.s.eng1, d), 'addressee').latest).to…
+    185|     const r = await assemble([d]);
+    186|     expect(r.status, r.text).toBe(409);
+       |                              ^
+    187|     expect(r.body.current.reason).toBe('drafts_not_complete');
+    188|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/9]⎯
+
+ FAIL  tests/reviewRegressions12.test.ts > R12-02 — комплект не собирается по устаревшему значению > подтверждённая копия (R11-05): «Подтвердить» значения по фрагменту, документ заменён — 409
+AssertionError: {"id":"d987ca8a-8781-49d9-8a91-afdc1487788f","stageId":"770c0df9-f398-401a-b02c-cdfae6ee7520","tenderId":"4ea7d729-0b6f-4a84-adf0-ee964f4e1a32","seq":4,"mode":"test","status":"assembling","createdAt":"2026-10-07T07:13:52.229Z","finishedAt":null,"createdBy":{"id":"b36033af-0c9f-45fa-b454-4094cb680802","name":"Инженер 1"},"supersededBy":null,"restricted":false,"inputs":{"calculationRevision":{"id":"d24c0357-291b-48b0-bd93-5cc6c97bba9f","seq":2,"kind":"provisional"},"evidenceScopeId":"3df64d0e-d674-475e-a2b8-fdca0e1b856e","reviewRun":null,"decisions":1,"drafts":[{"id":"f11da0b5-c875-45a4-8879-948bdde795eb","title":"Подтверждённая копия","templateName":"Письмо КП (Review 12-1)","revisionSeq":1,"isDemo":true}],"attachments":[],"fieldVersions":8,"baselines":{"calculation":55,"content":55},"inputsSha256":"36036559bdee20b32495dc1e083717922c9846172798668cf5af088647e6e63e"},"failure":null,"converterVersion":null,"contentHash":null,"checks":[],"files":[],"previews":[],"notes":[],"knownProductionBlockers":[],"eventsAfter":[],"current":true}: expected 201 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 201
+
+ ❯ tests/reviewRegressions12.test.ts:199:30
+    197|     expect(fieldOf(await draftOf(e.s.eng1, d), 'addressee').latest).to…
+    198|     const r = await assemble([d]);
+    199|     expect(r.status, r.text).toBe(409);
+       |                              ^
+    200|     expect(r.body.current.reason).toBe('drafts_not_complete');
+    201|     // После обработки событий (отметки инвалидации) — тоже отказ.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/9]⎯
+
+ FAIL  tests/reviewRegressions12.test.ts > R12-02 — комплект не собирается по устаревшему значению > вторая линия БД: вход-версия с заменённым основанием и приложение с ней в транзакции создания — 23514
+AssertionError: expected 'ok' to be '23514' // Object.is equality
+
+Expected: "23514"
+Received: "ok"
+
+ ❯ tests/reviewRegressions12.test.ts:225:52
+    223|         await c.query('INSERT INTO candidate_input (candidate_id, kind…
+    224|       });
+    225|     expect(await insert('field_version', version)).toBe('23514');
+       |                                                    ^
+    226|     expect(await insert('application_draft', d)).toBe('23514');
+    227|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/9]⎯
+
+ FAIL  tests/reviewRegressions12.test.ts > R12-03 — актуальность по всем событиям после базы > 200 правок чужого приложения — комплект актуален (контроль); затем правка использованного поля — неактуален в карточке и списке
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/reviewRegressions12.test.ts:249:27
+    247|     expect((await act(e.s.eng1, a, 'subject', f.etag, { action: 'set',…
+    248|     const after = (await e.s.eng1.get(`/release-candidates/${c.id}`)).…
+    249|     expect(after.current).toBe(false);
+       |                           ^
+    250|     expect(after.eventsAfter.some((x) => x.affects)).toBe(true);
+    251|     expect((await listed()).current).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/9]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  9 failed | 1 passed (10)
+   Start at  12:13:40
+   Duration  20.58s (tests 88%, transform 9%, import 3%)
+

@@ -76,6 +76,7 @@ export interface ICandidateView {
   notes?: string[];
   knownProductionBlockers?: string[];
   eventsAfter?: { seq: number; type: string; at: string | null; affects: boolean }[];
+  eventsAfterTotal?: number;
   current?: boolean;
 }
 

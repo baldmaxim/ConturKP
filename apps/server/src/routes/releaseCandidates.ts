@@ -10,9 +10,11 @@ import {
   auditFor,
   candidateChecks,
   candidateEventsAfter,
+  candidateEventsAfterCount,
   candidateFieldVersionIds,
   candidateFiles,
   candidateInputs,
+  candidateIsCurrent,
   createCandidate,
   createStandardAttachment,
   createStandardAttachmentRevision,
@@ -24,6 +26,7 @@ import {
   getStandardAttachmentRevision,
   listCandidates,
   listStandardAttachmentRevisions,
+  lockTenderStages,
   plannedFieldVersionIds,
   writeAudit,
   type IAccessContext,
@@ -36,6 +39,7 @@ import {
 import type { BlobStore } from '@kontur/storage';
 import { Router } from 'express';
 import PizZip from 'pizzip';
+import { issuesForDraft } from '../formsView.ts';
 import { command, parseBody, query, requireIfMatch, uuidParam, versionConflict } from '../http/command.ts';
 import { forbidden, HttpError, notFound } from '../http/errors.ts';
 import { readStoredBlob } from '../releaseMarkup.ts';
@@ -128,9 +132,11 @@ const candidateView = async (db: Queryable, store: BlobStore, ctx: IAccessContex
     previews: files.filter((f) => f.role === 'preview').map((f) => ({ id: f.id, path: f.path, sourceFileId: f.source_file_id, sizeBytes: f.size_bytes, sha256: f.blob_sha256, pages: f.pages, fonts: f.fonts })),
     notes: manifest?.notes ?? [],
     knownProductionBlockers: blockers,
-    // Изменения входов после сборки (D-032 В-12-9): неактуален, если есть событие, касающееся кандидата.
+    // Изменения входов после сборки (D-032 В-12-9): список ограничен (касающиеся — первыми), актуальность — по всем
+    // событиям после базы (R12-03).
     eventsAfter: events.map((e) => ({ seq: e.seq, type: e.type, at: iso(e.createdAt), affects: e.affects })),
-    current: !events.some((e) => e.affects),
+    eventsAfterTotal: await candidateEventsAfterCount(db, c),
+    current: await candidateIsCurrent(db, c),
   };
 };
 
@@ -173,6 +179,9 @@ export const releaseCandidatesRouter = (pool: Pool, store: BlobStore): Router =>
         const stage = await loadStage(client, ctx, uuidParam(req, 'id', 'tender_stage'));
         const body = parseBody(CreateCandidateRequest, req.body);
         const tgt = { tenderId: stage.tender_id, entityType: 'tender_stage', entityId: stage.id };
+        // Блокировка этапа — до проверок (R12-02): запись событий входов (новая редакция, правка поля) ждёт конца этой
+        // транзакции, поэтому проверки ниже и закрепление видят одно состояние, а более позднее событие — после базы.
+        await lockTenderStages(client, stage.tender_id, [stage.id]);
         // Собрать можно только из входов, которые создатель видит целиком (D-032 В-12-7).
         const drafts: IDraftRow[] = [];
         for (const id of body.draftIds.map((x) => x.toLowerCase())) {
@@ -183,6 +192,16 @@ export const releaseCandidatesRouter = (pool: Pool, store: BlobStore): Router =>
         const planned = await plannedFieldVersionIds(client, drafts);
         const visible = await fieldVersionVisibility(client, ctx, planned);
         if (planned.some((v) => !visible(v))) throw conflict('среди значений приложений есть то, что вы не можете читать: комплект не собирается', 'restricted_inputs', tgt);
+        // Заполненность сейчас (проект §6 `fields_complete`; R12-02): тот же список незавершённых пунктов, что у «заполнено».
+        for (const d of drafts.filter((x) => x.status === 'complete')) {
+          const blocking = (await issuesForDraft(client, ctx, d)).issues.filter((x) => x.blocking);
+          if (blocking.length > 0) {
+            throw conflict(`приложение «${d.title}» больше не готово к комплекту: ${blocking[0]!.label} — ${blocking[0]!.message}`, 'drafts_not_complete', tgt, {
+              draftId: d.id,
+              issues: blocking.map((x) => ({ kind: x.kind, fieldKey: x.fieldKey, message: x.message })),
+            });
+          }
+        }
         const r = await createCandidate(client, {
           tenderId: stage.tender_id,
           stageId: stage.id,
@@ -221,8 +240,7 @@ export const releaseCandidatesRouter = (pool: Pool, store: BlobStore): Router =>
       if (!hasTenderCap(ctx, stage.tender_id, 'tender.read')) throw notFound({ entityType: 'tender_stage', entityId: stage.id });
       const items = [];
       for (const c of await listCandidates(pool, stage.id)) {
-        const events = await candidateEventsAfter(pool, c);
-        items.push({ ...shell(c), restricted: !(await candidateVisible(pool, ctx, c)), current: !events.some((e) => e.affects), failureCode: c.failure_code });
+        items.push({ ...shell(c), restricted: !(await candidateVisible(pool, ctx, c)), current: await candidateIsCurrent(pool, c), failureCode: c.failure_code });
       }
       res.json({ items, canCreate: hasTenderCap(ctx, stage.tender_id, 'candidate.create') });
     }),

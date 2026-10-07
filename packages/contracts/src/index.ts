@@ -407,6 +407,8 @@ export type ErrorCode =
   | 'STATE_CONFLICT'
   | 'VALIDATION_FAILED'
   | 'IDEMPOTENCY_KEY_REUSED'
+  // Этап 13: матрица блокеров запрещает действие (state-machines §11.1, D-033); список — в поле blockers.
+  | 'BLOCKER_PRESENT'
   | 'RATE_LIMITED'
   | 'INTERNAL';
 
@@ -419,6 +421,7 @@ export interface IProblem {
   requestId: string;
   current?: unknown;
   errors?: { path: string; message: string }[];
+  blockers?: unknown;
 }
 export * from './requirements.ts';
 export * from './review.ts';

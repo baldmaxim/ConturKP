@@ -6,6 +6,9 @@
 // R12-02: комплект не собирается по значению, основание которого уже заменено: прямое основание, решение по требованию
 // (R11-03), подтверждённая копия (R11-05); вторая линия БД; после нового значения и «заполнено» — собирается.
 // R12-03: актуальность комплекта считается по всем событиям после базы, а не по первым 200.
+// Этап 13 (D-033, S13-01): актуальность — по правилам покрытия state-machines §1.1. Документ, поступивший до сборки, но не
+// вошедший в закреплённый снимок, комплект тоже делает неактуальным (удержание); после решения руководителя «не влияет»
+// по этим событиям комплект актуален. Ожидания контрольных сценариев приведены к этому правилу.
 import type pg from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { findSoffice } from '../apps/worker/src/office/libreoffice.ts';
@@ -55,6 +58,15 @@ const filledDraft = async (title: string, addressee: { value: string; bases: { t
   const r = await act(e.s.eng1, d.id, 'addressee', f.etag, { action: 'set', value: addressee.value, bases: addressee.bases });
   expect(r.status, r.text).toBe(200);
   return d.id;
+};
+
+// Решение руководителя «не влияет» по всем открытым удержаниям комплекта (этап 13, D-033 В-13-5).
+const notApplicable = async (candidateId: string, reason: string): Promise<number> => {
+  const holds = (await e.s.manager.get(`/stages/${e.s.stageA}/holds?candidateId=${candidateId}&status=open`)).body.items as { id: string }[];
+  if (holds.length === 0) return 0;
+  const r = await e.s.manager.post(`/release-candidates/${candidateId}/holds/resolve`, { holdIds: holds.map((h) => h.id), resolution: 'not_applicable', reason }, { headers: idem() });
+  expect(r.status, r.text).toBe(200);
+  return holds.length;
 };
 
 const assemble = (draftIds: string[]) => e.s.eng1.post(`/stages/${e.s.stageA}/release-candidates`, { mode: 'test', draftIds }, { headers: idem() });
@@ -139,7 +151,10 @@ describe('R12-02 — комплект не собирается по устар�
     await replaceDoc('other');
     const c = await assembled([d]);
     expect(c.status, JSON.stringify(c.failure)).toBe('ready_for_approval');
-    expect(c.current).toBe(true);
+    // S13-01 (D-033): новая редакция поступила до сборки и не входит в закреплённый снимок — удержание, не «актуален».
+    expect(c.current).toBe(false);
+    expect(await notApplicable(c.id, 'Прочие сведения тендера не влияют на письмо КП')).toBeGreaterThan(0);
+    expect((await e.s.eng1.get(`/release-candidates/${c.id}`)).body.current).toBe(true);
   });
 
   it('прямое основание заменено: приложение «заполнено», значение «устарело» — 409; новое значение по новой редакции и «заполнено» — собирается', async () => {
@@ -233,6 +248,8 @@ describe('R12-03 — актуальность по всем событиям п�
     await completeDraft(e.s.eng1, a);
     const c = await assembled([a]);
     expect(c.status, JSON.stringify(c.failure)).toBe('ready_for_approval');
+    // Документы предыдущих сценариев поступили до сборки и не входят в снимок (S13-01): решение «не влияет» по ним.
+    await notApplicable(c.id, 'Редакции предыдущих сценариев не влияют на приложение A');
     const b = await createDraft(e.s.eng1, e.s.stageA, revisionId, 'Приложение B');
     let etag = fieldOf(await draftOf(e.s.eng1, b.id), 'letter_number').etag;
     for (let n = 1; n <= 200; n += 1) {

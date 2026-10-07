@@ -3,11 +3,16 @@
 // с точными версиями полей, ревизии их шаблонов, выбранные вложения; базы актуальности; задание сборки. Чтение кандидата
 // его не пересобирает. Изменения входов после сборки — события барьера после базы; использованное поле — только
 // изменения приложений этого кандидата (D-032 В-12-9). Завершение сборки — файлы, проверки, манифест одной транзакцией.
+// Этап 13 (D-033): актуальность — по правилам покрытия state-machines §1.1 (SQL-функции 0034, S13-01); при создании
+// кандидата — удержания по каждому касающемуся непокрытому событию; завершение сборки — под блокировкой этапа (S13-02),
+// новый готовый заменяет невыпущенные кандидаты того же режима (В-13-6), их согласования — «заменено».
 import { canonicalJson, sha256Hex, type Audience, type IManifest } from '@kontur/core';
 import { draftFields, getDraft, type IDraftRow } from './forms.ts';
 import { enqueueJob } from './jobs.ts';
 import type { Queryable } from './pool.ts';
 import { lockTenderStages } from './stageEvents.ts';
+
+export type CandidateStatus = 'assembling' | 'assembly_failed' | 'ready_for_approval' | 'approved' | 'returned' | 'released' | 'superseded';
 
 export const CANDIDATE_ASSEMBLE_JOB_KIND = 'candidate.assemble';
 
@@ -17,7 +22,7 @@ export interface IReleaseCandidateRow {
   stage_id: string;
   seq: number;
   mode: 'test' | 'production';
-  status: 'assembling' | 'assembly_failed' | 'ready_for_approval' | 'superseded';
+  status: CandidateStatus;
   calculation_revision_id: string;
   evidence_scope_id: string;
   calculation_baseline_version: number;
@@ -55,6 +60,7 @@ export interface ICandidateFileRow {
 }
 
 export interface ICandidateCheckRow {
+  id: string;
   ordinal: number;
   code: string;
   outcome: 'passed' | 'failed' | 'unverified' | 'not_applicable';
@@ -83,7 +89,7 @@ export const candidateFiles = async (db: Queryable, id: string): Promise<ICandid
   (await db.query<ICandidateFileRow>('SELECT * FROM candidate_file WHERE candidate_id = $1 ORDER BY ordinal', [id])).rows.map((f) => ({ ...f, size_bytes: Number(f.size_bytes) }));
 
 export const candidateChecks = async (db: Queryable, id: string): Promise<ICandidateCheckRow[]> =>
-  (await db.query<ICandidateCheckRow>('SELECT ordinal, code, outcome, path, detail FROM candidate_check WHERE candidate_id = $1 ORDER BY ordinal', [id])).rows;
+  (await db.query<ICandidateCheckRow>('SELECT id, ordinal, code, outcome, path, detail FROM candidate_check WHERE candidate_id = $1 ORDER BY ordinal', [id])).rows;
 
 export const getCandidateFile = async (db: Queryable, id: string): Promise<ICandidateFileRow | null> => {
   const r = (await db.query<ICandidateFileRow>('SELECT * FROM candidate_file WHERE id = $1', [id])).rows[0];
@@ -203,6 +209,9 @@ export const createCandidate = async (db: Queryable, i: ICreateCandidateInput): 
       await db.query('INSERT INTO candidate_input (candidate_id, kind, ref_id, ordinal) VALUES ($1, $2, $3, $4)', [id, g.kind, ref, ordinal]);
     }
   }
+  // Удержания по всем касающимся непокрытым событиям этапа, в том числе до создания (RT-03, S13-01): документ,
+  // поступивший до сборки, но не вошедший в закреплённый снимок, блокирует согласование и выпуск до решения.
+  await holdUncoveredEvents(db, id);
   await enqueueJob(db, { kind: CANDIDATE_ASSEMBLE_JOB_KIND, dedupeKey: `assemble:${id}`, payload: { candidateId: id }, maxAttempts: 3, tenderId: i.tenderId });
   return { ok: true, candidateId: id };
 };
@@ -236,16 +245,22 @@ export const candidateEventsAfter = async (db: Queryable, c: IReleaseCandidateRo
   return rows.map((r) => ({ seq: Number(r.seq), type: r.event_type, createdAt: r.created_at, affects: r.affects })).sort((a, b) => a.seq - b.seq);
 };
 
-// Кандидат актуален, если после базы нет ни одного касающегося его события — по всем событиям, без ограничения списка
-// (R12-03: после 200 правок чужого приложения правка своего поля терялась).
+// Кандидат актуален, если нет ни одного касающегося непокрытого события без решения «не влияет» — по всем событиям
+// этапа и правилам покрытия §1.1 (R12-03, S13-01: событие источника до сборки, не вошедшее в снимок, тоже нарушает).
 export const candidateIsCurrent = async (db: Queryable, c: IReleaseCandidateRow): Promise<boolean> =>
-  !(
-    await db.query<{ affected: boolean }>(`SELECT EXISTS (SELECT 1 FROM stage_input_event e WHERE e.stage_id = $1 AND e.seq > $2 AND ${AFFECTS_SQL}) AS affected`, [
-      c.stage_id,
-      baselineOf(c),
-      c.id,
-    ])
-  ).rows[0]!.affected;
+  !(await db.query<{ changed: boolean }>('SELECT EXISTS (SELECT 1 FROM candidate_uncovered_events($1)) AS changed', [c.id])).rows[0]!.changed;
+
+// Удержания кандидата по всем касающимся непокрытым событиям (при создании; повтор не создаёт дублей).
+export const holdUncoveredEvents = async (db: Queryable, candidateId: string): Promise<number> =>
+  (
+    await db.query(
+      `INSERT INTO readiness_hold (candidate_id, tender_id, stage_id, input_event_id)
+       SELECT c.id, c.tender_id, c.stage_id, u.id FROM release_candidate c CROSS JOIN LATERAL candidate_uncovered_events(c.id) u(id)
+        WHERE c.id = $1
+       ON CONFLICT (candidate_id, input_event_id) DO NOTHING`,
+      [candidateId],
+    )
+  ).rowCount ?? 0;
 
 // Число событий после базы (для пометки «показаны не все»).
 export const candidateEventsAfterCount = async (db: Queryable, c: IReleaseCandidateRow): Promise<number> =>
@@ -279,6 +294,10 @@ export interface IFinishCandidate {
 }
 
 export const finishCandidate = async (db: Queryable, f: IFinishCandidate): Promise<'ready_for_approval' | 'assembly_failed' | 'skipped'> => {
+  // Порядок блокировок «этап → кандидат → согласование» (state-machines §1.2; S13-02): замена касается и согласованных.
+  const head = await getCandidate(db, f.candidateId);
+  if (!head || head.status !== 'assembling') return 'skipped';
+  await lockTenderStages(db, head.tender_id, [head.stage_id]);
   const c = await getCandidate(db, f.candidateId, true);
   if (!c || c.status !== 'assembling') return 'skipped';
   const fileIds = new Map<number, string>();
@@ -316,11 +335,24 @@ export const finishCandidate = async (db: Queryable, f: IFinishCandidate): Promi
       WHERE id = $1`,
     [c.id, f.manifest.blobSha256, f.manifest.sha256, f.converterVersion],
   );
-  // Прежний готовый кандидат этапа заменяется новым готовым (I03: прежний не меняется по содержимому).
-  await db.query(
-    `UPDATE release_candidate SET status = 'superseded', superseded_by_candidate_id = $2, row_version = row_version + 1
-      WHERE stage_id = $1 AND status = 'ready_for_approval' AND id <> $2 AND seq < $3`,
-    [c.stage_id, c.id, c.seq],
-  );
+  // Новый готовый заменяет невыпущенные кандидаты этапа того же режима (D-033 В-13-6; I03: прежние не меняются по
+  // содержимому); согласование заменённого остаётся в истории со статусом «заменено» (A09).
+  const replaced = (
+    await db.query<{ id: string }>(
+      `SELECT id FROM release_candidate WHERE stage_id = $1 AND mode = $2 AND status IN ('ready_for_approval', 'approved', 'returned') AND id <> $3 AND seq < $4
+        ORDER BY seq FOR UPDATE`,
+      [c.stage_id, c.mode, c.id, c.seq],
+    )
+  ).rows.map((r) => r.id);
+  if (replaced.length > 0) {
+    await db.query(
+      `UPDATE approval SET status = 'superseded', ended_at = now(), row_version = row_version + 1 WHERE candidate_id = ANY($1::uuid[]) AND status = 'active'`,
+      [replaced],
+    );
+    await db.query(
+      `UPDATE release_candidate SET status = 'superseded', superseded_by_candidate_id = $2, row_version = row_version + 1 WHERE id = ANY($1::uuid[])`,
+      [replaced, c.id],
+    );
+  }
   return 'ready_for_approval';
 };

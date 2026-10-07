@@ -32,6 +32,8 @@ describe('возможности', () => {
       'change_reason.confirm',
       'application.fill',
       'candidate.create',
+      // Этап 13 (D-033 В-13-7): выпуск — инженер тендера.
+      'candidate.release',
     ]);
   });
   it('руководитель-участник: управление этапами и журнал', () => {
@@ -60,6 +62,9 @@ describe('возможности', () => {
       'finding.accept_risk',
       'source_priority.manage',
       'template.manage',
+      // Этап 13 (ADR-006 §3): согласование и принятие риска — руководитель тендера.
+      'candidate.approve',
+      'risk.accept',
       'audit.read',
     ]);
   });

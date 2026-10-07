@@ -49,7 +49,12 @@ export type TenderCapability =
   | 'template.manage'
   // Этап 12 (D-032 В-12-7): сборка комплекта-кандидата — участник тендера (руководитель или инженер); только human,
   // модель и MCP не получают (I12). БД повторяет в tender_capabilities (миграция 0032).
-  | 'candidate.create';
+  | 'candidate.create'
+  // Этап 13 (D-033; ADR-006 §3): согласование, возврат, отзыв и принятие риска — руководитель тендера, выпуск — инженер
+  // тендера; только human (I12). БД повторяет в tender_capabilities (миграция 0034).
+  | 'candidate.approve'
+  | 'risk.accept'
+  | 'candidate.release';
 
 export const ROLES: readonly Role[] = ['admin', 'manager', 'engineer'];
 export const MEMBER_ROLES: readonly MemberRole[] = ['engineer', 'manager'];
@@ -112,6 +117,8 @@ export const tenderCapabilities = (
   if (role === 'manager') caps.push('requirement.confirm', 'requirement.decide', 'requirement.manage', 'fact.confirm');
   if (role === 'manager') caps.push('finding.accept_risk', 'source_priority.manage');
   if (role === 'manager') caps.push('template.manage');
+  if (role === 'manager') caps.push('candidate.approve', 'risk.accept');
+  if (role === 'engineer') caps.push('candidate.release');
   if (role === 'manager' || roles.has('admin')) caps.push('audit.read');
   if (roles.has('admin')) caps.push('admin.tender');
   return caps;

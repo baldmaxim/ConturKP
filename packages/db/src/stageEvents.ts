@@ -1,7 +1,8 @@
 // Барьер актуальности этапа (state-machines §1.1, R01-03): событие вставляется в той же
 // транзакции, что и изменение, под блокировкой строк затронутых этапов (по возрастанию id).
-// Удержания кандидатов (readiness_hold) и задание инвалидации появятся вместе с кандидатами
-// выпуска (этапы 12–13) и зависимостями (этап 09); сейчас кандидатов нет.
+// Этап 13 (D-033 В-13-5): в той же транзакции — удержание (readiness_hold) для каждого действующего кандидата этапа,
+// которого событие касается и которым не покрыто (правила покрытия — SQL-функции миграции 0034). Решения по
+// удержаниям, принятие риска, согласование и выпуск событий не порождают (R01-07).
 import type { Queryable } from './pool.ts';
 
 export type StageEventType =
@@ -63,14 +64,30 @@ export const emitStageEvents = async (db: Queryable, e: IStageEventInput): Promi
       'UPDATE tender_stage SET input_version = input_version + 1 WHERE id = $1 RETURNING input_version',
       [stageId],
     );
-    await db.query(
+    const event = await db.query<{ id: string }>(
       `INSERT INTO stage_input_event (stage_id, seq, event_class, event_type, ref_type, ref_id, actor_user_id, actor_kind)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
       [stageId, v.rows[0]!.input_version, CLASS_OF[e.eventType], e.eventType, e.refType, e.refId, e.actorUserId, e.actorUserId ? 'human' : 'system'],
     );
+    await holdActiveCandidates(db, stageId, event.rows[0]!.id);
   }
   return stages.length;
 };
+
+// Кандидаты, для которых событие ставит удержание: собирается, готов, согласован, выпущен (отправки до этапа 15 нет).
+export const ACTIVE_CANDIDATE_STATUSES = ['assembling', 'ready_for_approval', 'approved', 'released'] as const;
+
+// Удержание по событию для действующих кандидатов этапа (под блокировкой этапа, в транзакции события).
+export const holdActiveCandidates = async (db: Queryable, stageId: string, eventId: string): Promise<number> =>
+  (
+    await db.query(
+      `INSERT INTO readiness_hold (candidate_id, tender_id, stage_id, input_event_id)
+       SELECT c.id, c.tender_id, c.stage_id, $2 FROM release_candidate c
+        WHERE c.stage_id = $1 AND c.status = ANY($3::text[]) AND stage_event_affects(c.id, $2) AND NOT stage_event_covered(c.id, $2)
+       ON CONFLICT (candidate_id, input_event_id) DO NOTHING`,
+      [stageId, eventId, ACTIVE_CANDIDATE_STATUSES],
+    )
+  ).rowCount ?? 0;
 
 export interface IStageEventRow {
   id: string;

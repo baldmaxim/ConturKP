@@ -36,6 +36,7 @@ const TITLES: Record<ErrorCode, string> = {
   STATE_CONFLICT: 'Конфликт состояния',
   VALIDATION_FAILED: 'Некорректный запрос',
   IDEMPOTENCY_KEY_REUSED: 'Ключ идемпотентности использован с другим запросом',
+  BLOCKER_PRESENT: 'Действие запрещено блокерами',
   RATE_LIMITED: 'Слишком много попыток',
   INTERNAL: 'Внутренняя ошибка',
 };

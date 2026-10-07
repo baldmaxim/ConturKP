@@ -4,16 +4,11 @@
 // Чтение кандидата не пересобирает его. Файлы — по ID, не по пути; офисные — скачиванием, PDF — в песочнице CSP.
 import { CandidateArchiveQuery, CreateCandidateRequest, CreateStandardAttachmentRequest, CreateStandardAttachmentRevisionRequest } from '@kontur/contracts';
 import { detectFormat, MEDIA_TYPES } from '@kontur/adapters';
-import { formatEtag, globalCapabilities, hasContentRole, type IManifest } from '@kontur/core';
+import { formatEtag, globalCapabilities, hasContentRole } from '@kontur/core';
 import {
   approveStandardAttachmentRevision,
   auditFor,
-  candidateChecks,
-  candidateEventsAfter,
-  candidateEventsAfterCount,
-  candidateFieldVersionIds,
   candidateFiles,
-  candidateInputs,
   candidateIsCurrent,
   createCandidate,
   createStandardAttachment,
@@ -31,10 +26,8 @@ import {
   writeAudit,
   type IAccessContext,
   type IDraftRow,
-  type IReleaseCandidateRow,
   type IStandardAttachmentRevisionRow,
   type Pool,
-  type Queryable,
 } from '@kontur/db';
 import type { BlobStore } from '@kontur/storage';
 import { Router } from 'express';
@@ -44,101 +37,12 @@ import { command, parseBody, query, requireIfMatch, uuidParam, versionConflict }
 import { forbidden, HttpError, notFound } from '../http/errors.ts';
 import { readStoredBlob } from '../releaseMarkup.ts';
 import { CONTENT_CSP, contentDisposition } from './documents.ts';
+import { candidateShell, candidateTarget, candidateView, candidateVisible, iso, loadCandidate, requireVisibleCandidate } from '../releaseViews.ts';
 import { conflict } from './reviewScope.ts';
 import { hasTenderCap } from './scope.ts';
 import { loadStage } from './stages.ts';
 
-const target = (c: IReleaseCandidateRow) => ({ tenderId: c.tender_id, entityType: 'release_candidate', entityId: c.id });
-
-// Состав и файлы — только при видимости всех закреплённых значений полей (права — текущие, входы — закреплённые).
-const candidateVisible = async (db: Queryable, ctx: IAccessContext, c: IReleaseCandidateRow): Promise<boolean> => {
-  const pinned = await candidateFieldVersionIds(db, c.id);
-  const visible = await fieldVersionVisibility(db, ctx, pinned);
-  return pinned.every(visible);
-};
-
-const loadCandidate = async (db: Queryable, ctx: IAccessContext, id: string): Promise<IReleaseCandidateRow> => {
-  const c = await getCandidate(db, id);
-  if (!c || !hasTenderCap(ctx, c.tender_id, 'tender.read')) throw notFound({ entityType: 'release_candidate', entityId: id });
-  return c;
-};
-
-const requireVisibleCandidate = async (db: Queryable, ctx: IAccessContext, c: IReleaseCandidateRow): Promise<void> => {
-  if (!(await candidateVisible(db, ctx, c))) throw conflict('среди входов комплекта есть то, что вы не можете читать', 'restricted_inputs', target(c));
-};
-
-const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
-
-const shell = (c: IReleaseCandidateRow) => ({
-  id: c.id,
-  stageId: c.stage_id,
-  tenderId: c.tender_id,
-  seq: c.seq,
-  mode: c.mode,
-  status: c.status,
-  createdAt: iso(c.created_at),
-  finishedAt: iso(c.finished_at),
-  createdBy: { id: c.created_by, name: c.created_by_name },
-  supersededBy: c.superseded_by_candidate_id,
-});
-
-const candidateView = async (db: Queryable, store: BlobStore, ctx: IAccessContext, c: IReleaseCandidateRow) => {
-  if (!(await candidateVisible(db, ctx, c))) return { ...shell(c), restricted: true };
-  const inputs = await candidateInputs(db, c.id);
-  const ids = (k: string) => inputs.filter((i) => i.kind === k).sort((a, b) => a.ordinal - b.ordinal).map((i) => i.ref_id);
-  const files = await candidateFiles(db, c.id);
-  const previews = new Map(files.filter((f) => f.role === 'preview').map((f) => [f.source_file_id, f.id]));
-  const events = await candidateEventsAfter(db, c);
-  const calc = (await db.query<{ seq: number; kind: string }>('SELECT seq, kind FROM calculation_revision WHERE id = $1', [c.calculation_revision_id])).rows[0]!;
-  const drafts = (await db.query<{ id: string; title: string; is_demo: boolean; template_name: string; revision_seq: number }>(
-    `SELECT a.id, a.title, t.is_demo, t.name AS template_name, r.seq AS revision_seq FROM application_draft a JOIN template_revision r ON r.id = a.template_revision_id
-       JOIN application_template t ON t.id = r.template_id WHERE a.id = ANY($1::uuid[])`,
-    [ids('application_draft')],
-  )).rows;
-  const attachments: IStandardAttachmentRevisionRow[] = [];
-  for (const id of ids('attachment_revision')) attachments.push((await getStandardAttachmentRevision(db, id))!);
-  const run = ids('review_run')[0] ? (await db.query<{ id: string; status: string }>('SELECT id, status FROM review_run WHERE id = $1', [ids('review_run')[0]])).rows[0] : null;
-  let manifest: IManifest | null = null;
-  if (c.manifest_blob_sha256) manifest = JSON.parse((await readStoredBlob(store, c.manifest_blob_sha256)).toString('utf8')) as IManifest;
-  const demo = drafts.some((d) => d.is_demo);
-  const blockers = [
-    ...(c.mode === 'production' && calc.kind === 'provisional' ? ['CALCULATION_PROVISIONAL'] : []),
-    ...(c.mode === 'production' && demo ? ['TEMPLATE_DEMO'] : []),
-  ];
-  return {
-    ...shell(c),
-    restricted: false,
-    inputs: {
-      calculationRevision: { id: c.calculation_revision_id, seq: Number(calc.seq), kind: calc.kind },
-      evidenceScopeId: c.evidence_scope_id,
-      reviewRun: run ? { id: run.id, status: run.status } : null,
-      decisions: ids('decision').length,
-      drafts: ids('application_draft').map((id) => {
-        const d = drafts.find((x) => x.id === id)!;
-        return { id, title: d.title, templateName: d.template_name, revisionSeq: Number(d.revision_seq), isDemo: d.is_demo };
-      }),
-      attachments: attachments.map((a) => ({ revisionId: a.id, title: a.title, fileName: a.file_name, seq: a.seq })),
-      fieldVersions: ids('field_version').length,
-      baselines: { calculation: Number(c.calculation_baseline_version), content: Number(c.content_baseline_version) },
-      inputsSha256: c.inputs_sha256,
-    },
-    failure: c.failure_code ? { code: c.failure_code, detail: c.failure_detail } : null,
-    converterVersion: c.converter_version,
-    contentHash: c.manifest_sha256,
-    checks: await candidateChecks(db, c.id),
-    files: files
-      .filter((f) => f.role !== 'preview')
-      .map((f) => ({ id: f.id, path: f.path, role: f.role, audience: f.audience, mediaType: f.media_type, sizeBytes: f.size_bytes, sha256: f.blob_sha256, previewFileId: previews.get(f.id) ?? null })),
-    previews: files.filter((f) => f.role === 'preview').map((f) => ({ id: f.id, path: f.path, sourceFileId: f.source_file_id, sizeBytes: f.size_bytes, sha256: f.blob_sha256, pages: f.pages, fonts: f.fonts })),
-    notes: manifest?.notes ?? [],
-    knownProductionBlockers: blockers,
-    // Изменения входов после сборки (D-032 В-12-9): список ограничен (касающиеся — первыми), актуальность — по всем
-    // событиям после базы (R12-03).
-    eventsAfter: events.map((e) => ({ seq: e.seq, type: e.type, at: iso(e.createdAt), affects: e.affects })),
-    eventsAfterTotal: await candidateEventsAfterCount(db, c),
-    current: await candidateIsCurrent(db, c),
-  };
-};
+const target = candidateTarget;
 
 const attachmentView = (a: IStandardAttachmentRevisionRow, canManage: boolean) => ({
   revisionId: a.id,
@@ -240,7 +144,7 @@ export const releaseCandidatesRouter = (pool: Pool, store: BlobStore): Router =>
       if (!hasTenderCap(ctx, stage.tender_id, 'tender.read')) throw notFound({ entityType: 'tender_stage', entityId: stage.id });
       const items = [];
       for (const c of await listCandidates(pool, stage.id)) {
-        items.push({ ...shell(c), restricted: !(await candidateVisible(pool, ctx, c)), current: await candidateIsCurrent(pool, c), failureCode: c.failure_code });
+        items.push({ ...candidateShell(c), restricted: !(await candidateVisible(pool, ctx, c)), current: await candidateIsCurrent(pool, c), failureCode: c.failure_code });
       }
       res.json({ items, canCreate: hasTenderCap(ctx, stage.tender_id, 'candidate.create') });
     }),
@@ -250,6 +154,7 @@ export const releaseCandidatesRouter = (pool: Pool, store: BlobStore): Router =>
     '/release-candidates/:id',
     query(pool, 'release.candidate.read', 'release_candidate', async (ctx, req, res) => {
       const c = await loadCandidate(pool, ctx, uuidParam(req, 'id', 'release_candidate'));
+      res.setHeader('ETag', formatEtag(c.id, c.row_version));
       res.json(await candidateView(pool, store, ctx, c));
     }),
   );
@@ -296,7 +201,7 @@ export const releaseCandidatesRouter = (pool: Pool, store: BlobStore): Router =>
     query(pool, 'release.candidate.archive', 'release_candidate', async (ctx, req, res) => {
       const c = await loadCandidate(pool, ctx, uuidParam(req, 'id', 'release_candidate'));
       await requireVisibleCandidate(pool, ctx, c);
-      if (c.status !== 'ready_for_approval' && c.status !== 'superseded') throw conflict('архив — у собранного комплекта', 'not_assembled', target(c));
+      if (!c.manifest_blob_sha256) throw conflict('архив — у собранного комплекта', 'not_assembled', target(c));
       const q = CandidateArchiveQuery.safeParse(req.query);
       if (!q.success) throw new HttpError(400, 'VALIDATION_FAILED', 'set — customer или all');
       const files = (await candidateFiles(pool, c.id)).filter((f) => (q.data.set === 'all' ? true : f.audience === 'customer' && f.role !== 'preview'));

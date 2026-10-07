@@ -824,4 +824,6 @@
 
 Что изменяет: проект `docs/architecture/12-generation-design.md` §2–§12; ADR-013 (новый); `data-model.md` §4.9; `state-machines.md` §11 (сборка кандидата); `portal-api.md` §2.9 — при реализации. Согласование, выпуск и отправка остаются этапам 13–14.
 
+Реализация (`docs/stages/12-report.md`): миграции `0032_release_candidates.sql`, `0033_candidate_inputs_fresh.sql` (Review 12-1, R12-02); ядро `packages/core/src/release/` (разметка, вывод значений, сверка с расчётом, манифест, отметки); адаптер `packages/adapters/src/office/`; конвертер LibreOffice — `apps/worker/src/office/libreoffice.ts` (Windows — `soffice.com`); задание `candidate.assemble`; API кандидата и стандартных вложений; вкладка «Комплект»; уточнения реализации — проект §13.1. Исправления Review 12-1 и 12-2: выбор `soffice.com` (R12-01), свежесть закрепляемых версий под блокировкой этапа и вторая линия 0033 (R12-02), актуальность по всем событиям (R12-03), порядок блокировок «этап → приложение» (R12-04). Этап принят Review 12-3 (PASS) по `5f2213186eb89351000862cee0cf6f1fec6c185f`. Q-08, `TEMPLATE_DEMO`, Q-05 и X-01 — в силе.
+
 Ссылка на подтверждение владельца: `docs/reviews/12-owner-decisions.md`.

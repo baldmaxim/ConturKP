@@ -1,5 +1,5 @@
-# регрессия на рабочем дереве передачи 12-2: 2026-10-07T12:29:23+05:00, linux x64 Node v24.14.1, artifacts/stage-08a/ui-check.mjs, exit 0
-# ui-check — 2026-10-07T07:29:23.062Z, linux x64, Node v24.14.1, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker, MODEL_PROVIDER=fake
+# регрессия на рабочем дереве передачи 12-3: 2026-10-07T14:10:36+05:00, linux x64 Node v24.14.1, artifacts/stage-08a/ui-check.mjs, exit 0
+# ui-check — 2026-10-07T09:10:36.504Z, linux x64, Node v24.14.1, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker, MODEL_PROVIDER=fake
 PASS  server + worker готовы
 PASS  вход администратора-руководителя
 PASS  документ ТЗ загружен штатным импортом

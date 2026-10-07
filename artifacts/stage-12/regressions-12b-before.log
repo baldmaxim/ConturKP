@@ -1,0 +1,53 @@
+# 2026-10-07T12:48:32+05:00, linux x64 Node v24.14.1; регрессии Review 12-2 на продукте f37a12c (HEAD df90ceb — запись ревью, продукт не менялся), однопоточно; ожидается: наложение и 40P01 — FAIL, контроль — PASS
+
+ RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
+
+ ✓ tests/reviewRegressions12b.test.ts > R12-04 — правка поля и сборка комплекта одновременно > контроль: последовательно — правка 200, затем сборка 409 drafts_not_complete 677ms
+ × tests/reviewRegressions12b.test.ts > R12-04 — правка поля и сборка комплекта одновременно > наложение: правка держит приложение, сборка ждёт — без взаимной блокировки и HTTP 500; правка 200, сборка 201 или 409 1666ms
+   → {"type":"about:blank","title":"Внутренняя ошибка","status":500,"code":"INTERNAL","detail":"внутренняя ошибка; см. журнал по requestId","requestId":"cd685f24-162a-46dd-a3d9-9927da06c7e3"}: expected [ 201, 409 ] to include 500
+ × tests/reviewRegressions12b.test.ts > R12-04 — правка поля и сборка комплекта одновременно > проигранная гонка с взаимной блокировкой — управляемый конфликт, а не внутренняя ошибка 12ms
+   → expected undefined to be 409 // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/reviewRegressions12b.test.ts > R12-04 — правка поля и сборка комплекта одновременно > наложение: правка держит приложение, сборка ждёт — без взаимной блокировки и HTTP 500; правка 200, сборка 201 или 409
+AssertionError: {"type":"about:blank","title":"Внутренняя ошибка","status":500,"code":"INTERNAL","detail":"внутренняя ошибка; см. журнал по requestId","requestId":"cd685f24-162a-46dd-a3d9-9927da06c7e3"}: expected [ 201, 409 ] to include 500
+ ❯ tests/reviewRegressions12b.test.ts:94:32
+     92|     const [p, c] = await Promise.all([put!, post!]);
+     93|     expect(p.status, p.text).toBe(200);
+     94|     expect([201, 409], c.text).toContain(c.status);
+       |                                ^
+     95|     if (c.status === 409) expect(c.body.current?.reason).toBe('drafts_…
+     96|     // Итог согласован: приложение в работе (правка прошла); собранног…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/reviewRegressions12b.test.ts > R12-04 — правка поля и сборка комплекта одновременно > проигранная гонка с взаимной блокировкой — управляемый конфликт, а не внутренняя ошибка
+AssertionError: expected undefined to be 409 // Object.is equality
+
+- Expected:
+409
+
++ Received:
+undefined
+
+ ❯ tests/reviewRegressions12b.test.ts:107:25
+    105|   it('проигранная гонка с взаимной блокировкой — управляемый конфликт,…
+    106|     const err = fromPgError({ code: '40P01', message: 'deadlock detect…
+    107|     expect(err?.status).toBe(409);
+       |                         ^
+    108|     expect(err?.code).toBe('STATE_CONFLICT');
+    109|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  12:48:33
+   Duration  10.21s (tests 59%, transform 30%, import 12%)
+
+  Transform  transforming modules took 2.55s · 30% of tracked time, re-done on every run
+             persist transforms across runs with fsModuleCache: true
+             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns
+

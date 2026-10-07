@@ -13,7 +13,7 @@ Linux (машина разработки):
 
 ```bash
 sudo apt install libreoffice-writer-nogui libreoffice-calc-nogui fonts-liberation
-soffice --version     # проверено: LibreOffice 26.2.5.2
+soffice --version     # проверено: LibreOffice 26.2.5.2 и 26.2.6.3
 ```
 
 ## Проверка

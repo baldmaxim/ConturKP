@@ -1,13 +1,13 @@
 # Этап 12 — формирование документов и кандидата выпуска
 
-Дата: 2026-10-06; передача 12-2 — 2026-10-07
-Статус: **READY_FOR_REVIEW** — передача 12-2 независимому ревьюеру: исправление Review 12-1 (R12-01…R12-03). Review 12-1 (`docs/reviews/12-review-1.md`) — CHANGES REQUIRED по `fedca66`.
+Дата: 2026-10-06; передачи 12-2 и 12-3 — 2026-10-07
+Статус: **READY_FOR_REVIEW** — передача 12-3 независимому ревьюеру: исправление Review 12-2 (R12-04). Review 12-1 (`docs/reviews/12-review-1.md`) — CHANGES REQUIRED по `fedca66`; Review 12-2 (`docs/reviews/12-review-2.md`) — CHANGES REQUIRED по `f37a12c`, R12-01…R12-03 закрыты ревью.
 Базовый коммит: `49ab92e` (запись приёмки этапа 11 по `3f5b46e`, Review 11-3 — PASS).
 Ветка: `stage-12` от базового коммита; в origin не отправлялась, в `main` не сливалась.
-Коммиты этапа: `56c913f` — проект до кода; `27199a0` — решения владельца D-032 и ADR-013 до зависимого кода; `fedca66` — передача 12-1; `4d35752` — текст Review 12-1; передача 12-2 — коммит с этим отчётом. Точный SHA — в сообщении передачи и комментарии архива.
+Коммиты этапа: `56c913f` — проект до кода; `27199a0` — решения владельца D-032 и ADR-013 до зависимого кода; `fedca66` — передача 12-1; `4d35752` — текст Review 12-1; `f37a12c` — передача 12-2; `df90ceb` — текст Review 12-2; передача 12-3 — коммит с этим отчётом. Точный SHA — в сообщении передачи и комментарии архива.
 Рабочее дерево: чистое после коммита передачи. Не в Git по `.gitignore`: `node_modules/`, `apps/web/dist/`, `runtime/`. По `.git/info/exclude`: архивы и страницы передачи `ConturKP-*`, каталог `archive/`, реальные формы (`/001 *.zip`, `pilot-forms/`).
 Задание: `docs/spec/prompts/stage-12.md` (`docs/spec/03_STAGE_PROMPTS.md` §12). Решения: D-018, D-028…D-031, **D-032**; ADR-013. Проект: `docs/architecture/12-generation-design.md` (§12 — матрица проверок, §13.1 — уточнения реализации).
-Среда: Ubuntu 26.04 (Linux x64), Node 24.14.1. PostgreSQL 18 с pgvector в контейнере `kontur-pg` на `127.0.0.1:55432`. LibreOffice 26.2.5.2 (`libreoffice-writer-nogui`, `libreoffice-calc-nogui`, `fonts-liberation`). Chromium headless без песочницы (AppArmor). Windows на машине разработки нет: прогон на Windows — `NOT_RUN`, его выполняет ревьюер.
+Среда: Ubuntu 26.04 (Linux x64), Node 24.14.1. PostgreSQL 18 с pgvector в контейнере `kontur-pg` на `127.0.0.1:55432`. LibreOffice 26.2.5.2 (`libreoffice-writer-nogui`, `libreoffice-calc-nogui`, `fonts-liberation`) — передача 12-1; 2026-10-07 в 06:09 пакеты обновились до 26.2.6.3, на ней выполнены прогоны передач 12-2 и 12-3 (версия — в заголовках журналов). В отчёте и на странице передачи 12-2 версия ошибочно указана как 26.2.5.2. Chromium headless без песочницы (AppArmor). Windows на машине разработки нет: прогон на Windows — `NOT_RUN`, его выполняет ревьюер.
 
 ## Результат для пользователя
 
@@ -39,7 +39,7 @@
 | маршруты API | portal-api §2.9.1 |
 | экраны | вкладка этапа «Комплект» (сборка, список, карточка с превью); в «Шаблоны и формулировки» — размеченная копия и итог разметки у ревизии, библиотека стандартных вложений |
 | события аудита | `release.candidate.create`, `release.candidate.list`, `release.candidate.read`, `release.candidate.manifest`, `release.candidate.file.read`, `release.candidate.archive`, `release.attachment.create`, `release.attachment.list`, `release.attachment.revision.create`, `release.attachment.revision.approve`, `forms.markup.check`; отказы |
-| тесты этапа | 44 в 5 файлах: `releaseCore` 12, `releaseCandidates` 14, `releaseSchema` 5, `reviewRegressionsS12` 3, `reviewRegressions12` 10 (Review 12-1) |
+| тесты этапа | 47 в 6 файлах: `releaseCore` 12, `releaseCandidates` 14, `releaseSchema` 5, `reviewRegressionsS12` 3, `reviewRegressions12` 10 (Review 12-1), `reviewRegressions12b` 3 (Review 12-2) |
 | smoke / интерфейс / страницы | `scripts/smoke-12.mjs`; `artifacts/stage-12/ui-check.mjs`; `artifacts/stage-12/page-review.mjs` (PNG страниц для просмотра человеком) |
 | демонстрационные образцы | `scripts/build-demo-samples.mjs` → `docs/forms/samples/`: оригинал и размеченная копия письма КП (DOCX) и «Существенных условий» (XLSX), шрифты Liberation, запись детерминированна |
 | зависимости | `docxtemplater` 3.71.0, `pizzip` 3.3.0 (MIT); внешний инструмент — LibreOffice (`docs/runbooks/libreoffice.md`) |
@@ -59,12 +59,28 @@
 | `packages/db/src/forms.ts`; `apps/server/src/routes/formTemplates.ts`; `packages/contracts/src/forms.ts` | ревизия шаблона с размеченной копией и аудиторией; проверка разметки при создании; `POST /template-markup-check`; утверждение с ошибками разметки — 409 `markup_invalid` |
 | `packages/db/src/stageEvents.ts`; `apps/server/src/reviewMappers.ts` | `stageEventClass` — единые классы событий; свежесть прогона проверок по ним (S12-01) |
 | `apps/server/src/http/command.ts` | отказ команды над объектом без тендера — журнал без UUID тендера вместо 500 (S12-02) |
+| `apps/server/src/routes/formDrafts.ts` (`loadDraft`); `apps/server/src/http/errors.ts` | порядок блокировок «этап → приложение» для команд приложения; `40P01` — 409 (R12-04) |
 | `packages/config/src/index.ts`; `.env.example`; `tests/helpers.ts` | `SOFFICE_PATH`, `OFFICE_CONVERT_TIMEOUT_SECONDS`; `office` в тестовой конфигурации; `getBuffer` для двоичных ответов |
 | `apps/server/src/app.ts`; `apps/worker/src/handlers/index.ts`; `packages/*/src/index.ts` | маршруты кандидата и вложений; задание `candidate.assemble`; экспорт модулей |
 | `apps/web/src/pages/StagePage.tsx`, `forms/FormsLibraryPage.tsx`, `forms/TemplatesPanel.tsx`, `forms/Forms.module.css`; `api/formsEndpoints.ts`, `formsTypes.ts`, `upload.ts`; `index.css` | вкладка «Комплект»; новая ревизия: простой путь этапа 11 сохранён (выбор файла схемы сразу создаёт ревизию), переключатель «С образцом для генерации» добавляет оригинал, размеченную копию, аудиторию и кнопку «Загрузить ревизию»; значки и ошибки разметки; библиотека вложений, форма нового вложения раскрывается кнопкой; токен `--paper` (фон страницы превью в обеих темах) |
 | `scripts/smoke.mjs` | шаги этапа 12 и проверка комплекта после перезапуска server |
 
 Принятые миграции 0001–0031 не менялись (ADR-002); 0032 после передачи 12-1 не менялась — функция охранника заменена миграцией 0033.
+
+## Исправление Review 12-2
+
+Регрессия написана до правки продукта (`tests/reviewRegressions12b.test.ts`). На продукте `f37a12c` сценарий наложения падал: сборка — HTTP 500, взаимная блокировка. Проверка `40P01` тоже падала, последовательный контроль проходил — `artifacts/stage-12/regressions-12b-before.log`. После исправления — 3 / 3.
+
+### R12-04 — взаимная блокировка правки поля и сборки комплекта
+
+- Причина: правка поля блокировала строку приложения, а затем при записи события входа — этап. Сборка комплекта блокировала этап, а затем строку приложения. При наложении PostgreSQL прерывал одну транзакцию (`40P01`), и до пользователя доходила внутренняя ошибка.
+- Исправление: общий порядок доменных блокировок «этап → приложение».
+  - `loadDraft(..., lock)` сначала проверяет доступ без блокировки, затем берёт блокировку этапа (`lockTenderStages`) и только после неё — строку приложения.
+  - Через него идут все команды, меняющие приложение: правка поля, «заполнено», перенос, принятие и отклонение предложения.
+  - Тот же порядок уже был у сборки комплекта, записи событий входов (`emitStageEvents`) и их обработки (`lockStageForReview`).
+- Если взаимная блокировка всё же возникнет на другом пути, `fromPgError` переводит `40P01` в `409 STATE_CONFLICT` «перечитайте и повторите»: транзакция откатана целиком. Это защитная сетка, а не замена порядка.
+- Регрессия использует штатную точку остановки, а не подмену SQL. Тест держит ту же advisory-блокировку версии поля, которую правка берёт после блокировки приложения. Через `pg_stat_activity` проверяется, что сборка ждёт; затем правка продолжается. Итог: правка 200, сборка 409 `drafts_not_complete` (или 201 и неактуальный кандидат), приложение в работе.
+- Проверки свежести R12-02 сохранены: регрессии `reviewRegressions12` проходят без изменений ожиданий.
 
 ## Исправление Review 12-1
 
@@ -105,6 +121,7 @@
 | R12-01 (P1) | на Windows выбирался `soffice.exe`, определение версии не завершалось | Review 12-1 | `tests/reviewRegressions12.test.ts` — `artifacts/stage-12/regressions-12-before.log` |
 | R12-02 (P1) | комплект собирался по значению с уже заменённым основанием | Review 12-1 | то же |
 | R12-03 (P2) | после 200 посторонних событий изменение входа не делало кандидата неактуальным | Review 12-1 | то же |
+| R12-04 (P2) | одновременные правка поля и сборка комплекта взаимно блокировались, сборка — HTTP 500 | Review 12-2 | `tests/reviewRegressions12b.test.ts` — `artifacts/stage-12/regressions-12b-before.log` |
 
 Подробности и исправления — `docs/defects.md`. Тем же просмотром страниц исправлены: денежное поле печатается с `scale` знаками («120,00»), позиция заказчика в демо-XLSX — с «%», пустая группа файлов — «Файлов нет».
 
@@ -165,22 +182,24 @@
 
 ## Фактически выполненные проверки
 
-Передача 12-2 (журналы в `artifacts/stage-12/` перезаписаны прогоном на коде 12-2; журналы «до исправления» сохранены):
+Передача 12-3 (журналы в `artifacts/stage-12/` перезаписаны прогоном на коде 12-3; журналы «до исправления» сохранены). LibreOffice — 26.2.6.3.
 
 | Команда / сценарий | Среда и данные | Результат | Артефакт |
 |---|---|---|---|
-| `npx vitest run --maxWorkers=1 --fileParallelism=false` | Linux x64, Node 24.14.1, PostgreSQL 18 + pgvector, LibreOffice 26.2.5.2; изолированные тестовые БД | PASS: 1128 / 1128, 115 файлов, 510 с | `artifacts/stage-12/tests.log` |
+| `npx vitest run --maxWorkers=1 --fileParallelism=false` | Linux x64, Node 24.14.1, PostgreSQL 18 + pgvector, LibreOffice 26.2.6.3; изолированные тестовые БД | PASS: 1131 / 1131, 116 файлов, 560 с (повторный прогон) | `artifacts/stage-12/tests.log` |
+| то же, первый прогон | машина под внешней нагрузкой (load average ~11: чужие процессы — импорт HUBTender, `tsc` FOT) | 1130 / 1131: тайм-аут 30 с в `factGraphSchema.test.ts` (инвариант неизменяемости, не связан с правкой); отдельно файл — 8 / 8 за 12 с | `artifacts/stage-12/tests-12-3-first-run.log` |
 | `npm run typecheck` | Linux x64 | PASS | `artifacts/stage-12/typecheck.log` |
 | `npm run build` | Linux x64 | PASS | `artifacts/stage-12/build.log` |
 | `SMOKE_STAGE=stage-12 npm run smoke` | настоящие server + worker, чистая БД, LibreOffice, `MODEL_PROVIDER=fake` | PASS: 91 шаг, 33 миграции с пустой БД, из них этапа 12 — 6 | `artifacts/stage-12/smoke.log` |
-| `CHROME_NO_SANDBOX=1 node artifacts/stage-12/ui-check.mjs` | Chromium headless (CDP), настоящие server + worker, LibreOffice; поддельный TenderHub; 390, 360, 1280 px, тёмная тема | PASS: 20 шагов (шаблон с размеченной копией создаётся и утверждается через интерфейс) | `artifacts/stage-12/ui-check.log` |
-| `node artifacts/stage-12/page-review.mjs <каталог>` | LibreOffice 26.2.5.2; обе демо-формы с длинными текстами | PASS: 2 файла, 3 страницы, подмены шрифтов нет; генерация после передачи 12-1 не менялась | `artifacts/stage-12/page-review.log` |
-| тесты этапа 12, подробный вывод | 5 файлов | PASS: 44 / 44 (`releaseCore` 12, `releaseCandidates` 14, `releaseSchema` 5, `reviewRegressionsS12` 3, `reviewRegressions12` 10) | `artifacts/stage-12/stage-tests.log` |
-| регрессии Review 12-1 на продукте `fedca66` (исправления и миграция 0033 убраны на время прогона) | `tests/reviewRegressions12.test.ts` | ожидаемо: 9 FAIL / 1 PASS (контроль R12-02) | `artifacts/stage-12/regressions-12-before.log` |
+| `CHROME_NO_SANDBOX=1 node artifacts/stage-12/ui-check.mjs` | Chromium headless (CDP), настоящие server + worker, LibreOffice; поддельный TenderHub; 390, 360, 1280 px, тёмная тема | PASS: 20 шагов | `artifacts/stage-12/ui-check.log` |
+| `node artifacts/stage-12/page-review.mjs <каталог>` | LibreOffice 26.2.6.3; обе демо-формы с длинными текстами | PASS: 2 файла, 3 страницы, подмены шрифтов нет | `artifacts/stage-12/page-review.log` |
+| тесты этапа 12, подробный вывод | 6 файлов | PASS: 47 / 47 (`releaseCore` 12, `releaseCandidates` 14, `releaseSchema` 5, `reviewRegressionsS12` 3, `reviewRegressions12` 10, `reviewRegressions12b` 3) | `artifacts/stage-12/stage-tests.log` |
+| регрессия Review 12-2 на продукте `f37a12c` (до исправления) | `tests/reviewRegressions12b.test.ts` | ожидаемо: 2 FAIL (наложение — сборка 500; `40P01` не переводился) / 1 PASS (последовательный контроль) | `artifacts/stage-12/regressions-12b-before.log` |
+| регрессии Review 12-1 на продукте `fedca66` (передача 12-2) | `tests/reviewRegressions12.test.ts` | ожидаемо: 9 FAIL / 1 PASS (контроль R12-02) | `artifacts/stage-12/regressions-12-before.log` |
 | регрессия интерфейса этапов 02–11 (их `ui-check.mjs`) | этапы 02–04 — Chromium через `EDGE_PATH`-обёртку с `--no-sandbox` | PASS: 12 · 15 · 29 · 19 · 22 · 26 · 33 · 32 · 41 · 29 · 29 · 20 · 16 шагов (02, 03, 04, 05, 05a, 06, 06a, 07, 08, 08a, 09, 10, 11), всего 323 | `artifacts/stage-12/ui-check-stage*-regression.log` |
-| Windows: полный набор, typecheck, build, smoke, интерфейс, настоящий LibreOffice без явного пути (R12-01) | — | `NOT_RUN` — Windows на машине разработки нет; выполняет ревьюер | — |
+| Windows: полный набор, typecheck, build, smoke, интерфейс, одновременные команды | — | `NOT_RUN` — Windows на машине разработки нет; выполняет ревьюер | — |
 
-Передача 12-1 (те же журналы до перезаписи — в архиве передачи `fedca66`): полный набор 1118 / 1118; smoke 91 / 91 (32 миграции); интерфейс 12 — 20 / 20; регрессия интерфейса 02–11 — PASS (этап 11 — после исправления формы ревизии); регрессии S12-01, S12-02 на `49ab92e` — 2 FAIL / 1 PASS (`regressions-s12-before.log`); S12-03 и S12-04 до исправления — FAIL (`regression-s12-03-before.log`, `regression-s12-04-before.log`).
+Ранее: передача 12-2 — полный набор 1128 / 1128, smoke 91 / 91 (33 миграции), интерфейс 20 / 20, регрессия интерфейса 02–11 323 / 323 (журналы — в архиве `f37a12c`); передача 12-1 — полный набор 1118 / 1118, smoke 91 / 91 (32 миграции), регрессии S12-01…S12-04 до исправления — `regressions-s12-before.log`, `regression-s12-03-before.log`, `regression-s12-04-before.log`.
 
 ## Интеграции
 
@@ -215,13 +234,12 @@
 
 ## Передача независимому ревьюеру
 
-Проверяемый коммит — коммит передачи 12-2 на ветке `stage-12`; точный SHA — в сообщении передачи и комментарии архива. Передача 12-1 — `fedca66`, ревью — `docs/reviews/12-review-1.md`.
+Проверяемый коммит — коммит передачи 12-3 на ветке `stage-12`; точный SHA — в сообщении передачи и комментарии архива. Передачи 12-1 — `fedca66`, 12-2 — `f37a12c`; ревью — `docs/reviews/12-review-1.md`, `12-review-2.md`.
 
-Перед прогоном на Windows установите LibreOffice (`docs/runbooks/libreoffice.md`). Явный `SOFFICE_PATH` / `KONTUR_TEST_SOFFICE` больше не нужен: штатный выбор находит `soffice.com` (R12-01). Без LibreOffice тесты этапа 12 падают с причиной «LibreOffice не найден».
+Перед прогоном на Windows установите LibreOffice (`docs/runbooks/libreoffice.md`); явный путь не нужен — штатный выбор находит `soffice.com`.
 
 Что прошу проверить:
-1. Независимые `reviewer12.test.ts` — три сценария R12-01…R12-03 и контроль; регрессии `tests/reviewRegressions12.test.ts`.
-2. R12-01 без явного пути: определение версии и реальная конвертация через штатный выбор в `PATH` и в стандартном каталоге; `SOFFICE_PATH` на `soffice.exe` при соседнем `soffice.com`.
-3. R12-02: замена основания после «заполнено» — прямое, решение по требованию, копия; до и после обработки событий; гонка «новая редакция ↔ создание кандидата»; вторая линия 0033.
-4. R12-03: более 200 событий после базы — чужие правки и правка своего поля; карточка и список.
-5. Полный набор на Windows (один поток и штатные 4 worker), typecheck, build, smoke (`SMOKE_STAGE=stage-12`), интерфейс 12 и регрессия интерфейса 02–11.
+1. Независимые `reviewer12b.test.ts` (сценарий одновременных команд и последовательный контроль) и прежний `reviewer12.test.ts` с неизменными ожиданиями; регрессии `tests/reviewRegressions12b.test.ts`, `reviewRegressions12.test.ts`.
+2. R12-04 и смежные пары команд: правка поля, «заполнено», перенос, принятие предложения — против сборки комплекта, новой редакции документа и обработки событий; ни взаимной блокировки, ни HTTP 500.
+3. Проверки свежести R12-02 не ослаблены: замена основания после «заполнено» — 409, вторая линия 0033.
+4. Полный набор на Windows (один поток и штатные 4 worker), typecheck, build, smoke (`SMOKE_STAGE=stage-12`), интерфейс 12 и регрессия интерфейса 02–11.

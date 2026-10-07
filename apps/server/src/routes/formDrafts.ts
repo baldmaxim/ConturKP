@@ -22,6 +22,7 @@ import {
   getTemplateRevision,
   getWordingVersion,
   listDrafts,
+  lockTenderStages,
   setDraftStatus,
   tenderFactsByType,
   type IAccessContext,
@@ -41,11 +42,16 @@ import { loadStage } from './stages.ts';
 
 type Cap = 'tender.read' | 'application.fill';
 
+// Порядок блокировок (R12-04): этап, затем приложение. Команда, меняющая приложение, сначала берёт блокировку этапа —
+// ту же, что берут запись событий входов и сборка комплекта, — и только потом строку приложения; иначе правка поля
+// (приложение → событие → этап) и сборка (этап → приложение) взаимно блокировались.
 export const loadDraft = async (db: Queryable, ctx: IAccessContext, id: string, cap: Cap = 'tender.read', lock = false): Promise<IDraftRow> => {
-  const d = await getDraft(db, id, lock);
-  if (!d || !hasTenderCap(ctx, d.tender_id, 'tender.read')) throw notFound({ entityType: 'application_draft', entityId: id });
-  if (!hasTenderCap(ctx, d.tender_id, cap)) throw forbidden(cap, { entityType: 'application_draft', entityId: id, tenderId: d.tender_id });
-  return d;
+  const peek = await getDraft(db, id);
+  if (!peek || !hasTenderCap(ctx, peek.tender_id, 'tender.read')) throw notFound({ entityType: 'application_draft', entityId: id });
+  if (!hasTenderCap(ctx, peek.tender_id, cap)) throw forbidden(cap, { entityType: 'application_draft', entityId: id, tenderId: peek.tender_id });
+  if (!lock) return peek;
+  await lockTenderStages(db, peek.tender_id, [peek.stage_id]);
+  return (await getDraft(db, id, true))!;
 };
 
 export const draftTarget = (d: IDraftRow) => ({ tenderId: d.tender_id, entityType: 'application_draft', entityId: d.id });

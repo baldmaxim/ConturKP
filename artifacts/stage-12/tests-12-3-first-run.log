@@ -1,0 +1,34 @@
+# 2026-10-07T12:49:59+05:00, linux x64 Node v24.14.1, Ubuntu 26.04.1 LTS; PostgreSQL 18.6 + pgvector (контейнер kontur-pg, 127.0.0.1:55432); LibreOffice 26.2.6.3 620(Build:3); передача 12-3
+# Первый полный прогон передачи 12-3: 1 тайм-аут (factGraphSchema, 30 с) при внешней нагрузке на машину (load average ~11: импорт HUBTender и tsc FOT); файл отдельно — 8 / 8 за 12 с; повторный полный прогон — tests.log.
+# npx vitest run --maxWorkers=1 --fileParallelism=false
+
+ RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
+
+ ❯ tests/factGraphSchema.test.ts (8 tests | 1 failed) 90554ms
+   ❯ инвариант 1: неизменяемость прочитанного (1)
+     × прогон извлечения, факт, основание и решение не меняются и не удаляются — роль приложения и владелец схемы 30356ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/factGraphSchema.test.ts > инвариант 1: неизменяемость прочитанного > прогон извлечения, факт, основание и решение не меняются и не удаляются — роль приложения и владелец схемы
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/factGraphSchema.test.ts:89:3
+     87|
+     88| describe('инвариант 1: неизменяемость прочитанного', () => {
+     89|   it('прогон извлечения, факт, основание и решение не меняются и не уд…
+       |   ^
+     90|     for (const table of ['fact_extraction_run', 'evidence_fact', 'evid…
+     91|       expect(await q(`UPDATE ${table} SET created_xact = created_xact`…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 115 passed (116)
+      Tests  1 failed | 1130 passed (1131)
+   Start at  12:50:00
+   Duration  781.50s (tests 91%, import 8%, transform 1%)
+
+    Isolate  116 workers spawned · ~135ms startup each (spawn + environment, per file)
+             at least ~15.49s faster with isolate: false — reuses workers across files instead of one per file
+

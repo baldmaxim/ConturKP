@@ -1,14 +1,14 @@
-# 2026-10-07T12:15:18+05:00, linux x64 Node v24.14.1, Ubuntu 26.04.1 LTS; PostgreSQL 18.6 + pgvector (контейнер kontur-pg, 127.0.0.1:55432); LibreOffice 26.2.6.3 620(Build:3); передача 12-2
+# 2026-10-07T13:55:18+05:00, linux x64 Node v24.14.1, Ubuntu 26.04.1 LTS; PostgreSQL 18.6 + pgvector (контейнер kontur-pg, 127.0.0.1:55432); LibreOffice 26.2.6.3 620(Build:3); передача 12-3, повторный полный прогон (первый — tests-12-3-first-run.log)
 # npx vitest run --maxWorkers=1 --fileParallelism=false
 
  RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
 
 
- Test Files  115 passed (115)
-      Tests  1128 passed (1128)
-   Start at  12:15:19
-   Duration  510.41s (tests 90%, import 9%, transform 1%)
+ Test Files  116 passed (116)
+      Tests  1131 passed (1131)
+   Start at  13:55:19
+   Duration  560.22s (tests 90%, import 9%, transform 1%)
 
-    Isolate  115 workers spawned · ~101ms startup each (spawn + environment, per file)
-             at least ~11.54s faster with isolate: false — reuses workers across files instead of one per file
+    Isolate  116 workers spawned · ~110ms startup each (spawn + environment, per file)
+             at least ~12.62s faster with isolate: false — reuses workers across files instead of one per file
 

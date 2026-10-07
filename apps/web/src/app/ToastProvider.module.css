@@ -12,11 +12,20 @@
   pointer-events: none;
 }
 
+/* Липкая нижняя панель защищённых действий (этап 13, BRAND.md §9.1 п. 2): тост — над ней, а не поверх кнопки. */
+:global(body:has([data-bottom-bar='true'])) .host {
+  bottom: calc(max(var(--space-4), env(safe-area-inset-bottom)) + 96px);
+}
+
 @media (min-width: 768px) {
   .host {
     left: auto;
     width: 400px;
     right: max(var(--space-6), env(safe-area-inset-right));
+    bottom: max(var(--space-6), env(safe-area-inset-bottom));
+  }
+
+  :global(body:has([data-bottom-bar='true'])) .host {
     bottom: max(var(--space-6), env(safe-area-inset-bottom));
   }
 }

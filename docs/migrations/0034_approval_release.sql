@@ -336,6 +336,23 @@ LANGUAGE sql STABLE AS $$
    ORDER BY e.seq
 $$;
 
+-- Удержание по событию (state-machines §1.1 п. 4, §13): в той же транзакции, что и вставка события, — для каждого
+-- действующего кандидата этапа (собирается, готов, согласован, выпущен; отправки до этапа 15 нет), которого событие
+-- касается и которым не покрыто. Триггер, а не код: удержание создаётся при любом пути записи события, а код записи
+-- событий (stageEvents.ts) не зависит от схемы этапа 13. Событие вставляется под блокировкой строки этапа.
+CREATE FUNCTION stage_input_event_hold() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO readiness_hold (candidate_id, tender_id, stage_id, input_event_id)
+  SELECT c.id, c.tender_id, c.stage_id, NEW.id FROM release_candidate c
+   WHERE c.stage_id = NEW.stage_id AND c.status IN ('assembling', 'ready_for_approval', 'approved', 'released')
+     AND stage_event_affects(c.id, NEW.id) AND NOT stage_event_covered(c.id, NEW.id)
+  ON CONFLICT (candidate_id, input_event_id) DO NOTHING;
+  RETURN NULL;
+END;
+$$;
+CREATE TRIGGER stage_input_event_hold AFTER INSERT ON stage_input_event FOR EACH ROW EXECUTE FUNCTION stage_input_event_hold();
+
 -- ---------------------------------------------------------------- Возврат на доработку
 
 CREATE TABLE candidate_return (

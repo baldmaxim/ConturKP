@@ -9,7 +9,12 @@ import { useApiResource } from '../../hooks/useApiResource';
 import { formatDateTime } from '../../utils/datetime';
 import { BLOCKER_LABELS, CANDIDATE_STATUS, CHECK_LABELS, EVENT_LABELS, formatBytes, MODE_LABEL, noteLabel, OUTCOME_LABEL } from '../../utils/releaseLabels';
 import form from '../../styles/form.module.css';
+import { ApprovalActions } from './ApprovalActions';
+import { CandidateHistory } from './CandidateHistory';
+import { GatePanel } from './GatePanel';
+import { HoldsPanel } from './HoldsPanel';
 import { PdfPreview } from './PdfPreview';
+import { ReleaseChain } from './ReleaseChain';
 import styles from './Release.module.css';
 
 interface ICandidateDetailProps {
@@ -32,7 +37,8 @@ const FileRow: FC<{ f: ICandidateFile; selected: boolean; onSelect: () => void }
 /**
  * Комплект-кандидат (D-032): статус, режим, отметки и известные блокеры (без разрешения на выпуск), проверки сборки,
  * файлы для заказчика и внутренние, превью выбранного файла, закреплённые входы, изменения после сборки. Без видимости
- * всех входов — только оболочка (D-032 В-12-7).
+ * всех входов — только оболочка (D-032 В-12-7). Этап 13 (D-033): цепочка выпуска, матрица блокеров с принятием риска,
+ * удержания по событиям, защищённые действия «Согласовать…» и «Выпустить…» в конце карточки, журнал.
  */
 export const CandidateDetail: FC<ICandidateDetailProps> = ({ candidateId, onChanged }) => {
   const res = useApiResource((signal) => getCandidate(candidateId, signal), candidateId);
@@ -53,6 +59,12 @@ export const CandidateDetail: FC<ICandidateDetailProps> = ({ candidateId, onChan
   const status = CANDIDATE_STATUS[c.status]!;
   const files = c.files ?? [];
   const current = files.find((f) => f.id === selected) ?? files.find((f) => f.previewFileId) ?? null;
+  const refresh = (): void => {
+    res.reload();
+    onChanged();
+  };
+  const tracked = !c.restricted && ['ready_for_approval', 'approved', 'returned', 'released'].includes(c.status);
+  const gate = c.status === 'ready_for_approval' ? c.gate?.approve : c.status === 'approved' ? c.gate?.release : null;
   return (
     <section className={form.section} aria-labelledby={`candidate-${c.id}`}>
       <div className={styles.head}>
@@ -62,17 +74,24 @@ export const CandidateDetail: FC<ICandidateDetailProps> = ({ candidateId, onChan
         <div className={styles.badges}>
           <Badge label={status.label} icon={status.icon} tone={status.tone} dashed={status.dashed} />
           <Badge label={MODE_LABEL[c.mode] ?? c.mode} icon={c.mode === 'test' ? 'info' : 'shield-x'} tone={c.mode === 'test' ? 'warning' : 'neutral'} />
-          {c.current === false ? <Badge label="Входы изменились — нужен новый комплект" icon="clock-alert" tone="warning" dashed /> : null}
+          {c.current === false ? <Badge label="Есть события без решения" icon="octagon-pause" tone="warning" dashed /> : null}
         </div>
       </div>
       <p className={styles.muted}>{`Собрал ${c.createdBy.name} · ${formatDateTime(c.createdAt)}${c.converterVersion ? ` · превью: ${c.converterVersion}` : ''}`}</p>
       {c.restricted ? <Notice tone="warning">Среди входов комплекта есть материалы, закрытые для вас: состав и файлы не показываются.</Notice> : null}
       {c.failure ? <Notice tone="danger">{`Сборка не удалась (${CHECK_LABELS[c.failure.code] ?? c.failure.code}): ${c.failure.detail}`}</Notice> : null}
-      {(c.knownProductionBlockers ?? []).map((b) => (
-        <Notice key={b} tone="warning">
-          {BLOCKER_LABELS[b] ?? b}
-        </Notice>
-      ))}
+      {gate
+        ? null
+        : (c.knownProductionBlockers ?? []).map((b) => (
+            <Notice key={b} tone="warning">
+              {BLOCKER_LABELS[b] ?? b}
+            </Notice>
+          ))}
+      {tracked ? <ReleaseChain c={c} /> : null}
+      {gate ? (
+        <GatePanel candidateId={c.id} gate={gate} title={c.status === 'approved' ? 'Выпуск' : 'Согласование'} canAcceptRisk={!!c.can?.acceptRisk && c.status === 'ready_for_approval'} onChanged={refresh} />
+      ) : null}
+      {tracked || c.status === 'assembling' ? <HoldsPanel stageId={c.stageId} candidateId={c.id} version={`${c.etag}:${c.holds?.open ?? 0}:${c.holds?.total ?? 0}`} onChanged={refresh} /> : null}
       {(c.notes ?? []).length ? (
         <ul className={styles.notes} aria-label="Отметки комплекта">
           {c.notes!.map((n) => (
@@ -160,6 +179,8 @@ export const CandidateDetail: FC<ICandidateDetailProps> = ({ candidateId, onChan
           </ul>
         </details>
       ) : null}
+      {tracked ? <CandidateHistory candidateId={c.id} version={`${c.etag}:${(c.approvals ?? []).length}:${c.holds?.total ?? 0}`} /> : null}
+      {tracked ? <ApprovalActions c={c} onChanged={refresh} /> : null}
     </section>
   );
 };

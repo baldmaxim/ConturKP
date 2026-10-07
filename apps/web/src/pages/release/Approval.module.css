@@ -1,0 +1,256 @@
+/* Согласование и выпуск (этап 13; BRAND.md §4.3, §9.1): от 360 px — одна колонка, цепочка выпуска вертикальным списком,
+   зона действий — липкая нижняя панель над safe area; от 768 px — цепочка в строку, панель на месте. Цвета — токены темы. */
+.muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.mono {
+  color: var(--muted);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.label {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.itemText {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.chainWrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.chain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--muted);
+  min-width: 0;
+}
+
+.step[data-done='true'] {
+  border-style: solid;
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.step[data-tone='danger'] {
+  border-style: solid;
+  border-color: var(--danger);
+  color: var(--text);
+}
+
+.stepIcon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: var(--accent);
+}
+
+.step[data-done='false'] .stepIcon {
+  color: var(--muted);
+}
+
+.step[data-tone='danger'] .stepIcon {
+  color: var(--danger);
+}
+
+.stepText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gate,
+.holds {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  min-width: 0;
+}
+
+.gateTitle {
+  margin: 0;
+  font-size: var(--text-base, 1rem);
+  font-weight: 600;
+}
+
+.blockers,
+.items,
+.history,
+.compList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.blocker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-left: var(--space-3);
+  border-left: 4px solid var(--border-subtle);
+}
+
+.blocker[data-open='true'] {
+  border-left-color: var(--warning);
+}
+
+.blockerHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.blockerItem,
+.holdRow,
+.historyRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  min-width: 0;
+}
+
+.historyRow {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.holdText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.check {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  touch-action: manipulation;
+}
+
+.holdActions,
+.actionRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Защищённые действия — в конце карточки; на смартфоне — липкая нижняя панель над safe area (BRAND.md §9.1 п. 2). */
+.actionBar {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-2) calc(-1 * var(--space-3)) 0;
+  padding: var(--space-3) var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface);
+}
+
+.actionRow > button {
+  min-height: 44px;
+}
+
+/* Вторичные действия отделены от главного промежутком не меньше 24 px (BRAND.md §9.1 п. 2). */
+.gap {
+  display: block;
+  width: var(--space-6);
+  height: 1px;
+}
+
+.reasons {
+  margin: 0;
+  color: var(--warning);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.composition {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.compTitle {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.compFile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+
+.details {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-2);
+}
+
+.details summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+@media (min-width: 768px) {
+  .chain {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .step {
+    flex: 1 1 14rem;
+  }
+
+  .actionBar {
+    position: static;
+    margin: var(--space-2) 0 0;
+    padding: var(--space-3) 0 0;
+  }
+}

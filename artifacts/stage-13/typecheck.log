@@ -1,0 +1,10 @@
+# 2026-10-07T19:18:55+05:00, linux x64 Node v24.14.1
+
+> typecheck
+> tsc -p tsconfig.json --noEmit && npm run typecheck -w @kontur/web
+
+
+> typecheck
+> tsc -p tsconfig.json --noEmit
+
+exit 0

@@ -27,6 +27,8 @@ export const Button: FC<IButtonProps> = ({
 }) => (
   <button
     {...rest}
+    // Отметка для Dialog: showModal() переводит фокус на первый элемент, autoFocus React его не переживает (BRAND.md §9.1 п. 5).
+    data-autofocus={rest.autoFocus ? 'true' : undefined}
     type={type}
     className={cx(styles.button, styles[variant], iconOnly && styles.iconOnly, className)}
     disabled={disabled || loading}

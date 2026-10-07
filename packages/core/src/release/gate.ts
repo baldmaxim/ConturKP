@@ -70,6 +70,8 @@ export interface IGateItem {
   subjectVersion?: number | null;
   title: string;
   acceptable?: boolean;
+  // Предмет закрыт текущему пользователю: текст скрыт, принять по нему риск этот пользователь не может.
+  restricted?: boolean;
 }
 
 export interface IRiskAcceptanceFact {

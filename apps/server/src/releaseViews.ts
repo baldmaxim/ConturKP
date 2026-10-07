@@ -89,7 +89,8 @@ export const holdView = (h: IHoldRow) => ({
   candidateId: h.candidate_id,
   candidateSeq: h.candidate_seq,
   status: h.status,
-  event: { id: h.input_event_id, seq: h.event_seq, type: h.event_type, class: h.event_class, refType: h.ref_type, refId: h.ref_id, at: iso(h.event_at) },
+  // Идентификатор предмета события (письмо, документ) не отдаётся: по нему не раскрывается закрытый предмет.
+  event: { id: h.input_event_id, seq: h.event_seq, type: h.event_type, class: h.event_class, refType: h.ref_type, at: iso(h.event_at) },
   covered: h.covered,
   reason: h.reason,
   resolvedBy: h.resolved_by ? { id: h.resolved_by, name: h.resolved_by_name } : null,
@@ -127,6 +128,7 @@ export const gateView = (g: IGateResult) => ({
       subjectVersion: i.subjectVersion ?? null,
       title: i.title,
       acceptable: b.acceptable && i.acceptable !== false,
+      restricted: i.restricted === true,
       acceptance: i.acceptance ? { id: i.acceptance.id, reason: i.acceptance.reason, acceptedBy: i.acceptance.acceptedBy, acceptedAt: i.acceptance.acceptedAt } : null,
     })),
   })),

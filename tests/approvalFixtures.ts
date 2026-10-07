@@ -195,7 +195,7 @@ export const acceptAll = async (st: IStage13, c: ICandidate13): Promise<number> 
   for (const b of c.gate.approve?.blockers ?? []) {
     if (!b.acceptable) continue;
     for (const i of b.items.filter((x) => !x.acceptance)) {
-      const r = await acceptRisk(st, c, { blockerCode: b.code, subjectType: i.subjectType, subjectId: i.subjectId, subjectKey: i.subjectKey, reason: `Риск принят руководителем: ${i.title}`.slice(0, 2000) });
+      const r = await acceptRisk(st, c, { blockerCode: b.code, subjectType: i.subjectType, subjectId: i.subjectId, subjectKey: i.subjectKey, reason: `Риск принят руководителем по пункту ${b.code}` });
       expect(r.status, r.text).toBe(201);
       n += 1;
     }

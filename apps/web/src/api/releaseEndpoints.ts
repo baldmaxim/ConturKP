@@ -1,7 +1,7 @@
 // Вызовы комплекта-кандидата и библиотеки вложений (этап 12; portal-api §2.9). Файлы — по ID через API, права
 // проверяет сервер при каждом запросе (D-032 В-12-7).
 import { API_BASE, apiGet, apiPost } from './client';
-import type { ICandidateBrief, ICandidateView, IStandardAttachment } from './releaseTypes';
+import type { ICandidateBrief, ICandidateView, IHistoryEntry, IHoldView, IReleaseView, IStandardAttachment } from './releaseTypes';
 
 const enc = encodeURIComponent;
 
@@ -24,3 +24,33 @@ export const createAttachmentRevision = (attachmentId: string, body: { sha256: s
   apiPost<IStandardAttachment>(`/standard-attachments/${enc(attachmentId)}/revisions`, { body, idempotencyKey });
 
 export const approveAttachmentRevision = (a: IStandardAttachment) => apiPost<IStandardAttachment>(`/standard-attachment-revisions/${enc(a.revisionId)}/approve`, { body: {}, ifMatch: a.etag });
+
+// ---------------------------------------------------------------- Этап 13: согласование и выпуск (D-033)
+
+export const approveCandidate = (c: ICandidateView, comment: string | null, idempotencyKey: string) =>
+  apiPost<ICandidateView>(`/release-candidates/${enc(c.id)}/approve`, { body: { contentHash: c.contentHash, ...(comment ? { comment } : {}) }, ifMatch: c.etag, idempotencyKey });
+
+export const returnCandidate = (c: ICandidateView, reason: string, idempotencyKey: string) =>
+  apiPost<ICandidateView>(`/release-candidates/${enc(c.id)}/return`, { body: { reason }, ifMatch: c.etag, idempotencyKey });
+
+export const revokeApproval = (approval: { id: string; etag: string }, reason: string, idempotencyKey: string) =>
+  apiPost<ICandidateView>(`/approvals/${enc(approval.id)}/revoke`, { body: { reason }, ifMatch: approval.etag, idempotencyKey });
+
+export const releaseCandidate = (c: ICandidateView, approvalId: string, idempotencyKey: string) =>
+  apiPost<ICandidateView>(`/release-candidates/${enc(c.id)}/release`, { body: { approvalId, contentHash: c.contentHash }, ifMatch: c.etag, idempotencyKey });
+
+export const acceptRisk = (candidateId: string, body: { blockerCode: string; subjectType: string; subjectId: string; subjectKey: string; reason: string }, idempotencyKey: string) =>
+  apiPost<ICandidateView>(`/release-candidates/${enc(candidateId)}/risk-acceptances`, { body, idempotencyKey });
+
+export const listHolds = (stageId: string, candidateId: string, signal?: AbortSignal) =>
+  apiGet<{ items: IHoldView[]; canResolve: boolean }>(`/stages/${enc(stageId)}/holds?candidateId=${enc(candidateId)}`, { signal });
+
+export const resolveHolds = (candidateId: string, body: { holdIds: string[]; resolution: 'not_applicable' | 'requires_new_candidate'; reason: string }, idempotencyKey: string) =>
+  apiPost<ICandidateView>(`/release-candidates/${enc(candidateId)}/holds/resolve`, { body, idempotencyKey });
+
+export const candidateHistory = (candidateId: string, signal?: AbortSignal) => apiGet<{ items: IHistoryEntry[] }>(`/release-candidates/${enc(candidateId)}/history`, { signal });
+
+export const listReleases = (stageId: string, signal?: AbortSignal) => apiGet<{ items: (IReleaseView & { restricted: boolean })[] }>(`/stages/${enc(stageId)}/releases`, { signal });
+
+export const releaseManifestUrl = (id: string): string => `${API_BASE}/releases/${enc(id)}/manifest`;
+export const releaseArchiveUrl = (id: string, set: 'customer' | 'all' = 'customer'): string => `${API_BASE}/releases/${enc(id)}/archive?set=${set}`;

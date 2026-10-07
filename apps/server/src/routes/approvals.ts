@@ -170,6 +170,9 @@ export const approvalsRouter = (pool: Pool, store: BlobStore): Router => {
           .find((b) => b.code === code)
           ?.items.find((i) => i.subjectType === body.subjectType && i.subjectId === body.subjectId.toLowerCase() && (i.subjectKey ?? '') === body.subjectKey);
         if (!item) throw conflict('такого пункта блокера у комплекта сейчас нет', 'not_a_blocker', candidateTarget(c), { blockerCode: code });
+        if (item.restricted) {
+          throw conflict('основания пункта закрыты для вас: принять по нему риск нельзя', 'restricted_fragments', candidateTarget(c));
+        }
         if (item.acceptable === false) {
           throw conflict('у поля есть неснимаемая проблема (основание изменилось): нужно актуальное значение и пересборка (D-033 ут. 2)', 'field_not_current', candidateTarget(c));
         }

@@ -15,6 +15,7 @@ import { formatDateTime } from '../../utils/datetime';
 import { CANDIDATE_STATUS, MODE_LABEL } from '../../utils/releaseLabels';
 import form from '../../styles/form.module.css';
 import { CandidateDetail } from './CandidateDetail';
+import { ReleasesPanel } from './ReleasesPanel';
 import styles from './Release.module.css';
 
 interface ICandidatesTabProps {
@@ -119,7 +120,7 @@ export const CandidatesTab: FC<ICandidatesTabProps> = ({ stageId }) => {
                     <span className={styles.badges}>
                       <Badge label={s.label} icon={s.icon} tone={s.tone} dashed={s.dashed} />
                       {c.restricted ? <Badge label="Закрыт для вас" icon="lock" tone="muted" /> : null}
-                      {!c.current && c.status === 'ready_for_approval' ? <Badge label="Входы изменились" icon="clock-alert" tone="warning" dashed /> : null}
+                      {!c.current && ['ready_for_approval', 'approved', 'released'].includes(c.status) ? <Badge label="Есть события без решения" icon="octagon-pause" tone="warning" dashed /> : null}
                     </span>
                     <span className={styles.muted}>{`${c.createdBy.name} · ${formatDateTime(c.createdAt)}`}</span>
                   </button>
@@ -129,6 +130,7 @@ export const CandidatesTab: FC<ICandidatesTabProps> = ({ stageId }) => {
           </ul>
         )}
       </section>
+      <ReleasesPanel stageId={stageId} version={items.map((c) => `${c.id}:${c.status}:${c.current ? 1 : 0}`).join(',')} />
       {selected ? <CandidateDetail key={selected} candidateId={selected} onChanged={list.reload} /> : null}
     </div>
   );

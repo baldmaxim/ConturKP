@@ -10,6 +10,7 @@ const MESSAGES: Record<string, string> = {
   IDEMPOTENCY_KEY_REUSED: 'Повторная отправка с другими данными отклонена. Отправьте форму ещё раз.',
   RATE_LIMITED: 'Слишком много запросов. Подождите немного и повторите.',
   STATE_CONFLICT: 'Действие недоступно в текущем состоянии объекта.',
+  BLOCKER_PRESENT: 'Действие запрещено блокерами матрицы выпуска.',
   INTERNAL: 'Ошибка на сервере.',
 };
 
@@ -29,7 +30,7 @@ export const describeError = (error: unknown): string => {
   const code = problem?.code ?? '';
   const base = MESSAGES[code] ?? `Ошибка ${error.status}.`;
   // Для конфликта состояния сервер объясняет причину в detail — она важнее общей фразы.
-  const text = code === 'STATE_CONFLICT' && problem?.detail ? problem.detail : base;
+  const text = (code === 'STATE_CONFLICT' || code === 'BLOCKER_PRESENT') && problem?.detail ? problem.detail : base;
   if (error.status >= 500 && problem?.requestId) {
     return `${text} Код запроса: ${problem.requestId}.`;
   }

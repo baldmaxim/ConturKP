@@ -8,8 +8,10 @@ import {
   candidateFiles,
   candidateGateDbFacts,
   candidateInputs,
+  findingEvidence,
   getDraft,
   listAcceptances,
+  stageVisibility,
   type IAccessContext,
   type IApprovalRow,
   type ICandidateGateDbFacts,
@@ -18,6 +20,7 @@ import {
 } from '@kontur/db';
 import type { BlobStore } from '@kontur/storage';
 import { issuesForDraft } from './formsView.ts';
+import { reviewVisibility } from './reviewMappers.ts';
 
 // Байты файла хранилища совпадают с записанными SHA-256 и размером (ADR-003 §7): отсутствие файла — несовпадение.
 export const blobIntact = async (store: BlobStore, sha256: string, size: number | null): Promise<boolean> => {
@@ -107,8 +110,28 @@ export interface IGateOptions {
   store?: BlobStore | null;
 }
 
+// Пункты замечаний и вопросов, закрытые пользователю (основания из чужого ящика, закрытое требование), показываются без
+// текста (как в этапе 09, R08-02); принять риск по такому пункту нельзя — команда отвечает `restricted_fragments`.
+const RESTRICTED_FINDING = 'Критическое замечание: основания закрыты для вас';
+const RESTRICTED_QUESTION = 'Вопрос заказчику: закрыт для вас';
+
+const maskRestricted = async (db: Queryable, ctx: IAccessContext, c: IReleaseCandidateRow, facts: ICandidateGateDbFacts): Promise<ICandidateGateDbFacts> => {
+  const findingIds = [...facts.criticalFindings.map((f) => f.subjectId), ...facts.reviewRisks.map((r) => r.findingId)];
+  const review = await reviewVisibility(db, ctx, c.stage_id, findingIds.length ? await findingEvidence(db, findingIds) : []);
+  const stage = await stageVisibility(db, ctx, c.stage_id);
+  const finding = (i: IGateItem): IGateItem => (review.finding(i.subjectId) ? i : { ...i, title: RESTRICTED_FINDING, restricted: true });
+  const question = (i: IGateItem): IGateItem => (stage.visible('question', i.subjectId) ? i : { ...i, title: RESTRICTED_QUESTION, restricted: true });
+  return {
+    ...facts,
+    criticalFindings: facts.criticalFindings.map(finding),
+    questions: facts.questions.map(question),
+    draftQuestions: facts.draftQuestions.map(question),
+    reviewRisks: facts.reviewRisks.map((r) => (review.finding(r.findingId) ? r : { ...r, title: RESTRICTED_FINDING, reason: '' })),
+  };
+};
+
 export const candidateGate = async (db: Queryable, ctx: IAccessContext, c: IReleaseCandidateRow, o: IGateOptions): Promise<ICandidateGate> => {
-  const facts = await candidateGateDbFacts(db, c);
+  const facts = await maskRestricted(db, ctx, c, await candidateGateDbFacts(db, c));
   const fields = await fieldGaps(db, ctx, c, new Set(facts.fieldsStale.map((x) => x.subjectId)));
   const active = o.approval?.active ?? null;
   const gateFacts: IGateFacts = {

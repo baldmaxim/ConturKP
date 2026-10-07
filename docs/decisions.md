@@ -863,3 +863,5 @@
 Что изменяет: проект `docs/architecture/13-approval-release-design.md` §2–§15; `state-machines.md` §1.1 (реализация покрытия), §11, §11.1 (матрица по D-033), §13–§15; `data-model.md` §4.7 (`risk_acceptance`), §4.9; `portal-api.md` §2.9; `unknowns.md` Q-09 — при реализации. Q-05, Q-08, X-01 остаются ограничениями боевого выпуска.
 
 Ссылка на подтверждение владельца: `docs/reviews/13-owner-decisions.md`.
+
+Реализация (передача 13-1, `docs/stages/13-report.md`): миграция `0034_approval_release.sql` (возможности, решение `input_event_disposition`, функции покрытия событий и неснимаемых блокеров, `approval`, `release`, `risk_acceptance`, `readiness_hold`, `candidate_return`, охранники и переходы кандидата), ядро `packages/core/src/release/gate.ts` и `releaseManifest.ts` (`kontur-release/1`), слой БД `packages/db/src/approvals.ts`, API portal-api §2.9.2 (`apps/server/src/routes/approvals.ts`), экраны на карточке комплекта (цепочка выпуска, матрица с принятием риска, удержания, зона действий, журнал) и выпуски этапа; уточнения реализации — проект §15.1. S13-01…S13-03 исправлены.

@@ -29,6 +29,8 @@ export const Dialog: FC<IDialogProps> = ({ title, onClose, children, footer, onS
     }
     if (!dialog.open) {
       dialog.showModal();
+      // Начальный фокус — на элемент с autoFocus (у подтверждений — «Отмена»): showModal() ставит его на первую кнопку.
+      dialog.querySelector<HTMLElement>('[data-autofocus="true"]')?.focus();
     }
     const onCancel = (event: Event): void => {
       event.preventDefault();

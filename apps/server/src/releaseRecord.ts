@@ -36,8 +36,11 @@ export interface IReleaseDraft {
 export const buildReleaseManifest = async (db: Queryable, store: BlobStore, d: IReleaseDraft): Promise<IReleaseManifest> => {
   const c = d.candidate;
   const candidateManifest = JSON.parse((await readStoredBlob(store, c.manifest_blob_sha256!)).toString('utf8')) as IManifest;
+  // Заголовки замечаний и тексты вопросов в манифест не пишутся (их основания могут быть закрыты читателю манифеста):
+  // предмет — по виду и ID; у проверок прогона, полей и чисел комплекта — подпись пункта.
   const titles = new Map<string, string>();
-  for (const b of d.gate.blockers) for (const i of b.items) if (i.acceptance) titles.set(i.acceptance.id, i.title);
+  for (const b of d.gate.blockers) for (const i of b.items) if (i.acceptance && !['finding', 'customer_question'].includes(i.subjectType)) titles.set(i.acceptance.id, i.title);
+  const generic: Record<string, string> = { finding: 'критическое замечание', customer_question: 'вопрос заказчику' };
   const accepted = new Set(d.approval.accepted_risk_ids);
   const acceptances = (await listAcceptances(db, c.id)).filter((a) => accepted.has(a.id));
   const holds = (await listHolds(db, c.stage_id, { candidateId: c.id })).filter((h) => h.status !== 'open');
@@ -69,7 +72,7 @@ export const buildReleaseManifest = async (db: Queryable, store: BlobStore, d: I
       subjectId: a.subject_id,
       subjectKey: a.subject_key,
       subjectVersion: a.subject_version,
-      title: titles.get(a.id) ?? `${a.subject_type} ${a.subject_id}`,
+      title: titles.get(a.id) ?? `${generic[a.subject_type] ?? a.subject_type} ${a.subject_id}`,
       reason: a.reason,
       acceptedBy: { id: a.accepted_by, name: a.accepted_by_name },
       acceptedAt: a.accepted_at.toISOString(),
@@ -78,7 +81,6 @@ export const buildReleaseManifest = async (db: Queryable, store: BlobStore, d: I
       findingId: r.findingId,
       kind: r.kind,
       severity: r.severity,
-      title: r.title,
       reason: r.reason,
       acceptedBy: r.acceptedById ? { id: r.acceptedById, name: r.acceptedBy ?? '' } : null,
       acceptedAt: r.acceptedAt ? r.acceptedAt.toISOString() : null,

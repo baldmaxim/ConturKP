@@ -7,6 +7,7 @@
 // Этап 08a (scripts/smoke-08a.mjs): диалог, вопрос заданием gpu, ответ с цитатами, 409 второго вопроса, права.
 // Этап 09 (scripts/smoke-09.mjs): прогон проверки, 12 исходов, замечания, права на риск и приоритет; после перезапуска — из БД.
 // Этап 10 (scripts/smoke-10.mjs): отчёт ревизии, вторая ревизия, сравнение с парами системы и остатком; после перезапуска — из БД.
+// Этап 13 (scripts/smoke-13.mjs): матрица блокеров, права согласования, неснимаемый риск, удержание и решение «не влияет».
 // База kontur_kp_smoke_test создаётся заново и удаляется в конце. Пароль генерируется и не выводится.
 // Результат: artifacts/stage-02/smoke.log; код 0 только если все шаги PASS.
 import { spawn, spawnSync } from 'node:child_process';
@@ -25,6 +26,7 @@ import { smokeReview } from './smoke-09.mjs';
 import { smokeEconomics } from './smoke-10.mjs';
 import { smokeForms } from './smoke-11.mjs';
 import { smokeRelease } from './smoke-12.mjs';
+import { smokeApproval } from './smoke-13.mjs';
 import { PRECISE_RATE, TH, standardTender, startFakeTenderHub } from './tenderhub-fake.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -492,6 +494,9 @@ try {
   // ---- Этап 12: комплект-кандидат — scripts/smoke-12.mjs
   const release12 = await smokeRelease({ root: ROOT, api, api2, record, waitFor, idem, json, stageId });
 
+  // ---- Этап 13: матрица блокеров, права и удержания — scripts/smoke-13.mjs
+  const approval13 = await smokeApproval({ api, api2, record, idem, json, stageId, candidateId: release12.candidateId });
+
   await stopProc(server);
   server = startProc('server', 'apps/server/src/main.ts');
   ready = await waitReady(30_000);
@@ -524,6 +529,11 @@ try {
   );
   const candAfter = release12.candidateId ? await (await api(`/release-candidates/${release12.candidateId}`)).json() : null;
   record('этап 12: после перезапуска комплект — из PostgreSQL, тот же content_hash', Boolean(release12.contentHash) && candAfter?.contentHash === release12.contentHash);
+  const hardAfter = (candAfter?.gate?.approve?.blockers ?? []).filter((b) => b.open > 0 && !b.acceptable).map((b) => b.code);
+  record(
+    'этап 13: после перезапуска оценка матрицы и решения по удержаниям — из PostgreSQL',
+    approval13.hard.length > 0 && approval13.hard.every((code) => hardAfter.includes(code)) && !hardAfter.includes('INPUTS_CHANGED') && candAfter?.current === true,
+  );
   const me = await fetch(`${BASE}/api/v1/me`, { headers: { Cookie: cookieHeader() } });
   record('перезапуск server — сессия действительна', me.status === 200);
 

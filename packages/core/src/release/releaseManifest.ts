@@ -31,8 +31,9 @@ export interface IReleaseManifest {
     acceptedBy: IActorRef;
     acceptedAt: string;
   }[];
-  // Риски, принятые в этапе 09 по замечаниям и действующие на момент выпуска (D-029 В-09-3, D-033 ут. 3).
-  reviewRisks: { findingId: string; kind: string; severity: string; title: string; reason: string; acceptedBy: IActorRef | null; acceptedAt: string | null }[];
+  // Риски, принятые в этапе 09 по замечаниям и действующие на момент выпуска (D-029 В-09-3, D-033 ут. 3). Без заголовка
+  // замечания: манифест читает любой, кто видит комплект, а основания замечания могут быть ему закрыты.
+  reviewRisks: { findingId: string; kind: string; severity: string; reason: string; acceptedBy: IActorRef | null; acceptedAt: string | null }[];
   // Решения руководителя по событиям входов этого кандидата (I04): событие, решение, причина, кто и когда.
   holds: { eventSeq: number; eventType: string; decision: string; reason: string; decidedBy: IActorRef; decidedAt: string }[];
   files: { path: string; role: FileRole; audience: Audience; mediaType: string; sha256: string; size: number }[];

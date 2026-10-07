@@ -276,6 +276,26 @@
 | `GET /candidate-files/{id}/content` | `tender.read` + видимость | — | точные байты файла по ID (путь хранения не раскрывается): `X-Content-SHA256`, `Cache-Control: no-store`, `nosniff`, CSP-песочница; PDF — `inline`, остальные — `attachment`. Аудит `release.candidate.file.read` |
 | `GET /release-candidates/{id}/archive?set=customer\|all` | `tender.read` + видимость | — | детерминированный ZIP файлов кандидата: `customer` — файлы заказчику, `all` — все файлы с превью и манифестом. Аудит `release.candidate.archive` |
 
+#### 2.9.2. Реализация этапа 13 (D-033; миграция 0034)
+
+Команды — под блокировкой этапа; согласование, выпуск и принятие риска сначала обрабатывают поступившие события этапа. Отказ матрицы блокеров (`state-machines.md` §11.3) — `409 BLOCKER_PRESENT`: `detail` с кодами и `blockers: [{ code, class, acceptable, open, items: [{ subjectType, subjectId, subjectKey, subjectVersion, title, acceptable, acceptance }] }]` — только открытые блокеры; в журнале — `outcome = denied` и коды. Возможности `candidate.approve`, `risk.accept`, `hold.resolve`, `candidate.release` — только у человека (ADR-006 §3); запрос без сессии (в том числе с `Authorization: Bearer`) — `401`.
+
+| Метод и путь | Право | Ключи | Назначение |
+|---|---|---|---|
+| `GET /release-candidates/{id}` | `tender.read` + видимость | — | (дополнение) `etag`; `gate.approve` / `gate.release` — оценка матрицы для готового / согласованного (подсказка, без сверки байтов; пункт замечания или вопроса, закрытый пользователю, — `restricted: true` без текста); `gate.warnings` — черновики вопросов, пустые необязательные поля, риски этапа 09; `approval`, `approvals[]`, `release` (с `sendReadiness`), `returned`, `holds` (`open`, `total`), `can` (`approve`, `acceptRisk`, `resolveHolds`, `release`); `current` — предикат покрытия §1.1 |
+| `POST /release-candidates/{id}/risk-acceptances` | `risk.accept` | IK | `{ blockerCode, subjectType, subjectId, subjectKey?, reason ≥ 10 }`; `201` — карточка. `409`: `risk_not_acceptable` (неснимаемый код), `not_a_blocker`, `field_not_current`, `restricted_fragments` (основания пункта закрыты пользователю), `already_accepted`, `approved_revoke_first`, `not_ready`, `restricted_inputs` |
+| `POST /release-candidates/{id}/approve` | `candidate.approve` | IM, IK | `{ contentHash, comment? }`; `200` — карточка. `409`: `BLOCKER_PRESENT`, `content_changed`, `already_approved` (с `approvalId`), `not_ready`; `412` — устаревший `If-Match` |
+| `POST /release-candidates/{id}/return` | `candidate.approve` | IM, IK | `{ reason }`; `409`: `approved_revoke_first`, `not_ready` |
+| `POST /approvals/{id}/revoke` | `candidate.approve` | IM (ETag согласования), IK | `{ reason }`; кандидат снова готов. `409`: `already_released`, `approval_not_active` |
+| `POST /release-candidates/{id}/release` | `candidate.release` | IM, IK | `{ approvalId, contentHash }`; `201` — карточка с `release`. `409`: `BLOCKER_PRESENT` (в том числе `APPROVAL_NOT_ACTIVE`, `CANDIDATE_CONTENT_MISMATCH`, `INPUTS_CHANGED`), `already_released` (с `releaseId`), `not_approved`, `content_changed`. Аудит `release.candidate.release` и `release.create` |
+| `GET /stages/{id}/holds?candidateId=&status=` | `tender.read` | — | удержания: событие (номер, тип, вид предмета, время; ID предмета не отдаётся), `covered` (стало покрыто составом), решение, кто и когда; `canResolve` |
+| `POST /holds/{id}/resolve` | `hold.resolve` | IM (ETag удержания), IK | `{ resolution: not_applicable \| requires_new_candidate, reason }`. `409`: `hold_resolved`, `candidate_inactive`, `candidate_assembling` (для «влияет») |
+| `POST /release-candidates/{id}/holds/resolve` | `hold.resolve` | IK | `{ holdIds[1..200], resolution, reason }` — группой, всё или ничего; у каждого события своё решение |
+| `GET /release-candidates/{id}/history` | `tender.read` + видимость | — | журнал: сборка, принятие рисков, согласования и их завершение, решения по удержаниям, возврат, выпуск, замена — кто, когда, основание |
+| `GET /stages/{id}/releases` | `tender.read` | — | выпуски этапа; без видимости входов — оболочка `restricted: true` |
+| `GET /releases/{id}`, `GET /releases/{id}/manifest`, `GET /releases/{id}/archive?set=customer\|all` | `tender.read` + видимость | — | запись выпуска с готовностью к отправке; байты манифеста `kontur-release/1` (`X-Content-SHA256`); детерминированный ZIP точных файлов кандидата (`all` — с манифестами кандидата и выпуска) |
+
+
 ### 2.11. Диалоги и ответное ядро (этап 08a; D-019, D-027)
 
 Контекст диалога — контекст поиска `POST /search` (§2.4): права и область разрешаются тем же кодом. Диалог, его сообщения и ходы видит только автор; чужой диалог и прогон — `404` (существование не раскрывается), в том числе администратору. Стриминга нет: ответ получают опросом прогона.

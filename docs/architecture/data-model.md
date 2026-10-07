@@ -409,6 +409,17 @@ CHECK 0014 требовал размеры у `pdf_page` только в ста�
 | `candidate_file` | immutable | `candidate_id`, `ordinal`, `path`, `role` (`document`/`attachment`/`preview`), `audience`, `media_type`, `blob_sha256`, `size_bytes`, `source_file_id` (у превью), `template_revision_id` + `draft_id` (у документа), `attachment_revision_id` (у вложения), `pages`, `fonts` | пока кандидат «собирается»; размер = размеру blob; происхождение — из входов кандидата; превью — внутреннее, своего кандидата; путь и номер уникальны |
 | `candidate_check` | immutable | `candidate_id`, `ordinal`, `code`, `outcome` (`passed`/`failed`/`unverified`/`not_applicable`), `path`, `detail` | пока кандидат «собирается» |
 
+Этап 13 (миграция `0034_approval_release.sql`; D-033; проект `docs/architecture/13-approval-release-design.md` §2, §15.1) — согласование, выпуск, принятие риска и удержания. Отличия от заготовки выше: у `release_candidate` статусы `approved`, `returned`, `released`, замена — только кандидатом того же режима; `content_hash` выпуска = `manifest_sha256` кандидата.
+
+| Таблица | Класс | Ключевые колонки | Ограничения |
+|---|---|---|---|
+| `approval` | frozen-after | `candidate_id`, `candidate_content_hash`, `input_version`, `gate` (оценка матрицы), `accepted_risk_ids`, `comment`, `approved_by`, `approved_at`, `status` (`active`/`revoked`/`superseded`), `revoked_by`, `revoke_reason`, `ended_at` | одно `active` на кандидата; вставка — человек с `candidate.approve`, кандидат готов, хэш его манифеста, `candidate_gate_problem` пуст; меняются только поля завершения, только из `active`; согласование выпуска не завершается |
+| `release` | immutable | `candidate_id` (уникален), `approval_id`, `mode`, `input_version`, `content_hash`, `release_manifest_blob_sha256`, `release_manifest_sha256`, `gate`, `released_by`, `released_at` | человек с `candidate.release`; кандидат согласован; согласование действует, того же кандидата и хэша (FK по паре); `candidate_gate_problem` пуст |
+| `risk_acceptance` | immutable | `candidate_id`, `blocker_code`, `subject_type`, `subject_id`, `subject_key`, `subject_version`, `reason` (≥ 10), `accepted_by`, `accepted_at` | только бизнес-коды D-033, вид предмета — свой для кода (CHECK); человек с `risk.accept`; кандидат готов; предмет — текущий пункт этого кандидата (у поля — без устаревшего основания); уникальность пункта с версией (`NULLS NOT DISTINCT`) |
+| `readiness_hold` | frozen-after | `candidate_id`, `input_event_id`, `status` (`open`/`resolved_not_applicable`/`resolved_requires_new_candidate`), `decision_id`, `resolved_by`, `resolved_at` | (`candidate_id`, `input_event_id`) уникальны; вставка — для действующего кандидата этапа события; решение — один раз, человек с `hold.resolve`, решение `input_event_disposition` по этому событию тем же человеком |
+| `candidate_return` | immutable | `candidate_id` (уникален), `reason`, `hold_id`, `returned_by`, `returned_at` | руководитель тендера; кандидат готов или согласован; основание «влияет» — удержание этого кандидата |
+| `decision` (`input_event_disposition`) | immutable | предмет — `stage_input_event`; `statement` — «не влияет» / «влияет»; `rationale` — причина | автор — человек с `hold.resolve`; событий барьера не порождает (R01-07) |
+
 ### 4.10. Размещение и отправка
 
 | Таблица | Класс | Ключевые колонки | Ограничения |

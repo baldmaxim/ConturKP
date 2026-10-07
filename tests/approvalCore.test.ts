@@ -1,10 +1,12 @@
 // Этап 13 — ядро матрицы блокеров (D-033; packages/core/src/release/gate.ts): классы и снимаемость кодов, режимы,
 // действие принятия риска (тот же пункт и версия предмета), учёт принятий в действующем согласовании при выпуске,
-// пункт поля с другой проблемой не принимается; манифест выпуска — каноническая запись.
+// пункт поля с другой проблемой не принимается; манифест выпуска — каноническая запись; устаревший вход прогона —
+// неснимаемый (R13-01); отпечаток показанного состава (R13-04).
 import { describe, expect, it } from 'vitest';
 import {
   ACCEPTABLE_BLOCKERS,
   BLOCKERS,
+  compositionHash,
   evaluateGate,
   openBlockerCodes,
   RELEASE_MANIFEST_SCHEMA,
@@ -22,6 +24,7 @@ const base = (o: Partial<IGateFacts> = {}): IGateFacts => ({
   approval: null,
   contentMismatch: [],
   reviewScopeMismatch: false,
+  reviewOutdated: [],
   reviewMissing: false,
   reviewProcessing: [],
   uncoveredEvents: [],
@@ -104,6 +107,40 @@ describe('принятие риска', () => {
   it('содержимое не совпало, права, события — всегда блокируют', () => {
     const r = evaluateGate(base({ contentMismatch: ['01 Письмо.docx'], actorSeesContent: false, uncoveredEvents: [{ subjectType: 'stage_input_event', subjectId: 'e', title: '№ 5' }] }), 'approve');
     expect(openBlockerCodes(r)).toEqual(['RESTRICTED_INPUTS', 'CANDIDATE_CONTENT_MISMATCH', 'INPUTS_CHANGED']);
+  });
+});
+
+describe('Review 13-1', () => {
+  it('R13-01: устаревший вход прогона — технический неснимаемый блокер; принятие с тем же кодом его не снимает', () => {
+    expect(BLOCKERS.REVIEW_OUTDATED).toMatchObject({ class: 'technical', acceptable: false });
+    expect(ACCEPTABLE_BLOCKERS).not.toContain('REVIEW_OUTDATED');
+    const item = { subjectType: 'review_run', subjectId: 'r1', title: 'после прогона изменился реестр' };
+    const facts = base({ mode: 'test', reviewOutdated: [item], acceptances: [acceptance({ blockerCode: 'REVIEW_OUTDATED' as never, subjectType: 'review_run' as never, subjectId: 'r1', subjectVersion: null })] });
+    for (const action of ['approve', 'release', 'send'] as const) {
+      const g = evaluateGate({ ...facts, approval: action === 'approve' ? null : { active: true, matches: true, acceptedRiskIds: ['a1'] } }, action);
+      expect(g.ok).toBe(false);
+      expect(openBlockerCodes(g)).toEqual(['REVIEW_OUTDATED']);
+      expect(g.usedAcceptanceIds).toEqual([]);
+    }
+  });
+
+  it('R13-04: отпечаток состава не зависит от порядка и меняется с риском, решением по удержанию, риском этапа 09 и согласованием', () => {
+    const f = {
+      action: 'approve' as const,
+      contentHash: 'c'.repeat(64),
+      approvalId: null,
+      acceptances: [{ id: 'a1', subjectVersion: 3 }, { id: 'a2', subjectVersion: null }],
+      reviewRisks: [{ findingId: 'f9', acceptedAt: '2026-10-07T00:00:00.000Z' }],
+      holds: [{ id: 'h1', status: 'resolved_not_applicable', decisionId: 'd1' }],
+    };
+    const h = compositionHash(f);
+    expect(h).toMatch(/^[0-9a-f]{64}$/);
+    expect(compositionHash({ ...f, acceptances: [...f.acceptances].reverse() })).toBe(h);
+    expect(compositionHash({ ...f, acceptances: [...f.acceptances, { id: 'a3', subjectVersion: 1 }] })).not.toBe(h);
+    expect(compositionHash({ ...f, acceptances: [{ id: 'a1', subjectVersion: 4 }, f.acceptances[1]!] })).not.toBe(h);
+    expect(compositionHash({ ...f, holds: [...f.holds, { id: 'h2', status: 'resolved_not_applicable', decisionId: 'd2' }] })).not.toBe(h);
+    expect(compositionHash({ ...f, reviewRisks: [] })).not.toBe(h);
+    expect(compositionHash({ ...f, action: 'release', approvalId: 'p1' })).not.toBe(compositionHash({ ...f, action: 'release', approvalId: 'p2' }));
   });
 });
 

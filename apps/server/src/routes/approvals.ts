@@ -3,6 +3,8 @@
 // команды согласования, выпуска и принятия риска обрабатывают поступившие события этапа (инвалидация — в предварительной
 // транзакции и повторно под блокировкой, D-033 ут. 3–4). Отказ матрицы — 409 BLOCKER_PRESENT со списком и аудит
 // «запрещено». Возможности — только у человека (ADR-006 §3): модель и MCP их не получают; вторая линия — триггеры 0034.
+// Согласуется и выпускается только показанный состав (R13-04): отпечаток из карточки сверяется под блокировкой. Решение
+// по удержанию — только тем, кто видит предмет события (R13-02); причины и манифест — по закрытости предметов.
 import { randomUUID } from 'node:crypto';
 import {
   ApproveCandidateRequest,
@@ -20,6 +22,7 @@ import {
   activeApproval,
   auditFor,
   candidateFiles,
+  eventTitle,
   getApproval,
   getCandidate,
   getHold,
@@ -48,10 +51,22 @@ import { Router } from 'express';
 import PizZip from 'pizzip';
 import { command, parseBody, query, requireIfMatch, uuidParam, versionConflict } from '../http/command.ts';
 import { forbidden, HttpError, notFound } from '../http/errors.ts';
-import { candidateGate } from '../releaseGate.ts';
+import { candidateComposition, candidateGate } from '../releaseGate.ts';
 import { readStoredBlob } from '../releaseMarkup.ts';
 import { buildReleaseManifest, candidateHistory, storeReleaseManifest } from '../releaseRecord.ts';
-import { candidateTarget, candidateView, candidateVisible, gateView, holdView, loadCandidate, loadVisibleRelease, releaseView, requireVisibleCandidate } from '../releaseViews.ts';
+import {
+  candidateTarget,
+  candidateView,
+  candidateVisible,
+  gateView,
+  holdsVisibility,
+  holdView,
+  loadCandidate,
+  loadVisibleRelease,
+  releaseView,
+  requireManifestReadable,
+  requireVisibleCandidate,
+} from '../releaseViews.ts';
 import { contentDisposition } from './documents.ts';
 import { conflict, stageVersion } from './reviewScope.ts';
 import { hasTenderCap } from './scope.ts';
@@ -88,6 +103,14 @@ const blockerError = (c: IReleaseCandidateRow, g: IGateResult, verb: string): Ht
 
 const stateText = (c: IReleaseCandidateRow) => STATUS_TEXT[c.status] ?? c.status;
 
+// Показанный состав (R13-04): изменился после открытия диалога — повторное ознакомление, не молчаливое согласование.
+const requireComposition = (c: IReleaseCandidateRow, shown: string | undefined, actual: string): void => {
+  if (!shown) throw new HttpError(400, 'VALIDATION_FAILED', 'compositionHash — отпечаток показанного состава из карточки комплекта — обязателен');
+  if (shown !== actual) {
+    throw conflict('после показа изменились принятые риски или решения по удержаниям: перечитайте карточку и проверьте состав', 'composition_changed', candidateTarget(c));
+  }
+};
+
 const commandResult = async (client: Queryable, store: BlobStore, ctx: IAccessContext, id: string, status: number, audit: { action: string; details: Record<string, unknown> }) => {
   const c = (await getCandidate(client, id))!;
   return {
@@ -111,8 +134,22 @@ const importGaps = async (db: Queryable, h: IHoldRow): Promise<string> => {
   return rows.length > 0 ? `\nНеразобранные элементы партии: ${rows.map((r) => `${r.observed_name} (${r.status})`).join(', ')}` : '';
 };
 
-const resolveOne = async (client: PoolClient, h: IHoldRow, c: IReleaseCandidateRow, resolution: 'not_applicable' | 'requires_new_candidate', reason: string, userId: string) => {
+const resolveOne = async (
+  client: PoolClient,
+  h: IHoldRow,
+  c: IReleaseCandidateRow,
+  r: { resolution: 'not_applicable' | 'requires_new_candidate'; reason: string; userId: string; visible: boolean },
+) => {
+  const { resolution, reason, userId } = r;
   if (h.status !== 'open') throw conflict('по этому событию решение уже принято', 'hold_resolved', { tenderId: h.tender_id, entityType: 'readiness_hold', entityId: h.id });
+  // Решение о применимости — по прочитанному предмету (D-033 ут. 4: проверки прав не отменяются; R13-02).
+  if (!r.visible) {
+    throw conflict(`предмет события № ${h.event_seq} закрыт для вас: решение о его применимости принимает тот, кто может его прочитать`, 'restricted_event', {
+      tenderId: h.tender_id,
+      entityType: 'readiness_hold',
+      entityId: h.id,
+    });
+  }
   // Возвращённый — тоже: в группе «влияет» первое решение возвращает кандидата, остальные события решаются следом.
   if (!['assembling', 'ready_for_approval', 'approved', 'released', 'returned'].includes(c.status)) {
     throw conflict(`комплект ${stateText(c)}: удержание не решается`, 'candidate_inactive', candidateTarget(c));
@@ -122,8 +159,9 @@ const resolveOne = async (client: PoolClient, h: IHoldRow, c: IReleaseCandidateR
   }
   const decisionId = await resolveHold(client, h, { resolution, reason: `${reason}${await importGaps(client, h)}`.slice(0, 4000), userId });
   // «Влияет»: невыпущенный кандидат возвращается, его согласование отзывается; у выпущенного отправка исключена навсегда.
+  // Текст возврата и отзыва — без причины решения: она остаётся в решении по удержанию, закрытом вместе с предметом.
   if (resolution === 'requires_new_candidate' && (c.status === 'ready_for_approval' || c.status === 'approved')) {
-    const text = `влияет событие № ${h.event_seq}: ${reason}`.slice(0, 2000);
+    const text = `влияет событие № ${h.event_seq} (${eventTitle(h.event_type)}): решение по удержанию`;
     const active = await activeApproval(client, c.id);
     if (active) await revokeApproval(client, active.id, userId, text);
     await insertCandidateReturn(client, { candidate: c, reason: text, holdId: h.id, userId });
@@ -205,17 +243,19 @@ export const approvalsRouter = (pool: Pool, store: BlobStore): Router => {
         if (body.contentHash !== c.manifest_sha256) throw conflict('содержимое комплекта не то, что было показано: перечитайте карточку', 'content_changed', candidateTarget(c));
         const gate = await candidateGate(client, ctx, c, { action: 'approve', actorAuthorized: true, actorSeesContent: await candidateVisible(client, ctx, c), store });
         if (!gate.result.ok) throw blockerError(c, gate.result, 'Согласование');
+        const composition = await candidateComposition(client, c, gate, null);
+        requireComposition(c, body.compositionHash, composition);
         const approvalId = await insertApproval(client, {
           candidate: c,
           inputVersion: await stageVersion(client, c.stage_id),
-          gate: gateView(gate.result),
+          gate: { ...gateView(gate.result), compositionHash: composition },
           acceptedRiskIds: gate.result.usedAcceptanceIds,
           comment: body.comment ?? null,
           userId: ctx.principal.userId,
         });
         return commandResult(client, store, ctx, c.id, 200, {
           action: 'release.candidate.approve',
-          details: { approvalId, contentHash: c.manifest_sha256, acceptedRisks: gate.result.usedAcceptanceIds.length },
+          details: { approvalId, contentHash: c.manifest_sha256, compositionHash: composition, acceptedRisks: gate.result.usedAcceptanceIds.length },
         });
       },
     }),
@@ -299,6 +339,8 @@ export const approvalsRouter = (pool: Pool, store: BlobStore): Router => {
           store,
         });
         if (!gate.result.ok || !active) throw blockerError(c, gate.result, 'Выпуск');
+        const composition = await candidateComposition(client, c, gate, active.id);
+        requireComposition(c, body.compositionHash, composition);
         const releasedAt = (await client.query<{ now: Date }>('SELECT now() AS now')).rows[0]!.now;
         const id = randomUUID();
         const inputVersion = await stageVersion(client, c.stage_id);
@@ -313,7 +355,16 @@ export const approvalsRouter = (pool: Pool, store: BlobStore): Router => {
           releasedAt,
         });
         const stored = await storeReleaseManifest(client, store, manifest);
-        await insertRelease(client, { id, candidate: c, approvalId: active.id, inputVersion, manifest: stored, gate: gateView(gate.result), userId: ctx.principal.userId, releasedAt });
+        await insertRelease(client, {
+          id,
+          candidate: c,
+          approvalId: active.id,
+          inputVersion,
+          manifest: stored,
+          gate: { ...gateView(gate.result), compositionHash: composition },
+          userId: ctx.principal.userId,
+          releasedAt,
+        });
         const r = await commandResult(client, store, ctx, c.id, 201, { action: 'release.candidate.release', details: { releaseId: id, approvalId: active.id, mode: c.mode, manifestSha256: stored.sha256 } });
         return { ...r, audit: [...r.audit, { action: 'release.create', entityType: 'release', entityId: id, tenderId: c.tender_id, details: { candidateId: c.id, mode: c.mode } }] };
       },
@@ -330,7 +381,8 @@ export const approvalsRouter = (pool: Pool, store: BlobStore): Router => {
       const q = HoldsQuery.safeParse(req.query);
       if (!q.success) throw new HttpError(400, 'VALIDATION_FAILED', 'candidateId — UUID, status — open | resolved_not_applicable | resolved_requires_new_candidate');
       const items = await listHolds(pool, stage.id, { candidateId: q.data.candidateId?.toLowerCase(), status: q.data.status });
-      res.json({ items: items.map(holdView), canResolve: hasTenderCap(ctx, stage.tender_id, 'hold.resolve') });
+      const vis = await holdsVisibility(pool, ctx, { id: stage.id, tenderId: stage.tender_id }, items);
+      res.json({ items: items.map((h) => holdView(h, vis.event(h.ref_type, h.ref_id))), canResolve: hasTenderCap(ctx, stage.tender_id, 'hold.resolve') });
     }),
   );
 
@@ -353,11 +405,12 @@ export const approvalsRouter = (pool: Pool, store: BlobStore): Router => {
         const h = (await getHold(client, id, true))!;
         const body = parseBody(ResolveHoldRequest, req.body);
         if (requireIfMatch(req, h.id) !== h.row_version) throw versionConflict({ id: h.id, status: h.status, etag: formatEtag(h.id, h.row_version) });
-        const decisionId = await resolveOne(client, h, c, body.resolution, body.reason, ctx.principal.userId);
+        const vis = await holdsVisibility(client, ctx, { id: h.stage_id, tenderId: h.tender_id }, [h]);
+        const decisionId = await resolveOne(client, h, c, { resolution: body.resolution, reason: body.reason, userId: ctx.principal.userId, visible: vis.event(h.ref_type, h.ref_id) });
         const fresh = (await getHold(client, id))!;
         return {
           status: 200,
-          body: holdView(fresh),
+          body: holdView(fresh, true),
           etag: formatEtag(fresh.id, fresh.row_version),
           audit: [{ action: 'release.hold.resolve', entityType: 'readiness_hold', entityId: h.id, tenderId: h.tender_id, details: { candidateId: c.id, eventSeq: h.event_seq, resolution: body.resolution, decisionId } }],
         };
@@ -377,10 +430,17 @@ export const approvalsRouter = (pool: Pool, store: BlobStore): Router => {
         const c = await lockedCandidate(client, ctx, uuidParam(req, 'id', 'release_candidate'));
         const body = parseBody(ResolveHoldsRequest, req.body);
         const decisions: string[] = [];
+        const holds: IHoldRow[] = [];
         for (const holdId of [...new Set(body.holdIds.map((x) => x.toLowerCase()))]) {
           const h = await getHold(client, holdId, true);
           if (!h || h.candidate_id !== c.id) throw notFound({ entityType: 'readiness_hold', entityId: holdId });
-          decisions.push(await resolveOne(client, h, (await getCandidate(client, c.id))!, body.resolution, body.reason, ctx.principal.userId));
+          holds.push(h);
+        }
+        // Всё или ничего: закрытый предмет хоть одного события — отказ всей группы.
+        const vis = await holdsVisibility(client, ctx, { id: c.stage_id, tenderId: c.tender_id }, holds);
+        for (const h of holds) {
+          const visible = vis.event(h.ref_type, h.ref_id);
+          decisions.push(await resolveOne(client, h, (await getCandidate(client, c.id))!, { resolution: body.resolution, reason: body.reason, userId: ctx.principal.userId, visible }));
         }
         return commandResult(client, store, ctx, c.id, 200, { action: 'release.hold.resolve', details: { holds: decisions.length, resolution: body.resolution } });
       },
@@ -394,7 +454,7 @@ export const approvalsRouter = (pool: Pool, store: BlobStore): Router => {
     query(pool, 'release.candidate.history', 'release_candidate', async (ctx, req, res) => {
       const c = await loadCandidate(pool, ctx, uuidParam(req, 'id', 'release_candidate'));
       await requireVisibleCandidate(pool, ctx, c);
-      res.json({ items: await candidateHistory(pool, c) });
+      res.json({ items: await candidateHistory(pool, ctx, c) });
     }),
   );
 
@@ -406,7 +466,7 @@ export const approvalsRouter = (pool: Pool, store: BlobStore): Router => {
       const items = [];
       for (const r of await listReleases(pool, stage.id)) {
         const c = (await getCandidate(pool, r.candidate_id))!;
-        items.push((await candidateVisible(pool, ctx, c)) ? { ...(await releaseView(pool, r)), restricted: false } : { id: r.id, candidateId: r.candidate_id, candidateSeq: r.candidate_seq, mode: r.mode, restricted: true });
+        items.push((await candidateVisible(pool, ctx, c)) ? { ...(await releaseView(pool, store, ctx, r)), restricted: false } : { id: r.id, candidateId: r.candidate_id, candidateSeq: r.candidate_seq, mode: r.mode, restricted: true });
       }
       res.json({ items });
     }),
@@ -417,7 +477,7 @@ export const approvalsRouter = (pool: Pool, store: BlobStore): Router => {
     query(pool, 'release.read', 'release', async (ctx, req, res) => {
       const id = uuidParam(req, 'id', 'release');
       const { release } = await loadVisibleRelease(pool, ctx, await getRelease(pool, id), id);
-      res.json(await releaseView(pool, release));
+      res.json(await releaseView(pool, store, ctx, release));
     }),
   );
 
@@ -426,6 +486,7 @@ export const approvalsRouter = (pool: Pool, store: BlobStore): Router => {
     query(pool, 'release.manifest', 'release', async (ctx, req, res) => {
       const id = uuidParam(req, 'id', 'release');
       const { release } = await loadVisibleRelease(pool, ctx, await getRelease(pool, id), id);
+      await requireManifestReadable(pool, store, ctx, release);
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.setHeader('Cache-Control', 'private, no-store');
       res.setHeader('X-Content-SHA256', release.release_manifest_sha256);
@@ -441,6 +502,8 @@ export const approvalsRouter = (pool: Pool, store: BlobStore): Router => {
       const { release, candidate } = await loadVisibleRelease(pool, ctx, await getRelease(pool, id), id);
       const q = ReleaseArchiveQuery.safeParse(req.query);
       if (!q.success) throw new HttpError(400, 'VALIDATION_FAILED', 'set — customer или all');
+      // ZIP всех файлов содержит манифест выпуска с причинами решений (R13-02); ZIP для заказчика — только файлы.
+      if (q.data.set === 'all') await requireManifestReadable(pool, store, ctx, release);
       const files = (await candidateFiles(pool, candidate.id)).filter((f) => (q.data.set === 'all' ? true : f.audience === 'customer' && f.role !== 'preview'));
       const zip = new PizZip();
       const date = new Date(1980, 0, 1, 0, 0, 0);

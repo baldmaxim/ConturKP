@@ -1,8 +1,9 @@
 // Представления комплекта-кандидата и выпуска (этапы 12–13; D-032 В-12-7, D-033). Состав и файлы — только тому, кто
 // видит все закреплённые входы (права текущие, входы закреплённые). Карточка этапа 13 добавляет состояние согласования
 // и выпуска, оценку матрицы блокеров для согласования и выпуска (подсказка; разрешение даёт только команда под
-// блокировкой этапа), удержания и готовность выпуска к отправке. Чтение кандидата его не пересобирает.
-import { formatEtag, type IGateResult, type IManifest } from '@kontur/core';
+// блокировкой этапа), удержания и готовность выпуска к отправке. Чтение кандидата его не пересобирает. Причины решений —
+// по закрытости их предметов для читателя (R13-02); манифест выпуска — тому, кто видит предметы всех решений в нём.
+import { formatEtag, type IGateResult, type IManifest, type IReleaseManifest } from '@kontur/core';
 import {
   candidateChecks,
   candidateEventsAfter,
@@ -29,8 +30,9 @@ import {
 } from '@kontur/db';
 import type { BlobStore } from '@kontur/storage';
 import { notFound } from './http/errors.ts';
-import { candidateGate } from './releaseGate.ts';
+import { candidateComposition, candidateGate } from './releaseGate.ts';
 import { readStoredBlob } from './releaseMarkup.ts';
+import { decisionVisibility, type IDecisionVisibility } from './releaseVisibility.ts';
 import { conflict } from './routes/reviewScope.ts';
 import { hasTenderCap } from './routes/scope.ts';
 
@@ -84,7 +86,8 @@ export const approvalView = (a: IApprovalRow) => ({
   etag: formatEtag(a.id, a.row_version),
 });
 
-export const holdView = (h: IHoldRow) => ({
+// Удержание: причина решения — только тому, кто видит предмет события (R13-02); иначе `restricted` без текста.
+export const holdView = (h: IHoldRow, visible: boolean) => ({
   id: h.id,
   candidateId: h.candidate_id,
   candidateSeq: h.candidate_seq,
@@ -92,13 +95,40 @@ export const holdView = (h: IHoldRow) => ({
   // Идентификатор предмета события (письмо, документ) не отдаётся: по нему не раскрывается закрытый предмет.
   event: { id: h.input_event_id, seq: h.event_seq, type: h.event_type, class: h.event_class, refType: h.ref_type, at: iso(h.event_at) },
   covered: h.covered,
-  reason: h.reason,
+  restricted: !visible,
+  reason: visible ? h.reason : null,
   resolvedBy: h.resolved_by ? { id: h.resolved_by, name: h.resolved_by_name } : null,
   resolvedAt: iso(h.resolved_at),
   etag: formatEtag(h.id, h.row_version),
 });
 
-export const releaseView = async (db: Queryable, r: IReleaseRow) => ({
+// Предметы решений, записанных в манифест выпуска: принятые риски, риски этапа 09, события решений по удержаниям.
+const manifestSubjects = async (db: Queryable, store: BlobStore, r: IReleaseRow) => {
+  const m = JSON.parse((await readStoredBlob(store, r.release_manifest_blob_sha256)).toString('utf8')) as IReleaseManifest;
+  const events = (
+    await db.query<{ ref_type: string; ref_id: string }>('SELECT ref_type, ref_id FROM stage_input_event WHERE stage_id = $1 AND seq = ANY($2::bigint[])', [
+      r.stage_id,
+      m.holds.map((h) => h.eventSeq),
+    ])
+  ).rows.map((e) => ({ refType: e.ref_type, refId: e.ref_id }));
+  return { subjects: m.acceptedRisks.map((a) => ({ type: a.subjectType, id: a.subjectId })), findings: m.reviewRisks.map((x) => x.findingId), events };
+};
+
+// Манифест выпуска — точная неизменяемая запись с причинами решений: читает тот, кто сейчас видит предмет каждого
+// решения в нём (R13-02). Запись при отзыве прав не переписывается — закрывается чтение.
+export const releaseManifestReadable = async (db: Queryable, store: BlobStore, ctx: IAccessContext, r: IReleaseRow): Promise<boolean> => {
+  const q = await manifestSubjects(db, store, r);
+  const vis = await decisionVisibility(db, ctx, { id: r.stage_id, tenderId: r.tender_id }, q);
+  return q.subjects.every((x) => vis.subject(x.type, x.id)) && q.findings.every(vis.finding) && q.events.every((e) => vis.event(e.refType, e.refId));
+};
+
+export const requireManifestReadable = async (db: Queryable, store: BlobStore, ctx: IAccessContext, r: IReleaseRow): Promise<void> => {
+  if (!(await releaseManifestReadable(db, store, ctx, r))) {
+    throw conflict('в манифесте выпуска — причины решений по основаниям, закрытым для вас', 'restricted_basis', { tenderId: r.tender_id, entityType: 'release', entityId: r.id });
+  }
+};
+
+export const releaseView = async (db: Queryable, store: BlobStore, ctx: IAccessContext, r: IReleaseRow) => ({
   id: r.id,
   candidateId: r.candidate_id,
   candidateSeq: r.candidate_seq,
@@ -112,6 +142,7 @@ export const releaseView = async (db: Queryable, r: IReleaseRow) => ({
   releasedBy: { id: r.released_by, name: r.released_by_name },
   releasedAt: iso(r.released_at),
   sendReadiness: await releaseSendReadiness(db, r),
+  manifestReadable: await releaseManifestReadable(db, store, ctx, r),
 });
 
 export const gateView = (g: IGateResult) => ({
@@ -129,18 +160,30 @@ export const gateView = (g: IGateResult) => ({
       title: i.title,
       acceptable: b.acceptable && i.acceptable !== false,
       restricted: i.restricted === true,
-      acceptance: i.acceptance ? { id: i.acceptance.id, reason: i.acceptance.reason, acceptedBy: i.acceptance.acceptedBy, acceptedAt: i.acceptance.acceptedAt } : null,
+      // Причина принятия наследует закрытость предмета (R13-02): у закрытого пункта — без текста.
+      acceptance: i.acceptance
+        ? { id: i.acceptance.id, reason: i.restricted ? null : i.acceptance.reason, acceptedBy: i.acceptance.acceptedBy, acceptedAt: i.acceptance.acceptedAt }
+        : null,
     })),
   })),
 });
 
-// Состояние согласования и выпуска для карточки: оценки матрицы, согласования, выпуск, удержания, права действий.
-const approvalState = async (db: Queryable, ctx: IAccessContext, c: IReleaseCandidateRow) => {
+// Видимость предметов событий удержаний для читателя.
+export const holdsVisibility = async (db: Queryable, ctx: IAccessContext, stage: { id: string; tenderId: string }, holds: readonly IHoldRow[]): Promise<IDecisionVisibility> =>
+  decisionVisibility(db, ctx, stage, { events: holds.map((h) => ({ refType: h.ref_type, refId: h.ref_id })) });
+
+// Состояние согласования и выпуска для карточки: оценки матрицы с отпечатком показанного состава (R13-04), согласования,
+// выпуск, удержания и решения по ним, права действий.
+const approvalState = async (db: Queryable, store: BlobStore, ctx: IAccessContext, c: IReleaseCandidateRow) => {
   const approvals = await listApprovals(db, c.id);
   const active = approvals.find((a) => a.status === 'active') ?? null;
   const release = await releaseOfCandidate(db, c.id);
   const holds = await listHolds(db, c.stage_id, { candidateId: c.id });
+  const holdVis = await holdsVisibility(db, ctx, { id: c.stage_id, tenderId: c.tender_id }, holds);
   const ret = await candidateReturn(db, c.id);
+  // Возврат по решению «влияет» — текст закрыт вместе с предметом события (R13-02).
+  const retHold = ret?.hold_id ? holds.find((h) => h.id === ret.hold_id) : undefined;
+  const returnVisible = !retHold || holdVis.event(retHold.ref_type, retHold.ref_id);
   const evaluable = c.status === 'ready_for_approval' || c.status === 'approved';
   const approveGate = c.status === 'ready_for_approval' ? await candidateGate(db, ctx, c, { action: 'approve', actorAuthorized: true, actorSeesContent: true }) : null;
   const releaseGate = c.status === 'approved' ? await candidateGate(db, ctx, c, { action: 'release', actorAuthorized: true, actorSeesContent: true, approval: { active, requestedId: null } }) : null;
@@ -148,8 +191,8 @@ const approvalState = async (db: Queryable, ctx: IAccessContext, c: IReleaseCand
   const fields = approveGate?.fields ?? releaseGate?.fields ?? null;
   return {
     gate: {
-      approve: approveGate ? gateView(approveGate.result) : null,
-      release: releaseGate ? gateView(releaseGate.result) : null,
+      approve: approveGate ? { ...gateView(approveGate.result), compositionHash: await candidateComposition(db, c, approveGate, null) } : null,
+      release: releaseGate ? { ...gateView(releaseGate.result), compositionHash: await candidateComposition(db, c, releaseGate, active?.id ?? null) } : null,
       // Справка без блокирования: черновики вопросов (В-13-4), пустые необязательные поля (толкование D-033), риски этапа 09.
       warnings: evaluable && facts && fields
         ? {
@@ -161,9 +204,14 @@ const approvalState = async (db: Queryable, ctx: IAccessContext, c: IReleaseCand
     },
     approval: active ? approvalView(active) : null,
     approvals: approvals.map(approvalView),
-    release: release ? await releaseView(db, release) : null,
-    returned: ret ? { reason: ret.reason, holdId: ret.hold_id, returnedBy: { id: ret.returned_by, name: ret.returned_by_name }, returnedAt: iso(ret.returned_at) } : null,
-    holds: { open: holds.filter((h) => h.status === 'open').length, total: holds.length },
+    release: release ? await releaseView(db, store, ctx, release) : null,
+    returned: ret ? { reason: returnVisible ? ret.reason : null, restricted: !returnVisible, holdId: ret.hold_id, returnedBy: { id: ret.returned_by, name: ret.returned_by_name }, returnedAt: iso(ret.returned_at) } : null,
+    holds: {
+      open: holds.filter((h) => h.status === 'open').length,
+      total: holds.length,
+      // Решения по удержаниям — часть подтверждаемого состава (R13-04).
+      resolved: holds.filter((h) => h.status !== 'open').map((h) => holdView(h, holdVis.event(h.ref_type, h.ref_id))),
+    },
     can: {
       approve: hasTenderCap(ctx, c.tender_id, 'candidate.approve'),
       acceptRisk: hasTenderCap(ctx, c.tender_id, 'risk.accept'),
@@ -230,7 +278,7 @@ export const candidateView = async (db: Queryable, store: BlobStore, ctx: IAcces
     eventsAfter: events.map((e) => ({ seq: e.seq, type: e.type, at: iso(e.createdAt), affects: e.affects })),
     eventsAfterTotal: await candidateEventsAfterCount(db, c),
     current: await candidateIsCurrent(db, c),
-    ...(await approvalState(db, ctx, c)),
+    ...(await approvalState(db, store, ctx, c)),
   };
 };
 

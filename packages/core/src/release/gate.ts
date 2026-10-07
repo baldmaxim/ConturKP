@@ -2,7 +2,10 @@
 // согласования, выпуска и (этап 15) отправки: факты собирает слой БД под блокировкой этапа, решение — здесь.
 // Технические блокеры, полномочия и целостность принятием риска не снимаются; бизнес-блокеры — по каждому пункту, только
 // действующим принятием на этого кандидата (версия изменяемого предмета совпадает), а при выпуске — ещё и учтённым в
-// действующем согласовании (В-13-3).
+// действующем согласовании (В-13-3). Подтверждается показанный состав (R13-04): отпечаток `compositionHash` — содержимое,
+// учитываемые принятия рисков, риски этапа 09 и решения по удержаниям; изменился после показа — повторное ознакомление.
+import { canonicalJson } from '../requirements.ts';
+import { sha256Hex } from '../search.ts';
 
 export type GateAction = 'approve' | 'release' | 'send';
 export type BlockerClass = 'authority' | 'technical' | 'integrity' | 'business';
@@ -13,6 +16,7 @@ export type BlockerCode =
   | 'APPROVAL_NOT_ACTIVE'
   | 'CANDIDATE_CONTENT_MISMATCH'
   | 'REVIEW_SCOPE_MISMATCH'
+  | 'REVIEW_OUTDATED'
   | 'REVIEW_MISSING'
   | 'REVIEW_PROCESSING_INCOMPLETE'
   | 'INPUTS_CHANGED'
@@ -43,6 +47,9 @@ export const BLOCKERS: Readonly<Record<BlockerCode, IBlockerMeta>> = {
   APPROVAL_NOT_ACTIVE: { class: 'authority', acceptable: false, productionOnly: false, subjectType: null },
   CANDIDATE_CONTENT_MISMATCH: { class: 'technical', acceptable: false, productionOnly: false, subjectType: null },
   REVIEW_SCOPE_MISMATCH: { class: 'technical', acceptable: false, productionOnly: false, subjectType: null },
+  // Вход прогона устарел (R13-01): после прогона изменились реестр, покрытие, отметки, допущения, вопросы или решения по
+  // требованиям — отпечаток содержимого этапа не совпал с закреплённым. Нужен новый прогон и новый комплект.
+  REVIEW_OUTDATED: { class: 'technical', acceptable: false, productionOnly: false, subjectType: null },
   REVIEW_MISSING: { class: 'integrity', acceptable: false, productionOnly: false, subjectType: null },
   REVIEW_PROCESSING_INCOMPLETE: { class: 'integrity', acceptable: false, productionOnly: false, subjectType: null },
   INPUTS_CHANGED: { class: 'integrity', acceptable: false, productionOnly: false, subjectType: null },
@@ -95,6 +102,7 @@ export interface IGateFacts {
   // null — содержимое не сверялось (карточка); иначе — пути файлов, не совпавших с хранилищем.
   contentMismatch: readonly string[] | null;
   reviewScopeMismatch: boolean;
+  reviewOutdated: readonly IGateItem[];
   reviewMissing: boolean;
   reviewProcessing: readonly IGateItem[];
   uncoveredEvents: readonly IGateItem[];
@@ -152,6 +160,7 @@ export const evaluateGate = (f: IGateFacts, action: GateAction): IGateResult => 
     ['APPROVAL_NOT_ACTIVE', action === 'approve' || !f.approval ? [] : flag(!f.approval.active || !f.approval.matches, 'нет действующего согласования этого содержимого')],
     ['CANDIDATE_CONTENT_MISMATCH', (f.contentMismatch ?? []).map((p) => ({ subjectType: 'candidate_file', subjectId: '', subjectKey: p, title: p }))],
     ['REVIEW_SCOPE_MISMATCH', flag(f.reviewScopeMismatch, 'проверки построены на другом снимке или другой ревизии расчёта')],
+    ['REVIEW_OUTDATED', f.reviewOutdated],
     ['REVIEW_MISSING', flag(f.reviewMissing, 'нет завершённого прогона проверок')],
     ['REVIEW_PROCESSING_INCOMPLETE', f.reviewProcessing],
     ['INPUTS_CHANGED', f.uncoveredEvents],
@@ -188,3 +197,31 @@ export const evaluateGate = (f: IGateFacts, action: GateAction): IGateResult => 
 
 // Коды, которые остаются открытыми (для ответа BLOCKER_PRESENT и аудита отказа).
 export const openBlockerCodes = (r: IGateResult): BlockerCode[] => r.blockers.filter((b) => b.open > 0).map((b) => b.code);
+
+// Показанный состав согласования или выпуска (R13-04; D-033 В-13-8, I13): что подтверждает человек сверх байтов файлов.
+// Изменяемые сведения согласования в хэш содержимого не входят — он остаётся хэшем манифеста кандидата.
+export interface ICompositionFacts {
+  action: GateAction;
+  contentHash: string | null;
+  // Выпуск: согласование, которое выпускается; при согласовании — null.
+  approvalId: string | null;
+  // Принятия рисков, которые снимают пункты (с версией предмета).
+  acceptances: readonly { id: string; subjectVersion: number | null }[];
+  // Риски этапа 09, действующие сейчас: замечание и момент принятия.
+  reviewRisks: readonly { findingId: string; acceptedAt: string | null }[];
+  // Решения по удержаниям этого кандидата.
+  holds: readonly { id: string; status: string; decisionId: string | null }[];
+}
+
+export const compositionHash = (f: ICompositionFacts): string => {
+  const by = <T>(key: (x: T) => string) => (a: T, b: T) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0);
+  const body = {
+    action: f.action,
+    contentHash: f.contentHash,
+    approvalId: f.approvalId,
+    acceptances: [...f.acceptances].map((a) => ({ id: a.id, subjectVersion: a.subjectVersion })).sort(by((a) => a.id)),
+    reviewRisks: [...f.reviewRisks].map((r) => ({ findingId: r.findingId, acceptedAt: r.acceptedAt })).sort(by((r) => r.findingId)),
+    holds: [...f.holds].map((h) => ({ id: h.id, status: h.status, decisionId: h.decisionId })).sort(by((h) => h.id)),
+  };
+  return sha256Hex(`kontur.release_composition.v1\n${canonicalJson(body)}`);
+};

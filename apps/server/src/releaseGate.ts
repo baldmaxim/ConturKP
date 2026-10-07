@@ -1,8 +1,9 @@
 // Оценка матрицы блокеров кандидата (этап 13; D-033; проект §5): факты слоя БД, права действующего пользователя,
 // сверка точных байтов файлов и манифеста с хранилищем (только в командах — не в карточке) и бизнес-пробелы
-// необязательных полей («не сверено» списка незавершённых, толкование D-033). Решение — evaluateGate ядра.
+// необязательных полей («не сверено» списка незавершённых, толкование D-033). Решение — evaluateGate ядра. Отпечаток
+// показанного состава (R13-04) — compositionHash ядра по учитываемым принятиям, рискам этапа 09 и решениям по удержаниям.
 import { stat } from 'node:fs/promises';
-import { allFields, applicability, evaluateGate, type FieldValue, type GateAction, type IGateFacts, type IGateItem, type IGateResult } from '@kontur/core';
+import { allFields, applicability, compositionHash, evaluateGate, type FieldValue, type GateAction, type IGateFacts, type IGateItem, type IGateResult } from '@kontur/core';
 import {
   acceptanceFact,
   candidateFiles,
@@ -11,6 +12,7 @@ import {
   findingEvidence,
   getDraft,
   listAcceptances,
+  listHolds,
   stageVisibility,
   type IAccessContext,
   type IApprovalRow,
@@ -67,7 +69,9 @@ export interface IFieldGaps {
 export const fieldGaps = async (db: Queryable, ctx: IAccessContext, c: IReleaseCandidateRow, staleVersionIds: ReadonlySet<string>): Promise<IFieldGaps> => {
   const pinned = await pinnedVersions(db, c.id);
   const draftIds = (await candidateInputs(db, c.id)).filter((i) => i.kind === 'application_draft').sort((a, b) => a.ordinal - b.ordinal).map((i) => i.ref_id);
-  const incomplete: IGateItem[] = [];
+  // Один пункт на версию поля: несколько «не сверено» по одному полю (например, сверка с другими приложениями этапа)
+  // — один предмет принятия риска, сообщения объединяются.
+  const incomplete = new Map<string, IGateItem>();
   const emptyOptional: IFieldGaps['emptyOptional'] = [];
   for (const id of draftIds) {
     const draft = await getDraft(db, id);
@@ -77,7 +81,12 @@ export const fieldGaps = async (db: Queryable, ctx: IAccessContext, c: IReleaseC
       if (issue.kind !== 'unverified' || !issue.fieldKey) continue;
       const v = mine.find((x) => x.field_key === issue.fieldKey);
       if (!v) continue;
-      incomplete.push({
+      const seen = incomplete.get(v.id);
+      if (seen) {
+        incomplete.set(v.id, { ...seen, title: `${seen.title}; ${issue.message}` });
+        continue;
+      }
+      incomplete.set(v.id, {
         subjectType: 'field_version',
         subjectId: v.id,
         subjectKey: 'unverified',
@@ -91,7 +100,7 @@ export const fieldGaps = async (db: Queryable, ctx: IAccessContext, c: IReleaseC
       if (app.applicable.has(f.key) && !app.required.has(f.key) && (values.get(f.key) ?? null) === null) emptyOptional.push({ draftTitle: draft.title, fieldKey: f.key, label: f.label });
     }
   }
-  return { incomplete, emptyOptional };
+  return { incomplete: [...incomplete.values()], emptyOptional };
 };
 
 export interface ICandidateGate {
@@ -149,6 +158,7 @@ export const candidateGate = async (db: Queryable, ctx: IAccessContext, c: IRele
           },
     contentMismatch: o.store ? await verifyCandidateContent(db, o.store, c) : null,
     reviewScopeMismatch: facts.reviewScopeMismatch,
+    reviewOutdated: facts.reviewOutdated,
     reviewMissing: facts.reviewMissing,
     reviewProcessing: facts.reviewProcessing,
     uncoveredEvents: facts.uncoveredEvents,
@@ -165,4 +175,22 @@ export const candidateGate = async (db: Queryable, ctx: IAccessContext, c: IRele
     acceptances: (await listAcceptances(db, c.id)).map(acceptanceFact),
   };
   return { result: evaluateGate(gateFacts, o.action), db: facts, fields };
+};
+
+// Отпечаток состава, который подтверждает человек (R13-04; D-033 В-13-8): содержимое, принятия рисков, снимающие пункты
+// сейчас (с версией предмета), действующие риски этапа 09 и решения по удержаниям кандидата; у выпуска — ещё
+// согласование. Не зависит от прав читателя: маскируются тексты, а не идентификаторы.
+export const candidateComposition = async (db: Queryable, c: IReleaseCandidateRow, g: ICandidateGate, approvalId: string | null): Promise<string> => {
+  const used = new Set(g.result.usedAcceptanceIds);
+  const acceptances = new Map<string, number | null>();
+  for (const b of g.result.blockers) for (const i of b.items) if (i.acceptance && used.has(i.acceptance.id)) acceptances.set(i.acceptance.id, i.acceptance.subjectVersion);
+  const holds = (await listHolds(db, c.stage_id, { candidateId: c.id })).filter((h) => h.status !== 'open');
+  return compositionHash({
+    action: g.result.action,
+    contentHash: c.manifest_sha256,
+    approvalId,
+    acceptances: [...acceptances].map(([id, subjectVersion]) => ({ id, subjectVersion })),
+    reviewRisks: g.db.reviewRisks.map((r) => ({ findingId: r.findingId, acceptedAt: r.acceptedAt ? r.acceptedAt.toISOString() : null })),
+    holds: holds.map((h) => ({ id: h.id, status: h.status, decisionId: h.decision_id })),
+  });
 };

@@ -7,17 +7,22 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { TextAreaField } from '../../components/TextAreaField';
 import { useIdempotencyKey } from '../../hooks/useIdempotencyKey';
 import { useToast } from '../../hooks/useToast';
-import { BLOCKER_TITLES, formatBytes, MODE_LABEL } from '../../utils/releaseLabels';
+import { BLOCKER_TITLES, EVENT_LABELS, formatBytes, MODE_LABEL } from '../../utils/releaseLabels';
 import { ReasonDialog } from './ReasonDialog';
 import styles from './Approval.module.css';
 
 type TDialog = 'approve' | 'release' | 'return' | 'revoke' | null;
 
-/** Точный состав комплекта в диалоге подтверждения (BRAND.md §9.1 п. 5): что именно согласуется или выпускается. */
+/**
+ * Точный состав комплекта в диалоге подтверждения (BRAND.md §9.1 п. 5): что именно согласуется или выпускается —
+ * файлы, принятые риски и решения по событиям. Сервер принимает только этот состав (R13-04): изменился после показа —
+ * отказ и повторное ознакомление.
+ */
 const Composition: FC<{ c: ICandidateView; verb: string }> = ({ c, verb }) => {
   const gate = c.status === 'approved' ? c.gate?.release : c.gate?.approve;
   const accepted = (gate?.blockers ?? []).flatMap((b) => b.items.filter((i) => i.acceptance).map((i) => ({ code: b.code, title: i.title, reason: i.acceptance!.reason })));
   const review = c.gate?.warnings?.reviewRisks ?? [];
+  const decisions = c.holds?.resolved ?? [];
   return (
     <div className={styles.composition}>
       <p className={styles.muted}>{`${verb} именно это содержимое: SHA-256 манифеста ${c.contentHash?.slice(0, 16)}…`}</p>
@@ -43,10 +48,22 @@ const Composition: FC<{ c: ICandidateView; verb: string }> = ({ c, verb }) => {
           <h5 className={styles.compTitle}>Принятые риски</h5>
           <ul className={styles.compList}>
             {accepted.map((a, n) => (
-              <li key={`a${n}`}>{`${BLOCKER_TITLES[a.code] ?? a.code}: ${a.title} — ${a.reason}`}</li>
+              <li key={`a${n}`}>{`${BLOCKER_TITLES[a.code] ?? a.code}: ${a.title} — ${a.reason ?? 'причина закрыта для вас'}`}</li>
             ))}
             {review.map((r) => (
               <li key={r.findingId}>{`Замечание «${r.title}» (риск принят на проверке${r.acceptedBy ? `, ${r.acceptedBy}` : ''}): ${r.reason}`}</li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      {decisions.length > 0 ? (
+        <>
+          <h5 className={styles.compTitle}>Решения по событиям</h5>
+          <ul className={styles.compList}>
+            {decisions.map((h) => (
+              <li key={h.id}>
+                {`№ ${h.event.seq} (${EVENT_LABELS[h.event.type] ?? h.event.type}): ${h.status === 'resolved_not_applicable' ? 'не влияет' : 'влияет'}${h.resolvedBy ? `, ${h.resolvedBy.name}` : ''} — ${h.reason ?? 'причина закрыта для вас'}`}
+              </li>
             ))}
           </ul>
         </>
@@ -143,7 +160,7 @@ export const ApprovalActions: FC<IApprovalActionsProps> = ({ c, onChanged }) => 
           confirmIcon="stamp"
           busy={busy}
           onClose={() => setDialog(null)}
-          onConfirm={() => run(approveCandidate(c, comment.trim() || null, idem.keyFor({ a: c.id, comment })), `Комплект № ${c.seq} согласован`)}
+          onConfirm={() => run(approveCandidate(c, comment.trim() || null, idem.keyFor({ a: c.id, comment, k: c.gate?.approve?.compositionHash })), `Комплект № ${c.seq} согласован`)}
         >
           <Composition c={c} verb="Согласуется" />
           <TextAreaField label="Комментарий (необязательно)" value={comment} onValueChange={setComment} rows={2} maxLength={2000} />
@@ -156,7 +173,7 @@ export const ApprovalActions: FC<IApprovalActionsProps> = ({ c, onChanged }) => 
           confirmIcon="package-check"
           busy={busy}
           onClose={() => setDialog(null)}
-          onConfirm={() => run(releaseCandidate(c, c.approval!.id, idem.keyFor({ r: c.id, a: c.approval!.id })), `Комплект № ${c.seq} выпущен`)}
+          onConfirm={() => run(releaseCandidate(c, c.approval!.id, idem.keyFor({ r: c.id, a: c.approval!.id, k: c.gate?.release?.compositionHash })), `Комплект № ${c.seq} выпущен`)}
         >
           <Composition c={c} verb="Выпускается" />
           <p className={styles.muted}>{`Согласовал ${c.approval.approvedBy.name}. Файлы выпуска — точные байты этого комплекта, заново не генерируются.`}</p>

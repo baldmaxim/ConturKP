@@ -1,10 +1,12 @@
 // Этап 13 — права на содержимое пунктов матрицы (урок R11-01, R08-02): критическое замечание по письму из ящика, к
 // которому у инженера 2 нет доступа. Его заголовок не попадает в карточку инженера 2 (пункт без текста, «закрыт»), не
-// попадает в манифест выпуска, который читает любой, кто видит комплект; руководитель без доступа к ящику не принимает
-// риск по такому пункту (409 restricted_fragments); идентификатор письма не раскрывается списком удержаний.
+// попадает в манифест выпуска (родовой заголовок); манифест с решением по закрытому предмету инженер 2 не читает
+// (409 restricted_basis, R13-02), инженер 1 с доступом — читает; руководитель без доступа к ящику не принимает риск по
+// такому пункту (409 restricted_fragments); идентификатор письма не раскрывается списком удержаний.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { idem } from './helpers.ts';
 import { createMailbox, eml, importEml, linkMail, setMailAccess } from './mailFixtures.ts';
+import { etagOf } from './reviewFixtures.ts';
 import { fixScope } from './searchFixtures.ts';
 import { acceptAll, acceptRisk, approve, assembled, buildStage13, closeStage13, notApplicable, release, view, type IStage13 } from './approvalFixtures.ts';
 
@@ -49,7 +51,7 @@ describe('пункты матрицы по правам пользователя
     expect(holds.text).not.toContain(messageId);
   });
 
-  it('руководитель без доступа к ящику не принимает риск по закрытому пункту; с доступом — принимает; манифест выпуска без заголовка замечания', async () => {
+  it('руководитель без доступа к ящику не принимает риск по закрытому пункту; с доступом — принимает; манифест выпуска без заголовка замечания и только при доступе', async () => {
     let c = await assembled(st);
     await notApplicable(st, c.id, 'Письмо и прежние документы не меняют комплект');
     await setMailAccess(st.e.s.admin, box, st.e.s.ids.manager, []);
@@ -63,10 +65,44 @@ describe('пункты матрицы по правам пользователя
     expect(a.status, a.text).toBe(200);
     const r = await release(st, await view(st, c.id, st.e.s.eng1), a.body.approval.id as string);
     expect(r.status, r.text).toBe(201);
-    const manifest = await st.e.s.eng2.getBuffer(`/releases/${r.body.release.id}/manifest`);
+    const closed = await st.e.s.eng2.getBuffer(`/releases/${r.body.release.id}/manifest`);
+    expect(closed.status).toBe(409);
+    expect((closed.body as Buffer).toString('utf8')).not.toContain(SECRET);
+    const manifest = await st.e.s.eng1.getBuffer(`/releases/${r.body.release.id}/manifest`);
     expect(manifest.status).toBe(200);
     const text = (manifest.body as Buffer).toString('utf8');
     expect(text).not.toContain(SECRET);
     expect(JSON.parse(text).acceptedRisks.find((x: { code: string }) => x.code === 'CRITICAL_FINDINGS_OPEN')).toMatchObject({ subjectId: findingId, title: `критическое замечание ${findingId}` });
+  });
+
+  it('риск этапа 09 по закрытому замечанию (R13-02): причина не видна инженеру 2; манифест выпуска с этим риском — только при доступе', async () => {
+    const RISK09 = 'SECRET-09: условие письма принято на проверке';
+    const tr = await st.e.s.manager.post(
+      `/findings/${findingId}/transitions`,
+      { to: 'accepted_risk', reason: RISK09, statement: 'Риск по условию письма принят' },
+      { headers: { 'If-Match': await etagOf(st.e.s.manager, `/findings/${findingId}`), ...idem() } },
+    );
+    expect(tr.status, tr.text).toBe(200);
+    let c = await assembled(st);
+    await notApplicable(st, c.id, 'Прошлые события не влияют');
+    c = await view(st, c.id);
+    await acceptAll(st, c);
+    c = await view(st, c.id);
+    expect(c.gate.approve!.blockers.find((b) => b.code === 'CRITICAL_FINDINGS_OPEN')).toBeUndefined();
+    expect(c.gate.warnings!.reviewRisks.map((r) => r.findingId)).toContain(findingId);
+    const card = await st.e.s.eng2.get(`/release-candidates/${c.id}`);
+    expect(card.text).not.toContain(RISK09);
+    expect(card.text).not.toContain(SECRET);
+    const a = await approve(st, c);
+    expect(a.status, a.text).toBe(200);
+    const r = await release(st, await view(st, c.id, st.e.s.eng1), a.body.approval.id as string);
+    expect(r.status, r.text).toBe(201);
+    const id = r.body.release.id as string;
+    expect((await st.e.s.eng2.getBuffer(`/releases/${id}/manifest`)).status).toBe(409);
+    const open = await st.e.s.eng1.getBuffer(`/releases/${id}/manifest`);
+    expect(open.status).toBe(200);
+    const m = JSON.parse((open.body as Buffer).toString('utf8'));
+    expect(m.acceptedRisks.some((x: { subjectId: string }) => x.subjectId === findingId)).toBe(false);
+    expect(m.reviewRisks.find((x: { findingId: string }) => x.findingId === findingId)).toMatchObject({ reason: RISK09 });
   });
 });

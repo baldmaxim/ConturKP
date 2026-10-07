@@ -1,13 +1,15 @@
-# npm run smoke — 2026-10-07T14:18:55.448Z
-# Node v24.14.1, linux x64, PostgreSQL postgresql://***@127.0.0.1:55432/postgres
+
+> smoke
+> node scripts/smoke.mjs
+
 PASS  db:setup — роли и база — база kontur_kp_smoke_test: создана; роли и права выставлены
-PASS  db:migrate — пустая БД — готово, применено миграций: 34
+PASS  db:migrate — пустая БД — готово, применено миграций: 35
 PASS  db:migrate — повторный запуск без изменений
 PASS  bootstrap — первый администратор-руководитель
 PASS  bootstrap — повтор отклонён
 PASS  db:seed-demo — синтетические данные — демо-данные готовы
 PASS  config:check — без значений секретов
-PASS  server + worker — /ready 200 — {"database":{"ok":true,"detail":"доступна"},"schema":{"ok":true,"detail":"версия 34"},"storage":{"ok":true,"detail":"доступно на запись"},"worker":{"ok":true,"detail":"heartbeat свежий"}}
+PASS  server + worker — /ready 200 — {"database":{"ok":true,"detail":"доступна"},"schema":{"ok":true,"detail":"версия 35"},"storage":{"ok":true,"detail":"доступно на запись"},"worker":{"ok":true,"detail":"heartbeat свежий"}}
 PASS  неаутентифицированный запрос — 401
 PASS  вход администратора — HTTP 200
 PASS  список тендеров (демо) — тендеров: 2
@@ -82,7 +84,7 @@ PASS  этап 12: инженер заполнил приложение и от�
 PASS  этап 12: worker собрал тестовый комплект — LibreOffice, проверки пройдены, файл и превью — ready_for_approval
 PASS  этап 12: файл отдаётся по ID — те же байты, что в манифесте; content_hash — SHA-256 манифеста
 PASS  этап 12: чтение комплекта не пересобирает — тот же content_hash
-PASS  этап 13: карточка комплекта — оценка матрицы согласования с классами блокеров; неполная проверка демо-этапа — неснимаемый блокер — неснимаемые: REVIEW_SCOPE_MISMATCH, REVIEW_PROCESSING_INCOMPLETE, INPUTS_CHANGED
+PASS  этап 13: карточка комплекта — оценка матрицы согласования с классами блокеров; неполная проверка демо-этапа — неснимаемый блокер — неснимаемые: REVIEW_SCOPE_MISMATCH, REVIEW_OUTDATED, REVIEW_PROCESSING_INCOMPLETE, INPUTS_CHANGED
 PASS  этап 13: инженер не согласует (403); руководителю матрица отказывает — 409 BLOCKER_PRESENT с кодами карточки — HTTP 403/409
 PASS  этап 13: неснимаемый блокер риском не снимается — 409 risk_not_acceptable — HTTP 409
 PASS  этап 13: правка использованного поля после сборки — удержание у комплекта, согласование заблокировано INPUTS_CHANGED — удержаний: 11

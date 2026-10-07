@@ -1,5 +1,4 @@
-# регрессия на рабочем дереве передачи 13-1: 2026-10-07T19:02:24+05:00, linux x64 Node v24.14.1, artifacts/stage-08/ui-check.mjs, exit 0
-# ui-check — 2026-10-07T14:02:44.521Z, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker, MODEL_PROVIDER=fake, поддельный TenderHub
+# регрессия на рабочем дереве передачи 13-2 (исправление Review 13-1): 2026-10-07T20:46:38+05:00, linux x64 Node v24.14.1, artifacts/stage-08/ui-check.mjs, exit 0
 PASS  server + worker готовы
 PASS  вход администратора-руководителя
 PASS  документ ТЗ загружен штатным импортом

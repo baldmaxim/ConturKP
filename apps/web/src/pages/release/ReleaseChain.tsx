@@ -58,7 +58,7 @@ export const ReleaseChain: FC<{ c: ICandidateView }> = ({ c }) => {
           }. Прежнее согласование сохранено.`}
         </Notice>
       ) : null}
-      {c.returned ? <Notice tone="warning" icon="undo-2">{`Возвращён на доработку: ${c.returned.reason} (${c.returned.returnedBy.name}, ${formatDateTime(c.returned.returnedAt)})`}</Notice> : null}
+      {c.returned ? <Notice tone="warning" icon="undo-2">{`Возвращён на доработку: ${c.returned.reason ?? 'причина закрыта вместе с предметом события'} (${c.returned.returnedBy.name}, ${formatDateTime(c.returned.returnedAt)})`}</Notice> : null}
       <ol className={styles.chain} aria-label="Цепочка выпуска">
         {steps.map((s) => (
           <li key={s.key} className={styles.step} data-done={s.done ? 'true' : 'false'} data-tone={s.tone ?? ''}>

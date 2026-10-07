@@ -288,7 +288,7 @@ const axisEventView = (e: IAxisEventRow, visible: boolean) => ({
   bases: e.bases.map((b) => ({ type: b.basis_type, id: b.fragment_id ?? b.qa_item_revision_id ?? b.mail_message_revision_id ?? b.document_revision_id ?? b.decision_id })),
 });
 
-const axisBasesVisible = (events: readonly IAxisEventRow[], vis: IReviewVisibility): boolean =>
+export const axisBasesVisible = (events: readonly IAxisEventRow[], vis: IReviewVisibility): boolean =>
   events.every((e) =>
     e.bases.every(
       (b) =>

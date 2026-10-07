@@ -68,7 +68,9 @@ export const GatePanel: FC<IGatePanelProps> = ({ candidateId, gate, title, canAc
                 <li key={`${i.subjectType}:${i.subjectId}:${i.subjectKey}`} className={styles.blockerItem}>
                   <span className={styles.itemText}>{i.title}</span>
                   {i.acceptance ? (
-                    <span className={styles.muted}>{`Риск принят: ${i.acceptance.acceptedBy}, ${formatDateTime(i.acceptance.acceptedAt)} — ${i.acceptance.reason}`}</span>
+                    <span className={styles.muted}>
+                      {`Риск принят: ${i.acceptance.acceptedBy}, ${formatDateTime(i.acceptance.acceptedAt)} — ${i.acceptance.reason ?? 'причина закрыта вместе с основаниями пункта'}`}
+                    </span>
                   ) : canAcceptRisk && i.acceptable && !i.restricted ? (
                     <Button variant="secondary" icon="shield-check" onClick={() => setTarget({ b, i })}>
                       Принять риск…

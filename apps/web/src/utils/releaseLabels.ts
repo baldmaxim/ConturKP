@@ -50,6 +50,7 @@ export const BLOCKER_TITLES: Record<string, string> = {
   APPROVAL_NOT_ACTIVE: 'Нет действующего согласования этого содержимого',
   CANDIDATE_CONTENT_MISMATCH: 'Файлы в хранилище не совпадают с согласуемыми',
   REVIEW_SCOPE_MISMATCH: 'Проверки построены на другом снимке или расчёте',
+  REVIEW_OUTDATED: 'Проверки устарели: нужен новый прогон и новый комплект',
   REVIEW_MISSING: 'Нет завершённого прогона проверок',
   REVIEW_PROCESSING_INCOMPLETE: 'Обработка неполна или с ошибками',
   INPUTS_CHANGED: 'После сборки поступила информация без решения',

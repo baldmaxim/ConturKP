@@ -187,6 +187,7 @@ export const listHolds = async (
 export interface ICandidateGateDbFacts {
   reviewMissing: boolean;
   reviewScopeMismatch: boolean;
+  reviewOutdated: IGateItem[];
   reviewProcessing: IGateItem[];
   reviewUncertain: IGateItem[];
   uncoveredEvents: IGateItem[];
@@ -241,6 +242,13 @@ export const candidateGateDbFacts = async (db: Queryable, c: IReleaseCandidateRo
     [c.id],
   );
   const finished = runs.filter((r) => r.status === 'completed' || r.status === 'completed_with_gaps');
+  // R13-01: вход прогона устарел — отпечаток содержимого этапа не совпадает с закреплённым при запуске (тот же расчёт,
+  // что у второй линии 0035 и у свежести прогона в карточке проверок).
+  const outdated = await q<{ id: string; pinned: boolean }>(
+    `SELECT r.id, i.run_id IS NOT NULL AS pinned FROM review_run r LEFT JOIN review_run_input i ON i.run_id = r.id
+      WHERE r.id = ANY($1::uuid[]) AND (i.run_id IS NULL OR i.content_fingerprint <> stage_content_fingerprint(r.stage_id, r.registry_id))`,
+    [finished.map((r) => r.id)],
+  );
   const results = await q<{ id: string; check_code: string; outcome: string; reason: string | null }>(
     `SELECT x.id, x.check_code, x.outcome, x.reason FROM review_check_result x WHERE x.run_id = ANY($1::uuid[]) AND x.outcome IN ('incomplete', 'error')
       ORDER BY x.check_code`,
@@ -304,6 +312,13 @@ export const candidateGateDbFacts = async (db: Queryable, c: IReleaseCandidateRo
   return {
     reviewMissing: finished.length === 0,
     reviewScopeMismatch: finished.some((r) => r.evidence_scope_id !== c.evidence_scope_id || r.calculation_revision_id !== c.calculation_revision_id),
+    reviewOutdated: outdated.map((r) => ({
+      subjectType: 'review_run',
+      subjectId: r.id,
+      title: r.pinned
+        ? 'после прогона изменились реестр требований, покрытие, вопросы или решения: запустите проверки заново и соберите новый комплект'
+        : 'вход прогона не закреплён: запустите проверки заново и соберите новый комплект',
+    })),
     reviewProcessing: results.filter((x) => x.outcome === 'error' || x.check_code !== 'coverage').map(resultItem),
     reviewUncertain: results.filter((x) => x.outcome === 'incomplete' && x.check_code === 'coverage').map(resultItem),
     uncoveredEvents: uncovered.map((e) => ({
@@ -436,6 +451,8 @@ export const resolveHold = async (
 // Готовность выпуска к отправке (§4.4; этап 15 вызывает то же): «влияет» — исключён навсегда; непокрытые события без
 // «не влияет» — удержан; несвежий канал поступления — нет; иначе готов. Тестовый выпуск не отправляется никогда
 // (`sendable: false`), но удержания показываются и у него — путь проверяется тестовым режимом (D-033 В-13-2).
+// Исключение — по любому решению «влияет» этого кандидата, независимо от того, покрыто ли событие сейчас (R13-03):
+// позднее покрытие (исход элемента партии, новый снимок) решение не отменяет, исправление — только новым комплектом.
 export type SendReadiness = 'excluded' | 'held' | 'intake_not_current' | 'ready';
 
 export const releaseSendReadiness = async (
@@ -449,9 +466,10 @@ export const releaseSendReadiness = async (
       [r.candidate_id],
     )
   ).rows;
+  const excluded = await db.query(`SELECT 1 FROM readiness_hold WHERE candidate_id = $1 AND status = 'resolved_requires_new_candidate' LIMIT 1`, [r.candidate_id]);
   const list = events.map((e) => ({ seq: Number(e.seq), type: e.event_type }));
   let state: SendReadiness = 'ready';
-  if (events.some((e) => e.hold_status === 'resolved_requires_new_candidate')) state = 'excluded';
+  if (excluded.rowCount) state = 'excluded';
   else if (events.length > 0) state = 'held';
   else {
     const stale = await db.query(

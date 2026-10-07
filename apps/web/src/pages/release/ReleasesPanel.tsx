@@ -10,6 +10,7 @@ import styles from './Release.module.css';
 /**
  * Выпуски этапа (D-033 В-13-7): неизменяемые записи с манифестом выпуска и точными байтами комплекта; готовность к
  * отправке вычисляется (I01) — удержание после выпуска видно здесь же. Размещение и отправка — этапы 14 и 15.
+ * Манифест выпуска и ZIP всех файлов содержат причины решений: у того, кому закрыт предмет решения, их нет (R13-02).
  */
 export const ReleasesPanel: FC<{ stageId: string; version: string }> = ({ stageId, version }) => {
   const res = useApiResource((signal) => listReleases(stageId, signal), `releases:${stageId}:${version}`);
@@ -43,13 +44,18 @@ export const ReleasesPanel: FC<{ stageId: string; version: string }> = ({ stageI
                 <a className={styles.download} href={releaseArchiveUrl(r.id)} download>
                   ZIP для заказчика
                 </a>
-                <a className={styles.download} href={releaseArchiveUrl(r.id, 'all')} download>
-                  ZIP всех файлов
-                </a>
-                <a className={styles.download} href={releaseManifestUrl(r.id)} download={`release-${r.candidateSeq}.json`}>
-                  Манифест выпуска
-                </a>
+                {r.manifestReadable ? (
+                  <>
+                    <a className={styles.download} href={releaseArchiveUrl(r.id, 'all')} download>
+                      ZIP всех файлов
+                    </a>
+                    <a className={styles.download} href={releaseManifestUrl(r.id)} download={`release-${r.candidateSeq}.json`}>
+                      Манифест выпуска
+                    </a>
+                  </>
+                ) : null}
               </span>
+              {r.manifestReadable ? null : <span className={styles.muted}>Манифест выпуска закрыт: в нём причины решений по основаниям, недоступным вам.</span>}
             </li>
           );
         })}

@@ -28,7 +28,11 @@ export const approveAttachmentRevision = (a: IStandardAttachment) => apiPost<ISt
 // ---------------------------------------------------------------- Этап 13: согласование и выпуск (D-033)
 
 export const approveCandidate = (c: ICandidateView, comment: string | null, idempotencyKey: string) =>
-  apiPost<ICandidateView>(`/release-candidates/${enc(c.id)}/approve`, { body: { contentHash: c.contentHash, ...(comment ? { comment } : {}) }, ifMatch: c.etag, idempotencyKey });
+  apiPost<ICandidateView>(`/release-candidates/${enc(c.id)}/approve`, {
+    body: { contentHash: c.contentHash, compositionHash: c.gate?.approve?.compositionHash, ...(comment ? { comment } : {}) },
+    ifMatch: c.etag,
+    idempotencyKey,
+  });
 
 export const returnCandidate = (c: ICandidateView, reason: string, idempotencyKey: string) =>
   apiPost<ICandidateView>(`/release-candidates/${enc(c.id)}/return`, { body: { reason }, ifMatch: c.etag, idempotencyKey });
@@ -37,7 +41,11 @@ export const revokeApproval = (approval: { id: string; etag: string }, reason: s
   apiPost<ICandidateView>(`/approvals/${enc(approval.id)}/revoke`, { body: { reason }, ifMatch: approval.etag, idempotencyKey });
 
 export const releaseCandidate = (c: ICandidateView, approvalId: string, idempotencyKey: string) =>
-  apiPost<ICandidateView>(`/release-candidates/${enc(c.id)}/release`, { body: { approvalId, contentHash: c.contentHash }, ifMatch: c.etag, idempotencyKey });
+  apiPost<ICandidateView>(`/release-candidates/${enc(c.id)}/release`, {
+    body: { approvalId, contentHash: c.contentHash, compositionHash: c.gate?.release?.compositionHash },
+    ifMatch: c.etag,
+    idempotencyKey,
+  });
 
 export const acceptRisk = (candidateId: string, body: { blockerCode: string; subjectType: string; subjectId: string; subjectKey: string; reason: string }, idempotencyKey: string) =>
   apiPost<ICandidateView>(`/release-candidates/${enc(candidateId)}/risk-acceptances`, { body, idempotencyKey });

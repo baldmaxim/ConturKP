@@ -1,5 +1,4 @@
-# регрессия на рабочем дереве передачи 13-1 (итоговый код): 2026-10-07T19:05:27+05:00, linux x64 Node v24.14.1, artifacts/stage-12/ui-check.mjs, exit 0
-# ui-check — 2026-10-07T14:05:41.465Z, linux x64, Node v24.14.1, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker, LibreOffice, TenderHub — поддельный, демонстрационные формы
+# регрессия на рабочем дереве передачи 13-2 (исправление Review 13-1): 2026-10-07T20:47:43+05:00, linux x64 Node v24.14.1, artifacts/stage-12/ui-check.mjs, exit 0
 PASS  server + worker готовы
 PASS  вход администратора-руководителя
 PASS  этап подготовлен: ТЗ распознано, снимок области, ревизия расчёта — complete/201/complete

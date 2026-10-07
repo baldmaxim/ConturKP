@@ -20,6 +20,7 @@ import {
   notApplicable,
   openHolds,
   release,
+  rerunReview,
   tamperBlob,
   view,
   type ICandidate13,
@@ -262,6 +263,7 @@ describe('отзыв и возврат (В-13-9)', () => {
     await notApplicable(st, c2.id, 'Документы прошлых сценариев не меняют комплект');
     c2 = await view(st, c2.id);
     await acceptAll(st, c2);
+    c2 = await view(st, c2.id);
     const a1 = await approve(st, c2);
     expect(a1.status, a1.text).toBe(200);
     const first = a1.body.approval;
@@ -310,6 +312,7 @@ describe('старое согласование не выдаётся за но�
     await notApplicable(st, c3.id);
     c3 = await view(st, c3.id);
     await acceptAll(st, c3);
+    c3 = await view(st, c3.id);
     const a3 = await approve(st, c3);
     expect(a3.status, a3.text).toBe(200);
     const old = a3.body.approval.id as string;
@@ -326,6 +329,7 @@ describe('старое согласование не выдаётся за но�
     await notApplicable(st, c4.id);
     c4 = await view(st, c4.id);
     await acceptAll(st, c4);
+    c4 = await view(st, c4.id);
     const a4 = await approve(st, c4);
     expect(a4.status, a4.text).toBe(200);
     c4 = await view(st, c4.id, st.e.s.eng1);
@@ -373,6 +377,8 @@ describe('принятый риск не скрывает вопрос и зам
     );
     expect(created.status, created.text).toBe(201);
     const finding = created.body as { id: string };
+    // Вопросы — вход проверки (отпечаток содержимого этапа, R09-02): прогон до них устарел (R13-01), нужен новый.
+    await rerunReview(st);
     let c5 = await assembled(st);
     await notApplicable(st, c5.id);
     c5 = await view(st, c5.id);
@@ -428,6 +434,7 @@ describe('удержание до выпуска: «влияет» возвра�
     await notApplicable(st, c.id);
     c = await view(st, c.id);
     await acceptAll(st, c);
+    c = await view(st, c.id);
     const a = await approve(st, c);
     expect(a.status, a.text).toBe(200);
     await uploadDocument(st.db, st.e.config, st.e.s.eng1, st.e.s.stageA, 'Изменение ТЗ после согласования.pdf');
@@ -437,8 +444,11 @@ describe('удержание до выпуска: «влияет» возвра�
     const r = await st.e.s.manager.post(`/release-candidates/${c.id}/holds/resolve`, { holdIds: holds.map((h) => h.id), resolution: 'requires_new_candidate', reason: 'ТЗ изменилось' }, { headers: idem() });
     expect(r.status, r.text).toBe(200);
     expect(r.body).toMatchObject({ status: 'returned', approval: null, returned: { holdId: expect.any(String) } });
-    expect(r.body.approvals[0]).toMatchObject({ status: 'revoked', revokeReason: expect.stringContaining('ТЗ изменилось') });
-    const h = (await st.e.s.manager.get(`/release-candidates/${c.id}/history`)).body.items as { action: string }[];
+    // Отзыв и возврат ссылаются на событие; причина — в решении по удержанию, закрытом вместе с предметом (R13-02).
+    expect(r.body.approvals[0]).toMatchObject({ status: 'revoked', revokeReason: expect.stringContaining('влияет событие №') });
+    expect(r.body.approvals[0].revokeReason).not.toContain('ТЗ изменилось');
+    const h = (await st.e.s.manager.get(`/release-candidates/${c.id}/history`)).body.items as { action: string; basis: string | null }[];
     expect(h.map((x) => x.action)).toEqual(expect.arrayContaining(['approved', 'hold_requires_new_candidate', 'approval_revoked', 'returned']));
+    expect(h.find((x) => x.action === 'hold_requires_new_candidate')!.basis).toContain('ТЗ изменилось');
   });
 });

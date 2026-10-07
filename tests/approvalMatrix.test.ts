@@ -5,11 +5,12 @@
 //  3) риск, принятый в этапе 09, действует, пока действуют замечание и его основания; изменение оснований требует нового
 //     решения, прежний риск остаётся в истории;
 //  4) «не влияет» снимает удержание только по своим событиям и не отменяет актуальности оснований.
+// S13-04: несколько «не сверено» по одному полю (сверка с другими приложениями этапа) — один пункт на версию поля.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { draftOf, setValue } from './formsFixtures.ts';
 import { idem } from './helpers.ts';
 import { completeDraft } from './releaseFixtures.ts';
-import { acceptAll, acceptRisk, approve, assembled, buildStage13, closeStage13, codes, notApplicable, TZ, view, type IStage13 } from './approvalFixtures.ts';
+import { acceptAll, acceptRisk, approve, assembled, buildStage13, closeStage13, codes, filledDraft, notApplicable, TZ, view, type IStage13 } from './approvalFixtures.ts';
 import { etagOf } from './reviewFixtures.ts';
 import { fragmentIdOf, seedEvidenceRun, uploadDocument } from './searchFixtures.ts';
 
@@ -142,5 +143,30 @@ describe('D-033 ут. 2–4 — устаревшее основание поля
     const events = (await st.db.pool.query("SELECT to_value FROM finding_event WHERE finding_id = $1 AND event_kind = 'status' ORDER BY seq", [findingId])).rows.map((x) => x.to_value);
     expect(events).toEqual(expect.arrayContaining(['accepted_risk', 'stale']));
     expect((await st.e.s.eng1.get(`/findings/${findingId}`)).body.status).toBe('stale');
+  });
+});
+
+describe('S13-04 — несколько «не сверено» по одному полю — один пункт матрицы', () => {
+  let st: IStage13;
+  beforeAll(async () => {
+    st = await buildStage13();
+  });
+  afterAll(async () => {
+    await closeStage13(st);
+  });
+
+  it('второе письмо этапа добавляет сверки к полю условий: пункт поля один, риск по нему принимается один раз, комплект согласуется', async () => {
+    await filledDraft(st, 'letter', 'Второе письмо КП');
+    let c = await assembled(st);
+    await notApplicable(st, c.id, 'Второе письмо в комплект не входит');
+    c = await view(st, c.id);
+    const items = c.gate.approve!.blockers.find((b) => b.code === 'FIELDS_INCOMPLETE')!.items;
+    expect(new Set(items.map((i) => i.subjectId)).size).toBe(items.length);
+    expect(items.some((i) => i.title.includes('«Второе письмо КП»') && i.title.includes('; '))).toBe(true);
+    await acceptAll(st, c);
+    c = await view(st, c.id);
+    expect(codes(c.gate.approve)).toEqual([]);
+    const a = await approve(st, c);
+    expect(a.status, a.text).toBe(200);
   });
 });

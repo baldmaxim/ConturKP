@@ -22,6 +22,8 @@ interface IHoldsPanelProps {
  * Удержания комплекта (D-033 В-13-5): события после сборки или не вошедшие в снимок, которые останавливают согласование,
  * выпуск или отправку до решения руководителя. «Не влияет» снимает удержание только по выбранным событиям; «влияет» —
  * невыпущенный комплект возвращается, у выпущенного отправка исключена. Прежнее согласование остаётся в истории.
+ * Событие с закрытым для пользователя предметом (письмо чужого ящика) показывается без причины и не выбирается: решение
+ * о применимости принимает тот, кто может прочитать предмет (R13-02).
  */
 export const HoldsPanel: FC<IHoldsPanelProps> = ({ stageId, candidateId, version, onChanged }) => {
   const toast = useToast();
@@ -33,8 +35,9 @@ export const HoldsPanel: FC<IHoldsPanelProps> = ({ stageId, candidateId, version
   const items = res.data?.items ?? [];
   if (items.length === 0) return null;
   const open = items.filter((h) => h.status === 'open' && !h.covered);
+  const decidable = open.filter((h) => !h.restricted);
   const canResolve = res.data?.canResolve ?? false;
-  const selected = chosen.filter((id) => open.some((h) => h.id === id));
+  const selected = chosen.filter((id) => decidable.some((h) => h.id === id));
   const submit = (reason: string): void => {
     if (!dialog) return;
     const body = { holdIds: selected, resolution: dialog, reason };
@@ -64,7 +67,7 @@ export const HoldsPanel: FC<IHoldsPanelProps> = ({ stageId, candidateId, version
           const pending = h.status === 'open' && !h.covered;
           return (
             <li key={h.id} className={styles.holdRow}>
-              {canResolve && pending ? (
+              {canResolve && pending && !h.restricted ? (
                 <input
                   type="checkbox"
                   className={styles.check}
@@ -77,16 +80,23 @@ export const HoldsPanel: FC<IHoldsPanelProps> = ({ stageId, candidateId, version
                 <span className={styles.label}>{`№ ${h.event.seq}: ${EVENT_LABELS[h.event.type] ?? h.event.type}`}</span>
                 <span className={styles.muted}>{h.event.at ? formatDateTime(h.event.at) : ''}</span>
                 {h.reason ? <span className={styles.muted}>{`${h.resolvedBy?.name ?? ''}, ${h.resolvedAt ? formatDateTime(h.resolvedAt) : ''}: ${h.reason}`}</span> : null}
+                {h.restricted ? (
+                  <span className={styles.muted}>
+                    {h.status === 'open'
+                      ? 'Предмет события закрыт для вас: решение принимает тот, кто может его прочитать'
+                      : `${h.resolvedBy?.name ?? ''}, ${h.resolvedAt ? formatDateTime(h.resolvedAt) : ''}: причина закрыта вместе с предметом события`}
+                  </span>
+                ) : null}
               </div>
               <Badge label={st.label} icon={st.icon} tone={st.tone} />
             </li>
           );
         })}
       </ul>
-      {canResolve && open.length > 0 ? (
+      {canResolve && decidable.length > 0 ? (
         <div className={styles.holdActions}>
-          <Button variant="secondary" onClick={() => setChosen(selected.length === open.length ? [] : open.map((h) => h.id))}>
-            {selected.length === open.length ? 'Снять выбор' : 'Выбрать все'}
+          <Button variant="secondary" onClick={() => setChosen(selected.length === decidable.length ? [] : decidable.map((h) => h.id))}>
+            {selected.length === decidable.length ? 'Снять выбор' : 'Выбрать все'}
           </Button>
           <Button variant="secondary" icon="check" disabled={selected.length === 0} onClick={() => setDialog('not_applicable')}>
             Не влияет…
@@ -95,7 +105,7 @@ export const HoldsPanel: FC<IHoldsPanelProps> = ({ stageId, candidateId, version
             Влияет…
           </Button>
         </div>
-      ) : open.length > 0 ? (
+      ) : open.length > 0 && !canResolve ? (
         <p className={styles.muted}>Решение о применимости принимает руководитель тендера.</p>
       ) : null}
       {dialog ? (

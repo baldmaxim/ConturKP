@@ -420,6 +420,12 @@ CHECK 0014 требовал размеры у `pdf_page` только в ста�
 | `candidate_return` | immutable | `candidate_id` (уникален), `reason`, `hold_id`, `returned_by`, `returned_at` | руководитель тендера; кандидат готов или согласован; основание «влияет» — удержание этого кандидата |
 | `decision` (`input_event_disposition`) | immutable | предмет — `stage_input_event`; `statement` — «не влияет» / «влияет»; `rationale` — причина | автор — человек с `hold.resolve`; событий барьера не порождает (R01-07) |
 
+Review 13-1 (миграция `0035_review_outdated_gate.sql`; проект §15.2):
+- функция `stage_content_fingerprint(stage, registry)` — отпечаток содержимого этапа, байт в байт как у сервера;
+- `candidate_gate_problem` возвращает `REVIEW_OUTDATED`, если отпечаток не совпадает с `review_run_input.content_fingerprint` закреплённого прогона кандидата или вход не закреплён (R13-01).
+
+Схема таблиц не менялась. `approval.gate` и `release.gate` дополнительно хранят `compositionHash` — отпечаток подтверждённого состава (R13-04).
+
 ### 4.10. Размещение и отправка
 
 | Таблица | Класс | Ключевые колонки | Ограничения |

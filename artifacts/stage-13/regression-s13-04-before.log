@@ -1,0 +1,36 @@
+# 2026-10-07T20:41:06+05:00, linux x64 Node v24.14.1; регрессия S13-04 (tests/approvalMatrix.test.ts, describe S13-04) на продукте 28d4cb9 (HEAD 8978240; правки продукта временно в git stash), однопоточно; ожидается: FAIL — второй пункт того же поля «риск уже принят»
+
+ RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
+
+ ❯ tests/approvalMatrix.test.ts (5 tests | 1 failed | 4 skipped) 7163ms
+   ❯ S13-04 — несколько «не сверено» по одному полю — один пункт матрицы (1)
+     × второе письмо этапа добавляет сверки к полю условий: пункт поля один, риск по нему принимается один раз, комплект согласуется 2586ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/approvalMatrix.test.ts > S13-04 — несколько «не сверено» по одному полю — один пункт матрицы > второе письмо этапа добавляет сверки к полю условий: пункт поля один, риск по нему принимается один раз, комплект согласуется
+AssertionError: expected 2 to be 4 // Object.is equality
+
+- Expected
++ Received
+
+- 4
++ 2
+
+ ❯ tests/approvalMatrix.test.ts:164:57
+    162|     c = await view(st, c.id);
+    163|     const items = c.gate.approve!.blockers.find((b) => b.code === 'FIE…
+    164|     expect(new Set(items.map((i) => i.subjectId)).size).toBe(items.len…
+       |                                                         ^
+    165|     expect(items.some((i) => i.title.includes('«Второе письмо КП»') &&…
+    166|     await acceptAll(st, c);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 skipped (5)
+   Start at  20:41:07
+   Duration  11.35s (tests 70%, transform 23%, import 8%)
+
+exit 1

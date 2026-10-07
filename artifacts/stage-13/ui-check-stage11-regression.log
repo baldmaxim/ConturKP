@@ -1,5 +1,4 @@
-# регрессия на рабочем дереве передачи 13-1: 2026-10-07T19:03:29+05:00, linux x64 Node v24.14.1, artifacts/stage-11/ui-check.mjs, exit 0
-# ui-check — 2026-10-07T14:03:38.814Z, linux x64, Node v24.14.1, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker, демонстрационные формы
+# регрессия на рабочем дереве передачи 13-2 (исправление Review 13-1): 2026-10-07T20:47:30+05:00, linux x64 Node v24.14.1, artifacts/stage-11/ui-check.mjs, exit 0
 PASS  server + worker готовы
 PASS  вход руководителя
 PASS  руководитель создал демонстрационный шаблон компании, загрузил схему forms/1 файлом и утвердил ревизию

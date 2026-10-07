@@ -12,6 +12,7 @@ import {
   listApprovals,
   listHolds,
   releaseOfCandidate,
+  type IAccessContext,
   type IApprovalRow,
   type ICandidateGateDbFacts,
   type IReleaseCandidateRow,
@@ -19,6 +20,7 @@ import {
 } from '@kontur/db';
 import type { BlobStore } from '@kontur/storage';
 import { readStoredBlob } from './releaseMarkup.ts';
+import { decisionVisibility } from './releaseVisibility.ts';
 
 const MAX_MANIFEST_BYTES = 16 * 1024 * 1024;
 
@@ -115,9 +117,22 @@ export interface IHistoryEntry {
   ref: { type: string; id: string } | null;
 }
 
+const CLOSED = 'причина закрыта: основания предмета решения недоступны вам';
+
 // Журнал кандидата: сборка, принятие рисков, согласования и их завершение, решения по удержаниям, возврат, выпуск,
-// замена — по времени. Старое согласование остаётся в журнале со своим исходом (I04, A09).
-export const candidateHistory = async (db: Queryable, c: IReleaseCandidateRow): Promise<IHistoryEntry[]> => {
+// замена — по времени. Старое согласование остаётся в журнале со своим исходом (I04, A09). Причины принятия риска и
+// решений по удержаниям — по закрытости их предметов для читателя (R13-02).
+export const candidateHistory = async (db: Queryable, ctx: IAccessContext, c: IReleaseCandidateRow): Promise<IHistoryEntry[]> => {
+  const acceptances = await listAcceptances(db, c.id);
+  const holds = await listHolds(db, c.stage_id, { candidateId: c.id });
+  const vis = await decisionVisibility(db, ctx, { id: c.stage_id, tenderId: c.tender_id }, {
+    subjects: acceptances.map((a) => ({ type: a.subject_type, id: a.subject_id })),
+    events: holds.map((h) => ({ refType: h.ref_type, refId: h.ref_id })),
+  });
+  const holdVisible = (id: string | null): boolean => {
+    const h = id ? holds.find((x) => x.id === id) : undefined;
+    return !h || vis.event(h.ref_type, h.ref_id);
+  };
   const out: IHistoryEntry[] = [];
   const at = (d: Date) => d.toISOString();
   out.push({ at: at(c.created_at), action: 'created', actor: { id: c.created_by, name: c.created_by_name }, basis: `режим ${c.mode === 'test' ? 'тестовый' : 'боевой'}`, ref: null });
@@ -130,8 +145,9 @@ export const candidateHistory = async (db: Queryable, c: IReleaseCandidateRow): 
       ref: null,
     });
   }
-  for (const a of await listAcceptances(db, c.id)) {
-    out.push({ at: at(a.accepted_at), action: 'risk_accepted', actor: { id: a.accepted_by, name: a.accepted_by_name }, basis: `${a.blocker_code}: ${a.reason}`, ref: { type: 'risk_acceptance', id: a.id } });
+  for (const a of acceptances) {
+    const reason = vis.subject(a.subject_type, a.subject_id) ? a.reason : CLOSED;
+    out.push({ at: at(a.accepted_at), action: 'risk_accepted', actor: { id: a.accepted_by, name: a.accepted_by_name }, basis: `${a.blocker_code}: ${reason}`, ref: { type: 'risk_acceptance', id: a.id } });
   }
   for (const a of await listApprovals(db, c.id)) {
     out.push({ at: at(a.approved_at), action: 'approved', actor: { id: a.approved_by, name: a.approved_by_name }, basis: a.comment ?? `содержимое ${a.candidate_content_hash}`, ref: { type: 'approval', id: a.id } });
@@ -145,18 +161,26 @@ export const candidateHistory = async (db: Queryable, c: IReleaseCandidateRow): 
       });
     }
   }
-  for (const h of await listHolds(db, c.stage_id, { candidateId: c.id })) {
+  for (const h of holds) {
     if (h.status === 'open' || !h.resolved_at) continue;
     out.push({
       at: at(h.resolved_at),
       action: h.status === 'resolved_not_applicable' ? 'hold_not_applicable' : 'hold_requires_new_candidate',
       actor: h.resolved_by ? { id: h.resolved_by, name: h.resolved_by_name ?? '' } : null,
-      basis: `событие № ${h.event_seq} (${eventTitle(h.event_type)}): ${h.reason ?? ''}`,
+      basis: `событие № ${h.event_seq} (${eventTitle(h.event_type)}): ${vis.event(h.ref_type, h.ref_id) ? (h.reason ?? '') : CLOSED}`,
       ref: { type: 'readiness_hold', id: h.id },
     });
   }
   const ret = await candidateReturn(db, c.id);
-  if (ret) out.push({ at: at(ret.returned_at), action: 'returned', actor: { id: ret.returned_by, name: ret.returned_by_name }, basis: ret.reason, ref: ret.hold_id ? { type: 'readiness_hold', id: ret.hold_id } : null });
+  if (ret) {
+    out.push({
+      at: at(ret.returned_at),
+      action: 'returned',
+      actor: { id: ret.returned_by, name: ret.returned_by_name },
+      basis: holdVisible(ret.hold_id) ? ret.reason : CLOSED,
+      ref: ret.hold_id ? { type: 'readiness_hold', id: ret.hold_id } : null,
+    });
+  }
   const rel = await releaseOfCandidate(db, c.id);
   if (rel) out.push({ at: at(rel.released_at), action: 'released', actor: { id: rel.released_by, name: rel.released_by_name }, basis: `согласование ${rel.approval_id}; манифест выпуска ${rel.release_manifest_sha256}`, ref: { type: 'release', id: rel.id } });
   if (c.status === 'superseded' && c.superseded_by_candidate_id) {

@@ -16,7 +16,8 @@ export interface IGateItem {
   title: string;
   acceptable: boolean;
   restricted: boolean;
-  acceptance: { id: string; reason: string; acceptedBy: string; acceptedAt: string } | null;
+  // Причина закрыта вместе с предметом (R13-02) — null.
+  acceptance: { id: string; reason: string | null; acceptedBy: string; acceptedAt: string } | null;
 }
 
 export interface IGateBlocker {
@@ -30,6 +31,8 @@ export interface IGateBlocker {
 export interface IGateView {
   ok: boolean;
   blockers: IGateBlocker[];
+  // Отпечаток показанного состава (R13-04): передаётся в команду согласования или выпуска.
+  compositionHash?: string;
 }
 
 export interface IApprovalView {
@@ -59,6 +62,8 @@ export interface IReleaseView {
   releasedBy: IActor;
   releasedAt: string;
   sendReadiness: { state: 'excluded' | 'held' | 'intake_not_current' | 'ready'; sendable: boolean; testRelease: boolean; events: { seq: number; type: string }[] };
+  // Манифест выпуска (и ZIP всех файлов) — только при доступе к предметам всех решений в нём (R13-02).
+  manifestReadable: boolean;
 }
 
 export interface IHoldView {
@@ -68,6 +73,8 @@ export interface IHoldView {
   status: 'open' | 'resolved_not_applicable' | 'resolved_requires_new_candidate';
   event: { id: string; seq: number; type: string; class: string; refType: string; at: string | null };
   covered: boolean;
+  // Предмет события закрыт для читателя: причины нет, решение по нему не принимается (R13-02).
+  restricted: boolean;
   reason: string | null;
   resolvedBy: IActor | null;
   resolvedAt: string | null;
@@ -172,8 +179,8 @@ export interface ICandidateView {
   approval?: IApprovalView | null;
   approvals?: IApprovalView[];
   release?: IReleaseView | null;
-  returned?: { reason: string; holdId: string | null; returnedBy: IActor; returnedAt: string } | null;
-  holds?: { open: number; total: number };
+  returned?: { reason: string | null; restricted: boolean; holdId: string | null; returnedBy: IActor; returnedAt: string } | null;
+  holds?: { open: number; total: number; resolved: IHoldView[] };
   can?: { approve: boolean; acceptRisk: boolean; resolveHolds: boolean; release: boolean };
 }
 

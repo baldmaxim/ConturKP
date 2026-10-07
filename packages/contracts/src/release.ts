@@ -41,6 +41,9 @@ export const ApproveCandidateRequest = z
   .object({
     // Хэш содержимого, показанного руководителю (В-13-8): согласуется только оно.
     contentHash: sha256,
+    // Отпечаток показанного состава (R13-04): принятые риски, риски этапа 09, решения по удержаниям. Обязателен; сервер
+    // проверяет его после состояния комплекта (повтор по выпущенному — 409, а не 400).
+    compositionHash: sha256.optional(),
     comment: z.string().trim().min(1).max(2000).nullable().optional(),
   })
   .strict();
@@ -53,6 +56,7 @@ export const ReleaseCandidateRequest = z
   .object({
     approvalId: z.uuid(),
     contentHash: sha256,
+    compositionHash: sha256.optional(),
   })
   .strict();
 

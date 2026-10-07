@@ -20,7 +20,7 @@ export const smokeApproval = async ({ api, api2, record, idem, json, stageId, ca
     c.status === 'ready_for_approval' && Array.isArray(c.gate?.approve?.blockers) && hard.length > 0 && c.can?.approve === true,
     `неснимаемые: ${hard.join(', ') || '—'}`,
   );
-  const approveBody = JSON.stringify({ contentHash: c.contentHash });
+  const approveBody = JSON.stringify({ contentHash: c.contentHash, compositionHash: c.gate?.approve?.compositionHash });
   const eng = await api2(`/release-candidates/${candidateId}/approve`, { method: 'POST', headers: { ...json, ...idem(), 'If-Match': c.etag }, body: approveBody });
   const mgr = await api(`/release-candidates/${candidateId}/approve`, { method: 'POST', headers: { ...json, ...idem(), 'If-Match': c.etag }, body: approveBody });
   const mgrBody = mgr.status === 409 ? await mgr.json() : null;

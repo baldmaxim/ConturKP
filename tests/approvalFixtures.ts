@@ -37,6 +37,8 @@ export interface IStage13 {
 
 export interface ICandidateGateView {
   ok: boolean;
+  // Отпечаток показанного состава (R13-04): сервер согласует и выпускает только его.
+  compositionHash?: string;
   blockers: {
     code: string;
     class: string;
@@ -92,7 +94,7 @@ export interface IStage13Options {
   config?: Parameters<typeof testConfig>[0];
 }
 
-const requirementOf = async (st: { e: IEcon; registryId: string }, statement: string, fragmentId: string): Promise<string> => {
+export const requirementOf = async (st: { e: IEcon; registryId: string }, statement: string, fragmentId: string): Promise<string> => {
   const c = await st.e.s.eng1.post(
     `/requirement-registries/${st.registryId}/requirement-candidates`,
     { statement, parameters: [], evidence: [{ fragmentId, role: 'supports' }] },
@@ -148,6 +150,16 @@ export const buildStage13 = async (o: IStage13Options = {}): Promise<IStage13> =
   return out;
 };
 
+// Новый прогон проверок этапа (вход изменился после прежнего, R13-01) — до конца на worker.
+export const rerunReview = async (st: IStage13): Promise<string> => {
+  const started = await st.e.s.eng1.post(`/stages/${st.e.s.stageA}/review-runs`, {}, { headers: idem() });
+  expect(started.status, started.text).toBe(201);
+  await drain(st.e.worker);
+  const run = await st.e.s.eng1.get(`/review-runs/${started.body.id}`);
+  expect(['completed', 'completed_with_gaps'], run.text).toContain(run.body.status);
+  return started.body.id as string;
+};
+
 export const closeStage13 = async (st: IStage13 | undefined): Promise<void> => {
   await closeEcon(st?.e);
   await st?.db.drop();
@@ -179,12 +191,12 @@ export const assembled = async (st: IStage13, o: { mode?: 'test' | 'production';
 export const approve = (st: IStage13, c: ICandidate13, o: { client?: TestClient; contentHash?: string; etag?: string; key?: Record<string, string>; comment?: string } = {}) =>
   (o.client ?? st.e.s.manager).post(
     `/release-candidates/${c.id}/approve`,
-    { contentHash: o.contentHash ?? c.contentHash, ...(o.comment ? { comment: o.comment } : {}) },
+    { contentHash: o.contentHash ?? c.contentHash, compositionHash: c.gate.approve?.compositionHash, ...(o.comment ? { comment: o.comment } : {}) },
     { headers: { 'If-Match': o.etag ?? c.etag, ...(o.key ?? idem()) } },
   );
 
 export const release = (st: IStage13, c: ICandidate13, approvalId: string, o: { client?: TestClient; etag?: string; key?: Record<string, string> } = {}) =>
-  (o.client ?? st.e.s.eng1).post(`/release-candidates/${c.id}/release`, { approvalId, contentHash: c.contentHash }, { headers: { 'If-Match': o.etag ?? c.etag, ...(o.key ?? idem()) } });
+  (o.client ?? st.e.s.eng1).post(`/release-candidates/${c.id}/release`, { approvalId, contentHash: c.contentHash, compositionHash: c.gate.release?.compositionHash }, { headers: { 'If-Match': o.etag ?? c.etag, ...(o.key ?? idem()) } });
 
 export const acceptRisk = (st: IStage13, c: ICandidate13, body: { blockerCode: string; subjectType: string; subjectId: string; subjectKey?: string; reason: string }, client: TestClient = st.e.s.manager) =>
   client.post(`/release-candidates/${c.id}/risk-acceptances`, body, { headers: idem() });
@@ -196,7 +208,7 @@ export const acceptAll = async (st: IStage13, c: ICandidate13): Promise<number> 
     if (!b.acceptable) continue;
     for (const i of b.items.filter((x) => !x.acceptance)) {
       const r = await acceptRisk(st, c, { blockerCode: b.code, subjectType: i.subjectType, subjectId: i.subjectId, subjectKey: i.subjectKey, reason: `Риск принят руководителем по пункту ${b.code}` });
-      expect(r.status, r.text).toBe(201);
+      expect(r.status, `${b.code} ${i.subjectType}:${i.subjectId}:${i.subjectKey} «${i.title}» — ${r.text}`).toBe(201);
       n += 1;
     }
   }

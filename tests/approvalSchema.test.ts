@@ -1,8 +1,11 @@
 // Этап 13 — вторая линия в БД (миграция 0034; проект §13): прямые записи роли kontur_app в обход API. Согласование,
 // выпуск, принятие риска, удержания и возврат — только с правами человека и в допустимом состоянии; переходы кандидата —
-// только по state-machines §11; записи неизменны; согласованное состояние проверяется в конце транзакции.
+// только по state-machines §11; записи неизменны; согласованное состояние проверяется в конце транзакции. Отпечаток
+// содержимого этапа второй линии (0035, R13-01) совпадает с расчётом сервера.
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { stageContentFingerprint } from '../packages/db/src/index.ts';
+import { idem } from './helpers.ts';
 import { acceptAll, approve, assembled, buildStage13, closeStage13, notApplicable, release, view, type ICandidate13, type IStage13 } from './approvalFixtures.ts';
 import { uploadDocument } from './searchFixtures.ts';
 
@@ -141,5 +144,29 @@ describe('принятие риска, удержания, возврат', () =
   it('возврат — руководитель тендера, готовый или согласованный кандидат', async () => {
     expect(await sql('INSERT INTO candidate_return (candidate_id, tender_id, reason, returned_by) VALUES ($1, $2, $3, $4)', [other.id, st.e.s.tenderA, 'инженер возвращает', st.e.s.ids.eng1])).toBe('42501');
     expect(await sql('INSERT INTO candidate_return (candidate_id, tender_id, reason, returned_by) VALUES ($1, $2, $3, $4)', [c.id, st.e.s.tenderA, 'выпущенный не возвращается', st.e.s.ids.manager])).toBe('42501');
+  });
+});
+
+// Последним: меняет вопросы этапа (вход прогона устаревает).
+describe('отпечаток содержимого этапа (0035, R13-01)', () => {
+  it('SQL stage_content_fingerprint совпадает с сервером и с закреплённым при запуске: с реестром, без реестра, после изменений вопроса', async () => {
+    const same = async (registry: string | null): Promise<string> => {
+      const js = await stageContentFingerprint(st.db.pool, st.e.s.stageA, registry);
+      const db = (await st.db.pool.query<{ f: string }>('SELECT stage_content_fingerprint($1, $2) AS f', [st.e.s.stageA, registry])).rows[0]!.f;
+      expect(db).toBe(js);
+      return db;
+    };
+    const pinned = (await st.db.pool.query<{ f: string }>('SELECT content_fingerprint AS f FROM review_run_input WHERE run_id = $1', [st.run.id])).rows[0]!.f;
+    expect(await same(st.registryId)).toBe(pinned);
+    await same(null);
+    const q = await st.e.s.eng1.post(`/stages/${st.e.s.stageA}/customer-questions`, { text: 'Вопрос для отпечатка содержимого' }, { headers: idem() });
+    expect(q.status, q.text).toBe(201);
+    const afterCreate = await same(st.registryId);
+    expect(afterCreate).not.toBe(pinned);
+    const sent = await st.e.s.eng1.patch(`/customer-questions/${q.body.id}`, { status: 'sent' }, { headers: { 'If-Match': q.headers.etag as string } });
+    expect(sent.status, sent.text).toBe(200);
+    expect(await same(st.registryId)).not.toBe(afterCreate);
+    // Комплект на этом прогоне теперь не согласуется и во второй линии.
+    expect((await st.db.pool.query<{ p: string | null }>('SELECT candidate_gate_problem($1) AS p', [other.id])).rows[0]!.p).toBe('REVIEW_OUTDATED');
   });
 });

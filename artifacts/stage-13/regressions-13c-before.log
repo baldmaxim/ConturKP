@@ -1,0 +1,36 @@
+# 2026-10-08T16:56:20+05:00, linux x64 Node v24.14.1; регрессии Review 13-3 на продукте 917c266 (HEAD bbce681 — запись ревью, продукт не менялся), однопоточно; ожидается: R13-06 — FAIL на утверждении «прогон устарел», контроль (переименование, S12-01) — PASS
+
+ RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
+
+ ❯ tests/reviewRegressions13c.test.ts (2 tests | 1 failed) 4896ms
+   ❯ R13-06 — смена типа документа после прогона (2)
+     × тип ТЗ → «договор» после прогона: прогон устарел, REVIEW_OUTDATED в карточке и БД, согласование 409; новый прогон видит договорные требования; новый комплект — согласование 200, выпуск 201 185ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/reviewRegressions13c.test.ts > R13-06 — смена типа документа после прогона > тип ТЗ → «договор» после прогона: прогон устарел, REVIEW_OUTDATED в карточке и БД, согласование 409; новый прогон видит договорные требования; новый комплект — согласование 200, выпуск 201
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/reviewRegressions13c.test.ts:83:55
+     81|     expect(patched.status, patched.text).toBe(200);
+     82|     expect(await stageVersion()).toBe(version);
+     83|     expect((await runView(runId)).freshness.outdated).toBe(true);
+       |                                                       ^
+     84|
+     85|     let c = await readyToApprove();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  16:56:20
+   Duration  8.49s (tests 65%, transform 26%, import 9%)
+
+exit 1

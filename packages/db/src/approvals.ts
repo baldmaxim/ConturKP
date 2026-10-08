@@ -242,13 +242,16 @@ export const candidateGateDbFacts = async (db: Queryable, c: IReleaseCandidateRo
     [c.id],
   );
   const finished = runs.filter((r) => r.status === 'completed' || r.status === 'completed_with_gaps');
-  // R13-01, R13-05: вход прогона устарел — отпечаток содержимого этапа (v2, полные наборы записей) не совпадает с
-  // закреплённым при запуске; тот же расчёт — у второй линии 0036 и у свежести прогона. Вход, закреплённый прежним
-  // отпечатком (v1 — количество и максимум, до R13-05), полноту изменений не доказывает: устарел с отдельной причиной.
+  // R13-01, R13-05, R13-06: вход прогона устарел — отпечаток содержимого этапа (v3: полные наборы записей и вид
+  // документов снимка) не совпадает с закреплённым при запуске; тот же расчёт — у второй линии 0037 и у свежести прогона.
+  // Вход, закреплённый прежним отпечатком (v1 — до R13-05, v2 — до R13-06), полноту изменений не доказывает: устарел с
+  // отдельной причиной.
   const outdated = await q<{ id: string; pinned: boolean; legacy: boolean }>(
-    `SELECT r.id, i.run_id IS NOT NULL AS pinned, coalesce(i.content_fingerprint = stage_content_fingerprint(r.stage_id, r.registry_id), false) AS legacy
+    `SELECT r.id, i.run_id IS NOT NULL AS pinned,
+            coalesce(i.content_fingerprint IN (stage_content_fingerprint(r.stage_id, r.registry_id),
+                                               stage_content_fingerprint_v2(r.stage_id, r.registry_id, r.evidence_scope_id)), false) AS legacy
        FROM review_run r LEFT JOIN review_run_input i ON i.run_id = r.id
-      WHERE r.id = ANY($1::uuid[]) AND (i.run_id IS NULL OR i.content_fingerprint <> stage_content_fingerprint_v2(r.stage_id, r.registry_id, r.evidence_scope_id))`,
+      WHERE r.id = ANY($1::uuid[]) AND (i.run_id IS NULL OR i.content_fingerprint <> stage_content_fingerprint_v3(r.stage_id, r.registry_id, r.evidence_scope_id))`,
     [finished.map((r) => r.id)],
   );
   const results = await q<{ id: string; check_code: string; outcome: string; reason: string | null }>(
@@ -320,8 +323,8 @@ export const candidateGateDbFacts = async (db: Queryable, c: IReleaseCandidateRo
       title: !r.pinned
         ? 'вход прогона не закреплён: запустите проверки заново и соберите новый комплект'
         : r.legacy
-          ? 'вход прогона закреплён прежним отпечатком содержимого (до исправления R13-05): запустите проверки заново и соберите новый комплект'
-          : 'после прогона изменились реестр требований, кандидаты, покрытие, вопросы, решения или факты: запустите проверки заново и соберите новый комплект',
+          ? 'вход прогона закреплён прежним отпечатком содержимого (до исправлений R13-05, R13-06): запустите проверки заново и соберите новый комплект'
+          : 'после прогона изменились реестр требований, кандидаты, покрытие, вопросы, решения, факты или вид документов: запустите проверки заново и соберите новый комплект',
     })),
     reviewProcessing: results.filter((x) => x.outcome === 'error' || x.check_code !== 'coverage').map(resultItem),
     reviewUncertain: results.filter((x) => x.outcome === 'incomplete' && x.check_code === 'coverage').map(resultItem),

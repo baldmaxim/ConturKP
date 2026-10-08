@@ -1,4 +1,4 @@
-# регрессия на рабочем дереве передачи 13-3 (исправление Review 13-2): 2026-10-08T14:47:27+05:00, linux x64 Node v24.14.1, artifacts/stage-05/ui-check.mjs, Chromium headless без песочницы, exit 0
+# регрессия на рабочем дереве передачи 13-4 (исправление Review 13-3): 2026-10-08T17:19:03+05:00, linux x64 Node v24.14.1, artifacts/stage-05/ui-check.mjs, Chromium headless без песочницы, exit 0
 PASS  server + worker готовы
 PASS  вход инженера
 PASS  оригинал, экспорт RDWeb и замороженный состав этапа

@@ -5,7 +5,7 @@
 // записи входа.
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { legacyStageContentFingerprint, stageContentFingerprint } from '../packages/db/src/index.ts';
+import { legacyStageContentFingerprint, legacyStageContentFingerprintV2, stageContentFingerprint } from '../packages/db/src/index.ts';
 import { idem } from './helpers.ts';
 import { acceptAll, approve, assembled, buildStage13, closeStage13, notApplicable, release, view, type ICandidate13, type IStage13 } from './approvalFixtures.ts';
 import { uploadDocument } from './searchFixtures.ts';
@@ -149,13 +149,15 @@ describe('принятие риска, удержания, возврат', () =
 });
 
 // Последним: меняет вопросы и кандидатов этапа (вход прогона устаревает).
-describe('отпечаток содержимого этапа (0035–0036, R13-01, R13-05)', () => {
-  it('SQL stage_content_fingerprint_v2 совпадает с сервером и с закреплённым при запуске; каждое изменение записи входа меняет его; прежний v1 тоже совпадает с сервером', async () => {
+describe('отпечаток содержимого этапа (0035–0037, R13-01, R13-05, R13-06)', () => {
+  it('SQL stage_content_fingerprint_v3 совпадает с сервером и с закреплённым при запуске; каждое изменение записи входа меняет его; прежние v1 и v2 тоже совпадают с сервером', async () => {
     const scope = (await st.db.pool.query<{ s: string; r: string | null }>('SELECT evidence_scope_id AS s, registry_id AS r FROM review_run WHERE id = $1', [st.run.id])).rows[0]!;
     const same = async (registry: string | null): Promise<string> => {
       const js = await stageContentFingerprint(st.db.pool, st.e.s.stageA, registry, scope.s);
-      const db = (await st.db.pool.query<{ f: string }>('SELECT stage_content_fingerprint_v2($1, $2, $3) AS f', [st.e.s.stageA, registry, scope.s])).rows[0]!.f;
+      const db = (await st.db.pool.query<{ f: string }>('SELECT stage_content_fingerprint_v3($1, $2, $3) AS f', [st.e.s.stageA, registry, scope.s])).rows[0]!.f;
       expect(db).toBe(js);
+      const v2 = (await st.db.pool.query<{ f: string }>('SELECT stage_content_fingerprint_v2($1, $2, $3) AS f', [st.e.s.stageA, registry, scope.s])).rows[0]!.f;
+      expect(v2).toBe(await legacyStageContentFingerprintV2(st.db.pool, st.e.s.stageA, registry, scope.s));
       const v1 = (await st.db.pool.query<{ f: string }>('SELECT stage_content_fingerprint($1, $2) AS f', [st.e.s.stageA, registry])).rows[0]!.f;
       expect(v1).toBe(await legacyStageContentFingerprint(st.db.pool, st.e.s.stageA, registry));
       return db;
@@ -183,7 +185,21 @@ describe('отпечаток содержимого этапа (0035–0036, R13
       { headers: idem() },
     );
     expect(cand.status, cand.text).toBe(201);
-    expect(await same(st.registryId)).not.toBe(afterSent);
+    const afterCandidate = await same(st.registryId);
+    expect(afterCandidate).not.toBe(afterSent);
+    // Вид документа снимка (R13-06) меняет отпечаток; подпись и маршрут распознавания — нет (исходов не меняют).
+    const documentId = (await st.db.pool.query('SELECT document_id AS id FROM document_revision WHERE id = $1', [st.tzRev])).rows[0].id as string;
+    const patchDoc = async (body: Record<string, unknown>) => {
+      const d = await st.e.s.manager.get(`/documents/${documentId}`);
+      const r = await st.e.s.manager.patch(`/documents/${documentId}`, body, { headers: { 'If-Match': d.headers.etag as string } });
+      expect(r.status, r.text).toBe(200);
+    };
+    await patchDoc({ title: 'ТЗ (переименовано для отпечатка)' });
+    await patchDoc({ recognitionRoute: 'local' });
+    expect(await same(st.registryId)).toBe(afterCandidate);
+    await patchDoc({ docType: 'contract' });
+    const afterType = await same(st.registryId);
+    expect(afterType).not.toBe(afterCandidate);
     // Не зависит от часового пояса сессии (в отпечатке нет времени).
     const tz = await st.db.pool.connect();
     try {

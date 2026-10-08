@@ -430,6 +430,10 @@ Review 13-2 (миграция `0036_stage_content_fingerprint_v2.sql`; прое�
 - функция `stage_content_fingerprint_v2(stage, registry, scope)` — полные упорядоченные наборы ID записей, которые читает вход прогона; у изменяемых строк — `ID@row_version`, у документа — поля графа; без времени;
 - `candidate_gate_problem` сверяет закреплённый отпечаток с v2 (R13-05). Прогоны, закреплённые прежним v1, устарели.
 
+Review 13-3 (миграция `0037_stage_content_fingerprint_v3.sql`; проект §15.4):
+- функция `stage_content_fingerprint_v3(stage, registry, scope)` = v2 + вид документа `doc_type` и `contract_id` документов снимка;
+- `candidate_gate_problem` сверяет закреплённый отпечаток с v3 (R13-06). Прогоны, закреплённые v1 или v2, устарели.
+
 Схема таблиц не менялась.
 
 ### 4.10. Размещение и отправка

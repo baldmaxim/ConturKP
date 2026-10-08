@@ -402,21 +402,25 @@ export const hypothesisSource = async (
   return { requirements, positions, restricted };
 };
 
-// Отпечаток содержимого этапа, которое меняется без события барьера (R09-02; Review 13-2 R13-05). Это всё, что читает
-// вход прогона проверок, кроме закреплённого по ID (снимок области, ревизия расчёта) и поступающего событиями источника
-// (удержания, D-033). Части:
+// Отпечаток содержимого этапа, которое меняется без события барьера (R09-02; Review 13-2 R13-05, 13-3 R13-06). Это всё,
+// что читает вход прогона проверок и что может измениться после прогона, кроме закреплённого по ID (снимок области,
+// ревизия расчёта) и поступающего событиями источника (удержания, D-033). Части:
 // - реестр: требования и их ревизии, кандидаты требований и фактов, ревизии фактов, отметки, проходы;
 // - этап: покрытие, допущения и их ревизии, вопросы заказчику, решения по требованиям;
-// - снимок: решения человека по парам фактов единиц снимка, роли документов снимка в графе договора.
-// Извлечения фактов не входят: извлечение единицы при одной версии правил одно (UNIQUE), а прогон, начатый до его
-// завершения, неполон по обработке (`REVIEW_PROCESSING_INCOMPLETE`, неснимаемый) — устаревать ему нечем; иначе отчёт
-// этапа 09 «неполная» сменялся бы на «устарела» после фонового извлечения.
+// - снимок: решения человека по парам фактов единиц снимка; документы снимка — вид документа (`doc_type`: вид источника
+//   «договор», C07 и приоритет сторон конфликта, R13-06), принадлежность договору и роли в графе договора.
 // Каждая часть — полный упорядоченный набор ID, у изменяемых строк — ID@row_version (охранники требуют row_version + 1
-// при каждом изменении), у документа — поля графа. Агрегата «количество и максимум» нет: изменение записи, не ставшей
-// максимумом, не теряется (R13-05). Времени в отпечатке нет — он не зависит от часового пояса сессии. Тот же расчёт —
-// SQL-функция `stage_content_fingerprint_v2` (миграция 0036, вторая линия); совпадение проверяет тест схемы.
+// при каждом изменении); у документа — перечисленные поля, а не row_version: его меняют и подпись, код, примечание и
+// маршрут распознавания (фоновая смена), которые исходов проверок не меняют. Агрегата «количество и максимум» нет
+// (R13-05), времени нет — отпечаток не зависит от часового пояса сессии.
+// Не входят, потому что не меняют согласуемый прогон: извлечения фактов (извлечение единицы при одной версии правил одно,
+// UNIQUE), статус и страницы распознавания (завершённое распознавание неизменно, охранник 0007), элементы импорта без
+// исхода и подпись документа — прогон, у которого они не завершены, неполон по обработке (`REVIEW_PROCESSING_INCOMPLETE`,
+// неснимаемый), а подпись видна только в причинах неполноты. Иначе отчёт этапа 09 «неполная» сменялся бы на «устарела».
+// Тот же расчёт — SQL-функция `stage_content_fingerprint_v3` (миграция 0037, вторая линия); совпадение и
+// чувствительность каждой части проверяет тест схемы.
 const SCOPE_RUNS = 'SELECT i.recognition_run_id FROM evidence_scope_item i WHERE i.scope_id = $3';
-const STAGE_CONTENT_V2 = `SELECT concat_ws(chr(10),
+const stageContentSql = (documentRow: string): string => `SELECT concat_ws(chr(10),
   'requirement:' || coalesce((SELECT string_agg(q.id::text || '@' || q.row_version, ',' ORDER BY q.id) FROM requirement q
                                WHERE q.id IN (SELECT v.requirement_id FROM requirement_revision v WHERE v.registry_id = $2)), ''),
   'requirement_revision:' || coalesce((SELECT string_agg(v.id::text, ',' ORDER BY v.id) FROM requirement_revision v WHERE v.registry_id = $2), ''),
@@ -433,11 +437,20 @@ const STAGE_CONTENT_V2 = `SELECT concat_ws(chr(10),
   'fact_decision:' || coalesce((SELECT string_agg(fd.id::text, ',' ORDER BY fd.id) FROM fact_decision fd
                                  WHERE fd.fact_id IN (SELECT f.id FROM evidence_fact f JOIN fact_extraction_run x ON x.id = f.extraction_run_id
                                                        WHERE x.recognition_run_id IN (${SCOPE_RUNS}))), ''),
-  'document:' || coalesce((SELECT string_agg(concat_ws('/', d.id::text, coalesce(d.contract_role, ''), coalesce(d.main_document_id::text, ''), coalesce(d.main_document_role, '')), ',' ORDER BY d.id)
+  'document:' || coalesce((SELECT string_agg(${documentRow}, ',' ORDER BY d.id)
                             FROM document d WHERE d.id IN (SELECT v.document_id FROM document_revision v JOIN evidence_scope_item i ON i.document_revision_id = v.id WHERE i.scope_id = $3)), '')) AS v`;
+const DOCUMENT_V2 = "concat_ws('/', d.id::text, coalesce(d.contract_role, ''), coalesce(d.main_document_id::text, ''), coalesce(d.main_document_role, ''))";
+const DOCUMENT_V3 = "concat_ws('/', d.id::text, d.doc_type, coalesce(d.contract_id::text, ''), coalesce(d.contract_role, ''), coalesce(d.main_document_id::text, ''), coalesce(d.main_document_role, ''))";
 
 export const stageContentFingerprint = async (db: Queryable, stageId: string, registryId: string | null, scopeId: string): Promise<string> => {
-  const r = await db.query<{ v: string }>(STAGE_CONTENT_V2, [stageId, registryId, scopeId]);
+  const r = await db.query<{ v: string }>(stageContentSql(DOCUMENT_V3), [stageId, registryId, scopeId]);
+  return sha256Hex(`kontur.stage_content.v3\n${r.rows[0]!.v}`);
+};
+
+// Прежний отпечаток v2 (0036, до R13-06): без вида документа. Только чтобы назвать причину устаревания прогона,
+// закреплённого им: такой вход полноту изменений не доказывает и считается устаревшим.
+export const legacyStageContentFingerprintV2 = async (db: Queryable, stageId: string, registryId: string | null, scopeId: string): Promise<string> => {
+  const r = await db.query<{ v: string }>(stageContentSql(DOCUMENT_V2), [stageId, registryId, scopeId]);
   return sha256Hex(`kontur.stage_content.v2\n${r.rows[0]!.v}`);
 };
 

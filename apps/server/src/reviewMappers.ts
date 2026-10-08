@@ -30,6 +30,7 @@ import {
   reviewCheckResults,
   reviewRunInput,
   legacyStageContentFingerprint,
+  legacyStageContentFingerprintV2,
   stageContentFingerprint,
   stageVisibility,
   type IAccessContext,
@@ -106,12 +107,16 @@ export const runFreshness = async (db: Queryable, run: IReviewRunRow): Promise<I
   if (source.length > 0) reasons.push(`после снимка области поступили источники — событий ${source.length}`);
   if (calc.length > 0) reasons.push(`после проверки добавлена ревизия расчёта — событий ${calc.length}`);
   // Отпечаток содержимого закреплён при запуске вместе со входом (R09-02): изменение после запуска — «устарел». Вход,
-  // закреплённый прежним отпечатком (v1, до R13-05), полноту изменений не доказывает — тоже «устарел», со своей причиной.
+  // закреплённый прежним отпечатком (v1 — до R13-05, v2 — до R13-06), полноту изменений не доказывает — тоже «устарел»,
+  // со своей причиной.
   const stored = (await reviewRunInput(db, run.id))?.content_fingerprint ?? null;
   if (stored && stored !== (await stageContentFingerprint(db, run.stage_id, run.registry_id, run.evidence_scope_id))) {
+    const legacy =
+      stored === (await legacyStageContentFingerprint(db, run.stage_id, run.registry_id)) ||
+      stored === (await legacyStageContentFingerprintV2(db, run.stage_id, run.registry_id, run.evidence_scope_id));
     reasons.push(
-      stored === (await legacyStageContentFingerprint(db, run.stage_id, run.registry_id))
-        ? 'вход проверки закреплён прежним отпечатком содержимого (до исправления R13-05): запустите проверку заново'
+      legacy
+        ? 'вход проверки закреплён прежним отпечатком содержимого (до исправлений R13-05, R13-06): запустите проверку заново'
         : 'после проверки изменились реестр требований, покрытие или записи этапа',
     );
   }

@@ -126,10 +126,10 @@ export const createReviewRun = async (
     ],
   );
   const run = ins.rows[0]!;
-  const fingerprint = await stageContentFingerprint(db, r.stageId, run.registry_id);
+  const fingerprint = await stageContentFingerprint(db, r.stageId, run.registry_id, run.evidence_scope_id);
   const { input } = await loadReviewInput(db, run);
   const modelInput = run.model_provider ? await hypothesisSource(db, run, r.gate) : null;
-  if ((await stageContentFingerprint(db, r.stageId, run.registry_id)) !== fingerprint) return { ok: false, reason: 'inputs_changed' };
+  if ((await stageContentFingerprint(db, r.stageId, run.registry_id, run.evidence_scope_id)) !== fingerprint) return { ok: false, reason: 'inputs_changed' };
   const json = serializeReviewInput(input);
   await db.query('INSERT INTO review_run_input (run_id, input, model_input, input_sha256, content_fingerprint) VALUES ($1, $2, $3, $4, $5)', [
     run.id,
@@ -402,10 +402,48 @@ export const hypothesisSource = async (
   return { requirements, positions, restricted };
 };
 
-// Отпечаток содержимого этапа, которое меняется без события барьера: ревизии требований и оценки покрытия реестра,
-// отметки полноты, допущения, вопросы заказчику, решения по требованиям. Прогон хранит его; другой отпечаток —
-// «после проверки изменились реестр или записи этапа» (прогон устарел, §3.1).
-export const stageContentFingerprint = async (db: Queryable, stageId: string, registryId: string | null): Promise<string> => {
+// Отпечаток содержимого этапа, которое меняется без события барьера (R09-02; Review 13-2 R13-05). Это всё, что читает
+// вход прогона проверок, кроме закреплённого по ID (снимок области, ревизия расчёта) и поступающего событиями источника
+// (удержания, D-033). Части:
+// - реестр: требования и их ревизии, кандидаты требований и фактов, ревизии фактов, отметки, проходы;
+// - этап: покрытие, допущения и их ревизии, вопросы заказчику, решения по требованиям;
+// - снимок: решения человека по парам фактов единиц снимка, роли документов снимка в графе договора.
+// Извлечения фактов не входят: извлечение единицы при одной версии правил одно (UNIQUE), а прогон, начатый до его
+// завершения, неполон по обработке (`REVIEW_PROCESSING_INCOMPLETE`, неснимаемый) — устаревать ему нечем; иначе отчёт
+// этапа 09 «неполная» сменялся бы на «устарела» после фонового извлечения.
+// Каждая часть — полный упорядоченный набор ID, у изменяемых строк — ID@row_version (охранники требуют row_version + 1
+// при каждом изменении), у документа — поля графа. Агрегата «количество и максимум» нет: изменение записи, не ставшей
+// максимумом, не теряется (R13-05). Времени в отпечатке нет — он не зависит от часового пояса сессии. Тот же расчёт —
+// SQL-функция `stage_content_fingerprint_v2` (миграция 0036, вторая линия); совпадение проверяет тест схемы.
+const SCOPE_RUNS = 'SELECT i.recognition_run_id FROM evidence_scope_item i WHERE i.scope_id = $3';
+const STAGE_CONTENT_V2 = `SELECT concat_ws(chr(10),
+  'requirement:' || coalesce((SELECT string_agg(q.id::text || '@' || q.row_version, ',' ORDER BY q.id) FROM requirement q
+                               WHERE q.id IN (SELECT v.requirement_id FROM requirement_revision v WHERE v.registry_id = $2)), ''),
+  'requirement_revision:' || coalesce((SELECT string_agg(v.id::text, ',' ORDER BY v.id) FROM requirement_revision v WHERE v.registry_id = $2), ''),
+  'requirement_candidate:' || coalesce((SELECT string_agg(c.id::text || '@' || c.row_version, ',' ORDER BY c.id) FROM requirement_candidate c WHERE c.registry_id = $2), ''),
+  'fact_candidate:' || coalesce((SELECT string_agg(c.id::text || '@' || c.row_version, ',' ORDER BY c.id) FROM fact_candidate c WHERE c.registry_id = $2), ''),
+  'fact_revision:' || coalesce((SELECT string_agg(v.id::text, ',' ORDER BY v.id) FROM fact_revision v WHERE v.registry_id = $2), ''),
+  'registry_fragment_mark:' || coalesce((SELECT string_agg(m.id::text, ',' ORDER BY m.id) FROM registry_fragment_mark m WHERE m.registry_id = $2), ''),
+  'requirement_registry_review:' || coalesce((SELECT string_agg(w.id::text, ',' ORDER BY w.id) FROM requirement_registry_review w WHERE w.registry_id = $2), ''),
+  'requirement_coverage:' || coalesce((SELECT string_agg(c.id::text, ',' ORDER BY c.id) FROM requirement_coverage c WHERE c.stage_id = $1), ''),
+  'assumption:' || coalesce((SELECT string_agg(a.id::text || '@' || a.row_version, ',' ORDER BY a.id) FROM assumption a WHERE a.stage_id = $1), ''),
+  'assumption_revision:' || coalesce((SELECT string_agg(v.id::text, ',' ORDER BY v.id) FROM assumption_revision v WHERE v.stage_id = $1), ''),
+  'customer_question:' || coalesce((SELECT string_agg(q.id::text || '@' || q.row_version, ',' ORDER BY q.id) FROM customer_question q WHERE q.stage_id = $1), ''),
+  'requirement_decision:' || coalesce((SELECT string_agg(d.id::text, ',' ORDER BY d.id) FROM decision d WHERE d.stage_id = $1 AND d.decision_type = 'requirement_decision'), ''),
+  'fact_decision:' || coalesce((SELECT string_agg(fd.id::text, ',' ORDER BY fd.id) FROM fact_decision fd
+                                 WHERE fd.fact_id IN (SELECT f.id FROM evidence_fact f JOIN fact_extraction_run x ON x.id = f.extraction_run_id
+                                                       WHERE x.recognition_run_id IN (${SCOPE_RUNS}))), ''),
+  'document:' || coalesce((SELECT string_agg(concat_ws('/', d.id::text, coalesce(d.contract_role, ''), coalesce(d.main_document_id::text, ''), coalesce(d.main_document_role, '')), ',' ORDER BY d.id)
+                            FROM document d WHERE d.id IN (SELECT v.document_id FROM document_revision v JOIN evidence_scope_item i ON i.document_revision_id = v.id WHERE i.scope_id = $3)), '')) AS v`;
+
+export const stageContentFingerprint = async (db: Queryable, stageId: string, registryId: string | null, scopeId: string): Promise<string> => {
+  const r = await db.query<{ v: string }>(STAGE_CONTENT_V2, [stageId, registryId, scopeId]);
+  return sha256Hex(`kontur.stage_content.v2\n${r.rows[0]!.v}`);
+};
+
+// Прежний отпечаток (v1, до R13-05): количество и максимум времени. Только чтобы назвать причину устаревания прогона,
+// закреплённого до исправления: такой вход полноту изменений не доказывает и считается устаревшим.
+export const legacyStageContentFingerprint = async (db: Queryable, stageId: string, registryId: string | null): Promise<string> => {
   const r = await db.query<{ v: string }>(
     `SELECT concat_ws('|',
               (SELECT count(*) || ':' || coalesce(max(created_at)::text, '') FROM requirement_revision WHERE registry_id = $2),

@@ -92,6 +92,8 @@ export interface IStage13Options {
   missingPage?: boolean;
   modelError?: boolean;
   config?: Parameters<typeof testConfig>[0];
+  // Готовая база (тест обновления схемы); по умолчанию — новая со всеми миграциями.
+  db?: ITestDb;
 }
 
 export const requirementOf = async (st: { e: IEcon; registryId: string }, statement: string, fragmentId: string): Promise<string> => {
@@ -108,7 +110,7 @@ export const requirementOf = async (st: { e: IEcon; registryId: string }, statem
 
 export const buildStage13 = async (o: IStage13Options = {}): Promise<IStage13> => {
   requireConverter();
-  const db = await createTestDb();
+  const db = o.db ?? (await createTestDb());
   const e = await buildEcon(db, testConfig(o.config ?? {}), { chat: quietModel(o.modelError) });
   const tzRev = await uploadDocument(db, e.config, e.s.eng1, e.s.stageA, 'ТЗ.pdf');
   const pages = [{ blocks: [TZ.plaster, TZ.paint] }];

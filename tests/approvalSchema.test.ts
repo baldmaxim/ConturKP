@@ -1,10 +1,11 @@
 // Этап 13 — вторая линия в БД (миграция 0034; проект §13): прямые записи роли kontur_app в обход API. Согласование,
 // выпуск, принятие риска, удержания и возврат — только с правами человека и в допустимом состоянии; переходы кандидата —
 // только по state-machines §11; записи неизменны; согласованное состояние проверяется в конце транзакции. Отпечаток
-// содержимого этапа второй линии (0035, R13-01) совпадает с расчётом сервера.
+// содержимого этапа второй линии (0035–0036, R13-01, R13-05) совпадает с расчётом сервера и замечает изменение каждой
+// записи входа.
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { stageContentFingerprint } from '../packages/db/src/index.ts';
+import { legacyStageContentFingerprint, stageContentFingerprint } from '../packages/db/src/index.ts';
 import { idem } from './helpers.ts';
 import { acceptAll, approve, assembled, buildStage13, closeStage13, notApplicable, release, view, type ICandidate13, type IStage13 } from './approvalFixtures.ts';
 import { uploadDocument } from './searchFixtures.ts';
@@ -147,25 +148,51 @@ describe('принятие риска, удержания, возврат', () =
   });
 });
 
-// Последним: меняет вопросы этапа (вход прогона устаревает).
-describe('отпечаток содержимого этапа (0035, R13-01)', () => {
-  it('SQL stage_content_fingerprint совпадает с сервером и с закреплённым при запуске: с реестром, без реестра, после изменений вопроса', async () => {
+// Последним: меняет вопросы и кандидатов этапа (вход прогона устаревает).
+describe('отпечаток содержимого этапа (0035–0036, R13-01, R13-05)', () => {
+  it('SQL stage_content_fingerprint_v2 совпадает с сервером и с закреплённым при запуске; каждое изменение записи входа меняет его; прежний v1 тоже совпадает с сервером', async () => {
+    const scope = (await st.db.pool.query<{ s: string; r: string | null }>('SELECT evidence_scope_id AS s, registry_id AS r FROM review_run WHERE id = $1', [st.run.id])).rows[0]!;
     const same = async (registry: string | null): Promise<string> => {
-      const js = await stageContentFingerprint(st.db.pool, st.e.s.stageA, registry);
-      const db = (await st.db.pool.query<{ f: string }>('SELECT stage_content_fingerprint($1, $2) AS f', [st.e.s.stageA, registry])).rows[0]!.f;
+      const js = await stageContentFingerprint(st.db.pool, st.e.s.stageA, registry, scope.s);
+      const db = (await st.db.pool.query<{ f: string }>('SELECT stage_content_fingerprint_v2($1, $2, $3) AS f', [st.e.s.stageA, registry, scope.s])).rows[0]!.f;
       expect(db).toBe(js);
+      const v1 = (await st.db.pool.query<{ f: string }>('SELECT stage_content_fingerprint($1, $2) AS f', [st.e.s.stageA, registry])).rows[0]!.f;
+      expect(v1).toBe(await legacyStageContentFingerprint(st.db.pool, st.e.s.stageA, registry));
       return db;
     };
     const pinned = (await st.db.pool.query<{ f: string }>('SELECT content_fingerprint AS f FROM review_run_input WHERE run_id = $1', [st.run.id])).rows[0]!.f;
     expect(await same(st.registryId)).toBe(pinned);
     await same(null);
-    const q = await st.e.s.eng1.post(`/stages/${st.e.s.stageA}/customer-questions`, { text: 'Вопрос для отпечатка содержимого' }, { headers: idem() });
-    expect(q.status, q.text).toBe(201);
-    const afterCreate = await same(st.registryId);
-    expect(afterCreate).not.toBe(pinned);
-    const sent = await st.e.s.eng1.patch(`/customer-questions/${q.body.id}`, { status: 'sent' }, { headers: { 'If-Match': q.headers.etag as string } });
+    // Два вопроса: первый — с большей версией; изменение второго (не максимума) меняет отпечаток (R13-05).
+    const q1 = await st.e.s.eng1.post(`/stages/${st.e.s.stageA}/customer-questions`, { text: 'Вопрос 1 для отпечатка содержимого' }, { headers: idem() });
+    const q2 = await st.e.s.eng1.post(`/stages/${st.e.s.stageA}/customer-questions`, { text: 'Вопрос 2 для отпечатка содержимого' }, { headers: idem() });
+    expect([q1.status, q2.status]).toEqual([201, 201]);
+    let etag = q1.headers.etag as string;
+    for (let i = 0; i < 3; i += 1) etag = (await st.e.s.eng1.patch(`/customer-questions/${q1.body.id}`, { text: `Вопрос 1, вариант ${i}` }, { headers: { 'If-Match': etag } })).headers.etag as string;
+    const before = await same(st.registryId);
+    expect(before).not.toBe(pinned);
+    const sent = await st.e.s.eng1.patch(`/customer-questions/${q2.body.id}`, { status: 'sent' }, { headers: { 'If-Match': q2.headers.etag as string } });
     expect(sent.status, sent.text).toBe(200);
-    expect(await same(st.registryId)).not.toBe(afterCreate);
+    const afterSent = await same(st.registryId);
+    expect(afterSent).not.toBe(before);
+    // Кандидат требования без подтверждения — полнота реестра изменилась.
+    const fragment = (await st.db.pool.query('SELECT id FROM evidence_fragment WHERE text = $1 ORDER BY id LIMIT 1', ['Окраска фасада выполняется в два слоя.'])).rows[0].id as string;
+    const cand = await st.e.s.eng1.post(
+      `/requirement-registries/${st.registryId}/requirement-candidates`,
+      { statement: 'Кандидат для отпечатка содержимого', parameters: [], evidence: [{ fragmentId: fragment, role: 'supports' }] },
+      { headers: idem() },
+    );
+    expect(cand.status, cand.text).toBe(201);
+    expect(await same(st.registryId)).not.toBe(afterSent);
+    // Не зависит от часового пояса сессии (в отпечатке нет времени).
+    const tz = await st.db.pool.connect();
+    try {
+      await tz.query("SET TIME ZONE 'Asia/Almaty'");
+      expect(await stageContentFingerprint(tz, st.e.s.stageA, st.registryId, scope.s)).toBe(await stageContentFingerprint(st.db.pool, st.e.s.stageA, st.registryId, scope.s));
+    } finally {
+      await tz.query('RESET TIME ZONE');
+      tz.release();
+    }
     // Комплект на этом прогоне теперь не согласуется и во второй линии.
     expect((await st.db.pool.query<{ p: string | null }>('SELECT candidate_gate_problem($1) AS p', [other.id])).rows[0]!.p).toBe('REVIEW_OUTDATED');
   });

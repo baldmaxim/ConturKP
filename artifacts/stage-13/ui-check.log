@@ -1,3 +1,4 @@
+# ui-check — 2026-10-08T09:32:52.288Z, linux x64, Node v24.14.1, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker, LibreOffice, TenderHub и модель — поддельные, демонстрационные формы
 PASS  server + worker готовы
 PASS  вход администратора-руководителя
 PASS  этап подготовлен: ТЗ, снимок, расчёт, требование с покрытием, завершённый проход реестра, прогон проверок без пробелов обработки — complete/complete/200/201/201/completed_with_gaps

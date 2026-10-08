@@ -1,0 +1,56 @@
+# 2026-10-08T13:58:23+05:00, linux x64 Node v24.14.1; регрессии Review 13-2 на продукте 34e0af2 (HEAD 2ce83ef — запись ревью, продукт не менялся), однопоточно; ожидается: R13-05 (вопрос не максимум; кандидат требования) — FAIL на утверждениях дефекта, контроль S12-01 — PASS
+
+ RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
+
+ ❯ tests/reviewRegressions13b.test.ts (3 tests | 2 failed) 5790ms
+   ❯ R13-05 — изменение любой записи входа устаревает прогон (3)
+     × сценарий ревью: первый вопрос изменён 32 раза, второй отправлен после прогона — прогон устарел, REVIEW_OUTDATED в API и БД; новый прогон и комплект — согласование 200, выпуск 201 1002ms
+     × кандидат требования, созданный после прогона без подтверждения, меняет полноту реестра — прогон устарел, согласование 409 194ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/reviewRegressions13b.test.ts > R13-05 — изменение любой записи входа устаревает прогон > сценарий ревью: первый вопрос изменён 32 раза, второй отправлен после прогона — прогон устарел, REVIEW_OUTDATED в API и БД; новый прогон и комплект — согласование 200, выпуск 201
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/reviewRegressions13b.test.ts:78:47
+     76|     const sent = await patch(q2, { status: 'sent' });
+     77|     expect(sent.rowVersion).toBe(2);
+     78|     expect((await freshness(runId)).outdated).toBe(true);
+       |                                               ^
+     79|
+     80|     let c = await readyToApprove();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/reviewRegressions13b.test.ts > R13-05 — изменение любой записи входа устаревает прогон > кандидат требования, созданный после прогона без подтверждения, меняет полноту реестра — прогон устарел, согласование 409
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/reviewRegressions13b.test.ts:110:47
+    108|     );
+    109|     expect(cand.status, cand.text).toBe(201);
+    110|     expect((await freshness(runId)).outdated).toBe(true);
+       |                                               ^
+    111|     const c = await readyToApprove();
+    112|     expect(codes(c.gate.approve)).toEqual(['REVIEW_OUTDATED']);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  13:58:24
+   Duration  9.44s (tests 69%, transform 23%, import 8%)
+
+exit 1

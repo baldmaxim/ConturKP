@@ -1,4 +1,4 @@
-# регрессия на рабочем дереве передачи 13-2 (исправление Review 13-1): 2026-10-07T20:48:00+05:00, linux x64 Node v24.14.1, artifacts/stage-02/ui-check.mjs, браузер — Chromium headless без песочницы через EDGE_PATH/CHROME_PATH, exit 0
+# регрессия на рабочем дереве передачи 13-3 (исправление Review 13-2): 2026-10-08T14:46:35+05:00, linux x64 Node v24.14.1, artifacts/stage-02/ui-check.mjs, Chromium headless без песочницы, exit 0
 PASS  server + worker готовы
 PASS  без входа открывается форма входа
 PASS  вход инженера через форму — список тендеров — 390 px

@@ -1,0 +1,205 @@
+# регрессии Review 14-1 до правки: продукт 8c6cb90 (HEAD 04c5fe5 — запись ревью, продукт не менялся), 2026-10-09T16:31:18+05:00, linux x64 Node v24.14.1
+
+ RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
+
+ ✓ tests/reviewRegressions14.test.ts > R14-01: внутренний манифест выпуска не выгружается в обход права на его основания > контроль этапа 13: инженер 2 не скачивает манифест выпуска и ZIP всех файлов (409) 78ms
+ × tests/reviewRegressions14.test.ts > R14-01: внутренний манифест выпуска не выгружается в обход права на его основания > выпуск инженером 2: доставка «для заказчика» создана, во внутреннее назначение — нет; ничего закрытого не записано 175ms
+   → expected [ …(2) ] to deeply equal [ Array(1) ]
+ × tests/reviewRegressions14.test.ts > R14-01: внутренний манифест выпуска не выгружается в обход права на его основания > «Разместить» инженером 2 во внутреннее назначение — 409 restricted_basis, ничего не записано; видит, что недоступно 21ms
+   → expected { total: 2, delivered: 2, …(3) } to match object { missing: +0, restricted: 1 }
+(4 matching properties omitted from actual)
+ × tests/reviewRegressions14.test.ts > R14-01: внутренний манифест выпуска не выгружается в обход права на его основания > права отозваны между заказом и выполнением: worker отказывает RESTRICTED_BASIS до записи; повтор без прав — 409, с правами — размещено 36ms
+   → {"created":[],"items":[{"id":"63832f61-e57a-48bc-b8e9-168b7fba768a","releaseId":"5edb401f-f406-4792-a2bd-1caf750fe168","destination":{"id":"9c04c29e-33ff-4784-8ded-6c9b59c9967d","title":"Внутреннее","kind":"smb","environment":"test","version":1},"targetFolder":"A-1/Этап 1/Выпуск 1 5edb401f","fileSet":"all","status":"delivered","attemptCount":1,"lastError":null,"supersededBy":null,"deliveredAt":"2026-10-09T11:31:28.296Z","cloud":null,"files":[{"path":"01 Письмо КП.docx","kind":"file","size":3801,"sha256":"32f07f1697d4577671cf60542798cb9ad57e872a4c065b8b28b82a3e23b53112","remoteState":"verified","checkedAt":"2026-10-09T11:31:28.264Z"},{"path":"01 Письмо КП (превью).pdf","kind":"file","size":38474,"sha256":"89b6cff404afc2e10307c853a6ae4b907ce0746b31d18ca4c3638f663a750eb5","remoteState":"verified","checkedAt":"2026-10-09T11:31:28.270Z"},{"path":"03 Ключевые условия.xlsx","kind":"file","size":4506,"sha256":"30c30da922d7861c53eb8a161e6eb8800881b8f9f90ea74812ac54f9eb6a2e06","remoteState":"verified","checkedAt":"2026-10-09T11:31:28.274Z"},{"path":"03 Ключевые условия (превью).pdf","kind":"file","size":49044,"sha256":"21869203988657cba53c37a46ce1dc2e62ec3481d014fd5f3dd9dcb45e061a2b","remoteState":"verified","checkedAt":"2026-10-09T11:31:28.278Z"},{"path":"manifest.json","kind":"manifest","size":6778,"sha256":"957f5bd63ec02f221e35dd5b7627be6209b40cec7948f6aca37c94d828af69e9","remoteState":"verified","checkedAt":"2026-10-09T11:31:28.282Z"},{"path":"release-manifest.json","kind":"manifest","size":4845,"sha256":"4981b166764fa8bcfa6d0c9bb9ec10623974586f3447664fd2a07b0ca9f495e4","remoteState":"verified","checkedAt":"2026-10-09T11:31:28.284Z"},{"path":"kontur-placement.json","kind":"marker","size":1091,"sha256":"290abb1afc25939113f59faa99c05ccc5ef6844f132f9f13cafd02faf7c4c0a6","remoteState":"verified","checkedAt":"2026-10-09T11:31:28.292Z"}],"attempts":[{"seq":1,"startedAt":"2026-10-09T11:31:28.195Z","finishedAt":"2026-10-09T11:31:28.296Z","outcome":"delivered","errorCode":null,"detail":null}],"events":[{"action":"created","actor":null,"reason":null,"createdAt":"2026-10-09T11:31:27.997Z"}],"createdAt":"2026-10-09T11:31:27.997Z","updatedAt":"2026-10-09T11:31:28.296Z","rowVersion":5,"etag":"\"63832f61-e57a-48bc-b8e9-168b7fba768a:5\"","actions":{"retry":false,"resolveConflict":false,"redirect":false,"confirmCloud":false}},{"id":"e84e8279-b1f1-44de-bf85-b10d10934ff7","releaseId":"5edb401f-f406-4792-a2bd-1caf750fe168","destination":{"id":"b7645c39-5270-4701-bae3-d3b19e1f3e9f","title":"Для заказчика","kind":"smb","environment":"test","version":1},"targetFolder":"A-1/Этап 1/Выпуск 1 5edb401f","fileSet":"customer","status":"delivered","attemptCount":1,"lastError":null,"supersededBy":null,"deliveredAt":"2026-10-09T11:31:28.333Z","cloud":null,"files":[{"path":"01 Письмо КП.docx","kind":"file","size":3801,"sha256":"32f07f1697d4577671cf60542798cb9ad57e872a4c065b8b28b82a3e23b53112","remoteState":"verified","checkedAt":"2026-10-09T11:31:28.324Z"},{"path":"kontur-placement.json","kind":"marker","size":429,"sha256":"dd2e7e50ccacdb8752b0b2997509d8a4e9c4b52aaea339fb1804ae67a74666df","remoteState":"verified","checkedAt":"2026-10-09T11:31:28.330Z"}],"attempts":[{"seq":1,"startedAt":"2026-10-09T11:31:28.301Z","finishedAt":"2026-10-09T11:31:28.333Z","outcome":"delivered","errorCode":null,"detail":null}],"events":[{"action":"created","actor":null,"reason":null,"createdAt":"2026-10-09T11:31:27.997Z"}],"createdAt":"2026-10-09T11:31:27.997Z","updatedAt":"2026-10-09T11:31:28.333Z","rowVersion":5,"etag":"\"e84e8279-b1f1-44de-bf85-b10d10934ff7:5\"","actions":{"retry":false,"resolveConflict":false,"redirect":false,"confirmCloud":false}}],"summary":{"total":2,"delivered":2,"cloudTotal":0,"cloudConfirmed":0,"missing":0},"canPlace":false}: expected 200 to be 201 // Object.is equality
+ × tests/reviewRegressions14.test.ts > R14-01: внутренний манифест выпуска не выгружается в обход права на его основания > перенаправление на внутреннюю версию назначения — та же проверка права 123ms
+   → expected true to be false // Object.is equality
+ × tests/reviewRegressions14.test.ts > R14-03: служебная папка Яндекс Диска физически внутри синхронизации — через API и worker > «Проверить назначение» и размещение отказывают INVALID_PATH, внутри синхронизации ничего не записано 56ms
+   → expected { version: 1, current: true, …(5) } to match object { outcome: 'failed', …(1) }
+(5 matching properties omitted from actual)
+ × tests/reviewRegressions14Fs.test.ts > R14-02: признак готовности не заменяет чужой файл, когда жёсткие ссылки недоступны > ссылки не поддерживаются, чужой признак появляется на границе переноса — перенос отказывает, чужие байты целы 20ms
+   → перенос без замены при недоступных ссылках должен отказывать, а не проверять имя и переименовывать: expected 'ok' not to be 'ok' // Object.is equality
+ ✓ tests/reviewRegressions14Fs.test.ts > R14-02: признак готовности не заменяет чужой файл, когда жёсткие ссылки недоступны > контроль: обычный путь через жёсткую ссылку сохраняет существующий признак (EEXIST) 6ms
+ × tests/reviewRegressions14Fs.test.ts > R14-03: служебная папка физически внутри папки синхронизации > размещение: отказ до записи — ни одного файла внутри синхронизируемого дерева 210ms
+   → незавершённые файлы записаны внутрь папки синхронизации через junction: expected 5 to be +0 // Object.is equality
+ × tests/reviewRegressions14Fs.test.ts > R14-03: служебная папка физически внутри папки синхронизации > «Проверить назначение»: тот же отказ, пробная папка не создаётся 25ms
+   → expected 'ok' to be 'INVALID_PATH' // Object.is equality
+ × tests/reviewRegressions14Fs.test.ts > R14-03: служебная папка физически внутри папки синхронизации > корень физически внутри служебной папки — отказ и у сетевой папки 22ms
+   → expected 'ok' to be 'INVALID_PATH' // Object.is equality
+ ✓ tests/reviewRegressions14Fs.test.ts > R14-03: служебная папка физически внутри папки синхронизации > контроль: служебная папка вне синхронизации на том же диске — проверка проходит 17ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/reviewRegressions14.test.ts > R14-01: внутренний манифест выпуска не выгружается в обход права на его основания > выпуск инженером 2: доставка «для заказчика» создана, во внутреннее назначение — нет; ничего закрытого не записано
+AssertionError: expected [ …(2) ] to deeply equal [ Array(1) ]
+
+- Expected
++ Received
+
+  [
++   "9c04c29e-33ff-4784-8ded-6c9b59c9967d",
+    "b7645c39-5270-4701-bae3-d3b19e1f3e9f",
+  ]
+
+ ❯ tests/reviewRegressions14.test.ts:92:53
+     90|     await runDeliveries(st, deliveryWorker(st, fs));
+     91|     const list = await deliveriesOf(s().manager, releaseId);
+     92|     expect(list.items.map((d) => d.destination.id)).toEqual([customer.…
+       |                                                     ^
+     93|     expect(list.items[0]!.status).toBe('delivered');
+     94|     expect(manifestsIn(internal.current.rootPath)).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  tests/reviewRegressions14.test.ts > R14-01: внутренний манифест выпуска не выгружается в обход права на его основания > «Разместить» инженером 2 во внутреннее назначение — 409 restricted_basis, ничего не записано; видит, что недоступно
+AssertionError: expected { total: 2, delivered: 2, …(3) } to match object { missing: +0, restricted: 1 }
+(4 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "missing": 0,
+-   "restricted": 1,
+  }
+
+ ❯ tests/reviewRegressions14.test.ts:103:27
+    101|     const view2 = await deliveriesOf(s().eng2, releaseId);
+    102|     expect(view2.canPlace).toBe(false);
+    103|     expect(view2.summary).toMatchObject({ missing: 0, restricted: 1 });
+       |                           ^
+    104|     const r = await place(s().eng2, releaseId, 'Попытка выгрузить закр…
+    105|     expect(r.status, r.text).toBe(409);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  tests/reviewRegressions14.test.ts > R14-01: внутренний манифест выпуска не выгружается в обход права на его основания > права отозваны между заказом и выполнением: worker отказывает RESTRICTED_BASIS до записи; повтор без прав — 409, с правами — размещено
+AssertionError: {"created":[],"items":[{"id":"63832f61-e57a-48bc-b8e9-168b7fba768a","releaseId":"5edb401f-f406-4792-a2bd-1caf750fe168","destination":{"id":"9c04c29e-33ff-4784-8ded-6c9b59c9967d","title":"Внутреннее","kind":"smb","environment":"test","version":1},"targetFolder":"A-1/Этап 1/Выпуск 1 5edb401f","fileSet":"all","status":"delivered","attemptCount":1,"lastError":null,"supersededBy":null,"deliveredAt":"2026-10-09T11:31:28.296Z","cloud":null,"files":[{"path":"01 Письмо КП.docx","kind":"file","size":3801,"sha256":"32f07f1697d4577671cf60542798cb9ad57e872a4c065b8b28b82a3e23b53112","remoteState":"verified","checkedAt":"2026-10-09T11:31:28.264Z"},{"path":"01 Письмо КП (превью).pdf","kind":"file","size":38474,"sha256":"89b6cff404afc2e10307c853a6ae4b907ce0746b31d18ca4c3638f663a750eb5","remoteState":"verified","checkedAt":"2026-10-09T11:31:28.270Z"},{"path":"03 Ключевые условия.xlsx","kind":"file","size":4506,"sha256":"30c30da922d7861c53eb8a161e6eb8800881b8f9f90ea74812ac54f9eb6a2e06","remoteState":"verified","checkedAt":"2026-10-09T11:31:28.274Z"},{"path":"03 Ключевые условия (превью).pdf","kind":"file","size":49044,"sha256":"21869203988657cba53c37a46ce1dc2e62ec3481d014fd5f3dd9dcb45e061a2b","remoteState":"verified","checkedAt":"2026-10-09T11:31:28.278Z"},{"path":"manifest.json","kind":"manifest","size":6778,"sha256":"957f5bd63ec02f221e35dd5b7627be6209b40cec7948f6aca37c94d828af69e9","remoteState":"verified","checkedAt":"2026-10-09T11:31:28.282Z"},{"path":"release-manifest.json","kind":"manifest","size":4845,"sha256":"4981b166764fa8bcfa6d0c9bb9ec10623974586f3447664fd2a07b0ca9f495e4","remoteState":"verified","checkedAt":"2026-10-09T11:31:28.284Z"},{"path":"kontur-placement.json","kind":"marker","size":1091,"sha256":"290abb1afc25939113f59faa99c05ccc5ef6844f132f9f13cafd02faf7c4c0a6","remoteState":"verified","checkedAt":"2026-10-09T11:31:28.292Z"}],"attempts":[{"seq":1,"startedAt":"2026-10-09T11:31:28.195Z","finishedAt":"2026-10-09T11:31:28.296Z","outcome":"delivered","errorCode":null,"detail":null}],"events":[{"action":"created","actor":null,"reason":null,"createdAt":"2026-10-09T11:31:27.997Z"}],"createdAt":"2026-10-09T11:31:27.997Z","updatedAt":"2026-10-09T11:31:28.296Z","rowVersion":5,"etag":"\"63832f61-e57a-48bc-b8e9-168b7fba768a:5\"","actions":{"retry":false,"resolveConflict":false,"redirect":false,"confirmCloud":false}},{"id":"e84e8279-b1f1-44de-bf85-b10d10934ff7","releaseId":"5edb401f-f406-4792-a2bd-1caf750fe168","destination":{"id":"b7645c39-5270-4701-bae3-d3b19e1f3e9f","title":"Для заказчика","kind":"smb","environment":"test","version":1},"targetFolder":"A-1/Этап 1/Выпуск 1 5edb401f","fileSet":"customer","status":"delivered","attemptCount":1,"lastError":null,"supersededBy":null,"deliveredAt":"2026-10-09T11:31:28.333Z","cloud":null,"files":[{"path":"01 Письмо КП.docx","kind":"file","size":3801,"sha256":"32f07f1697d4577671cf60542798cb9ad57e872a4c065b8b28b82a3e23b53112","remoteState":"verified","checkedAt":"2026-10-09T11:31:28.324Z"},{"path":"kontur-placement.json","kind":"marker","size":429,"sha256":"dd2e7e50ccacdb8752b0b2997509d8a4e9c4b52aaea339fb1804ae67a74666df","remoteState":"verified","checkedAt":"2026-10-09T11:31:28.330Z"}],"attempts":[{"seq":1,"startedAt":"2026-10-09T11:31:28.301Z","finishedAt":"2026-10-09T11:31:28.333Z","outcome":"delivered","errorCode":null,"detail":null}],"events":[{"action":"created","actor":null,"reason":null,"createdAt":"2026-10-09T11:31:27.997Z"}],"createdAt":"2026-10-09T11:31:27.997Z","updatedAt":"2026-10-09T11:31:28.333Z","rowVersion":5,"etag":"\"e84e8279-b1f1-44de-bf85-b10d10934ff7:5\"","actions":{"retry":false,"resolveConflict":false,"redirect":false,"confirmCloud":false}}],"summary":{"total":2,"delivered":2,"cloudTotal":0,"cloudConfirmed":0,"missing":0},"canPlace":false}: expected 200 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 200
+
+ ❯ tests/reviewRegressions14.test.ts:114:30
+    112|   it('права отозваны между заказом и выполнением: worker отказывает RE…
+    113|     const r = await place(s().manager, releaseId, 'Внутренний набор дл…
+    114|     expect(r.status, r.text).toBe(201);
+       |                              ^
+    115|     await setMailAccess(s().admin, box, s().ids.manager, []);
+    116|     await runDeliveries(st, deliveryWorker(st, fs));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ FAIL  tests/reviewRegressions14.test.ts > R14-01: внутренний манифест выпуска не выгружается в обход права на его основания > перенаправление на внутреннюю версию назначения — та же проверка права
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/reviewRegressions14.test.ts:152:33
+    150|     expect(v.status, v.text).toBe(201);
+    151|     const f2 = await deliveryOf(s().eng2, failed.id);
+    152|     expect(f2.actions.redirect).toBe(false);
+       |                                 ^
+    153|     expect((await act(s().eng2, f2, 'redirect', 'Перенаправить во внут…
+    154|     const fm = await deliveryOf(s().manager, failed.id);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+
+ FAIL  tests/reviewRegressions14.test.ts > R14-03: служебная папка Яндекс Диска физически внутри синхронизации — через API и worker > «Проверить назначение» и размещение отказывают INVALID_PATH, внутри синхронизации ничего не записано
+AssertionError: expected { version: 1, current: true, …(5) } to match object { outcome: 'failed', …(1) }
+(5 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "errorCode": "INVALID_PATH",
+-   "outcome": "failed",
++   "errorCode": null,
++   "outcome": "ok",
+  }
+
+ ❯ tests/reviewRegressions14.test.ts:175:60
+    173|     expect(pr.status, pr.text).toBe(202);
+    174|     await runDeliveries(st, deliveryWorker(st, fs));
+    175|     expect((await destination(s().admin, y.id)).lastProbe).toMatchObje…
+       |                                                            ^
+    176|     const p = await place(s().manager, releaseId, 'Яндекс Диск через с…
+    177|     expect(p.status, p.text).toBe(201);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/9]⎯
+
+ FAIL  tests/reviewRegressions14Fs.test.ts > R14-02: признак готовности не заменяет чужой файл, когда жёсткие ссылки недоступны > ссылки не поддерживаются, чужой признак появляется на границе переноса — перенос отказывает, чужие байты целы
+AssertionError: перенос без замены при недоступных ссылках должен отказывать, а не проверять имя и переименовывать: expected 'ok' not to be 'ok' // Object.is equality
+ ❯ tests/reviewRegressions14Fs.test.ts:53:124
+     51|     const { nodeDeliveryFs } = await import('../packages/storage/src/d…
+     52|     const code = await codeOf(nodeDeliveryFs().moveNoReplace(source, d…
+     53|     expect(code, 'перенос без замены при недоступных ссылках должен от…
+       |                                                                                                                            ^
+     54|     if (existsSync(dest)) expect(readFileSync(dest, 'utf8')).toBe('COM…
+     55|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/9]⎯
+
+ FAIL  tests/reviewRegressions14Fs.test.ts > R14-03: служебная папка физически внутри папки синхронизации > размещение: отказ до записи — ни одного файла внутри синхронизируемого дерева
+AssertionError: незавершённые файлы записаны внутрь папки синхронизации через junction: expected 5 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 5
+
+ ❯ tests/reviewRegressions14Fs.test.ts:110:94
+    108|       }),
+    109|     );
+    110|     expect(writes, 'незавершённые файлы записаны внутрь папки синхрони…
+       |                                                                                              ^
+    111|     expect(code).toBe('INVALID_PATH');
+    112|     expect(readdirSync(join(physical, 'own-delivery'))).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/9]⎯
+
+ FAIL  tests/reviewRegressions14Fs.test.ts > R14-03: служебная папка физически внутри папки синхронизации > «Проверить назначение»: тот же отказ, пробная папка не создаётся
+AssertionError: expected 'ok' to be 'INVALID_PATH' // Object.is equality
+
+Expected: "INVALID_PATH"
+Received: "ok"
+
+ ❯ tests/reviewRegressions14Fs.test.ts:121:37
+    119|     const { FsDeliveryTarget } = await import('../packages/adapters/sr…
+    120|     const t = new FsDeliveryTarget({ kind: 'yandex_disk', rootPath: ro…
+    121|     expect(await codeOf(t.probe())).toBe('INVALID_PATH');
+       |                                     ^
+    122|     expect(readdirSync(physical)).toEqual(['own-delivery']);
+    123|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/9]⎯
+
+ FAIL  tests/reviewRegressions14Fs.test.ts > R14-03: служебная папка физически внутри папки синхронизации > корень физически внутри служебной папки — отказ и у сетевой папки
+AssertionError: expected 'ok' to be 'INVALID_PATH' // Object.is equality
+
+Expected: "INVALID_PATH"
+Received: "ok"
+
+ ❯ tests/reviewRegressions14Fs.test.ts:134:37
+    132|     const { FsDeliveryTarget } = await import('../packages/adapters/sr…
+    133|     const t = new FsDeliveryTarget({ kind: 'smb', rootPath: rootAlias,…
+    134|     expect(await codeOf(t.probe())).toBe('INVALID_PATH');
+       |                                     ^
+    135|   });
+    136|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/9]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  9 failed | 3 passed (12)
+   Start at  16:31:18
+   Duration  10.47s (tests 74%, transform 20%, import 7%)
+
+exit=1

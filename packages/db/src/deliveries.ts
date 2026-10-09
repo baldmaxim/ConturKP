@@ -239,18 +239,32 @@ export const pendingProbeVersions = async (db: Queryable, versionIds: readonly s
 
 // ---------------------------------------------------------------- Доставки
 
-// Активные назначения среды выпуска без действующей доставки (для «Разместить»).
-export const missingDestinationCount = async (db: Queryable, releaseId: string, mode: DeliveryEnvironment): Promise<number> =>
-  Number(
-    (
-      await db.query<{ n: string }>(
-        `SELECT count(*) AS n FROM delivery_destination t
-          WHERE t.active AND t.environment = $2
-            AND NOT EXISTS (SELECT 1 FROM delivery d WHERE d.release_id = $1 AND d.destination_id = t.id AND d.status <> 'superseded')`,
-        [releaseId, mode],
-      )
-    ).rows[0]!.n,
-  );
+// Активные назначения среды выпуска без действующей доставки (для «Разместить»): у каждого — нужен ли внутренний набор.
+export const missingDestinationsOf = async (db: Queryable, releaseId: string, mode: DeliveryEnvironment): Promise<{ id: string; include_internal: boolean }[]> =>
+  (
+    await db.query<{ id: string; include_internal: boolean }>(
+      `SELECT t.id, v.include_internal FROM delivery_destination t JOIN delivery_destination_version v ON v.id = t.current_version_id
+        WHERE t.active AND t.environment = $2
+          AND NOT EXISTS (SELECT 1 FROM delivery d WHERE d.release_id = $1 AND d.destination_id = t.id AND d.status <> 'superseded')
+        ORDER BY t.kind, t.title, t.id`,
+      [releaseId, mode],
+    )
+  ).rows;
+
+// Кто отвечает за размещение (Review 14-1 R14-01): последний человек, запросивший его («Разместить», повтор,
+// перенаправление), иначе — выпустивший (доставка создана в транзакции выпуска). Его текущие права worker сверяет
+// перед записью внутреннего набора.
+export const deliveryResponsibleUser = async (db: Queryable, deliveryId: string): Promise<string | null> =>
+  (
+    await db.query<{ user_id: string | null }>(
+      `SELECT coalesce(
+         (SELECT e.actor_user_id FROM delivery_event e
+           WHERE e.delivery_id = $1 AND e.actor_user_id IS NOT NULL AND e.action IN ('place', 'retry', 'resolve_conflict', 'redirect')
+           ORDER BY e.created_at DESC, e.id DESC LIMIT 1),
+         (SELECT r.released_by FROM delivery d JOIN release r ON r.id = d.release_id WHERE d.id = $1)) AS user_id`,
+      [deliveryId],
+    )
+  ).rows[0]?.user_id ?? null;
 
 const DELIVERY_SELECT = `SELECT d.*, t.title AS destination_title, v.version AS destination_version, cu.display_name AS cloud_confirmed_by_name
   FROM delivery d JOIN delivery_destination t ON t.id = d.destination_id JOIN delivery_destination_version v ON v.id = d.destination_version_id
@@ -376,11 +390,23 @@ const insertDelivery = async (
 };
 
 // Доставки выпуска во все активные назначения его среды, которых ещё нет (в транзакции выпуска или «Разместить»).
-export const createDeliveriesForRelease = async (db: Queryable, releaseId: string, createdBy: string | null, reason: string | null = null): Promise<string[]> => {
+// Внутренний набор несёт манифест выпуска с причинами решений: без права его читать (internal = false) такие назначения
+// пропускаются (Review 14-1 R14-01).
+export const createDeliveriesForRelease = async (
+  db: Queryable,
+  releaseId: string,
+  createdBy: string | null,
+  reason: string | null = null,
+  opts: { internal: boolean } = { internal: true },
+): Promise<{ created: string[]; skipped: string[] }> => {
   const release = await releaseForDelivery(db, releaseId);
-  const out: string[] = [];
-  for (const dest of await missingDestinations(db, release)) out.push(await insertDelivery(db, release, dest, createdBy, reason));
-  return out;
+  const created: string[] = [];
+  const skipped: string[] = [];
+  for (const dest of await missingDestinations(db, release)) {
+    if (dest.include_internal && !opts.internal) skipped.push(dest.id);
+    else created.push(await insertDelivery(db, release, dest, createdBy, reason));
+  }
+  return { created, skipped };
 };
 
 export const enqueueDelivery = async (db: Queryable, deliveryId: string, tenderId: string): Promise<void> => {

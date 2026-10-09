@@ -7,7 +7,7 @@ const enc = encodeURIComponent;
 export const listReleaseDeliveries = (releaseId: string, signal?: AbortSignal) => apiGet<IReleaseDeliveries>(`/releases/${enc(releaseId)}/deliveries`, { signal });
 
 export const placeRelease = (releaseId: string, idempotencyKey: string) =>
-  apiPost<IReleaseDeliveries & { created: string[] }>(`/releases/${enc(releaseId)}/deliveries`, { body: {}, idempotencyKey });
+  apiPost<IReleaseDeliveries & { created: string[]; skipped: string[] }>(`/releases/${enc(releaseId)}/deliveries`, { body: {}, idempotencyKey });
 
 export type TDeliveryAction = 'retry' | 'resolve-conflict' | 'redirect' | 'confirm-cloud';
 

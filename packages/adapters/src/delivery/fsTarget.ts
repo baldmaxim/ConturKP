@@ -3,10 +3,11 @@
 // UNC-путь. Корень и служебная папка — только из закреплённой версии назначения (R01-05). Адаптер ничего не удаляет вне
 // служебной папки доставки, ничего не перезаписывает в папке выпуска и ничего не публикует.
 import { randomUUID } from 'node:crypto';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { isPathInside } from '@kontur/core';
 import type { Readable } from 'node:stream';
 import { DeliveryAdapterError, deliveryErrorOf, withTimeout } from './errors.ts';
-import type { IDeliveryFs } from './fs.ts';
+import type { IDeliveryFs, IFsIdentity } from './fs.ts';
 
 export type DeliveryTargetKind = 'yandex_disk' | 'smb';
 export type Where = 'root' | 'staging';
@@ -80,11 +81,43 @@ export class FsDeliveryTarget {
       staging = await this.run('проверка служебной папки', false, () => this.o.fs.stat(this.o.stagingPath));
     }
     if (!staging || !staging.isDirectory) throw new DeliveryAdapterError('STAGING_NOT_FOUND', 'служебная папка назначения не найдена или это не папка');
+    await this.checkPhysicalSeparation();
     return { rootDev: root.dev, stagingDev: staging.dev };
   }
 
-  // Проверка доступа учётной записи процесса (D-034): запись и чтение в служебной папке, перенос пробной папки в корень и
-  // обратно (тот же том, права записи в корне), удаление. В корне пробная папка живёт доли секунды.
+  // Физическое разделение корня и служебной папки (Review 14-1 R14-03): строки путей могут различаться, а каталог — быть
+  // тем же (junction, символическая ссылка, короткое имя). Сверяются разрешённые пути и идентичность (dev + ino) каждого
+  // родителя. Корень внутри служебной папки — отказ у любого назначения; служебная папка внутри корня — у Яндекс Диска
+  // (у сетевой папки служебная по умолчанию лежит в корне). Проверка — до любой записи.
+  private async checkPhysicalSeparation(): Promise<void> {
+    const root = await this.run('проверка корня', false, () => this.o.fs.realpath(this.o.rootPath));
+    const staging = await this.run('проверка служебной папки', false, () => this.o.fs.realpath(this.o.stagingPath));
+    const rootId = await this.run('проверка корня', false, () => this.o.fs.identity(root));
+    const stagingId = await this.run('проверка служебной папки', false, () => this.o.fs.identity(staging));
+    if (isPathInside(root, staging) || (await this.hasAncestor(root, stagingId))) {
+      throw new DeliveryAdapterError('INVALID_PATH', 'корень назначения физически лежит внутри служебной папки (ссылка или junction)');
+    }
+    if (this.kind === 'yandex_disk' && (isPathInside(staging, root) || (await this.hasAncestor(staging, rootId)))) {
+      throw new DeliveryAdapterError('INVALID_PATH', 'служебная папка физически лежит внутри папки синхронизации (ссылка или junction): незавершённые файлы ушли бы в облако');
+    }
+  }
+
+  // Путь p или один из его родителей — тот же каталог, что id. Неизвестная идентичность (ino = 0, сетевые ресурсы) или
+  // недоступный родитель — проверка по разрешённому пути остаётся единственной.
+  private async hasAncestor(p: string, id: IFsIdentity | null): Promise<boolean> {
+    if (!id || id.ino === 0n) return false;
+    for (let cur = p; ; ) {
+      const here = await this.o.fs.identity(cur).catch(() => null);
+      if (here && here.dev === id.dev && here.ino === id.ino) return true;
+      const up = dirname(cur);
+      if (up === cur) return false;
+      cur = up;
+    }
+  }
+
+  // Проверка доступа учётной записи процесса (D-034): физическое разделение корня и служебной папки, запись и чтение в
+  // служебной папке, перенос пробной папки в корень и обратно (тот же том, права записи в корне), перенос файла без
+  // замены жёсткой ссылкой (так переносится признак готовности, R14-02), удаление. В корне пробная папка живёт доли секунды.
   async probe(): Promise<void> {
     const bases = await this.checkBases();
     if (bases.rootDev !== bases.stagingDev) throw new DeliveryAdapterError('CROSS_DEVICE', 'служебная папка и корень на разных томах');
@@ -99,6 +132,8 @@ export class FsDeliveryTarget {
       if (h.size !== body.length) throw new DeliveryAdapterError('UNAVAILABLE', 'пробный файл прочитан не полностью');
       await this.run('перенос пробной папки в корень', true, () => this.o.fs.rename(inStaging, inRoot));
       await this.run('перенос пробной папки обратно', true, () => this.o.fs.rename(inRoot, inStaging));
+      await this.run('создание пробной папки в корне', true, () => this.o.fs.mkdir(inRoot));
+      await this.run('перенос файла без замены', true, () => this.o.fs.moveNoReplace(join(inStaging, 'probe.txt'), join(inRoot, 'probe.txt')));
     } finally {
       await this.o.fs.remove(inStaging).catch(() => undefined);
       await this.o.fs.remove(inRoot).catch(() => undefined);

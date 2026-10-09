@@ -1,4 +1,4 @@
-# 2026-10-09T15:12:27+05:00, linux x64 Node v24.14.1, npm run build
+# 2026-10-09T16:38:59+05:00, linux x64 Node v24.14.1, npm run build
 
 > build
 > npm run build -w @kontur/web
@@ -16,19 +16,19 @@ dist/index.html                                      1.80 kB │ gzip:   0.78 kB
 dist/assets/pdf.worker.min-iDqQPrd3.mjs          1,232.30 kB
 dist/assets/index-bX7jQvhO.css                      72.41 kB │ gzip:  11.91 kB
 dist/assets/workbox-window.prod.es5-Bd17z0YL.js      5.65 kB │ gzip:   2.20 kB
-dist/assets/pdf-CZHfjiFn.js                        409.76 kB │ gzip: 121.72 kB
-dist/assets/index-00anSMs4.js                      812.29 kB │ gzip: 225.15 kB
+dist/assets/pdf-Cg2PjrzQ.js                        409.76 kB │ gzip: 121.72 kB
+dist/assets/index-BWb_qtDX.js                      812.87 kB │ gzip: 225.32 kB
 
 [plugin builtin:vite-reporter] 
 (!) Some chunks are larger than 500 kB after minification. Consider:
 - Using dynamic import() to code-split the application
 - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
-✓ built in 837ms
+✓ built in 750ms
 
 PWA v1.3.0
 mode      generateSW
-precache  18 entries (1289.22 KiB)
+precache  18 entries (1289.78 KiB)
 files generated
   dist/sw.js
   dist/workbox-98f7a950.js

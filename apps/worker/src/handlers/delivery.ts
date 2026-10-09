@@ -6,6 +6,8 @@
 import { DeliveryAdapterError, FsDeliveryTarget, PlacementConflict, placeFolder, type IDeliveryFs } from '@kontur/adapters';
 import {
   isPathInside,
+  tenderCapabilities,
+  type IReleaseManifest,
   PLACEMENT_MARKER,
   placementBytes,
   placementSha256,
@@ -14,8 +16,14 @@ import {
   segmentProblem,
 } from '@kontur/core';
 import {
+  candidateVisibleTo,
+  deliveryResponsibleUser,
   fileStates,
   getDelivery,
+  getRelease,
+  loadAccessContext,
+  memberRoleOf,
+  releaseManifestReadableBy,
   getDestinationVersion,
   insertAttempt,
   insertProbe,
@@ -70,6 +78,19 @@ const setMatchesPlacement = (d: IDeliveryRow, files: readonly IDeliveryFileState
   );
 };
 
+// Внутренний набор несёт манифест выпуска с причинами решений (Review 14-1 R14-01): перед записью — текущее право того,
+// кто запросил размещение (иначе — выпустившего): активен, delivery.manage по тендеру, видит комплект, читает манифест.
+const internalSetAllowed = async (ctx: IJobContext, d: IDeliveryRow): Promise<boolean> => {
+  const userId = await deliveryResponsibleUser(ctx.pool, d.id);
+  const access = userId ? await loadAccessContext(ctx.pool, userId, `job:${ctx.job.id}`) : null;
+  if (!access || !tenderCapabilities(access.roles, memberRoleOf(access, d.tender_id)).includes('delivery.manage')) return false;
+  const release = await getRelease(ctx.pool, d.release_id);
+  if (!release || !(await candidateVisibleTo(ctx.pool, access, release.candidate_id))) return false;
+  const chunks: Buffer[] = [];
+  for await (const chunk of ctx.store.openRead(release.release_manifest_blob_sha256)) chunks.push(chunk as Buffer);
+  return releaseManifestReadableBy(ctx.pool, access, release, JSON.parse(Buffer.concat(chunks).toString('utf8')) as IReleaseManifest);
+};
+
 export const deliveryPlaceHandler: IJobHandlerSpec = {
   run: async (ctx) => {
     const id = String(ctx.job.payload.deliveryId);
@@ -96,6 +117,10 @@ export const deliveryPlaceHandler: IJobHandlerSpec = {
       }
       if (placementSha256(d.placement) !== d.placement_sha256) throw new PermanentJobError('CONTENT_MISMATCH', 'признак готовности не совпадает с закреплённым');
       if (!setMatchesPlacement(d, files)) throw new PermanentJobError('CONTENT_MISMATCH', 'набор файлов доставки не совпадает с признаком готовности');
+      // Право на внутренний набор — текущее, до любой записи (R14-01).
+      if (d.file_set === 'all' && !(await internalSetAllowed(ctx, d))) {
+        throw new PermanentJobError('RESTRICTED_BASIS', 'внутренний набор: у запросившего размещение сейчас нет доступа к основаниям решений в манифесте выпуска; повторить может тот, у кого доступ есть');
+      }
       // 2. Пути (A38).
       const problem = pathProblem(d, version, files);
       if (problem) throw new PermanentJobError('INVALID_PATH', problem);

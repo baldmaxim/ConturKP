@@ -13,6 +13,9 @@ import {
   type SourceKind,
 } from '@kontur/core';
 import {
+  axisBasesVisible,
+  reviewVisibility,
+  type IReviewVisibility,
   axisEvents,
   stageEventClass,
   currentAxes,
@@ -24,15 +27,11 @@ import {
   findingOccurrences,
   getDiscrepancy,
   listSuggestions,
-  readableDocumentRevisions,
-  readableFragments,
-  readableMailRevisions,
   reviewCheckResults,
   reviewRunInput,
   legacyStageContentFingerprint,
   legacyStageContentFingerprintV2,
   stageContentFingerprint,
-  stageVisibility,
   type IAccessContext,
   type IAxisEventRow,
   type IDiscrepancyRow,
@@ -48,44 +47,8 @@ const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
 
 // ---------------------------------------------------------------- Видимость
 
-export interface IReviewVisibility {
-  finding: (id: string) => boolean;
-  fragment: (id: string) => boolean;
-  documentRevision: (id: string) => boolean;
-  mailRevision: (id: string) => boolean;
-}
-
-// Видимость замечаний этапа: все фрагменты оснований (и фрагменты фактов) читаются, требования и вопросы оснований
-// видимы по замыканию закрытости этапа 08, редакции документов читаются.
-export const reviewVisibility = async (db: Queryable, ctx: IAccessContext, stageId: string, evidence: readonly IFindingEvidenceRow[], extra: { fragments?: string[]; mailRevisions?: string[]; documentRevisions?: string[] } = {}): Promise<IReviewVisibility> => {
-  const vis = await stageVisibility(db, ctx, stageId);
-  const fragmentIds = [...evidence.flatMap((e) => [e.fragment_id, ...(e.fact_fragment_ids ?? [])]).filter((x): x is string => !!x), ...(extra.fragments ?? [])];
-  const readable = await readableFragments(db, ctx, fragmentIds);
-  const docs = await readableDocumentRevisions(db, ctx, [...evidence.map((e) => e.document_revision_id).filter((x): x is string => !!x), ...(extra.documentRevisions ?? [])]);
-  const mails = await readableMailRevisions(db, ctx, extra.mailRevisions ?? []);
-  const byFinding = new Map<string, IFindingEvidenceRow[]>();
-  for (const e of evidence) byFinding.set(e.finding_id, [...(byFinding.get(e.finding_id) ?? []), e]);
-  const memo = new Map<string, boolean>();
-  return {
-    fragment: (id) => readable.has(id),
-    documentRevision: (id) => docs.has(id),
-    mailRevision: (id) => mails.has(id),
-    finding: (id) => {
-      const cached = memo.get(id);
-      if (cached !== undefined) return cached;
-      const ok = (byFinding.get(id) ?? []).every(
-        (e) =>
-          (!e.fragment_id || readable.has(e.fragment_id)) &&
-          (e.fact_fragment_ids ?? []).every((f) => readable.has(f)) &&
-          (!e.requirement_id || vis.visible('requirement', e.requirement_id)) &&
-          (!e.customer_question_id || vis.visible('question', e.customer_question_id)) &&
-          (!e.document_revision_id || docs.has(e.document_revision_id)),
-      );
-      memo.set(id, ok);
-      return ok;
-    },
-  };
-};
+// Видимость замечаний — `@kontur/db` (decisionVisibility.ts; перенесено без изменений, Review 14-1 R14-01).
+export { axisBasesVisible, reviewVisibility, type IReviewVisibility };
 
 // ---------------------------------------------------------------- Прогон
 
@@ -298,16 +261,6 @@ const axisEventView = (e: IAxisEventRow, visible: boolean) => ({
   invalidatedReason: e.invalidated_reason,
   bases: e.bases.map((b) => ({ type: b.basis_type, id: b.fragment_id ?? b.qa_item_revision_id ?? b.mail_message_revision_id ?? b.document_revision_id ?? b.decision_id })),
 });
-
-export const axisBasesVisible = (events: readonly IAxisEventRow[], vis: IReviewVisibility): boolean =>
-  events.every((e) =>
-    e.bases.every(
-      (b) =>
-        (!b.fragment_id || vis.fragment(b.fragment_id)) &&
-        (!b.mail_message_revision_id || vis.mailRevision(b.mail_message_revision_id)) &&
-        (!b.document_revision_id || vis.documentRevision(b.document_revision_id)),
-    ),
-  );
 
 export const discrepancyView = (d: IDiscrepancyRow, events: readonly IAxisEventRow[], findingVisible: boolean, vis: IReviewVisibility, decisions: Awaited<ReturnType<typeof decisionsFor>>) => {
   const visible = findingVisible && axisBasesVisible(events, vis);

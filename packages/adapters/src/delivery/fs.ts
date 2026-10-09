@@ -11,6 +11,13 @@ export interface IFsStat {
   dev: number;
 }
 
+// Физическая идентичность объекта файловой системы (stat bigint): одинаковые dev и ino — один и тот же каталог, как
+// бы к нему ни вели пути (junction, символическая ссылка, короткое имя 8.3). ino = 0 — идентичность неизвестна.
+export interface IFsIdentity {
+  dev: bigint;
+  ino: bigint;
+}
+
 export interface IDeliveryFs {
   stat(path: string): Promise<IFsStat | null>;
   mkdir(path: string): Promise<void>;
@@ -23,4 +30,7 @@ export interface IDeliveryFs {
   // поэтому — жёсткая ссылка (атомарно, EEXIST) и удаление исходного; где ссылки не поддерживаются — проверка и rename.
   moveNoReplace(from: string, to: string): Promise<void>;
   remove(path: string): Promise<void>;
+  // Физический путь: ссылки и junction разрешены (Review 14-1 R14-03).
+  realpath(path: string): Promise<string>;
+  identity(path: string): Promise<IFsIdentity | null>;
 }

@@ -1,13 +1,16 @@
 // Реализация файловых операций размещения (этап 14; D-034) поверх файловой системы — для FsDeliveryTarget (@kontur/adapters).
-// Перенос файла без замены — жёсткой ссылкой, как запись в хранилище: rename файла и на Windows, и на POSIX заменяет
-// существующий файл.
+// Перенос файла без замены — только жёсткой ссылкой, как запись в хранилище: rename файла и на Windows, и на POSIX заменяет
+// существующий файл, а связка «проверить имя, затем rename» не атомарна (Review 14-1 R14-02). Нет жёстких ссылок —
+// понятный отказ NO_HARDLINK, без запасного пути.
 import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { link, mkdir, readdir, rename, rm, stat } from 'node:fs/promises';
+import { link, mkdir, readdir, realpath, rename, rm, stat } from 'node:fs/promises';
 import { pipeline } from 'node:stream/promises';
 import type { IDeliveryFs } from '@kontur/adapters';
 
-const LINK_UNSUPPORTED = new Set(['ENOTSUP', 'EOPNOTSUPP', 'ENOSYS', 'EXDEV', 'EPERM', 'EINVAL', 'EISDIR', 'UNKNOWN']);
+// Отказы link, означающие «ссылку здесь создать нельзя» (ресурс без жёстких ссылок, FAT/exFAT, запрет политики).
+const LINK_UNSUPPORTED = new Set(['ENOTSUP', 'EOPNOTSUPP', 'ENOSYS', 'EPERM', 'EACCES', 'EINVAL', 'EISDIR', 'EMLINK', 'UNKNOWN']);
+export const NO_HARDLINK = 'NO_HARDLINK';
 
 // Windows: антивирус и индексатор кратко держат только что записанный файл или папку — rename отвечает EPERM, EACCES или
 // EBUSY (так же поступает graceful-fs). Короткие повторы, около 2 с; если имя назначения уже занято, повтор не поможет —
@@ -83,12 +86,22 @@ export const nodeDeliveryFs = (): IDeliveryFs => ({
       await link(from, to);
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code ?? '';
-      if (!LINK_UNSUPPORTED.has(code)) throw err;
-      if (await exists(to)) throw Object.assign(new Error('EEXIST: имя занято'), { code: 'EEXIST' });
-      await renameSafe(from, to);
-      return;
+      if (LINK_UNSUPPORTED.has(code)) {
+        throw Object.assign(new Error(`жёсткую ссылку создать нельзя (${code}): нет прав или назначение их не поддерживает`), { code: NO_HARDLINK, cause: err });
+      }
+      throw err;
     }
     await rm(from, RM);
   },
   remove: async (p) => rm(p, RM),
+  realpath: async (p) => realpath(p),
+  identity: async (p) => {
+    try {
+      const s = await stat(p, { bigint: true });
+      return { dev: s.dev, ino: s.ino };
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw err;
+    }
+  },
 });

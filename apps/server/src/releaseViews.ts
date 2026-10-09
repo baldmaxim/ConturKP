@@ -18,6 +18,7 @@ import {
   getStandardAttachmentRevision,
   listApprovals,
   listHolds,
+  releaseManifestReadableBy,
   releaseOfCandidate,
   releaseSendReadiness,
   type IAccessContext,
@@ -102,25 +103,11 @@ export const holdView = (h: IHoldRow, visible: boolean) => ({
   etag: formatEtag(h.id, h.row_version),
 });
 
-// Предметы решений, записанных в манифест выпуска: принятые риски, риски этапа 09, события решений по удержаниям.
-const manifestSubjects = async (db: Queryable, store: BlobStore, r: IReleaseRow) => {
-  const m = JSON.parse((await readStoredBlob(store, r.release_manifest_blob_sha256)).toString('utf8')) as IReleaseManifest;
-  const events = (
-    await db.query<{ ref_type: string; ref_id: string }>('SELECT ref_type, ref_id FROM stage_input_event WHERE stage_id = $1 AND seq = ANY($2::bigint[])', [
-      r.stage_id,
-      m.holds.map((h) => h.eventSeq),
-    ])
-  ).rows.map((e) => ({ refType: e.ref_type, refId: e.ref_id }));
-  return { subjects: m.acceptedRisks.map((a) => ({ type: a.subjectType, id: a.subjectId })), findings: m.reviewRisks.map((x) => x.findingId), events };
-};
-
 // Манифест выпуска — точная неизменяемая запись с причинами решений: читает тот, кто сейчас видит предмет каждого
-// решения в нём (R13-02). Запись при отзыве прав не переписывается — закрывается чтение.
-export const releaseManifestReadable = async (db: Queryable, store: BlobStore, ctx: IAccessContext, r: IReleaseRow): Promise<boolean> => {
-  const q = await manifestSubjects(db, store, r);
-  const vis = await decisionVisibility(db, ctx, { id: r.stage_id, tenderId: r.tender_id }, q);
-  return q.subjects.every((x) => vis.subject(x.type, x.id)) && q.findings.every(vis.finding) && q.events.every((e) => vis.event(e.refType, e.refId));
-};
+// решения в нём (R13-02). Проверка — `releaseManifestReadableBy` (@kontur/db): ту же выполняет worker перед размещением
+// внутреннего набора (Review 14-1 R14-01).
+export const releaseManifestReadable = async (db: Queryable, store: BlobStore, ctx: IAccessContext, r: IReleaseRow): Promise<boolean> =>
+  releaseManifestReadableBy(db, ctx, r, JSON.parse((await readStoredBlob(store, r.release_manifest_blob_sha256)).toString('utf8')) as IReleaseManifest);
 
 export const requireManifestReadable = async (db: Queryable, store: BlobStore, ctx: IAccessContext, r: IReleaseRow): Promise<void> => {
   if (!(await releaseManifestReadable(db, store, ctx, r))) {

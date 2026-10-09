@@ -3,7 +3,7 @@
 // обрыв сети, потеря доступа, частичная запись, перезапуск, неизвестный исход, существующий файл, несовпадение хэша,
 // независимость направлений, заполненный диск, облако Яндекс Диска, среда. Настоящих назначений здесь нет.
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { canonicalJson, PLACEMENT_MARKER } from '../packages/core/src/index.ts';
@@ -23,6 +23,7 @@ import {
   newVersion,
   pgCode,
   place,
+  removeKnownFiles,
   runDeliveries,
   runOneDelivery,
   setActive,
@@ -311,7 +312,9 @@ describe('существующие файлы и целостность (A27, A3
     const again = await deliveryOf(eng(), d0.id);
     expect(again.status).toBe('conflict');
     expect(readFileSync(join(folder, d0.files[0]!.path))).toEqual(foreign);
-    rmSync(folder, { recursive: true });
+    // Человек убирает чужую папку: только известный файл и пустая папка, с проверкой результата (R14-04).
+    removeKnownFiles(folder, [d0.files[0]!.path]);
+    expect(existsSync(folder)).toBe(false);
     expect((await act(eng(), again, 'resolve-conflict', 'Чужую папку убрали вручную')).status).toBe(200);
     await runDeliveries(st(), deliveryWorker(st(), fs));
     const ok = await deliveryOf(eng(), d0.id);

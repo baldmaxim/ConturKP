@@ -64,6 +64,7 @@ import {
   holdView,
   loadCandidate,
   loadVisibleRelease,
+  releaseManifestReadable,
   releaseView,
   requireManifestReadable,
   requireVisibleCandidate,
@@ -366,12 +367,14 @@ export const approvalsRouter = (pool: Pool, store: BlobStore): Router => {
           userId: ctx.principal.userId,
           releasedAt,
         });
-        // Этап 14: доставки во все активные назначения среды выпуска — в той же транзакции; размещает worker.
-        const deliveries = await createDeliveriesForRelease(client, id, null);
+        // Этап 14: доставки во все активные назначения среды выпуска — в той же транзакции; размещает worker. Внутренний набор
+        // несёт манифест выпуска — только если выпускающий его читает (Review 14-1 R14-01); иначе назначение пропускается.
+        const internalOk = await releaseManifestReadable(client, store, ctx, (await getRelease(client, id))!);
+        const { created: deliveries, skipped } = await createDeliveriesForRelease(client, id, null, null, { internal: internalOk });
         const r = await commandResult(client, store, ctx, c.id, 201, { action: 'release.candidate.release', details: { releaseId: id, approvalId: active.id, mode: c.mode, manifestSha256: stored.sha256 } });
         return {
           ...r,
-          audit: [...r.audit, { action: 'release.create', entityType: 'release', entityId: id, tenderId: c.tender_id, details: { candidateId: c.id, mode: c.mode, deliveries } }],
+          audit: [...r.audit, { action: 'release.create', entityType: 'release', entityId: id, tenderId: c.tender_id, details: { candidateId: c.id, mode: c.mode, deliveries, deliveriesSkipped: skipped.map((destinationId) => ({ destinationId, reason: 'restricted_basis' })) } }],
         };
       },
     }),

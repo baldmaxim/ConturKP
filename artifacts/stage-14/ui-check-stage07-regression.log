@@ -1,4 +1,4 @@
-# регрессия на рабочем дереве передачи 14-1: 2026-10-09T15:27:39+05:00, linux x64 Node v24.14.1, artifacts/stage-07/ui-check.mjs, Chromium headless без песочницы, exit 0
+# регрессия на рабочем дереве передачи 14-2: 2026-10-09T16:54:21+05:00, linux x64 Node v24.14.1, artifacts/stage-07/ui-check.mjs, Chromium headless без песочницы, exit 0
 PASS  server + worker готовы
 PASS  вход администратора-руководителя
 PASS  пункт «Почта» в шапке администратора ящиков

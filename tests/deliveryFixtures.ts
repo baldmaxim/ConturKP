@@ -1,14 +1,14 @@
 // Фикстуры этапа 14 (D-034): выпуск тестового комплекта этапа 13 и назначения размещения во временных папках —
 // «папка синхронизации» Яндекс Диска со служебной папкой вне её и «сетевая папка» со служебной внутри. Это поддельные
 // назначения (VERIFIED_FIXTURE): клиента Яндекс Диска и сервера SMB нет. Отказы вносит обёртка файловой системы.
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmdirSync, statSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import { Readable } from 'node:stream';
 import { expect } from 'vitest';
 import { HANDLERS } from '../apps/worker/src/handlers/index.ts';
 import { WorkerRuntime } from '../apps/worker/src/runtime.ts';
-import type { IDeliveryFs, IFsStat } from '../packages/adapters/src/index.ts';
+import type { IDeliveryFs, IFsIdentity, IFsStat } from '../packages/adapters/src/index.ts';
 import { BlobStore, nodeDeliveryFs } from '../packages/storage/src/index.ts';
 import { acceptAll, approve, assembled, buildStage13, closeStage13, notApplicable, release, view, type IStage13 } from './approvalFixtures.ts';
 import { idem, type TestClient } from './helpers.ts';
@@ -165,11 +165,28 @@ export class FaultyFs implements IDeliveryFs {
   remove(p: string): Promise<void> {
     return this.wrap('remove', p, () => this.inner.remove(p));
   }
+
+  realpath(p: string): Promise<string> {
+    return this.wrap('realpath', p, () => this.inner.realpath(p));
+  }
+
+  identity(p: string): Promise<IFsIdentity | null> {
+    return this.wrap('identity', p, () => this.inner.identity(p));
+  }
 }
 
 const norm = (p: string): string => p.replaceAll('\\', '/');
 
 export const nodeFsDev = (p: string): number => statSync(p).dev;
+
+// Удаление своего тестового каталога (Review 14-1 R14-04): только известные файлы — unlinkSync, затем пустые папки —
+// rmdirSync, с проверкой результата. На Windows rmSync(…, { recursive: true }) оставлял папку и файл без ошибки, тест
+// повторял размещение поверх неубранной папки. Посторонний файл не удаляется: rmdirSync непустой папки — ошибка.
+export const removeKnownFiles = (folder: string, names: readonly string[]): void => {
+  for (const n of names) unlinkSync(join(folder, n));
+  rmdirSync(folder);
+  if (existsSync(folder)) throw new Error(`тестовая папка не удалена: ${folder}`);
+};
 
 // ---------------------------------------------------------------- Временные назначения
 

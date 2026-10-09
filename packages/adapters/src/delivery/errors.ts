@@ -11,7 +11,8 @@ export type DeliveryErrorCode =
   | 'UNAVAILABLE'
   | 'TIMEOUT_UNKNOWN_OUTCOME'
   | 'CONFLICT'
-  | 'INVALID_PATH';
+  | 'INVALID_PATH'
+  | 'NO_ATOMIC_MOVE';
 
 const RETRYABLE: ReadonlySet<DeliveryErrorCode> = new Set(['UNAVAILABLE', 'TIMEOUT_UNKNOWN_OUTCOME']);
 
@@ -45,6 +46,8 @@ export const deliveryErrorOf = (err: unknown, op: string, mutating: boolean): De
   if (code === 'ENOENT') return new DeliveryAdapterError('NOT_FOUND', `${op}: путь не найден`);
   if (code === 'EXDEV') return new DeliveryAdapterError('CROSS_DEVICE', `${op}: служебная папка и корень на разных томах`);
   if (code === 'EEXIST' || code === 'ENOTEMPTY') return new DeliveryAdapterError('CONFLICT', `${op}: на этом месте уже есть файл или папка`);
+  // Перенос без замены невозможен без жёстких ссылок (Review 14-1 R14-02): отказ, не перезапись.
+  if (code === 'NO_HARDLINK') return new DeliveryAdapterError('NO_ATOMIC_MOVE', `${op}: назначение не поддерживает перенос без замены (жёсткие ссылки) или нет прав на них`);
   if (NETWORK.has(code)) return new DeliveryAdapterError('UNAVAILABLE', `${op}: назначение недоступно (${code})`);
   return new DeliveryAdapterError('UNAVAILABLE', `${op}: ошибка назначения${code ? ` (${code})` : ''}`);
 };

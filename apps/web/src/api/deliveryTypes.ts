@@ -37,7 +37,8 @@ export interface IDeliveryView {
 
 export interface IReleaseDeliveries {
   items: IDeliveryView[];
-  summary: { total: number; delivered: number; cloudTotal: number; cloudConfirmed: number; missing: number };
+  // missing — недостающие назначения, доступные вам; restricted — внутренние, закрытые для вас (манифест выпуска).
+  summary: { total: number; delivered: number; cloudTotal: number; cloudConfirmed: number; missing: number; restricted: number };
   canPlace: boolean;
 }
 

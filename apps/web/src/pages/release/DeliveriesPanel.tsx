@@ -57,6 +57,9 @@ export const DeliveriesPanel: FC<{ releaseId: string }> = ({ releaseId }) => {
         ) : null}
       </div>
       <p className={styles.muted}>«Размещено» не означает «отправлено заказчику»: отправка регистрируется отдельно.</p>
+      {s.restricted > 0 ? (
+        <p className={styles.muted}>{`Во внутренние назначения (${s.restricted}) разместить может только тот, кому открыты основания решений в манифесте выпуска.`}</p>
+      ) : null}
       {visible.length > 0 ? (
         <ul className={styles.list}>
           {visible.map((d) => (

@@ -2,7 +2,9 @@
 // пути и политика внутренних материалов — новой версией, проверка доступа — задание worker под учётной записью службы.
 // Доставки — у каждого назначения своя (A28): «Разместить», «Повторить», «Повторить после проверки», «Перенаправить»,
 // «Подтвердить облако» — delivery.manage, только человек, с причиной; команда — одна транзакция под блокировкой этапа.
-// Полные пути видит только администратор; остальным — папка выпуска относительно корня (проект §9).
+// Полные пути видит только администратор; остальным — папка выпуска относительно корня (проект §9). Внутренний набор
+// несёт манифест выпуска с причинами решений: заказать его размещение может только тот, кто сейчас читает манифест
+// (как скачивание манифеста и ZIP всех файлов, R13-02; Review 14-1 R14-01).
 import {
   ConfirmCloudRequest,
   CreateDestinationRequest,
@@ -30,7 +32,7 @@ import {
   listDestinations,
   listDestinationVersions,
   lockTenderStages,
-  missingDestinationCount,
+  missingDestinationsOf,
   pendingProbeVersions,
   redirectDelivery,
   retryDelivery,
@@ -48,7 +50,8 @@ import {
 import { Router, type Request } from 'express';
 import { command, parseBody, query, requireIfMatch, uuidParam, versionConflict } from '../http/command.ts';
 import { forbidden, HttpError, notFound } from '../http/errors.ts';
-import { iso, loadVisibleRelease } from '../releaseViews.ts';
+import type { BlobStore } from '@kontur/storage';
+import { iso, loadVisibleRelease, releaseManifestReadable } from '../releaseViews.ts';
 import { conflict } from './reviewScope.ts';
 import { hasTenderCap } from './scope.ts';
 
@@ -143,17 +146,37 @@ const destinationResult = async (db: Queryable, id: string, status: number, audi
 
 const canManage = (ctx: IAccessContext, d: { tender_id: string }): boolean => hasTenderCap(ctx, d.tender_id, 'delivery.manage');
 
-// Перенаправление возможно, если у назначения есть более новая версия путей и назначение включено.
-const redirectTarget = async (db: Queryable, d: IDeliveryRow): Promise<{ ok: boolean; reason: 'version_not_newer' | 'destination_inactive' | null }> => {
+// Право на внутренний набор выпуска — текущее право читать его манифест (на запрос; Review 14-1 R14-01).
+const internalAccess = (db: Queryable, store: BlobStore, ctx: IAccessContext) => {
+  const memo = new Map<string, Promise<boolean>>();
+  return (releaseId: string): Promise<boolean> => {
+    let p = memo.get(releaseId);
+    if (!p) {
+      p = getRelease(db, releaseId).then((r) => (r ? releaseManifestReadable(db, store, ctx, r) : false));
+      memo.set(releaseId, p);
+    }
+    return p;
+  };
+};
+type InternalAccess = ReturnType<typeof internalAccess>;
+
+const restrictedBasis = (d: { tender_id: string }, entity: { entityType: string; entityId: string }) =>
+  conflict('внутренний набор назначения содержит манифест выпуска с причинами решений по основаниям, закрытым для вас', 'restricted_basis', { tenderId: d.tender_id, ...entity });
+
+// Перенаправление возможно, если у назначения есть более новая версия путей и назначение включено; internal — набор
+// новой версии внутренний.
+const redirectTarget = async (db: Queryable, d: IDeliveryRow): Promise<{ ok: boolean; internal: boolean; reason: 'version_not_newer' | 'destination_inactive' | null }> => {
   const dest = (await getDestination(db, d.destination_id))!;
-  if (!dest.active) return { ok: false, reason: 'destination_inactive' };
   const current = (await getDestinationVersion(db, dest.current_version_id))!;
-  return current.version > d.destination_version ? { ok: true, reason: null } : { ok: false, reason: 'version_not_newer' };
+  if (!dest.active) return { ok: false, internal: current.include_internal, reason: 'destination_inactive' };
+  return current.version > d.destination_version ? { ok: true, internal: current.include_internal, reason: null } : { ok: false, internal: current.include_internal, reason: 'version_not_newer' };
 };
 
-const deliveryView = async (db: Queryable, ctx: IAccessContext, d: IDeliveryRow) => {
+const deliveryView = async (db: Queryable, ctx: IAccessContext, d: IDeliveryRow, internal: InternalAccess) => {
   const manage = canManage(ctx, d);
-  const redirect = manage && (d.status === 'failed' || d.status === 'conflict') ? await redirectTarget(db, d) : { ok: false };
+  const setAllowed = d.file_set !== 'all' || (manage && (await internal(d.release_id)));
+  const to = manage && (d.status === 'failed' || d.status === 'conflict') ? await redirectTarget(db, d) : null;
+  const redirect = { ok: !!to && to.ok && (!to.internal || (await internal(d.release_id))) };
   return {
     id: d.id,
     releaseId: d.release_id,
@@ -192,21 +215,25 @@ const deliveryView = async (db: Queryable, ctx: IAccessContext, d: IDeliveryRow)
     rowVersion: d.row_version,
     etag: formatEtag(d.id, d.row_version),
     actions: {
-      retry: manage && d.status === 'failed',
-      resolveConflict: manage && d.status === 'conflict',
+      retry: manage && d.status === 'failed' && setAllowed,
+      resolveConflict: manage && d.status === 'conflict' && setAllowed,
       redirect: redirect.ok,
       confirmCloud: manage && d.kind === 'yandex_disk' && d.status === 'delivered' && d.cloud_state === 'unconfirmed',
     },
   };
 };
 
-const releaseDeliveries = async (db: Queryable, ctx: IAccessContext, r: { id: string; tender_id: string; mode: 'test' | 'production' }) => {
+const releaseDeliveries = async (db: Queryable, ctx: IAccessContext, r: { id: string; tender_id: string; mode: 'test' | 'production' }, internal: InternalAccess) => {
   const rows = await listDeliveries(db, r.id);
   const items = [];
-  for (const d of rows) items.push(await deliveryView(db, ctx, d));
+  for (const d of rows) items.push(await deliveryView(db, ctx, d, internal));
   const active = rows.filter((d) => d.status !== 'superseded');
   const yandex = active.filter((d) => d.kind === 'yandex_disk');
-  const missing = await missingDestinationCount(db, r.id, r.mode);
+  // Недостающие назначения: доступные этому пользователю и внутренние, закрытые для него (restricted).
+  const absent = await missingDestinationsOf(db, r.id, r.mode);
+  const internalOk = absent.some((x) => x.include_internal) ? await internal(r.id) : true;
+  const restricted = internalOk ? 0 : absent.filter((x) => x.include_internal).length;
+  const missing = absent.length - restricted;
   return {
     items,
     summary: {
@@ -215,6 +242,7 @@ const releaseDeliveries = async (db: Queryable, ctx: IAccessContext, r: { id: st
       cloudTotal: yandex.length,
       cloudConfirmed: yandex.filter((d) => d.cloud_state === 'confirmed').length,
       missing,
+      restricted,
     },
     canPlace: hasTenderCap(ctx, r.tender_id, 'delivery.manage') && missing > 0,
   };
@@ -238,21 +266,21 @@ const authorizeManage = async (client: PoolClient, ctx: IAccessContext, req: Req
 };
 
 // Порядок блокировок: этап → доставка.
-const lockedDelivery = async (client: PoolClient, ctx: IAccessContext, req: Request): Promise<IDeliveryRow> => {
+const lockedDelivery = async (client: PoolClient, ctx: IAccessContext, req: Request, internal: InternalAccess): Promise<IDeliveryRow> => {
   const head = await loadDelivery(client, ctx, uuidParam(req, 'id', 'delivery'));
   await lockTenderStages(client, head.tender_id, [head.stage_id]);
   const d = (await getDelivery(client, head.id, true))!;
-  if (requireIfMatch(req, d.id) !== d.row_version) throw versionConflict(await deliveryView(client, ctx, d));
+  if (requireIfMatch(req, d.id) !== d.row_version) throw versionConflict(await deliveryView(client, ctx, d, internal));
   return d;
 };
 
 const target = (d: IDeliveryRow) => ({ tenderId: d.tender_id, entityType: 'delivery', entityId: d.id });
 
-const deliveryResult = async (client: Queryable, ctx: IAccessContext, id: string, status: number, audit: { action: string; details: Record<string, unknown> }) => {
+const deliveryResult = async (client: Queryable, ctx: IAccessContext, internal: InternalAccess, id: string, status: number, audit: { action: string; details: Record<string, unknown> }) => {
   const d = (await getDelivery(client, id))!;
   return {
     status,
-    body: await deliveryView(client, ctx, d),
+    body: await deliveryView(client, ctx, d, internal),
     etag: formatEtag(d.id, d.row_version),
     audit: [
       {
@@ -266,7 +294,7 @@ const deliveryResult = async (client: Queryable, ctx: IAccessContext, id: string
   };
 };
 
-export const deliveriesRouter = (pool: Pool): Router => {
+export const deliveriesRouter = (pool: Pool, store: BlobStore): Router => {
   const router = Router();
 
   // ---------------------------------------------------------------- Назначения (администратор)
@@ -400,7 +428,7 @@ export const deliveriesRouter = (pool: Pool): Router => {
     query(pool, 'delivery.list', 'release', async (ctx, req, res) => {
       const id = uuidParam(req, 'id', 'release');
       const { release } = await loadVisibleRelease(pool, ctx, await getRelease(pool, id), id);
-      res.json(await releaseDeliveries(pool, ctx, release));
+      res.json(await releaseDeliveries(pool, ctx, release, internalAccess(pool, store, ctx)));
     }),
   );
 
@@ -409,7 +437,7 @@ export const deliveriesRouter = (pool: Pool): Router => {
     query(pool, 'delivery.read', 'delivery', async (ctx, req, res) => {
       const d = await loadDelivery(pool, ctx, uuidParam(req, 'id', 'delivery'));
       res.setHeader('ETag', formatEtag(d.id, d.row_version));
-      res.json(await deliveryView(pool, ctx, d));
+      res.json(await deliveryView(pool, ctx, d, internalAccess(pool, store, ctx)));
     }),
   );
 
@@ -430,11 +458,14 @@ export const deliveriesRouter = (pool: Pool): Router => {
         const { release } = await loadVisibleRelease(client, ctx, await getRelease(client, id), id);
         await lockTenderStages(client, release.tender_id, [release.stage_id]);
         const body = parseBody(PlaceDeliveriesRequest, req.body);
-        const created = await createDeliveriesForRelease(client, release.id, ctx.principal.userId, body.reason ?? null);
+        const internal = internalAccess(client, store, ctx);
+        // Внутренние назначения — только при праве читать манифест выпуска; остальные размещаются.
+        const { created, skipped } = await createDeliveriesForRelease(client, release.id, ctx.principal.userId, body.reason ?? null, { internal: await internal(release.id) });
+        if (created.length === 0 && skipped.length > 0) throw restrictedBasis(release, { entityType: 'release', entityId: release.id });
         return {
           status: created.length > 0 ? 201 : 200,
-          body: { created, ...(await releaseDeliveries(client, ctx, release)) },
-          audit: [{ action: 'delivery.place', entityType: 'release', entityId: release.id, tenderId: release.tender_id, details: { created, mode: release.mode } }],
+          body: { created, skipped, ...(await releaseDeliveries(client, ctx, release, internal)) },
+          audit: [{ action: 'delivery.place', entityType: 'release', entityId: release.id, tenderId: release.tender_id, details: { created, skipped, mode: release.mode } }],
         };
       },
     }),
@@ -448,11 +479,13 @@ export const deliveriesRouter = (pool: Pool): Router => {
       idempotent: true,
       authorize: authorizeManage,
       run: async (client, ctx, req) => {
-        const d = await lockedDelivery(client, ctx, req);
+        const internal = internalAccess(client, store, ctx);
+        const d = await lockedDelivery(client, ctx, req, internal);
         const body = parseBody(DeliveryReasonRequest, req.body);
         if (d.status !== 'failed') throw conflict('повторить можно доставку с ошибкой', 'not_failed', target(d), { status: d.status });
+        if (d.file_set === 'all' && !(await internal(d.release_id))) throw restrictedBasis(d, { entityType: 'delivery', entityId: d.id });
         await retryDelivery(client, d, 'retry', ctx.principal.userId, body.reason);
-        return deliveryResult(client, ctx, d.id, 200, { action: 'delivery.retry', details: { from: d.status, lastError: d.last_error_code } });
+        return deliveryResult(client, ctx, internal, d.id, 200, { action: 'delivery.retry', details: { from: d.status, lastError: d.last_error_code } });
       },
     }),
   );
@@ -466,11 +499,13 @@ export const deliveriesRouter = (pool: Pool): Router => {
       idempotent: true,
       authorize: authorizeManage,
       run: async (client, ctx, req) => {
-        const d = await lockedDelivery(client, ctx, req);
+        const internal = internalAccess(client, store, ctx);
+        const d = await lockedDelivery(client, ctx, req, internal);
         const body = parseBody(DeliveryReasonRequest, req.body);
         if (d.status !== 'conflict') throw conflict('повторить после проверки можно доставку в конфликте', 'not_conflict', target(d), { status: d.status });
+        if (d.file_set === 'all' && !(await internal(d.release_id))) throw restrictedBasis(d, { entityType: 'delivery', entityId: d.id });
         await retryDelivery(client, d, 'resolve_conflict', ctx.principal.userId, body.reason);
-        return deliveryResult(client, ctx, d.id, 200, { action: 'delivery.resolve_conflict', details: { from: d.status } });
+        return deliveryResult(client, ctx, internal, d.id, 200, { action: 'delivery.resolve_conflict', details: { from: d.status } });
       },
     }),
   );
@@ -484,7 +519,8 @@ export const deliveriesRouter = (pool: Pool): Router => {
       idempotent: true,
       authorize: authorizeManage,
       run: async (client, ctx, req) => {
-        const d = await lockedDelivery(client, ctx, req);
+        const internal = internalAccess(client, store, ctx);
+        const d = await lockedDelivery(client, ctx, req, internal);
         const body = parseBody(DeliveryReasonRequest, req.body);
         if (d.status !== 'failed' && d.status !== 'conflict') throw conflict('перенаправить можно доставку с ошибкой или в конфликте', 'not_failed', target(d), { status: d.status });
         await getDestination(client, d.destination_id, true);
@@ -496,9 +532,10 @@ export const deliveriesRouter = (pool: Pool): Router => {
             target(d),
           );
         }
+        if (t.internal && !(await internal(d.release_id))) throw restrictedBasis(d, { entityType: 'delivery', entityId: d.id });
         const next = await redirectDelivery(client, d, ctx.principal.userId, body.reason);
-        const r = await deliveryResult(client, ctx, next, 201, { action: 'delivery.redirect', details: { supersedes: d.id, from: d.status } });
-        return { ...r, audit: [...r.audit, ...(await deliveryResult(client, ctx, d.id, 200, { action: 'delivery.superseded', details: { supersededBy: next } })).audit] };
+        const r = await deliveryResult(client, ctx, internal, next, 201, { action: 'delivery.redirect', details: { supersedes: d.id, from: d.status } });
+        return { ...r, audit: [...r.audit, ...(await deliveryResult(client, ctx, internal, d.id, 200, { action: 'delivery.superseded', details: { supersededBy: next } })).audit] };
       },
     }),
   );
@@ -512,13 +549,14 @@ export const deliveriesRouter = (pool: Pool): Router => {
       idempotent: true,
       authorize: authorizeManage,
       run: async (client, ctx, req) => {
-        const d = await lockedDelivery(client, ctx, req);
+        const internal = internalAccess(client, store, ctx);
+        const d = await lockedDelivery(client, ctx, req, internal);
         const body = parseBody(ConfirmCloudRequest, req.body);
         if (d.kind !== 'yandex_disk') throw conflict('облако подтверждается только у Яндекс Диска', 'not_yandex', target(d));
         if (d.status !== 'delivered') throw conflict('облако подтверждается после проверки в локальной папке', 'not_delivered', target(d), { status: d.status });
         if (d.cloud_state !== 'unconfirmed') throw conflict('облако уже подтверждено', 'already_confirmed', target(d));
         await confirmCloud(client, d, ctx.principal.userId, body.note);
-        return deliveryResult(client, ctx, d.id, 200, { action: 'delivery.confirm_cloud', details: {} });
+        return deliveryResult(client, ctx, internal, d.id, 200, { action: 'delivery.confirm_cloud', details: {} });
       },
     }),
   );

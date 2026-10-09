@@ -98,7 +98,7 @@ export const createApp = (deps: IAppDeps): express.Express => {
   api.use(formSuggestionsRouter(pool, config));
   api.use(releaseCandidatesRouter(pool, store));
   api.use(approvalsRouter(pool, store));
-  api.use(deliveriesRouter(pool));
+  api.use(deliveriesRouter(pool, store));
   api.use(mailboxesRouter(pool, store, config));
   api.use(mailMessagesRouter(pool, store));
   api.use(communicationsRouter(pool, store, config));

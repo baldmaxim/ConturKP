@@ -56,3 +56,4 @@ export * from './releaseCandidates.ts';
 export * from './standardAttachments.ts';
 export * from './approvals.ts';
 export * from './deliveries.ts';
+export * from './decisionVisibility.ts';

@@ -6,6 +6,7 @@ import { calculationCaptureHandler } from './calculation.ts';
 import { economicsReasonsHandler } from './economics.ts';
 import { formsSuggestHandler } from './forms.ts';
 import { candidateAssembleHandler } from './candidates.ts';
+import { deliveryPlaceHandler, deliveryProbeHandler } from './delivery.ts';
 import { factExtractHandler } from './facts.ts';
 import { importExpandHandler, importRegisterHandler } from './imports.ts';
 import { intakeScanHandler } from './intake.ts';
@@ -37,4 +38,6 @@ export const HANDLERS: Record<string, JobHandler> = {
   'economics.reasons': economicsReasonsHandler,
   'forms.suggest': formsSuggestHandler,
   'candidate.assemble': candidateAssembleHandler,
+  'delivery.place': deliveryPlaceHandler,
+  'delivery.probe': deliveryProbeHandler,
 };

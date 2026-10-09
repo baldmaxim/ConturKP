@@ -8,6 +8,8 @@
 // Этап 09 (scripts/smoke-09.mjs): прогон проверки, 12 исходов, замечания, права на риск и приоритет; после перезапуска — из БД.
 // Этап 10 (scripts/smoke-10.mjs): отчёт ревизии, вторая ревизия, сравнение с парами системы и остатком; после перезапуска — из БД.
 // Этап 13 (scripts/smoke-13.mjs): матрица блокеров, права согласования, неснимаемый риск, удержание и решение «не влияет».
+// Этап 14 (scripts/smoke-14.mjs): назначения размещения во временных папках, проверка доступа worker, сценарий живой
+// проверки в режиме --fixture; после перезапуска — назначения и результаты проверки из БД.
 // База kontur_kp_smoke_test создаётся заново и удаляется в конце. Пароль генерируется и не выводится.
 // Результат: artifacts/stage-02/smoke.log; код 0 только если все шаги PASS.
 import { spawn, spawnSync } from 'node:child_process';
@@ -27,6 +29,7 @@ import { smokeEconomics } from './smoke-10.mjs';
 import { smokeForms } from './smoke-11.mjs';
 import { smokeRelease } from './smoke-12.mjs';
 import { smokeApproval } from './smoke-13.mjs';
+import { smokeDelivery } from './smoke-14.mjs';
 import { PRECISE_RATE, TH, standardTender, startFakeTenderHub } from './tenderhub-fake.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -497,6 +500,9 @@ try {
   // ---- Этап 13: матрица блокеров, права и удержания — scripts/smoke-13.mjs
   const approval13 = await smokeApproval({ api, api2, record, idem, json, stageId, candidateId: release12.candidateId });
 
+  // ---- Этап 14: назначения размещения и проверка доступа worker — scripts/smoke-14.mjs
+  const delivery14 = await smokeDelivery({ root: ROOT, env, api, api2, record, waitFor, idem, json });
+
   await stopProc(server);
   server = startProc('server', 'apps/server/src/main.ts');
   ready = await waitReady(30_000);
@@ -533,6 +539,13 @@ try {
   record(
     'этап 13: после перезапуска оценка матрицы и решения по удержаниям — из PostgreSQL',
     approval13.hard.length > 0 && approval13.hard.every((code) => hardAfter.includes(code)) && !hardAfter.includes('INPUTS_CHANGED') && candAfter?.current === true,
+  );
+  const destAfter = (await (await api('/delivery-destinations')).json()).items ?? [];
+  record(
+    'этап 14: после перезапуска назначения, версии путей и результаты проверки доступа — из PostgreSQL',
+    delivery14.destinationIds.length === 2 &&
+      delivery14.destinationIds.every((id) => destAfter.find((d) => d.id === id)?.lastProbe?.outcome === 'ok') &&
+      destAfter.find((d) => d.id === delivery14.destinationIds[0])?.versions?.length === 3,
   );
   const me = await fetch(`${BASE}/api/v1/me`, { headers: { Cookie: cookieHeader() } });
   record('перезапуск server — сессия действительна', me.status === 200);

@@ -448,6 +448,20 @@ Review 13-3 (миграция `0037_stage_content_fingerprint_v3.sql`; прое�
 | `send_event` | frozen-after | `release_id` (только выпуск с `mode = production`), `channel` (`email`/`customer_portal`/`paper`/`other`), `sent_at`, `recipients`, `evidence_kind` (`mailhub_message`/`uploaded_file`/`manual_note`), `evidence_ref`, `attachment_check` (`matched`/`mismatched`/`not_checked`), `status` (`registered`/`verified`/`disputed`), `registered_by`, `idempotency_key` | (`registered_by`, `idempotency_key`) уникальны; письмо не доказывает получение (A46); для тестового выпуска запись невозможна (R01-05) |
 | `compliance_incident` | append-only | `release_id`, `incident_kind` (`test_release_sent_externally`/`sent_despite_blocker`/`other`), `evidence_ref`, `description`, `registered_by`, `registered_at` | учёт недопустимой отправки, совершённой вне системы; не является `send_event` и не подтверждает выпуск |
 
+Этап 14 (миграция `0038_delivery.sql`; D-034; проект `docs/architecture/14-delivery-design.md` §2, §13, §15.1) — реализация размещения. Оба назначения файловые: Яндекс Диск — папка внутри локальной папки синхронизации клиента, сетевая папка — UNC-путь; секретов нет.
+
+| Таблица | Класс | Ключевые колонки | Ограничения |
+|---|---|---|---|
+| `delivery_destination` | mutable | `title`, `kind`, `environment`, `active`, `current_version_id`, `created_by`, `updated_by`, `row_version` | вставка и изменение — активный администратор (42501); `kind`, `environment` неизменны (55000); указатель версии — только на более позднюю; без версии в конце транзакции не остаётся |
+| `delivery_destination_version` | immutable | `destination_id`, `version`, `root_path`, `staging_path`, `include_internal`, `reason`, `created_by` | номер — следующий; автор — администратор; `root_path <> staging_path`; `kontur_app` без `UPDATE` |
+| `delivery_destination_probe` | append-only | `destination_version_id`, `job_id`, `requested_by`, `outcome` (`ok`/`failed`), `error_code`, `detail`, `checked_at` | запрашивает администратор; выполняет worker под учётной записью службы |
+| `delivery` | mutable | `release_id`, `tender_id`, `stage_id`, `destination_id`, `destination_version_id`, `kind`, `environment`, `target_folder`, `file_set` (`customer`/`all`), `placement` (признак `kontur-placement/1`), `placement_sha256`, `status`, `attempt_count`, `last_error_code`, `last_error_detail`, `superseded_by_delivery_id`, `delivered_at`, `cloud_state` (`not_applicable`/`unconfirmed`/`confirmed`), `cloud_confirmed_by/at`, `cloud_note`, `created_by`, `created_xact`, `row_version` | UNIQUE (`release_id`, `destination_version_id`); частичный UNIQUE (`release_id`, `destination_id`) WHERE `status <> 'superseded'`; среда = `release.mode` = среда назначения; версия — текущая, назначение активно; закреплённые поля неизменны; переходы §16; `delivered` — только при всех файлах `verified`; облако — §16 (D-034); отложенно: набор файлов, признак и папка выпуска соответствуют выпуску (`delivery_set_check`), заменённая ссылается на заменяющую |
+| `delivery_file_state` | mutable | `delivery_id`, `ordinal`, `path`, `kind` (`file`/`manifest`/`marker`), `sha256`, `size_bytes`, `remote_state`, `remote_sha256`, `checked_at` | вставка — только в транзакции создания доставки; файл неизменен; `verified` — только при `remote_sha256 = sha256`; после `delivered`/`superseded` не меняется |
+| `delivery_attempt` | append-only | `delivery_id`, `seq`, `job_id`, `started_at`, `finished_at`, `outcome` (`delivered`/`failed`/`outcome_unknown`/`conflict`/`interrupted`), `error_code`, `detail` | — |
+| `delivery_event` | append-only | `delivery_id`, `action` (`created`/`place`/`retry`/`resolve_conflict`/`redirect`/`confirm_cloud`), `actor_user_id`, `reason`, `created_xact` | решения человека — автор с `delivery.manage` по этапу и причина; человеческие переходы `delivery` — только с событием этой транзакции |
+
+`DELETE` и `TRUNCATE` запрещены у всех таблиц этапа. `integration_status`: `yandex_disk` / `smb` × `FsDeliveryTarget` = `BLOCKED_EXTERNAL` до живой приёмки.
+
 ### 4.11. Сравнение
 
 | Таблица | Класс | Ключевые колонки | Ограничения |

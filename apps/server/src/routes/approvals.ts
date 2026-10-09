@@ -22,6 +22,7 @@ import {
   activeApproval,
   auditFor,
   candidateFiles,
+  createDeliveriesForRelease,
   eventTitle,
   getApproval,
   getCandidate,
@@ -365,8 +366,13 @@ export const approvalsRouter = (pool: Pool, store: BlobStore): Router => {
           userId: ctx.principal.userId,
           releasedAt,
         });
+        // Этап 14: доставки во все активные назначения среды выпуска — в той же транзакции; размещает worker.
+        const deliveries = await createDeliveriesForRelease(client, id, null);
         const r = await commandResult(client, store, ctx, c.id, 201, { action: 'release.candidate.release', details: { releaseId: id, approvalId: active.id, mode: c.mode, manifestSha256: stored.sha256 } });
-        return { ...r, audit: [...r.audit, { action: 'release.create', entityType: 'release', entityId: id, tenderId: c.tender_id, details: { candidateId: c.id, mode: c.mode } }] };
+        return {
+          ...r,
+          audit: [...r.audit, { action: 'release.create', entityType: 'release', entityId: id, tenderId: c.tender_id, details: { candidateId: c.id, mode: c.mode, deliveries } }],
+        };
       },
     }),
   );

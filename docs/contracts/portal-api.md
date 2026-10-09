@@ -326,11 +326,17 @@
 | `POST /deliveries/{id}/retry` | `delivery.manage` | IM, IK | повтор одного назначения |
 | `POST /deliveries/{id}/resolve-conflict` | `delivery.manage` | IM, IK | решение по конфликту имени и хэша |
 | `POST /deliveries/{id}/redirect` | `delivery.manage` | IM, IK | новая доставка на текущую версию назначения той же среды; старая → `superseded` |
+| `GET /deliveries/{id}` | `tender.read` | — | доставка: назначение (название, тип, среда, версия), папка выпуска, статус, облако, файлы, попытки, события, права действий (этап 14) |
+| `POST /releases/{id}/deliveries` | `delivery.manage` | IK | «Разместить»: недостающие доставки в активные назначения среды выпуска; повтор — `200`, `created: []` (этап 14) |
+| `POST /deliveries/{id}/confirm-cloud` | `delivery.manage` | IM, IK | только `yandex_disk` в `delivered`: облако `unconfirmed` → `confirmed`, примечание обязательно (этап 14, D-034) |
+| `GET /delivery-destinations`, `POST /delivery-destinations`, `POST /delivery-destinations/{id}/versions`, `PATCH /delivery-destinations/{id}` | `admin.delivery` | IK; IM у версий и `PATCH` | назначения: пути и политика — новой версией; `PATCH` — `title`, `active` (этап 14) |
+| `POST /delivery-destinations/{id}/probe` | `admin.delivery` | IK | проверка доступа текущей версии — задание worker `delivery.probe`; ответ `202`, результат — `lastProbe` (этап 14, D-034) |
 | `POST /releases/{id}/send-events` | `send.register` | IK | регистрация отправки с основанием; только для выпуска `mode = production`, иначе `RELEASE_IS_TEST`; под барьером актуальности |
 | `POST /releases/{id}/compliance-incidents` | `send.register` | IK | учёт недопустимой отправки, совершённой вне системы; не создаёт отправку |
 | `POST /send-events/{id}/verify` | `send.register` | IM, IK | сверка состава вложений с манифестом |
 | `POST /comparisons`, `GET /comparisons/{id}` | `tender.read` | IK | сравнение двух выпусков — этап 15, поверх сравнения ревизий расчёта этапа 10 (§2.5) |
 | `POST /change-explanations/{id}/confirm` | `finding.write` | IM, IK | заменено этапом 10: причина — `PUT /comparison-units/{id}/explanation` и решение по гипотезе (§2.5) |
+| (этап 14) ошибки размещения | — | — | `409 STATE_CONFLICT` с `current.reason`: `not_failed`, `not_conflict`, `not_delivered`, `not_yandex`, `already_confirmed`, `version_not_newer`, `destination_inactive`; `412` — устаревший ETag; `403` — нет `delivery.manage` / `admin.delivery`; пути назначений — только администратору, остальным — папка выпуска относительно корня |
 | `GET /tenders/{id}/audit-events` | `audit.read` | — | журнал действий; руководитель тендера — все события, администратор без назначения — только действия с карточкой и участниками (R02-02) |
 
 ## 3. Правила ответов

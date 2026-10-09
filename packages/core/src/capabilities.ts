@@ -6,7 +6,17 @@ export type MemberRole = 'engineer' | 'manager';
 
 // Этап 11 (D-031 В-11-3): шаблоны компании и библиотека формулировок — глобальная роль «руководитель»; доступа к
 // содержимому тендеров и закрытой переписке эти права не дают. БД повторяет в can_manage_template (миграция 0029).
-export type GlobalCapability = 'admin.users' | 'admin.tender' | 'admin.audit' | 'admin.intake' | 'admin.contract' | 'admin.mailbox' | 'admin.templates' | 'wording.approve';
+// Этап 14 (D-034 В-14-5): назначения размещения (пути, политика внутренних материалов) — admin.delivery, администратор.
+export type GlobalCapability =
+  | 'admin.users'
+  | 'admin.tender'
+  | 'admin.audit'
+  | 'admin.intake'
+  | 'admin.contract'
+  | 'admin.mailbox'
+  | 'admin.delivery'
+  | 'admin.templates'
+  | 'wording.approve';
 // Возможности договора (D-022 OD-2): выдаются явно строками contract_access, не ролью.
 // contract.create — глобальная выдача; остальные — по договору.
 export type ContractCapability = 'contract.read' | 'contract.link' | 'contract.manage';
@@ -54,13 +64,16 @@ export type TenderCapability =
   // тендера; только human (I12). БД повторяет в tender_capabilities (миграция 0034).
   | 'candidate.approve'
   | 'risk.accept'
-  | 'candidate.release';
+  | 'candidate.release'
+  // Этап 14 (D-034 В-14-5): размещение выпуска, повтор, «повторить после проверки», перенаправление и подтверждение облака —
+  // участник тендера (инженер и руководитель), только human. Назначения — администратор. БД — tender_capabilities (0038).
+  | 'delivery.manage';
 
 export const ROLES: readonly Role[] = ['admin', 'manager', 'engineer'];
 export const MEMBER_ROLES: readonly MemberRole[] = ['engineer', 'manager'];
 
 export const globalCapabilities = (roles: ReadonlySet<Role>): GlobalCapability[] => [
-  ...(roles.has('admin') ? (['admin.users', 'admin.tender', 'admin.audit', 'admin.intake', 'admin.contract', 'admin.mailbox'] as const) : []),
+  ...(roles.has('admin') ? (['admin.users', 'admin.tender', 'admin.audit', 'admin.intake', 'admin.contract', 'admin.mailbox', 'admin.delivery'] as const) : []),
   ...(roles.has('manager') ? (['admin.templates', 'wording.approve'] as const) : []),
 ];
 
@@ -111,6 +124,7 @@ export const tenderCapabilities = (
   if (role) caps.push('economics.compare', 'change_reason.confirm');
   if (role) caps.push('application.fill');
   if (role) caps.push('candidate.create');
+  if (role) caps.push('delivery.manage');
   // Решения о неприменимости (элементы импорта, удержания) — только руководитель тендера (ADR-006 §3).
   if (role === 'manager') caps.push('stage.manage', 'hold.resolve');
   // Подтверждение, решение и ведение реестра — руководитель тендера (OD-08-5).

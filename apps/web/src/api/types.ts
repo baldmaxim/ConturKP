@@ -9,7 +9,7 @@ export type TPrincipalKind = 'human' | 'model_via_mcp' | 'integration' | 'system
 export type TAuditOutcome = 'allowed' | 'denied' | 'failed';
 
 /** Глобальные возможности пользователя. */
-export type TGlobalCapability = 'admin.users' | 'admin.tender' | 'admin.audit' | 'admin.intake' | 'admin.contract' | 'admin.mailbox' | 'admin.templates' | 'wording.approve';
+export type TGlobalCapability = 'admin.users' | 'admin.tender' | 'admin.audit' | 'admin.intake' | 'admin.contract' | 'admin.mailbox' | 'admin.delivery' | 'admin.templates' | 'wording.approve';
 
 /** Возможности пользователя в конкретном тендере. */
 export type TTenderCapability =

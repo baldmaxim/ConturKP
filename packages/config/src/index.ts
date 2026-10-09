@@ -143,6 +143,12 @@ export interface IMailConfig {
   maxAttachmentBytes: number;
 }
 
+// Размещение (этап 14; D-034): оба назначения — файловые (папка синхронизации Яндекс Диска, сетевая папка), секретов нет.
+// Срок ожидания одной файловой операции; истечение у записи и переноса — неизвестный исход (A29).
+export interface IDeliveryConfig {
+  operationTimeoutMs: number;
+}
+
 export interface IAppConfig {
   env: KonturEnv;
   databaseUrl: string;
@@ -171,6 +177,7 @@ export interface IAppConfig {
   chatModel: IChatModelConfig;
   answer: IAnswerConfig;
   office: IOfficeConfig;
+  delivery: IDeliveryConfig;
 }
 
 interface IConfigKey {
@@ -249,9 +256,9 @@ export const CONFIG_KEYS: IConfigKey[] = [
   { name: 'OFFICE_CONVERT_TIMEOUT_SECONDS', secret: false, required: false, purpose: 'предел конвертации одного файла в PDF, по умолчанию 120' },
   { name: 'MAILHUB_URL', secret: false, required: false, purpose: 'интеграция MailHub (этап 07)' },
   { name: 'MAILHUB_TOKEN', secret: true, required: false, purpose: 'интеграция MailHub (этап 07)' },
-  { name: 'YANDEX_DISK_TOKEN', secret: true, required: false, purpose: 'размещение на Яндекс Диске (этап 14)' },
-  { name: 'SMB_USERNAME', secret: false, required: false, purpose: 'размещение в сетевой папке (этап 14)' },
-  { name: 'SMB_PASSWORD', secret: true, required: false, purpose: 'размещение в сетевой папке (этап 14)' },
+  // Этап 14 (D-034): Яндекс Диск — локальная синхронизируемая папка, сетевая папка — права учётной записи службы worker;
+  // токена и пароля нет (YANDEX_DISK_TOKEN, SMB_USERNAME, SMB_PASSWORD убраны). Пути назначений — в БД, задаёт администратор.
+  { name: 'DELIVERY_OPERATION_TIMEOUT_SECONDS', secret: false, required: false, purpose: 'срок одной файловой операции размещения, по умолчанию 60' },
 ];
 
 const localRecognitionFrom = (env: Env, problems: string[]): ILocalRecognitionConfig => {
@@ -510,6 +517,7 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
     chatModel: chatModelFrom(env, problems),
     answer: answerFrom(env, problems),
     office: { sofficePath: env.SOFFICE_PATH?.trim() || null, convertTimeoutMs: intFrom(env, 'OFFICE_CONVERT_TIMEOUT_SECONDS', 120, problems) * 1000 },
+    delivery: { operationTimeoutMs: intFrom(env, 'DELIVERY_OPERATION_TIMEOUT_SECONDS', 60, problems) * 1000 },
   };
   for (const root of config.intakeRoots) {
     if (!isAbsolute(root)) problems.push(`INTAKE_ROOTS: «${root}» должен быть абсолютным путём`);

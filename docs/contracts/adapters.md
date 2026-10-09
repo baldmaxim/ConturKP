@@ -313,6 +313,29 @@ interface DeliveryTarget {                       // проект контрак�
 - Существующий файл с другим отпечатком — `CONFLICT`, без перезаписи (A30).
 - Публичные ссылки не создаются; внутренние материалы размещаются только если это разрешено настройкой назначения.
 
+### Реализация (этап 14; D-034)
+
+REST API Яндекс Диска и OAuth не реализуются (D-034 В-14-1): оба назначения — файловые, один адаптер `FsDeliveryTarget` (`packages/adapters/src/delivery/`) поверх узкого набора операций `IDeliveryFs` (`stat`, `mkdir`, `readdir`, `writeFile`, `hashFile`, `rename`, `moveNoReplace`, `remove`; реализация — `nodeDeliveryFs` в `@kontur/storage`: пакет адаптеров файловую систему не трогает, A38; в тестах — обёртка с внесением отказов).
+
+```ts
+class FsDeliveryTarget {
+  constructor(o: { kind: 'yandex_disk' | 'smb'; rootPath: string; stagingPath: string; fs: IDeliveryFs; timeoutMs?: number });
+  checkBases(): Promise<{ rootDev: number; stagingDev: number }>;   // служебная по умолчанию <корень>/.kontur-staging создаётся
+  probe(): Promise<void>;                                            // запись, чтение, перенос пробной папки в корень и обратно, удаление
+  inspect(where: 'root' | 'staging', rel: string): Promise<{ type: 'file'; size: number; sha256: string } | { type: 'dir' } | null>;
+  putStagingFile(rel: string, file: { sha256: string; size: number; open: () => Readable }): Promise<IRemoteFile>;
+  commitFolder(stagingRel: string, targetRel: string): Promise<'moved' | 'target_exists'>;      // перенос папки без замены
+  putMarker(targetRel: string, name: string, own: string, bytes: Buffer): Promise<'written' | 'exists'>; // без перезаписи
+}
+placeFolder(target, plan, hooks): Promise<'placed' | 'already_placed'>;   // общий алгоритм worker и живой проверки
+```
+
+- Ошибки — `DeliveryAdapterError` с кодом: `FORBIDDEN`, `ROOT_NOT_FOUND`, `STAGING_NOT_FOUND`, `CROSS_DEVICE`, `NO_SPACE`, `UNAVAILABLE` (повтор), `TIMEOUT_UNKNOWN_OUTCOME` (повтор, следующий запуск только сверяет), `CONFLICT`, `INVALID_PATH`. Текст — без полных путей.
+- Срок ожидания: истёк у изменяющей операции — исход неизвестен, у чтения — недоступность; сама операция не прерывается.
+- `moveNoReplace`: `rename` файла на Windows и POSIX заменяет существующий файл, поэтому признак готовности переносится жёсткой ссылкой (атомарно, `EEXIST`) и удалением исходного; где ссылки не поддерживаются — проверка и `rename`.
+- В папке выпуска — ровно файлы набора и признак: посторонний файл — конфликт; служебные файлы оболочки (`desktop.ini`, `Thumbs.db`, `.DS_Store`) не считаются.
+- Синхронизацию Яндекс Диска с облаком портал не наблюдает: «доставлено в облако» подтверждает человек; помощь — `npm run delivery:compare`.
+
 ## 8. Шлюз модели
 
 ```ts

@@ -1,0 +1,5 @@
+# npm run delivery:live-smoke — 2026-10-09T10:00:59.467Z
+# Режим: LIVE (настоящие назначения); Node v24.14.1, linux
+[NOT_RUN] Яндекс Диск: не задан DELIVERY_LIVE_YANDEX_ROOT
+[NOT_RUN] сетевая папка: не задан DELIVERY_LIVE_SMB_ROOT
+Итог: NOT_RUN

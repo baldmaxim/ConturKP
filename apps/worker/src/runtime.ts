@@ -5,6 +5,7 @@ import {
   createChatModel,
   describeLocalRecognizer,
   localSettings,
+  type IDeliveryFs,
   type ILocalOcrEngineFactory,
   type IModelGatewayChat,
   type IModelGatewayEmbeddings,
@@ -38,7 +39,7 @@ import {
   type Pool,
   type PoolClient,
 } from '@kontur/db';
-import { localOcrFactory, type BlobStore } from '@kontur/storage';
+import { localOcrFactory, nodeDeliveryFs, type BlobStore } from '@kontur/storage';
 import { runSearchMaintenance, type IMaintenanceReport } from './maintenance.ts';
 
 export class LeaseLostError extends Error {
@@ -74,6 +75,8 @@ export interface IJobContext {
   localOcr: ILocalOcrEngineFactory | null;
   // Генеративная модель этапа 08 (OD-08-2); null — модель не настроена (MODEL_PROVIDER=none).
   chat: IModelGatewayChat | null;
+  // Файловые операции размещения (этап 14, D-034); в тестах — обёртка с внесением отказов.
+  deliveryFs: IDeliveryFs;
   signal: AbortSignal;
   // Короткая транзакция под действующей арендой: сначала блокировка задания с проверкой токена.
   withLease: <T>(fn: (client: PoolClient) => Promise<T>) => Promise<T>;
@@ -116,6 +119,8 @@ export interface IWorkerOptions {
   localOcr?: ILocalOcrEngineFactory | null;
   // Генеративная модель для тестов (сценарии отказов); по умолчанию — по конфигурации (MODEL_PROVIDER).
   chat?: IModelGatewayChat | null;
+  // Файловые операции размещения для тестов (отказы сети, прав, места, неизвестный исход); по умолчанию — node:fs.
+  deliveryFs?: IDeliveryFs;
 }
 
 // Интерактивная полоса (ADR-004 §7a): только смысловые запросы поиска. Worker выполняет задания
@@ -302,6 +307,7 @@ export class WorkerRuntime {
       embeddings: this.o.embeddings ?? null,
       localOcr: this.localOcr,
       chat: this.chat,
+      deliveryFs: this.o.deliveryFs ?? nodeDeliveryFs(),
       signal: controller.signal,
       withLease,
       complete: async (fn, then) => {

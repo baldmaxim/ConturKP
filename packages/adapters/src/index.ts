@@ -37,3 +37,4 @@ export * from './office/render.ts';
 export * from './office/fonts.ts';
 export * from './office/converterTypes.ts';
 export * from './office/pdf.ts';
+export * from './delivery/index.ts';

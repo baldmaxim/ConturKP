@@ -32,6 +32,8 @@ describe('возможности', () => {
       'change_reason.confirm',
       'application.fill',
       'candidate.create',
+      // Этап 14 (D-034 В-14-5): размещение — инженер и руководитель тендера.
+      'delivery.manage',
       // Этап 13 (D-033 В-13-7): выпуск — инженер тендера.
       'candidate.release',
     ]);
@@ -53,6 +55,7 @@ describe('возможности', () => {
       'change_reason.confirm',
       'application.fill',
       'candidate.create',
+      'delivery.manage',
       'stage.manage',
       'hold.resolve',
       'requirement.confirm',
@@ -75,7 +78,7 @@ describe('возможности', () => {
   it('администратор без назначения: только администрирование и журнал, без содержимого', () => {
     expect(tenderCapabilities(roles('admin'), null)).toEqual(['audit.read', 'admin.tender']);
     expect(canSeeTenderCard(roles('admin'), null)).toBe(true);
-    expect(globalCapabilities(roles('admin'))).toEqual(['admin.users', 'admin.tender', 'admin.audit', 'admin.intake', 'admin.contract', 'admin.mailbox']);
+    expect(globalCapabilities(roles('admin'))).toEqual(['admin.users', 'admin.tender', 'admin.audit', 'admin.intake', 'admin.contract', 'admin.mailbox', 'admin.delivery']);
     // Этап 11 (D-031 В-11-3): шаблоны компании и формулировки — роль «руководитель», без доступа к содержимому тендеров.
     expect(globalCapabilities(roles('manager', 'engineer'))).toEqual(['admin.templates', 'wording.approve']);
     expect(globalCapabilities(roles('engineer'))).toEqual([]);

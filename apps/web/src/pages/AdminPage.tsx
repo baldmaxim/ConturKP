@@ -7,6 +7,7 @@ import { Tabs, tabId, tabPanelId, type ITab } from '../components/Tabs';
 import { useAuth } from '../hooks/useAuth';
 import { AuditLog } from './AuditLog';
 import { ContractCreatorsPanel } from './contracts/ContractCreatorsPanel';
+import { DestinationsPanel } from './delivery/DestinationsPanel';
 import { UsersPanel } from './UsersPanel';
 import styles from './TenderPage.module.css';
 
@@ -16,6 +17,7 @@ export const AdminPage: FC = () => {
   const canUsers = can('admin.users');
   const canAudit = can('admin.audit');
   const canContracts = can('admin.contract');
+  const canDelivery = can('admin.delivery');
 
   const tabs = useMemo(() => {
     const result: ITab[] = [];
@@ -25,11 +27,14 @@ export const AdminPage: FC = () => {
     if (canContracts) {
       result.push({ id: 'contracts', label: 'Создание договоров', icon: 'file-signature' });
     }
+    if (canDelivery) {
+      result.push({ id: 'delivery', label: 'Назначения размещения', icon: 'folder' });
+    }
     if (canAudit) {
       result.push({ id: 'audit', label: 'Журнал вне тендеров', icon: 'scroll-text' });
     }
     return result;
-  }, [canUsers, canAudit, canContracts]);
+  }, [canUsers, canAudit, canContracts, canDelivery]);
 
   if (tabs.length === 0) {
     return (
@@ -51,6 +56,7 @@ export const AdminPage: FC = () => {
       <div className={styles.panel} role="tabpanel" id={tabPanelId(active)} aria-labelledby={tabId(active)}>
         {active === 'users' ? <UsersPanel /> : null}
         {active === 'contracts' ? <ContractCreatorsPanel /> : null}
+        {active === 'delivery' ? <DestinationsPanel /> : null}
         {active === 'audit' ? (
           <AuditLog loadPage={listAdminAudit} sourceKey="admin" emptyText="Событий вне тендеров (входы, изменения пользователей) пока нет." />
         ) : null}

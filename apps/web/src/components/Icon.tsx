@@ -10,6 +10,7 @@ const ICONS = {
       <path d="M19 12H5" />
     </>
   ),
+  cloud: <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />,
   archive: (
     <>
       <rect width="20" height="5" x="2" y="3" rx="1" />

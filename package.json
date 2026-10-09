@@ -28,7 +28,9 @@
     "start:worker": "node --env-file-if-exists=.env apps/worker/src/main.ts",
     "smoke": "node scripts/smoke.mjs",
     "search:index": "node --env-file-if-exists=.env scripts/search-index.ts",
-    "tenderhub:live-smoke": "node --env-file-if-exists=.env scripts/tenderhub-live-smoke.ts"
+    "tenderhub:live-smoke": "node --env-file-if-exists=.env scripts/tenderhub-live-smoke.ts",
+    "delivery:live-smoke": "node --env-file-if-exists=.env scripts/delivery-live-smoke.ts",
+    "delivery:compare": "node scripts/delivery-compare.ts"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.100",

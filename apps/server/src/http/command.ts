@@ -3,6 +3,7 @@
 import { createHash } from 'node:crypto';
 import { parseIfMatch } from '@kontur/core';
 import {
+  accessFingerprint,
   findIdempotent,
   lockIdempotencyKey,
   saveIdempotent,
@@ -139,7 +140,7 @@ export const command =
             if (stored.requestHash !== requestHash) {
               throw new HttpError(422, 'IDEMPOTENCY_KEY_REUSED', 'ключ уже использован с другим запросом');
             }
-            const saved = stored.body as { body?: unknown; etag?: string; ref?: unknown };
+            const saved = stored.body as { body?: unknown; etag?: string; ref?: unknown; access?: string };
             if (spec.replay) {
               // Сохранённого тела у такой команды нет; запись без ссылки заново не показывается.
               if (saved.ref === undefined) throw new HttpError(409, 'STATE_CONFLICT', 'сохранённый ответ команды недоступен: перечитайте объект');
@@ -147,6 +148,12 @@ export const command =
               const rebuilt: ICommandResult & { replay: boolean } = { status: stored.status, body: again.body, audit: [], replay: true };
               if (again.etag) rebuilt.etag = again.etag;
               return rebuilt;
+            }
+            // Сохранённое тело построено по правам на момент первого выполнения. Если права с тех пор изменились (отзыв
+            // `mail.read`, назначения, роли, доступа к договору) или запись создана до привязки к правам, тело не отдаётся:
+            // команда уже выполнена, второй раз не выполняется, объект нужно перечитать (S15-14, D-036).
+            if (saved.access !== accessFingerprint(ctx)) {
+              throw new HttpError(409, 'STATE_CONFLICT', 'команда уже выполнена, но сохранённый ответ недоступен: права изменились или запись создана до обновления — перечитайте объект', { current: { reason: 'replay_unavailable' } });
             }
             const replayed: ICommandResult & { replay: boolean } = { status: stored.status, body: saved.body, audit: [], replay: true };
             if (saved.etag) replayed.etag = saved.etag;
@@ -168,7 +175,7 @@ export const command =
           await saveIdempotent(client, ctx.principal.userId, key, {
             requestHash,
             status: r.status,
-            body: spec.replay ? { ref: r.replayRef } : { body: r.body, ...(r.etag ? { etag: r.etag } : {}) },
+            body: spec.replay ? { ref: r.replayRef } : { body: r.body, ...(r.etag ? { etag: r.etag } : {}), access: accessFingerprint(ctx) },
           });
         }
         return { ...r, replay: false };

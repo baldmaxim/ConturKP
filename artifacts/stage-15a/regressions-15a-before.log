@@ -1,0 +1,162 @@
+# регрессии этапа 15a до правки обёртки команд: продукт 9e57f44 (этап 15 принят) + функция отпечатка прав без её использования, 2026-10-12T18:52:38+05:00, linux x64 Node v24.14.1, npx vitest run tests/replayAccess.test.ts --maxWorkers=1 --fileParallelism=false --reporter=verbose
+
+ RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
+
+ × tests/replayAccess.test.ts > повтор команды и права (S15-14) > без изменения прав повтор отдаёт сохранённый ответ; запись хранит отпечаток прав (контроль) 44ms
+   → expected undefined to be 'b63abdfb2d880ab301447afb4ed26f3952599…' // Object.is equality
+ × tests/replayAccess.test.ts > повтор команды и права (S15-14) > после отзыва доступа к договору повтор не возвращает закрытую формулировку: 409 replay_unavailable, второй записи нет 57ms
+   → {"id":"d946422f-1c96-4b8f-bc14-5343857cc46f","seq":1,"reason":null,"status":"open","stageId":"fc171657-8166-44e6-b21b-277317e1866b","visible":true,"evidence":[],"createdAt":"2026-10-12T13:52:44.789Z","revisions":[{"id":"ae687019-abc9-4d41-8ce7-653c8effe616","seq":1,"reason":null,"status":"open","statement":"Допускаем КЛЮЧ-15A-90417 до выхода РД","created_at":"2026-10-12T13:52:44.789Z","authored_by":"e64185e5-276d-4939-8805-c5a432f671f4"}],"statement":"Допускаем КЛЮЧ-15A-90417 до выхода РД","authoredBy":"e64185e5-276d-4939-8805-c5a432f671f4","restricted":false,"rowVersion":1,"requirementId":"9e3c7e9a-4912-4b1c-b7a3-8d76d012b306","requirementCode":"R-0001","currentRevisionId":"ae687019-abc9-4d41-8ce7-653c8effe616","revisionCreatedAt":"2026-10-12T13:52:44.789Z","supersededByAssumptionId":null}: expected 201 to be 409 // Object.is equality
+ × tests/replayAccess.test.ts > повтор команды и права (S15-14) > любое изменение прав, в том числе расширение, делает сохранённый ответ недоступным 50ms
+   → {"id":"8c6a44de-75db-4541-8d7a-fe3e10c4cf91","seq":1,"reason":null,"status":"open","stageId":"fc171657-8166-44e6-b21b-277317e1866b","visible":true,"evidence":[],"createdAt":"2026-10-12T13:52:44.844Z","revisions":[{"id":"c88b1ebe-d161-4a85-b83d-83ea8cde4125","seq":1,"reason":null,"status":"open","statement":"Допускаем КЛЮЧ-15A-90417 до выхода РД","created_at":"2026-10-12T13:52:44.844Z","authored_by":"e64185e5-276d-4939-8805-c5a432f671f4"}],"statement":"Допускаем КЛЮЧ-15A-90417 до выхода РД","authoredBy":"e64185e5-276d-4939-8805-c5a432f671f4","restricted":false,"rowVersion":1,"requirementId":"9e3c7e9a-4912-4b1c-b7a3-8d76d012b306","requirementCode":"R-0001","currentRevisionId":"c88b1ebe-d161-4a85-b83d-83ea8cde4125","revisionCreatedAt":"2026-10-12T13:52:44.844Z","supersededByAssumptionId":null}: expected 201 to be 409 // Object.is equality
+ × tests/replayAccess.test.ts > повтор команды и права (S15-14) > запись, созданная до привязки к правам (без отпечатка), сохранённое тело не отдаёт 37ms
+   → {"id":"f47e87c5-6a67-4e29-b41a-647b9bf4b6b2","seq":1,"reason":null,"status":"open","stageId":"fc171657-8166-44e6-b21b-277317e1866b","visible":true,"evidence":[],"createdAt":"2026-10-12T13:52:44.894Z","revisions":[{"id":"00027ed6-d7be-471d-8e78-eed9049a7d64","seq":1,"reason":null,"status":"open","statement":"Допускаем КЛЮЧ-15A-90417 до выхода РД","created_at":"2026-10-12T13:52:44.894Z","authored_by":"e64185e5-276d-4939-8805-c5a432f671f4"}],"statement":"Допускаем КЛЮЧ-15A-90417 до выхода РД","authoredBy":"e64185e5-276d-4939-8805-c5a432f671f4","restricted":false,"rowVersion":1,"requirementId":"9e3c7e9a-4912-4b1c-b7a3-8d76d012b306","requirementCode":"R-0001","currentRevisionId":"00027ed6-d7be-471d-8e78-eed9049a7d64","revisionCreatedAt":"2026-10-12T13:52:44.894Z","supersededByAssumptionId":null}: expected 201 to be 409 // Object.is equality
+ ✓ tests/replayAccess.test.ts > повтор команды и права (S15-14) > ключ с другим запросом — 422; чужой пользователь по тому же ключу чужого ответа не получает; снятая роль — отказ authorize 45ms
+ ✓ tests/replayAccess.test.ts > отпечаток прав > не зависит от порядка, личности и номера запроса; меняется от каждого вида права 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/replayAccess.test.ts > повтор команды и права (S15-14) > без изменения прав повтор отдаёт сохранённый ответ; запись хранит отпечаток прав (контроль)
+AssertionError: expected undefined to be 'b63abdfb2d880ab301447afb4ed26f3952599…' // Object.is equality
+
+- Expected:
+"b63abdfb2d880ab301447afb4ed26f3952599da33c851cd0dcd5d265ad8d80c6"
+
++ Received:
+undefined
+
+ ❯ tests/replayAccess.test.ts:72:55
+     70|     expect(await assumptions()).toBe(before);
+     71|     const ctx = (await loadAccessContext(db.pool, st.s.ids.manager, 't…
+     72|     expect((await stored(key))!.response_body.access).toBe(accessFinge…
+       |                                                       ^
+     73|   });
+     74|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/replayAccess.test.ts > повтор команды и права (S15-14) > после отзыва доступа к договору повтор не возвращает закрытую формулировку: 409 replay_unavailable, второй записи нет
+AssertionError: {"id":"d946422f-1c96-4b8f-bc14-5343857cc46f","seq":1,"reason":null,"status":"open","stageId":"fc171657-8166-44e6-b21b-277317e1866b","visible":true,"evidence":[],"createdAt":"2026-10-12T13:52:44.789Z","revisions":[{"id":"ae687019-abc9-4d41-8ce7-653c8effe616","seq":1,"reason":null,"status":"open","statement":"Допускаем КЛЮЧ-15A-90417 до выхода РД","created_at":"2026-10-12T13:52:44.789Z","authored_by":"e64185e5-276d-4939-8805-c5a432f671f4"}],"statement":"Допускаем КЛЮЧ-15A-90417 до выхода РД","authoredBy":"e64185e5-276d-4939-8805-c5a432f671f4","restricted":false,"rowVersion":1,"requirementId":"9e3c7e9a-4912-4b1c-b7a3-8d76d012b306","requirementCode":"R-0001","currentRevisionId":"ae687019-abc9-4d41-8ce7-653c8effe616","revisionCreatedAt":"2026-10-12T13:52:44.789Z","supersededByAssumptionId":null}: expected 201 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 201
+
+ ❯ tests/replayAccess.test.ts:87:42
+     85|       expect(JSON.stringify(card.body)).not.toContain(SECRET);
+     86|       const replay = await st.s.manager.post(path(), body(), { headers…
+     87|       expect(replay.status, replay.text).toBe(409);
+       |                                          ^
+     88|       expect(replay.body).toMatchObject({ code: 'STATE_CONFLICT', curr…
+     89|       expect(replay.headers['idempotent-replayed']).toBeUndefined();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/replayAccess.test.ts > повтор команды и права (S15-14) > любое изменение прав, в том числе расширение, делает сохранённый ответ недоступным
+AssertionError: {"id":"8c6a44de-75db-4541-8d7a-fe3e10c4cf91","seq":1,"reason":null,"status":"open","stageId":"fc171657-8166-44e6-b21b-277317e1866b","visible":true,"evidence":[],"createdAt":"2026-10-12T13:52:44.844Z","revisions":[{"id":"c88b1ebe-d161-4a85-b83d-83ea8cde4125","seq":1,"reason":null,"status":"open","statement":"Допускаем КЛЮЧ-15A-90417 до выхода РД","created_at":"2026-10-12T13:52:44.844Z","authored_by":"e64185e5-276d-4939-8805-c5a432f671f4"}],"statement":"Допускаем КЛЮЧ-15A-90417 до выхода РД","authoredBy":"e64185e5-276d-4939-8805-c5a432f671f4","restricted":false,"rowVersion":1,"requirementId":"9e3c7e9a-4912-4b1c-b7a3-8d76d012b306","requirementCode":"R-0001","currentRevisionId":"c88b1ebe-d161-4a85-b83d-83ea8cde4125","revisionCreatedAt":"2026-10-12T13:52:44.844Z","supersededByAssumptionId":null}: expected 201 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 201
+
+ ❯ tests/replayAccess.test.ts:110:38
+    108|     await setMailAccess(st.s.admin, mailbox, st.s.ids.manager, ['mail.…
+    109|     const grown = await st.s.manager.post(path(), body(), { headers: k…
+    110|     expect(grown.status, grown.text).toBe(409);
+       |                                      ^
+    111|     expect(grown.body.current).toMatchObject({ reason: 'replay_unavail…
+    112|     await setMailAccess(st.s.admin, mailbox, st.s.ids.manager, []);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/replayAccess.test.ts > повтор команды и права (S15-14) > запись, созданная до привязки к правам (без отпечатка), сохранённое тело не отдаёт
+AssertionError: {"id":"f47e87c5-6a67-4e29-b41a-647b9bf4b6b2","seq":1,"reason":null,"status":"open","stageId":"fc171657-8166-44e6-b21b-277317e1866b","visible":true,"evidence":[],"createdAt":"2026-10-12T13:52:44.894Z","revisions":[{"id":"00027ed6-d7be-471d-8e78-eed9049a7d64","seq":1,"reason":null,"status":"open","statement":"Допускаем КЛЮЧ-15A-90417 до выхода РД","created_at":"2026-10-12T13:52:44.894Z","authored_by":"e64185e5-276d-4939-8805-c5a432f671f4"}],"statement":"Допускаем КЛЮЧ-15A-90417 до выхода РД","authoredBy":"e64185e5-276d-4939-8805-c5a432f671f4","restricted":false,"rowVersion":1,"requirementId":"9e3c7e9a-4912-4b1c-b7a3-8d76d012b306","requirementCode":"R-0001","currentRevisionId":"00027ed6-d7be-471d-8e78-eed9049a7d64","revisionCreatedAt":"2026-10-12T13:52:44.894Z","supersededByAssumptionId":null}: expected 201 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 201
+
+ ❯ tests/replayAccess.test.ts:133:40
+    131|     const before = await assumptions();
+    132|     const replay = await st.s.manager.post(path(), body(), { headers: …
+    133|     expect(replay.status, replay.text).toBe(409);
+       |                                        ^
+    134|     expect(replay.body.current).toMatchObject({ reason: 'replay_unavai…
+    135|     expect(JSON.stringify(replay.body)).not.toContain(SECRET);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 2 passed (6)
+   Start at  18:52:39
+   Duration  5.84s (tests 53%, transform 36%, import 12%)
+
+exit=1
+
+# S15a-01 до правки: продукт 9e57f44, 2026-10-12T19:05:19+05:00, npx vitest run tests/suggestionRejectAccess.test.ts --maxWorkers=1 --fileParallelism=false --reporter=verbose
+
+ RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
+
+ ✓ tests/suggestionRejectAccess.test.ts > чтение прогона закрывает гипотезу тому, кто не читает письмо (контроль) 20ms
+ × tests/suggestionRejectAccess.test.ts > отклонить гипотезу без права читать её основания нельзя: 409 restricted_fragments, текста гипотезы в ответе нет 59ms
+   → {"id":"70c53b81-0c0c-41c2-a8c1-904d288e7aa9","runId":"2e974bd4-2652-4ddd-8da8-a897398b6794","status":"rejected","restricted":false,"title":"R-0001: возможно, не отражено в расчёте","rationale":"Поддельная модель: ни одна позиция не разделяет слов с формулировкой","decidedBy":"Инженер 2","decisionReason":"не относится к расчёту этапа","findingId":null,"evidence":[{"side":"left","fragmentId":"eac0d67b-47aa-4533-a18e-56e9ea16354d","calculationRevisionId":null,"externalPositionId":null}],"createdAt":"2026-10-12T14:05:25.941Z","etag":"\"70c53b81-0c0c-41c2-a8c1-904d288e7aa9:2\""}: expected 200 to be 409 // Object.is equality
+ × tests/suggestionRejectAccess.test.ts > тот, кто читает основания, отклоняет гипотезу как раньше (контроль) 17ms
+   → {"type":"about:blank","title":"Конфликт состояния","status":409,"code":"STATE_CONFLICT","detail":"гипотеза уже решена или истекла","requestId":"634b271d-6c30-4373-badd-d10fec43cdbd","current":{"reason":"suggestion_not_open","status":"rejected"}}: expected 409 to be 200 // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/suggestionRejectAccess.test.ts > отклонить гипотезу без права читать её основания нельзя: 409 restricted_fragments, текста гипотезы в ответе нет
+AssertionError: {"id":"70c53b81-0c0c-41c2-a8c1-904d288e7aa9","runId":"2e974bd4-2652-4ddd-8da8-a897398b6794","status":"rejected","restricted":false,"title":"R-0001: возможно, не отражено в расчёте","rationale":"Поддельная модель: ни одна позиция не разделяет слов с формулировкой","decidedBy":"Инженер 2","decisionReason":"не относится к расчёту этапа","findingId":null,"evidence":[{"side":"left","fragmentId":"eac0d67b-47aa-4533-a18e-56e9ea16354d","calculationRevisionId":null,"externalPositionId":null}],"createdAt":"2026-10-12T14:05:25.941Z","etag":"\"70c53b81-0c0c-41c2-a8c1-904d288e7aa9:2\""}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/suggestionRejectAccess.test.ts:49:28
+     47| it('отклонить гипотезу без права читать её основания нельзя: 409 restr…
+     48|   const r = await st.s.eng2.post(`/model-suggestions/${open.id}/reject…
+     49|   expect(r.status, r.text).toBe(409);
+       |                            ^
+     50|   expect(r.body.current).toMatchObject({ reason: 'restricted_fragments…
+     51|   expect(JSON.stringify(r.body)).not.toContain(open.title);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/suggestionRejectAccess.test.ts > тот, кто читает основания, отклоняет гипотезу как раньше (контроль)
+AssertionError: {"type":"about:blank","title":"Конфликт состояния","status":409,"code":"STATE_CONFLICT","detail":"гипотеза уже решена или истекла","requestId":"634b271d-6c30-4373-badd-d10fec43cdbd","current":{"reason":"suggestion_not_open","status":"rejected"}}: expected 409 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 409
+
+ ❯ tests/suggestionRejectAccess.test.ts:58:28
+     56| it('тот, кто читает основания, отклоняет гипотезу как раньше (контроль…
+     57|   const r = await st.s.eng1.post(`/model-suggestions/${open.id}/reject…
+     58|   expect(r.status, r.text).toBe(200);
+       |                            ^
+     59|   expect(r.body).toMatchObject({ id: open.id, status: 'rejected', rest…
+     60| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  19:05:19
+   Duration  6.25s (tests 48%, transform 39%, import 13%)
+
+  Transform  transforming modules took 2.07s · 39% of tracked time, re-done on every run
+             persist transforms across runs with fsModuleCache: true
+             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns
+
+exit=1

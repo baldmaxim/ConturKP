@@ -28,6 +28,7 @@ import {
   insertSourcePriority,
   listDiscrepancies,
   lockTenderStages,
+  readableFragments,
   recomputeOwnerGraph,
   rejectSuggestion,
   sourcePriorityRevisions,
@@ -239,6 +240,13 @@ export const discrepanciesRouter = (pool: Pool): Router => {
         const s = await loadSuggestionCurrent(client, ctx, uuidParam(req, 'id', 'model_suggestion'));
         const body = parseBody(RejectSuggestionRequest, req.body);
         if (s.status !== 'open') throw conflict('гипотеза уже решена или истекла', 'suggestion_not_open', { tenderId: s.tender_id, entityType: 'model_suggestion', entityId: s.id }, { status: s.status });
+        // Нельзя решать по тому, чего не можешь прочитать (R08-02): текст и обоснование гипотезы закрыты вместе с её
+        // основаниями — тем же правилом, что при чтении прогона; иначе ответ команды отдал бы их в обход прав (S15a-01).
+        const fragmentIds = s.evidence.map((e) => e.fragment_id).filter((x): x is string => !!x);
+        const readable = await readableFragments(client, ctx, fragmentIds);
+        if (fragmentIds.some((f) => !readable.has(f))) {
+          throw conflict('среди оснований гипотезы есть то, что вы не можете читать', 'restricted_fragments', { tenderId: s.tender_id, entityType: 'model_suggestion', entityId: s.id });
+        }
         await rejectSuggestion(client, s, ctx.principal.userId, body.reason);
         return {
           status: 200,

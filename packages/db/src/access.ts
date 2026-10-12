@@ -2,6 +2,7 @@
 // аргументом, поэтому запрос без контекста не компилируется. Контекст читается из БД
 // на каждый запрос: снятие роли или назначения действует сразу.
 import { effectiveContractCapabilities, effectiveMailCapabilities, hasContentRole, type ContractCapability, type MailCapability, type MemberRole, type Role } from '@kontur/core';
+import { createHash } from 'node:crypto';
 import type { Queryable } from './pool.ts';
 
 export interface IPrincipal {
@@ -83,6 +84,21 @@ export const loadAccessContext = async (
     mailGrants,
     requestId,
   };
+};
+
+// Отпечаток прав пользователя: роли, действующие назначения, выдачи по договорам и почтовым ящикам. Любое изменение прав
+// (отзыв `mail.read`, снятие назначения, роль, доступ к договору) меняет отпечаток. Им запись идемпотентности привязана к
+// правам, с которыми был построен сохранённый ответ (S15-14, D-036).
+export const accessFingerprint = (ctx: IAccessContext): string => {
+  const pairs = <V>(m: ReadonlyMap<string, V>, value: (v: V) => unknown): [string, unknown][] => [...m.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([k, v]) => [k, value(v)]);
+  const snapshot = {
+    roles: [...ctx.roles].sort(),
+    memberships: pairs(ctx.memberships, (role) => role),
+    contractGrants: pairs(ctx.contractGrants, (caps) => [...caps].sort()),
+    contractCreateGranted: ctx.contractCreateGranted,
+    mailGrants: pairs(ctx.mailGrants, (caps) => [...caps].sort()),
+  };
+  return createHash('sha256').update(`kontur.access.v1\n${JSON.stringify(snapshot)}`, 'utf8').digest('hex');
 };
 
 export const memberRoleOf = (ctx: IAccessContext, tenderId: string): MemberRole | null =>

@@ -1,0 +1,58 @@
+# 2026-10-12T19:19:39+05:00, linux x64 Node v24.14.1, тесты этапа 15a и смежные (подробно): npx vitest run tests/replayAccess.test.ts tests/suggestionRejectAccess.test.ts tests/reviewRegressions15.test.ts tests/concurrency.test.ts tests/regressions-r02.test.ts --maxWorkers=1 --fileParallelism=false --reporter=verbose
+
+ RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
+
+ ✓ tests/reviewRegressions15.test.ts > sent question text cannot be changed through the API (control) 22ms
+ ✓ tests/reviewRegressions15.test.ts > an already computed comparison retains the historical question status after it is answered 75ms
+ ✓ tests/reviewRegressions15.test.ts > a received out-of-scope letter has evidence for its immutable revision 19ms
+ ✓ tests/reviewRegressions15.test.ts > out-of-scope mail remains closed after mail.read is revoked (control) 38ms
+ ✓ tests/reviewRegressions15.test.ts > out-of-scope mail in an existing comparison cannot follow a later imported revision 152ms
+ ✓ tests/reviewRegressions15.test.ts > idempotent send registration rechecks mailbox visibility after access is revoked 280ms
+ ✓ tests/reviewRegressions15.test.ts > idempotent extras acceptance rechecks the closed basis instead of replaying private rationale 70ms
+ ✓ tests/reviewRegressions15.test.ts > idempotent incident registration does not replay text derived from a now closed letter 80ms
+ ✓ tests/reviewRegressions15.test.ts > R15-01: повтор без отзыва прав — та же запись и открытое представление, второй записи нет 74ms
+ ✓ tests/reviewRegressions15.test.ts > R15-01: после отзыва mail.read повтор отвечает тем же кодом и ограниченным представлением, как чтение 134ms
+ ✓ tests/reviewRegressions15.test.ts > R15-01: в записи идемпотентности закрытого текста нет — только ссылка на запись 4ms
+ ✓ tests/reviewRegressions15.test.ts > R15-01: ключ с другим запросом — отказ; чужой пользователь по тому же ключу записи не получает (контроль) 36ms
+ ✓ tests/reviewRegressions15.test.ts > R15-01: повтор создания сравнения — то же сравнение, представление по текущим правам 40ms
+ ✓ tests/reviewRegressions15.test.ts > R15-02: закрытый к правому выпуску вопрос — слева «отправлен», текущий статус в вывод не попадает 2414ms
+ ✓ tests/regressions-r02.test.ts > R02-01: повтор по ключу идемпотентности не обходит отзыв доступа > после снятия назначения повтор создания этапа — 404 без сохранённых данных, отказ в журнале 121ms
+ ✓ tests/regressions-r02.test.ts > R02-01: повтор по ключу идемпотентности не обходит отзыв доступа > после снятия глобальной роли повтор — 404 104ms
+ ✓ tests/regressions-r02.test.ts > R02-01: повтор по ключу идемпотентности не обходит отзыв доступа > администратор без роли admin не получает повтор создания пользователя — 403 187ms
+ ✓ tests/regressions-r02.test.ts > R02-01: повтор по ключу идемпотентности не обходит отзыв доступа > при сохранённых правах повтор по-прежнему возвращает исходный результат 14ms
+ ✓ tests/regressions-r02.test.ts > R02-02: журнал тендера не раскрывает содержимое этапов администратору без назначения > администратор видит только административные события; руководитель — все 34ms
+ ✓ tests/regressions-r02.test.ts > R02-02: журнал тендера не раскрывает содержимое этапов администратору без назначения > администратор, назначенный руководителем тендера, видит полный журнал 83ms
+ ✓ tests/regressions-r02.test.ts > R02-03: параллельное снятие ролей не оставляет ноль администраторов > два администратора снимают роль друг у друга: один запрос — 409, администратор остаётся 402ms
+ ✓ tests/regressions-r02.test.ts > R02-04: формат хэшей совместим с пакетом argon2 в обе стороны > хэш портала проверяется пакетом argon2, в том числе с символами + и / 1369ms
+ ✓ tests/regressions-r02.test.ts > R02-04: формат хэшей совместим с пакетом argon2 в обе стороны > хэш пакета argon2 (другой порядок параметров) проверяется порталом 432ms
+ ✓ tests/regressions-r02.test.ts > R02-04: формат хэшей совместим с пакетом argon2 в обе стороны > прежний base64url-хэш проверяется и переписывается при входе без смены версии строки 365ms
+ ✓ tests/suggestionRejectAccess.test.ts > чтение прогона закрывает гипотезу тому, кто не читает письмо (контроль) 30ms
+ ✓ tests/suggestionRejectAccess.test.ts > отклонить гипотезу без права читать её основания нельзя: 409 restricted_fragments, текста гипотезы в ответе нет 75ms
+ ✓ tests/suggestionRejectAccess.test.ts > тот, кто читает основания, отклоняет гипотезу как раньше (контроль) 70ms
+ ✓ tests/replayAccess.test.ts > повтор команды и права (S15-14) > без изменения прав повтор отдаёт сохранённый ответ; запись хранит отпечаток прав (контроль) 36ms
+ ✓ tests/replayAccess.test.ts > повтор команды и права (S15-14) > после отзыва доступа к договору повтор не возвращает закрытую формулировку: 409 replay_unavailable, второй записи нет 60ms
+ ✓ tests/replayAccess.test.ts > повтор команды и права (S15-14) > любое изменение прав, в том числе расширение, делает сохранённый ответ недоступным 52ms
+ ✓ tests/replayAccess.test.ts > повтор команды и права (S15-14) > запись, созданная до привязки к правам (без отпечатка), сохранённое тело не отдаёт 21ms
+ ✓ tests/replayAccess.test.ts > повтор команды и права (S15-14) > ключ с другим запросом — 422; чужой пользователь по тому же ключу чужого ответа не получает; снятая роль — отказ authorize 24ms
+ ✓ tests/replayAccess.test.ts > отпечаток прав > не зависит от порядка, личности и номера запроса; меняется от каждого вида права 1ms
+ ✓ tests/concurrency.test.ts > устаревшая правка (stale edit) > второй инженер с прежней версией получает 412 и текущее состояние; правка первого сохранена 28ms
+ ✓ tests/concurrency.test.ts > устаревшая правка (stale edit) > без If-Match — 428, с чужим ETag — 412 13ms
+ ✓ tests/concurrency.test.ts > устаревшая правка (stale edit) > параллельные правки с одной версией: ровно одна успешна 21ms
+ ✓ tests/concurrency.test.ts > устаревшая правка (stale edit) > устаревшая версия тендера при назначении — 412 23ms
+ ✓ tests/concurrency.test.ts > не больше двух инженеров на тендере > третий инженер отклоняется, параллельные назначения не обходят ограничение 48ms
+ ✓ tests/concurrency.test.ts > не больше двух инженеров на тендере > вторая линия в БД: триггер отклоняет третьего инженера в обход API 16ms
+ ✓ tests/concurrency.test.ts > идемпотентность команд > повтор с тем же ключом возвращает тот же ответ без дубля 29ms
+ ✓ tests/concurrency.test.ts > идемпотентность команд > тот же ключ с другим телом — 422 25ms
+ ✓ tests/concurrency.test.ts > идемпотентность команд > параллельные повторы с одним ключом создают одну запись 16ms
+ ✓ tests/concurrency.test.ts > идемпотентность команд > команда создания без ключа отклоняется 8ms
+ ✓ tests/concurrency.test.ts > журнал действий > правка фиксирует автора, объект, тендер и изменения 32ms
+ ✓ tests/concurrency.test.ts > журнал действий > руководитель видит журнал своего тендера с автором 11ms
+ ✓ tests/concurrency.test.ts > журнал действий > пагинация журнала по курсору 15ms
+ ✓ tests/concurrency.test.ts > журнал действий > роль приложения не может изменить или удалить журнал; триггер — вторая линия 23ms
+
+ Test Files  5 passed (5)
+      Tests  47 passed (47)
+   Start at  19:19:40
+   Duration  30.45s (tests 85%, import 8%, transform 7%)
+
+exit=0

@@ -17,7 +17,8 @@ const PATTERNS: RegExp[] = [
   /\bgh[pousr]_[A-Za-z0-9]{20,}/g,
   /\bAKIA[0-9A-Z]{16}\b/g,
   // Пары «имя секрета = значение».
-  /\b(?:password|passwd|pwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token|пароль)\s*[:=]\s*[^\s,;"']{4,}/gi,
+  // Граница слова — через классы Юникода: `\b` в JavaScript кириллицу не понимает.
+  /(?<![\p{L}\p{N}_])(?:password|passwd|pwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token|пароль)\s*[:=]\s*[^\s,;"']{4,}/giu,
 ];
 
 // Внутренние адреса и пути из настроек установки: в ответах чат-клиенту им не место.

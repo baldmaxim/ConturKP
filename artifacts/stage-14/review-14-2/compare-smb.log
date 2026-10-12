@@ -1,0 +1,11 @@
+
+> delivery:compare
+> node scripts/delivery-compare.ts \\192.168.5.55\SharA_Tender\Tender\1. В работе\_ConturKP-review-14-2-20261009\Проверка размещения Контур КП\2026-10-09T12-22-36 68e312af\Выпуск 1 68e312af --marker-sha256 f0d467fcf67d4eb713d3ffe20943946ed06fcc28c3a8073aec139c1ff0743b46
+
+[PASS] признак: схема kontur-placement/1, каноническая запись
+[PASS] признак: SHA-256 совпадает с записанным порталом
+[PASS] «01 Проверка размещения.txt»: размер и SHA-256 совпадают
+[PASS] «02 Двоичный файл.bin»: размер и SHA-256 совпадают
+[PASS] «03 Пустой файл.txt»: размер и SHA-256 совпадают
+[PASS] посторонних файлов нет
+Итог: PASS (3 файлов, выпуск live-check-68e312af)

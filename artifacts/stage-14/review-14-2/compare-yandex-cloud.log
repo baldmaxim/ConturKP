@@ -1,0 +1,11 @@
+
+> delivery:compare
+> node scripts/delivery-compare.ts C:\Users\odintsov.a.a\Documents\Codex\ConturKP-review-14-2\cloud-download-61e37e33\Выпуск 1 61e37e33 --marker-sha256 1f7d187817fa9bb82f4940c1128c1875894984c715eaee05964f7f83a87710e3
+
+[PASS] признак: схема kontur-placement/1, каноническая запись
+[PASS] признак: SHA-256 совпадает с записанным порталом
+[PASS] «01 Проверка размещения.txt»: размер и SHA-256 совпадают
+[PASS] «02 Двоичный файл.bin»: размер и SHA-256 совпадают
+[PASS] «03 Пустой файл.txt»: размер и SHA-256 совпадают
+[PASS] посторонних файлов нет
+Итог: PASS (3 файлов, выпуск live-check-61e37e33)

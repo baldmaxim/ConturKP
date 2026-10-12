@@ -1,0 +1,31 @@
+{
+  "source": "Owner supplied download from Yandex Disk web interface",
+  "archive": "C:\\Users\\odintsov.a.a\\Desktop\\Выпуск 1 61e37e33.zip",
+  "archiveSha256": "a161d9cc521f3bf8d3ea4bee1d8f0f8650c48f4faefdd5b296cc3e052ea0ac35",
+  "archiveBytes": 1575270,
+  "entries": 5,
+  "extractedFolder": "C:\\Users\\odintsov.a.a\\Documents\\Codex\\ConturKP-review-14-2\\cloud-download-61e37e33\\Выпуск 1 61e37e33",
+  "markerSha256": "1f7d187817fa9bb82f4940c1128c1875894984c715eaee05964f7f83a87710e3",
+  "release": "live-check-61e37e33",
+  "files": [
+    {
+      "path": "01 Проверка размещения.txt",
+      "size": 77,
+      "sha256": "f98628b2bd8f6ae672e60cb034d1945bc9f2f57794b1617af20bd2c8567b6e72",
+      "status": "PASS"
+    },
+    {
+      "path": "02 Двоичный файл.bin",
+      "size": 1572864,
+      "sha256": "980b7747d27f6d8009172aef337aeea6d7d119f0573c1d94e178347f661edab1",
+      "status": "PASS"
+    },
+    {
+      "path": "03 Пустой файл.txt",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "status": "PASS"
+    }
+  ],
+  "status": "PASS"
+}

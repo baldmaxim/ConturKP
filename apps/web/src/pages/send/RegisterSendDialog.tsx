@@ -144,7 +144,7 @@ export const RegisterSendDialog: FC<IRegisterSendDialogProps> = ({ releaseId, wa
               <span className={own.candidate}>
                 <span>{`${c.subject ?? '(без темы)'} · ${formatDateTime(c.sentAt)}`}</span>
                 <span className={styles.muted}>{`${c.mailboxName}${c.folder ? ` / ${c.folder}` : ''} · кому: ${c.recipients.join(', ') || '—'} · вложений: ${c.attachments}`}</span>
-                <span className={styles.badges}>
+                <span className={own.badges}>
                   <Badge label={candidateNote(c)} icon={c.check === 'matched' ? 'check' : 'file-exclamation-point'} tone={c.registeredSendEventId || c.sentBeforeRelease ? 'muted' : c.check === 'matched' ? 'success' : 'danger'} />
                 </span>
               </span>

@@ -8,7 +8,7 @@ import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sendKitSha256 } from '../packages/core/src/index.ts';
 import { createPool, dropDatabase, MIGRATIONS_DIR, migrate, setupDatabase } from '../packages/db/src/index.ts';
-import { buildStage13, closeStage13, notApplicable, openHolds, type IStage13 } from './approvalFixtures.ts';
+import { acceptAll, approve, assembled, buildStage13, closeStage13, notApplicable, openHolds, release, view, type IStage13 } from './approvalFixtures.ts';
 import { ADMIN_URL, auditRows, createUser, drain, idem, type ITestDb } from './helpers.ts';
 import { setMailAccess } from './mailFixtures.ts';
 import { uploadDocument } from './searchFixtures.ts';
@@ -140,7 +140,8 @@ describe('вторая линия БД: отправка', () => {
     expect(await insertNote(unsent, { seq: '99' })).toBe('23514');
     expect(await insertNote(unsent, { status: 'verified' })).toBe('23514');
     expect(await insertNote(unsent, { check: 'matched', status: 'verified' })).toBe('23514');
-    expect(await pgCode(`INSERT INTO send_event (${sendColumns}) SELECT r.id, r.tender_id, r.stage_id, 9, 'paper', r.released_at - interval '1 hour', 'manual_note', $2, 'not_checked', $3, r.release_manifest_sha256, 'registered', $4, 'direct-early-key-01' FROM release r WHERE r.id = $1`, [unsent.releaseId, NOTE, kit(unsent), st.e.s.ids.eng1])).toBe('23514');
+    // Время отправки раньше минуты выпуска — отказ; в ту же минуту (ввод с точностью до минуты) — допустимо.
+    expect(await pgCode(`INSERT INTO send_event (${sendColumns}) SELECT r.id, r.tender_id, r.stage_id, (SELECT coalesce(max(seq), 0) + 1 FROM send_event WHERE release_id = r.id), 'paper', r.released_at - interval '1 hour', 'manual_note', $2, 'not_checked', $3, r.release_manifest_sha256, 'registered', $4, 'direct-early-key-01' FROM release r WHERE r.id = $1`, [unsent.releaseId, NOTE, kit(unsent), st.e.s.ids.eng1])).toBe('23514');
   });
 
   it('письмо-основание: итог сверки и вложения считает БД — «совпало» для письма с лишним файлом не записать; чужой файл хранилища основанием не сделать', async () => {
@@ -228,7 +229,7 @@ describe('удержания после отправки (state-machines §1.1 �
 });
 
 describe('обновление схемы 0038 → 0039', () => {
-  it('данные этапов 13–14 переживают обновление: выпуск и его удержания на месте, возможности и статус MailHub добавлены, новое событие удерживает выпуск', async () => {
+  it('данные этапов 13–14 переживают обновление: согласованный комплект и его удержания на месте, возможности и статус MailHub добавлены; после обновления комплект выпускается, новое событие его удерживает', async () => {
     const name = `kontur_kp_test_upgrade38_${Date.now().toString(36)}`;
     const urlFor = (user: string) => {
       const u = new URL(ADMIN_URL);
@@ -254,21 +255,35 @@ describe('обновление схемы 0038 → 0039', () => {
     try {
       expect(await migrateTo(38)).toBe(38);
       up = await buildStage13({ db });
-      const old = await released(up, 'test');
-      await uploadDocument(db, up.e.config, up.e.s.eng1, up.e.s.stageA, 'Документ до обновления.pdf');
-      await drain(up.e.worker);
-      const holdsBefore = (await openHolds(up, old.candidate.id)).length;
+      const stage = up;
+      // Комплект согласован на прежней схеме; новое событие после согласования — открытое удержание.
+      let c = await assembled(stage);
+      await notApplicable(stage, c.id).catch(() => 0);
+      c = await view(stage, c.id);
+      await acceptAll(stage, c);
+      c = await view(stage, c.id);
+      const a = await approve(stage, c);
+      expect(a.status, a.text).toBe(200);
+      await uploadDocument(db, stage.e.config, stage.e.s.eng1, stage.e.s.stageA, 'Документ до обновления.pdf');
+      await drain(stage.e.worker);
+      const holdsBefore = (await openHolds(stage, c.id)).length;
       expect(holdsBefore).toBeGreaterThan(0);
       expect(await migrateTo(39)).toBe(1);
-      expect((await openHolds(up, old.candidate.id)).length).toBe(holdsBefore);
-      expect((await db.pool.query('SELECT tender_capabilities($1, $2) AS caps', [up.e.s.ids.eng1, up.e.s.tenderA])).rows[0].caps).toContain('send.register');
+      expect((await openHolds(stage, c.id)).length).toBe(holdsBefore);
+      expect((await db.pool.query('SELECT tender_capabilities($1, $2) AS caps', [stage.e.s.ids.eng1, stage.e.s.tenderA])).rows[0].caps).toContain('send.register');
+      expect((await db.pool.query('SELECT tender_capabilities($1, $2) AS caps', [stage.e.s.ids.manager, stage.e.s.tenderA])).rows[0].caps).toContain('send.accept_extras');
       expect((await db.pool.query("SELECT status FROM integration_status WHERE system = 'mailhub' AND component = 'MailHubSentReader'")).rows).toEqual([{ status: 'BLOCKED_EXTERNAL' }]);
-      const s = await sends(up, old.releaseId);
-      expect(s.summary).toMatchObject({ state: 'not_registered', testRelease: true, readiness: { state: 'held' } });
-      await uploadDocument(db, up.e.config, up.e.s.eng1, up.e.s.stageA, 'Документ после обновления.pdf');
-      await drain(up.e.worker);
-      expect((await openHolds(up, old.candidate.id)).length).toBeGreaterThan(holdsBefore);
-      const r = await registerSend(up, old.releaseId, { evidence: { kind: 'manual_note' }, channel: 'paper', sentAt: new Date().toISOString(), note: NOTE });
+      // После обновления: решение по удержанию, выпуск, блок отправки; заменённый триггер удерживает неотправленный выпуск.
+      await notApplicable(stage, c.id, 'Документ до обновления на комплект не влияет');
+      const rel = await release(stage, await view(stage, c.id, stage.e.s.eng1), a.body.approval.id as string);
+      expect(rel.status, rel.text).toBe(201);
+      const releaseId = rel.body.release.id as string;
+      expect((await sends(stage, releaseId)).summary).toMatchObject({ state: 'not_registered', testRelease: true, readiness: { state: 'ready' } });
+      await uploadDocument(db, stage.e.config, stage.e.s.eng1, stage.e.s.stageA, 'Документ после обновления.pdf');
+      await drain(stage.e.worker);
+      expect((await openHolds(stage, c.id)).length).toBeGreaterThan(0);
+      expect((await sends(stage, releaseId)).summary.readiness.state).toBe('held');
+      const r = await registerSend(stage, releaseId, { evidence: { kind: 'manual_note' }, channel: 'paper', sentAt: new Date().toISOString(), note: NOTE });
       expect(r.body.current).toMatchObject({ reason: 'RELEASE_IS_TEST' });
     } finally {
       await closeStage13(up);

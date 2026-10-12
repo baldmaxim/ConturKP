@@ -4,13 +4,13 @@ import type { IBadgeMeta } from './sourceLabels';
 
 export const SEND_STATE: Record<string, IBadgeMeta> = {
   not_registered: { label: 'Отправка не зарегистрирована', icon: 'send', tone: 'muted', dashed: true },
-  registered_unchecked: { label: 'Отправка зарегистрирована, состав не сверялся', icon: 'send', tone: 'info', dashed: true },
+  registered_unchecked: { label: 'Отправка без сверки состава', icon: 'send', tone: 'info', dashed: true },
   verified: { label: 'Отправка подтверждена', icon: 'send', tone: 'success' },
   disputed: { label: 'Состав не совпал', icon: 'file-exclamation-point', tone: 'danger' },
 };
 
 export const SEND_STATUS: Record<string, IBadgeMeta> = {
-  registered: { label: 'Зарегистрирована, состав не сверялся', icon: 'send', tone: 'info', dashed: true },
+  registered: { label: 'Зарегистрирована без сверки', icon: 'send', tone: 'info', dashed: true },
   verified: { label: 'Подтверждена', icon: 'check', tone: 'success' },
   disputed: { label: 'Состав не совпал', icon: 'file-exclamation-point', tone: 'danger' },
 };

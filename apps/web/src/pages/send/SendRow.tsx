@@ -52,7 +52,7 @@ export const SendRow: FC<{ s: ISendView; onChanged: () => void }> = ({ s, onChan
     <li className={own.send} data-status={s.status}>
       <div className={styles.head}>
         <span className={styles.label}>{`Отправка № ${s.seq} · ${SEND_CHANNEL[s.channel] ?? s.channel} · ${formatDateTime(s.sentAt)}`}</span>
-        <span className={styles.badges}>
+        <span className={own.badges}>
           <Badge label={status.label} icon={status.icon} tone={status.tone} dashed={status.dashed} />
           {s.extrasAccepted ? <Badge label="Лишние вложения приняты" icon="user-check" tone="info" /> : null}
           {s.repeat ? <Badge label="Повторная" icon="repeat" tone="muted" /> : null}
@@ -74,6 +74,7 @@ export const SendRow: FC<{ s: ISendView; onChanged: () => void }> = ({ s, onChan
           </a>
         </span>
       ) : null}
+      {s.status === 'registered' ? <span className={styles.muted}>Состав отправки не сверялся: машинного основания нет.</span> : null}
       {s.evidence.kind === 'manual_note' ? <span className={styles.muted}>Основание — только пояснение, файла нет.</span> : null}
       {s.recipients.length > 0 ? <span className={styles.muted}>{`Адресаты: ${s.recipients.join(', ')}`}</span> : null}
       {s.note ? <span className={styles.muted}>{s.note}</span> : null}
@@ -104,7 +105,7 @@ export const SendRow: FC<{ s: ISendView; onChanged: () => void }> = ({ s, onChan
       ) : null}
       {s.actions.acceptExtras ? (
         <span className={styles.actions}>
-          <Button icon="user-check" onClick={() => setDialog(true)}>
+          <Button icon="user-check" className={own.wrapButton} onClick={() => setDialog(true)}>
             Принять лишние вложения…
           </Button>
         </span>

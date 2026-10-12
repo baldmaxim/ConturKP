@@ -14,15 +14,15 @@
 
 .muted {
   margin: 0;
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
 
 .mono {
   font-family: var(--font-mono, monospace);
-  font-size: var(--text-xs, 12px);
-  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  color: var(--muted);
   overflow-wrap: anywhere;
 }
 
@@ -71,7 +71,7 @@
 
 .title {
   margin: 0;
-  font-size: var(--text-md, 16px);
+  font-size: var(--text-md);
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -92,6 +92,7 @@
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
+  max-width: 100%;
 }
 
 .sides {
@@ -116,8 +117,8 @@
 }
 
 .sideLabel {
-  color: var(--text-secondary);
-  font-size: var(--text-xs, 12px);
+  color: var(--muted);
+  font-size: var(--text-xs);
 }
 
 .section {
@@ -200,4 +201,15 @@
   .sides {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
+}
+
+/* Кнопка с длинной подписью переносит текст и не шире своего контейнера (360 px). */
+.stack .wrapButton {
+  max-width: 100%;
+  height: auto;
+  min-height: var(--control-h);
+  padding-top: var(--space-1);
+  padding-bottom: var(--space-1);
+  white-space: normal;
+  text-align: left;
 }

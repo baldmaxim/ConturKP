@@ -462,11 +462,34 @@ Review 13-3 (миграция `0037_stage_content_fingerprint_v3.sql`; прое�
 
 `DELETE` и `TRUNCATE` запрещены у всех таблиц этапа. `integration_status`: `yandex_disk` / `smb` × `FsDeliveryTarget` = `BLOCKED_EXTERNAL` до живой приёмки.
 
+Этап 15 (миграция `0039_send_comparison.sql`; D-035; проект `docs/architecture/15-send-comparison-design.md` §2, §15, §15.1) — реализация отправки и нарушений:
+
+| Таблица | Класс | Ключевые колонки | Ограничения |
+|---|---|---|---|
+| `send_evidence_upload` | append-only | `release_id`, `tender_id`, `blob_sha256`, `file_name`, `size_bytes`, `uploaded_by` | загружает инженер тендера (`send.register`); отправка и нарушение ссылаются только на собственную загрузку регистрирующего для этого выпуска |
+| `send_event` | frozen-after | `release_id`, `tender_id`, `stage_id`, `seq`, `channel`, `sent_at`, `recipients`, `evidence_kind` (`mail_message`/`uploaded_file`/`manual_note`), `mail_message_revision_id`, `mail_message_id`, `mail_communication_id`, `mail_raw_sha256`, `evidence_upload_id`, `evidence_blob_sha256`, `evidence_file_name`, `note`, `attachment_check`, `check_detail`, `kit_sha256`, `release_manifest_sha256`, `status`, `extras_accepted`, `registered_by`, `idempotency_key`, `created_xact`, `row_version` | только боевой выпуск; автор — человек с `send.register`; выпуск готов к отправке (`release_send_problem`: «влияет», непокрытые события, несвежий канал); `sent_at` — не раньше минуты выпуска и не в будущем; форма основания по виду (у письма нет адресатов и пояснения); письмо — исходящее, связано с тендером, время и байты — из закреплённой ревизии; UNIQUE (`registered_by`, `idempotency_key`), (`release_id`, `mail_communication_id`), (`release_id`, `mail_raw_sha256`); в конце транзакции: вложения — ровно вложения ревизии, `attachment_check` и `kit_sha256` равны вычисленным БД; единственное изменение — `disputed` → `verified` с `extras_accepted` по решению этой транзакции |
+| `send_event_file` | immutable | `send_event_id`, `ordinal`, `sha256`, `size_bytes`, `class` (`kit`/`internal`/`other_release`/`unknown`), `kit_path`, `other_release_id`, `mail_attachment_id`, `inline` | только в транзакции регистрации; вложение — закреплённой ревизии письма; класс равен `send_file_class` |
+| `send_event_decision` | append-only | `send_event_id`, `action` (`accept_extras`), `actor_user_id`, `reason`, `created_xact` | автор — руководитель тендера (`send.accept_extras`; D-035 В-15-1) |
+| `compliance_incident` | append-only | `release_id`, `tender_id`, `stage_id`, `incident_kind`, `occurred_at`, `description`, `mail_message_revision_id`, `mail_message_id`, `evidence_upload_id`, `evidence_blob_sha256`, `evidence_file_name`, `registered_by`, `idempotency_key` | автор — `send.register`; `test_release_sent_externally` — только у тестового выпуска, `sent_despite_blocker` — только у боевого; письмо-основание связано с тендером; отправку не создаёт |
+
+Функции: `send_kit_files` (комплект для заказчика), `send_file_class`, `release_send_problem`, `release_has_counted_send`, `send_event_extras_only`, `ensure_release_holds`; `stage_input_event_hold` заменена: выпущенный кандидат с засчитанной отправкой удержаний не получает. У `release` — UNIQUE (`id`, `tender_id`). `integration_status`: `mailhub` × `MailHubSentReader` = `BLOCKED_EXTERNAL` (X-03).
+
 ### 4.11. Сравнение
 
 | Таблица | Класс | Ключевые колонки | Ограничения |
 |---|---|---|---|
 | `comparison` | frozen-after | `tender_id`, `left_release_id`, `right_release_id`, `method_version`, `decomposition_method`, `status` (`computing`/`ready`/`failed`) | обе стороны — выпуски, не текущие папки; этап 15 — поверх `calculation_comparison` ревизий, закреплённых в выпусках |
+
+Этап 15 (миграция `0039_send_comparison.sql`; проект `docs/architecture/15-send-comparison-design.md` §8–§11) — сравнение выпусков; таблица проекта этапа 01 `comparison` реализована как `release_comparison`:
+
+| Таблица | Класс | Ключевые колонки | Ограничения |
+|---|---|---|---|
+| `release_comparison` | frozen-after | `tender_id`, `left_release_id`, `right_release_id`, `method_version` (`release-compare/15-1`), `status`, `failure_reason`, `calculation_comparison_id`, `summary`, `result_sha256`, `requested_by`, `created_xact` | стороны — разные выпуски одного тендера, левая выпущена раньше; запускает участник с `economics.compare`; `computing` → `ready` / `failed` только в транзакции создания; `result_sha256` — хэш выводов, хэшей манифестов сторон и хэша сравнения расчёта, без времени и ID |
+| `release_comparison_item` | immutable | `comparison_id`, `ordinal`, `section` (`sources`/`requirements`/`questions`/`terms`/`decisions`/`applications`/`received`), `change`, `subject_type`, `item_key`, `left_ref`, `right_ref`, `left_sha256`, `right_sha256`, `detail` | только в транзакции создания сравнения; свободного текста нет — ID, хэши, коды; текст подставляется при чтении по правам читателя |
+| `release_comparison_reason` | immutable (версии) | `comparison_id`, `item_id`, `version`, `reason_kind`, `reason_status` (`unknown`/`hypothesis`/`confirmed`), `rationale`, `actor_user_id` | по готовому сравнению; автор — `change_reason.confirm`; версия — следующая; «подтверждена» — с основанием, «не установлена» — без оснований (в конце транзакции) |
+| `release_comparison_reason_basis` | immutable | `reason_id`, `basis_type` (`fragment`/`decision`), `fragment_id`, `decision_id` | только вместе с версией причины; фрагмент — из снимков этапов сторон, решение — этого тендера |
+
+Вход стороны читается только из закреплённых записей выпуска: `evidence_scope_item` снимка кандидата, `review_run_input.input` закреплённого прогона, `candidate_input`, `candidate_file`, манифест выпуска. Раздел расчёта — `calculation_comparison` этапа 10 для ревизий, закреплённых в выпусках (в том числе разных этапов).
 
 Этап 10 (миграции `0026`, `0027` — Review 10-1, R10-01, `0028` — Review 10-2, R10-03; D-030; проект `docs/architecture/10-economics-design.md` §2, §13) — сравнение ревизий расчёта, на котором строится сравнение выпусков:
 

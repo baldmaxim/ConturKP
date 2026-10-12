@@ -351,7 +351,7 @@ export const sendsRouter = (pool: Pool, store: BlobStore, config: IAppConfig): R
           extrasOnly: match.extrasOnly,
           otherReleaseSeqs: seqs,
           registeredSendEventId: await sendEventOfLetter(pool, r.id, m.communication_id, m.raw_blob_sha256),
-          sentBeforeRelease: !!m.sent_at && m.sent_at < r.released_at,
+          sentBeforeRelease: !!m.sent_at && m.sent_at.getTime() < Math.floor(r.released_at.getTime() / 60_000) * 60_000,
         });
       }
       res.json({ items, kitFiles: kit.length, note: 'Отсутствие письма в списке не доказывает, что комплект не отправлен: зарегистрируйте отправку по файлу или пояснению.' });
@@ -445,7 +445,8 @@ export const sendsRouter = (pool: Pool, store: BlobStore, config: IAppConfig): R
           sentAt = new Date(body.sentAt!);
           evidence = body.evidence.kind === 'uploaded_file' ? { kind: 'uploaded_file', upload: await uploadOf(client, ctx, r, body.evidence.uploadId.toLowerCase()) } : { kind: 'manual_note' };
         }
-        if (sentAt < r.released_at) throw conflict('время отправки раньше выпуска: этот выпуск тогда отправить было нельзя', 'sent_before_release', target(r));
+        // Время ручной регистрации вводится с точностью до минуты: сравнение — с минутой выпуска (то же в охраннике БД).
+        if (sentAt.getTime() < Math.floor(r.released_at.getTime() / 60_000) * 60_000) throw conflict('время отправки раньше выпуска: этот выпуск тогда отправить было нельзя', 'sent_before_release', target(r));
         if (sentAt.getTime() > now.getTime() + 24 * 3600 * 1000) throw conflict('время отправки в будущем', 'sent_in_future', target(r));
         const warnings = await placementWarnings(client, r);
         const done = await registerSendEvent(client, {

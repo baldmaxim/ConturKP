@@ -10,6 +10,8 @@
 // Этап 13 (scripts/smoke-13.mjs): матрица блокеров, права согласования, неснимаемый риск, удержание и решение «не влияет».
 // Этап 14 (scripts/smoke-14.mjs): назначения размещения во временных папках, проверка доступа worker, сценарий живой
 // проверки в режиме --fixture; после перезапуска — назначения и результаты проверки из БД.
+// Этап 15 (scripts/smoke-15.mjs): отправки и сравнение выпусков — маршруты и права без выпуска, статус MailHub
+// BLOCKED_EXTERNAL; полный путь регистрации отправки и сравнения — интеграционные тесты и проверка интерфейса.
 // База kontur_kp_smoke_test создаётся заново и удаляется в конце. Пароль генерируется и не выводится.
 // Результат: artifacts/stage-02/smoke.log; код 0 только если все шаги PASS.
 import { spawn, spawnSync } from 'node:child_process';
@@ -30,6 +32,7 @@ import { smokeForms } from './smoke-11.mjs';
 import { smokeRelease } from './smoke-12.mjs';
 import { smokeApproval } from './smoke-13.mjs';
 import { smokeDelivery } from './smoke-14.mjs';
+import { smokeSends } from './smoke-15.mjs';
 import { PRECISE_RATE, TH, standardTender, startFakeTenderHub } from './tenderhub-fake.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -503,6 +506,9 @@ try {
   // ---- Этап 14: назначения размещения и проверка доступа worker — scripts/smoke-14.mjs
   const delivery14 = await smokeDelivery({ root: ROOT, env, api, api2, record, waitFor, idem, json });
 
+  // ---- Этап 15: отправки и сравнение выпусков — маршруты, права и статус MailHub — scripts/smoke-15.mjs
+  const sends15 = await smokeSends({ base: BASE, api, api2, record, idem, json, tenderId: demo.id });
+
   await stopProc(server);
   server = startProc('server', 'apps/server/src/main.ts');
   ready = await waitReady(30_000);
@@ -547,6 +553,9 @@ try {
       delivery14.destinationIds.every((id) => destAfter.find((d) => d.id === id)?.lastProbe?.outcome === 'ok') &&
       destAfter.find((d) => d.id === delivery14.destinationIds[0])?.versions?.length === 3,
   );
+  const releasesAfter = await api(`/tenders/${sends15.tenderId}/releases`);
+  const integrationsAfter = ((await (await api('/mailboxes')).json()).integrations ?? []).find((i) => i.component === 'MailHubSentReader');
+  record('этап 15: после перезапуска выпуски тендера читаются, статус MailHubSentReader — BLOCKED_EXTERNAL из PostgreSQL', releasesAfter.status === 200 && integrationsAfter?.status === 'BLOCKED_EXTERNAL');
   const me = await fetch(`${BASE}/api/v1/me`, { headers: { Cookie: cookieHeader() } });
   record('перезапуск server — сессия действительна', me.status === 200);
 

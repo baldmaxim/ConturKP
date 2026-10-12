@@ -283,8 +283,9 @@ BEGIN
     IF v_problem IS NOT NULL THEN
       RAISE EXCEPTION 'send_event: выпуск не готов к отправке (%)', v_problem USING ERRCODE = '23514';
     END IF;
-    IF NEW.sent_at < r.released_at OR NEW.sent_at > now() + interval '1 day' THEN
-      RAISE EXCEPTION 'send_event: время отправки — не раньше выпуска и не в будущем' USING ERRCODE = '23514';
+    -- Время ручной регистрации вводится с точностью до минуты: сравнение — с минутой выпуска.
+    IF NEW.sent_at < date_trunc('minute', r.released_at) OR NEW.sent_at > now() + interval '1 day' THEN
+      RAISE EXCEPTION 'send_event: время отправки — не раньше минуты выпуска и не в будущем' USING ERRCODE = '23514';
     END IF;
     IF NEW.evidence_kind = 'mail_message' THEN
       -- Письмо-основание: отправленное, связанное с тендером; время, коммуникация и байты — из закреплённой ревизии.

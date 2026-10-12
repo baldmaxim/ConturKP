@@ -1,4 +1,4 @@
-import { useState, type FC } from 'react';
+import type { FC } from 'react';
 import { getReleaseComparison } from '../../api/sendEndpoints';
 import type { IComparisonSide, IComparisonView, TCompareSection } from '../../api/sendTypes';
 import { Badge } from '../../components/Badge';
@@ -58,13 +58,13 @@ const Calculation: FC<{ c: NonNullable<IComparisonView['calculation']> }> = ({ c
  * построено по закреплённым записям выпусков: текущая папка, рабочий набор источников и поисковый индекс не читаются.
  */
 export const ComparisonResult: FC<{ comparisonId: string }> = ({ comparisonId }) => {
-  const [version, setVersion] = useState(0);
-  const res = useApiResource((signal) => getReleaseComparison(comparisonId, signal), `release-comparison:${comparisonId}:${version}`);
+  const res = useApiResource((signal) => getReleaseComparison(comparisonId, signal), `release-comparison:${comparisonId}`);
   const c = res.data;
   if (res.error && !c) return <ErrorState error={res.error} onRetry={res.reload} />;
   if (!c) return <LoadingState />;
   if (c.status !== 'ready' || !c.sections) return <Notice tone="danger">{`Сравнение не построено: ${c.failureReason ?? 'причина не указана'}.`}</Notice>;
-  const reload = (): void => setVersion((v) => v + 1);
+  // Перечитывание тем же ключом сохраняет данные на экране: раскрытые разделы не сворачиваются после записи причины.
+  const reload = res.reload;
   const section = (id: TCompareSection) => {
     const s = c.sections![id];
     const n = total(s.changes);

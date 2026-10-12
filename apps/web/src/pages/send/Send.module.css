@@ -20,7 +20,7 @@
 }
 
 .send[data-status='verified'] {
-  border-left-color: var(--success, var(--accent));
+  border-left-color: var(--success);
 }
 
 .send[data-status='disputed'],
@@ -29,7 +29,16 @@
 }
 
 .send[data-status='registered'] {
-  border-left-color: var(--info, var(--accent));
+  border-left-color: var(--info);
+}
+
+/* Отметки не шире блока: длинная подпись обрезается многоточием, а не раздвигает страницу (360 px). */
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .candidate {
@@ -51,4 +60,15 @@
   min-height: 44px;
   max-width: 100%;
   font-size: 16px;
+}
+
+/* Кнопки с длинными подписями («Зарегистрировать нарушение…») переносят текст и не шире блока на 360 px. */
+.sends .wrapButton {
+  max-width: 100%;
+  height: auto;
+  min-height: var(--control-h);
+  padding-top: var(--space-1);
+  padding-bottom: var(--space-1);
+  white-space: normal;
+  text-align: left;
 }

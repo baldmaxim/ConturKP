@@ -7,6 +7,7 @@ import { Icon } from '../components/Icon';
 import { Logo } from '../components/Logo';
 import { ThemeSwitcher } from '../components/ThemeSwitcher';
 import { ChangePasswordDialog } from '../pages/ChangePasswordDialog';
+import { ApiTokensDialog } from '../pages/mcp/ApiTokensDialog';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { cx } from '../utils/cx';
@@ -20,6 +21,7 @@ export const Header: FC = () => {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [tokensOpen, setTokensOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
   const showAdmin = can('admin.users') || can('admin.audit') || can('admin.contract');
@@ -64,6 +66,11 @@ export const Header: FC = () => {
   const openPassword = (): void => {
     setMenuOpen(false);
     setPasswordOpen(true);
+  };
+
+  const openTokens = (): void => {
+    setMenuOpen(false);
+    setTokensOpen(true);
   };
 
   const navLinks = (
@@ -113,6 +120,7 @@ export const Header: FC = () => {
             {me?.displayName}
           </span>
           <ThemeSwitcher compact />
+          <Button variant="ghost" icon="message-square" iconOnly aria-label="Доступ для чат-клиентов" title="Доступ для чат-клиентов" onClick={openTokens} />
           <Button variant="ghost" icon="key-round" iconOnly aria-label="Сменить пароль" title="Сменить пароль" onClick={openPassword} />
           <Button variant="ghost" icon="log-out" loading={loggingOut} onClick={() => void handleLogout()}>
             Выйти
@@ -140,6 +148,9 @@ export const Header: FC = () => {
           </nav>
           <ThemeSwitcher />
           <div className={styles.menuActions}>
+            <Button icon="message-square" onClick={openTokens}>
+              Доступ для чат-клиентов
+            </Button>
             <Button icon="key-round" onClick={openPassword}>
               Сменить пароль
             </Button>
@@ -150,6 +161,7 @@ export const Header: FC = () => {
         </div>
       ) : null}
       {passwordOpen ? <ChangePasswordDialog onClose={() => setPasswordOpen(false)} /> : null}
+      {tokensOpen ? <ApiTokensDialog onClose={() => setTokensOpen(false)} /> : null}
     </header>
   );
 };

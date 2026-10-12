@@ -17,14 +17,16 @@ interface IStep {
 
 /**
  * Цепочка выпуска (BRAND.md §4.3, I01): согласование, выпуск и готовность к отправке — разные события, у каждого свои
- * факты. Размещение (этап 14) — блок «Размещение» у выпуска; регистрация отправки — этап 15: показывается как ещё не
- * реализованная, а не «дорисовывается».
- * Удержание отправки — баннер над цепочкой; прежнее согласование остаётся видимым.
+ * факты. Размещение (этап 14) и отправка (этап 15) — блоки «Размещение» и «Отправка» у выпуска; здесь — готовность и
+ * число засчитанных отправок. Отправка не означает получение или согласие заказчика (A46).
+ * Удержание отправки — баннер над цепочкой; прежнее согласование остаётся видимым. У уже отправленного выпуска новые
+ * события этапа — условие только повторной отправки.
  */
 export const ReleaseChain: FC<{ c: ICandidateView }> = ({ c }) => {
   const a = c.approval ?? null;
   const r = c.release ?? null;
   const send = r ? SEND_READINESS[r.sendReadiness.state]! : null;
+  const sent = r?.send?.counted ?? 0;
   const steps: IStep[] = [
     {
       key: 'approval',
@@ -43,13 +45,13 @@ export const ReleaseChain: FC<{ c: ICandidateView }> = ({ c }) => {
     {
       key: 'send',
       icon: send?.icon ?? 'send',
-      done: !!r && r.sendReadiness.sendable,
-      label: r ? (r.sendReadiness.testRelease ? `${send!.label}; тестовый выпуск не отправляется` : send!.label) : 'Отправка — после выпуска',
-      facts: r ? 'Размещение — в блоке «Размещение» у выпуска; регистрация отправки — этап 15' : 'Регистрация отправки — этап 15',
-      ...(r && r.sendReadiness.state !== 'ready' ? { tone: 'danger' as const } : {}),
+      done: !!r && (sent > 0 || r.sendReadiness.sendable),
+      label: r ? (r.sendReadiness.testRelease ? `${send!.label}; тестовый выпуск не отправляется` : sent > 0 ? `Отправка зарегистрирована (${sent})` : send!.label) : 'Отправка — после выпуска',
+      facts: r ? (sent > 0 ? `первая — ${formatDateTime(r.send?.firstCountedAt)}; записи — в блоке «Отправка» у выпуска` : 'Размещение и отправка — в блоках «Размещение» и «Отправка» у выпуска') : 'Отправка регистрируется после выпуска',
+      ...(r && sent === 0 && r.sendReadiness.state !== 'ready' ? { tone: 'danger' as const } : {}),
     },
   ];
-  const held = r && (r.sendReadiness.state === 'held' || r.sendReadiness.state === 'excluded');
+  const held = r && sent === 0 && (r.sendReadiness.state === 'held' || r.sendReadiness.state === 'excluded');
   return (
     <div className={styles.chainWrap}>
       {held ? (

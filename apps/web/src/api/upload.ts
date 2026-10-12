@@ -5,6 +5,7 @@
 import { API_BASE, ApiError, csrfToken, isProblem, notifyUnauthenticated } from './client';
 import type { IContractUploadResult, TContractRole } from './contractTypes';
 import type { IMailImport, INegotiationImportResult, IQaImportResult, TMailDirection } from './mailTypes';
+import type { IEvidenceUpload } from './sendTypes';
 import type { IImportBatch, IProblem, IRecognitionRunAccepted } from './types';
 
 export interface IUploadHandle<T> {
@@ -168,3 +169,7 @@ export const uploadFormSample = (file: File, idempotencyKey: string, tenderId: s
   const params = new URLSearchParams({ name: file.name, ...(tenderId ? { tenderId } : {}) });
   return xhrUpload<{ sha256: string; name: string; sizeBytes: number }>(`${API_BASE}/form-samples?${params.toString()}`, file, idempotencyKey, () => undefined);
 };
+
+/** Файл-основание отправки или нарушения (этап 15): скан, квитанция, снимок экрана. Сервер его не разбирает. */
+export const uploadSendEvidence = (releaseId: string, file: File, idempotencyKey: string, onProgress: (fraction: number) => void = () => undefined): IUploadHandle<IEvidenceUpload> =>
+  xhrUpload<IEvidenceUpload>(`${API_BASE}/releases/${encodeURIComponent(releaseId)}/send-evidence?name=${encodeURIComponent(file.name)}`, file, idempotencyKey, onProgress);

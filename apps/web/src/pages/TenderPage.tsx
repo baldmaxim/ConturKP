@@ -10,6 +10,7 @@ import { Tabs, tabId, tabPanelId, type ITab } from '../components/Tabs';
 import { useApiResource } from '../hooks/useApiResource';
 import { useAuth } from '../hooks/useAuth';
 import { AuditLog } from './AuditLog';
+import { ReleaseComparisonPanel } from './comparison/ReleaseComparisonPanel';
 import { TenderMailPanel } from './communications/TenderMailPanel';
 import { TenderNegotiationsPanel } from './communications/TenderNegotiationsPanel';
 import { TenderQaPanel } from './communications/TenderQaPanel';
@@ -36,6 +37,7 @@ const tabsFor = (tender: ITender, canAdminIntake: boolean): ITab[] => {
     tabs.push({ id: 'qa', label: 'Вопросы и ответы', icon: 'message-square' });
     tabs.push({ id: 'negotiations', label: 'Переговоры', icon: 'mic' });
     tabs.push({ id: 'priority', label: 'Приоритет источников', icon: 'list-checks' });
+    tabs.push({ id: 'compare', label: 'Сравнение выпусков', icon: 'copy' });
   }
   tabs.push({ id: 'card', label: 'Карточка', icon: 'briefcase' });
   tabs.push({ id: 'members', label: 'Участники', icon: 'users' });
@@ -105,6 +107,7 @@ export const TenderPage: FC = () => {
         {active === 'qa' ? <TenderQaPanel tenderId={tender.id} canImport={caps.includes('source.write')} /> : null}
         {active === 'negotiations' ? <TenderNegotiationsPanel tenderId={tender.id} canImport={caps.includes('source.write')} /> : null}
         {active === 'priority' ? <SourcePriorityPanel tenderId={tender.id} /> : null}
+        {active === 'compare' ? <ReleaseComparisonPanel tenderId={tender.id} /> : null}
         {active === 'card' ? <TenderCard tender={tender} onChanged={(next) => setData(next)} /> : null}
         {active === 'members' ? (
           <MembersPanel

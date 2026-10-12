@@ -62,6 +62,8 @@ export interface IReleaseView {
   releasedBy: IActor;
   releasedAt: string;
   sendReadiness: { state: 'excluded' | 'held' | 'intake_not_current' | 'ready'; sendable: boolean; testRelease: boolean; events: { seq: number; type: string }[] };
+  // Отправки выпуска (этап 15): записи и засчитанные; «состав не совпал» не засчитывается.
+  send?: { events: number; counted: number; disputed: number; incidents: number; firstCountedAt: string | null };
   // Манифест выпуска (и ZIP всех файлов) — только при доступе к предметам всех решений в нём (R13-02).
   manifestReadable: boolean;
 }

@@ -4,14 +4,15 @@ import { Badge } from '../../components/Badge';
 import { useApiResource } from '../../hooks/useApiResource';
 import { formatDateTime } from '../../utils/datetime';
 import { MODE_LABEL, SEND_READINESS } from '../../utils/releaseLabels';
+import { SendsPanel } from '../send/SendsPanel';
 import { DeliveriesPanel } from './DeliveriesPanel';
 import form from '../../styles/form.module.css';
 import styles from './Release.module.css';
 
 /**
  * Выпуски этапа (D-033 В-13-7): неизменяемые записи с манифестом выпуска и точными байтами комплекта; готовность к
- * отправке вычисляется (I01) — удержание после выпуска видно здесь же. Размещение (этап 14) — блок под выпуском;
- * регистрация отправки — этап 15.
+ * отправке вычисляется (I01) — удержание после выпуска видно здесь же. Размещение (этап 14) и отправка (этап 15) —
+ * отдельные блоки под выпуском.
  * Манифест выпуска и ZIP всех файлов содержат причины решений: у того, кому закрыт предмет решения, их нет (R13-02).
  */
 export const ReleasesPanel: FC<{ stageId: string; version: string }> = ({ stageId, version }) => {
@@ -59,6 +60,7 @@ export const ReleasesPanel: FC<{ stageId: string; version: string }> = ({ stageI
               </span>
               {r.manifestReadable ? null : <span className={styles.muted}>Манифест выпуска закрыт: в нём причины решений по основаниям, недоступным вам.</span>}
               <DeliveriesPanel releaseId={r.id} />
+              <SendsPanel releaseId={r.id} />
             </li>
           );
         })}

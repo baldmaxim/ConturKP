@@ -21,6 +21,7 @@ import {
   releaseManifestReadableBy,
   releaseOfCandidate,
   releaseSendReadiness,
+  sendSummaries,
   type IAccessContext,
   type IApprovalRow,
   type IHoldRow,
@@ -115,6 +116,11 @@ export const requireManifestReadable = async (db: Queryable, store: BlobStore, c
   }
 };
 
+const releaseSendCounts = async (db: Queryable, releaseId: string) => {
+  const s = (await sendSummaries(db, [releaseId])).get(releaseId)!;
+  return { events: s.events, counted: s.counted, disputed: s.disputed, incidents: s.incidents, firstCountedAt: iso(s.firstCountedAt) };
+};
+
 export const releaseView = async (db: Queryable, store: BlobStore, ctx: IAccessContext, r: IReleaseRow) => ({
   id: r.id,
   candidateId: r.candidate_id,
@@ -129,6 +135,8 @@ export const releaseView = async (db: Queryable, store: BlobStore, ctx: IAccessC
   releasedBy: { id: r.released_by, name: r.released_by_name },
   releasedAt: iso(r.released_at),
   sendReadiness: await releaseSendReadiness(db, r),
+  // Отправки выпуска (этап 15): число записей и засчитанных; сами записи — GET /releases/{id}/send-events.
+  send: await releaseSendCounts(db, r.id),
   manifestReadable: await releaseManifestReadable(db, store, ctx, r),
 });
 

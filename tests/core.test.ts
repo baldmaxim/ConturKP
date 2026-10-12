@@ -34,6 +34,7 @@ describe('возможности', () => {
       'candidate.create',
       // Этап 14 (D-034 В-14-5): размещение — инженер и руководитель тендера.
       'delivery.manage',
+      'mcp.propose',
       // Этап 13 (D-033 В-13-7): выпуск — инженер тендера.
       'candidate.release',
       // Этап 15 (state-machines §17, ADR-006 п. 3): отправку и нарушение регистрирует инженер тендера.
@@ -58,6 +59,7 @@ describe('возможности', () => {
       'application.fill',
       'candidate.create',
       'delivery.manage',
+      'mcp.propose',
       'stage.manage',
       'hold.resolve',
       'requirement.confirm',

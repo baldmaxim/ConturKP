@@ -71,7 +71,11 @@ export type TenderCapability =
   // Этап 15 (D-035; state-machines §17, ADR-006 п. 3): регистрация отправки и нарушения — инженер тендера; лишние
   // вложения письма об отправке принимает руководитель тендера (В-15-1); только human. БД — tender_capabilities (0039).
   | 'send.register'
-  | 'send.accept_extras';
+  | 'send.accept_extras'
+  // Этап 16 (D-037; ADR-006, ADR-010): предложение через чат-клиент (MCP) — участник тендера, инженер и руководитель.
+  // Нужна и область `propose` у токена. Принятие предложения — возможностью соответствующей записи, только human (I12).
+  // БД — tender_capabilities (миграция 0040).
+  | 'mcp.propose';
 
 export const ROLES: readonly Role[] = ['admin', 'manager', 'engineer'];
 export const MEMBER_ROLES: readonly MemberRole[] = ['engineer', 'manager'];
@@ -129,6 +133,7 @@ export const tenderCapabilities = (
   if (role) caps.push('application.fill');
   if (role) caps.push('candidate.create');
   if (role) caps.push('delivery.manage');
+  if (role) caps.push('mcp.propose');
   // Решения о неприменимости (элементы импорта, удержания) — только руководитель тендера (ADR-006 §3).
   if (role === 'manager') caps.push('stage.manage', 'hold.resolve');
   // Подтверждение, решение и ведение реестра — руководитель тендера (OD-08-5).

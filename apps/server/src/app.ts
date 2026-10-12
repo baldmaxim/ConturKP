@@ -116,7 +116,7 @@ export const createApp = (deps: IAppDeps): express.Express => {
   api.use((_req: Request, _res: Response, next: NextFunction) => next(new HttpError(404, 'NOT_FOUND', 'Маршрут не найден')));
   app.use('/api/v1', api);
   // MCP портала (этап 16): отдельная точка вне /api/v1 — только токен, без cookie и без проверки CSRF.
-  app.use('/mcp', mcpRouter({ pool, config, clock, logError }));
+  app.use('/mcp', mcpRouter({ pool, store, config, clock, logError }));
   app.use('/api', (_req: Request, _res: Response, next: NextFunction) => next(new HttpError(404, 'NOT_FOUND', 'Маршрут не найден')));
 
   const webDist = config.webDistDir ?? DEFAULT_WEB_DIST;

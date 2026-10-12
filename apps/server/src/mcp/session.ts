@@ -2,9 +2,12 @@
 // Контекст прав загружается заново на каждый запрос: отзыв назначения, роли или `mail.read` действует сразу.
 import type { IAppConfig } from '@kontur/config';
 import type { IAccessContext, IApiTokenRow, Pool } from '@kontur/db';
+import type { BlobStore } from '@kontur/storage';
 
 export interface IMcpSession {
   pool: Pool;
+  // Хранилище нужно только сравнению выпусков: оно читает закреплённые манифесты сторон. Файлы чат-клиенту не отдаются.
+  store: BlobStore;
   config: IAppConfig;
   clock: () => Date;
   ctx: IAccessContext;

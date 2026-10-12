@@ -4,6 +4,7 @@
 // сервера к клиенту у портала нет. Клиенты прежних ревизий протокола (с рукопожатием) обслуживает SDK без состояния.
 import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
 import type { IAppConfig } from '@kontur/config';
+import type { BlobStore } from '@kontur/storage';
 import { findActiveApiToken, loadAccessContext, writeAudit, type Pool } from '@kontur/db';
 import express, { Router, type Request, type Response } from 'express';
 import { requestIdOf } from '../http/context.ts';
@@ -13,6 +14,7 @@ import type { IMcpSession } from './session.ts';
 import { callTool, type IMcpTool, type IToolRuntime } from './tools.ts';
 import { integrationStatusTool, listCasesTool } from './tools/cases.ts';
 import { proposeChangeReasonTool, proposeConditionTextTool, proposeFindingTool, proposeQuestionTool } from './tools/propose.ts';
+import { caseOverviewTool, getCalculationTool, getEconomicsTool, getReadinessTool, listDecisionsTool, listDocumentsTool, listFindingsTool, listQuestionsTool, listRequirementsTool } from './tools/reads.ts';
 import { getCitationTool, getSearchRunTool, searchEvidenceTool } from './tools/search.ts';
 
 export const MCP_SERVER_NAME = 'kontur-kp';
@@ -20,9 +22,18 @@ export const MCP_SERVER_VERSION = '16.0.0';
 
 export const MCP_TOOLS: readonly IMcpTool[] = [
   listCasesTool,
+  caseOverviewTool,
+  listDocumentsTool,
   searchEvidenceTool,
   getSearchRunTool,
   getCitationTool,
+  listRequirementsTool,
+  getCalculationTool,
+  getEconomicsTool,
+  listFindingsTool,
+  listQuestionsTool,
+  listDecisionsTool,
+  getReadinessTool,
   integrationStatusTool,
   proposeFindingTool,
   proposeQuestionTool,
@@ -39,13 +50,14 @@ const rpcError = (code: number, message: string) => ({ jsonrpc: '2.0', error: { 
 
 export interface IMcpDeps {
   pool: Pool;
+  store: BlobStore;
   config: IAppConfig;
   clock: () => Date;
   logError: (message: string, meta: Record<string, unknown>) => void;
 }
 
 export const mcpRouter = (deps: IMcpDeps): Router => {
-  const { pool, config, clock } = deps;
+  const { pool, store, config, clock } = deps;
   const router = Router();
   const runtime: IToolRuntime = { limiter: new CallLimiter(config.mcp.callsPerMinute, config.mcp.callsPerHour), redact: createRedactor(config) };
 
@@ -97,7 +109,7 @@ export const mcpRouter = (deps: IMcpDeps): Router => {
       res.status(401).json(rpcError(-32001, 'нужен действующий токен портала в заголовке Authorization: Bearer'));
       return;
     }
-    const session: IMcpSession = { pool, config, clock, ctx, token, requestId };
+    const session: IMcpSession = { pool, store, config, clock, ctx, token, requestId };
     const headers = new Headers();
     for (const [name, value] of Object.entries(req.headers)) {
       // Токен дальше не передаётся: обработчик SDK аутентификацию не выполняет.

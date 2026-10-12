@@ -5,12 +5,12 @@ import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CHUNKER_VERSION } from '../packages/core/src/index.ts';
 import { createVersion } from '../packages/db/src/index.ts';
-import { buildStage13, buildStageContent, closeStage13, PLASTER_LINE, requirementOf, rerunReview, TZ, type IStage13 } from './approvalFixtures.ts';
+import { buildStage13, buildStageContent, closeStage13, notApplicable, PLASTER_LINE, requirementOf, rerunReview, TZ, type IStage13 } from './approvalFixtures.ts';
 import { captureNow, linkSource } from './calculationFixtures.ts';
 import { decide, E, effectMap, lineageOf, unitOf, units, v2Tender, type IEcon } from './economicsFixtures.ts';
 import { act, draftOf, fieldOf } from './formsFixtures.ts';
 import { auditRows, drain, idem, type TestClient } from './helpers.ts';
-import { createMailbox, eml, importEml, linkMail, setMailAccess } from './mailFixtures.ts';
+import { createMailbox, eml, importEml, linkMail, setMailAccess, unlinkMail } from './mailFixtures.ts';
 import { completeDraft } from './releaseFixtures.ts';
 import { buildIndex, fixScope, fragmentIdOf, seedEvidenceRun, setWorkingSet, uploadDocument } from './searchFixtures.ts';
 import { released, type IReleased } from './sendFixtures.ts';
@@ -56,7 +56,7 @@ let a: IReleased;
 let b: IReleased;
 let cmp: IComparison;
 let mailbox: string;
-const ids = { lateRev: '', newRev: '', outRev: '', newRun: '', letterRevision: '', mailFragment: '', newFragment: '' };
+const ids = { lateRev: '', newRev: '', outRev: '', newRun: '', letterRevision: '', letterMessage: '', mailFragment: '', newFragment: '' };
 
 const NEW_REQ = 'Монтаж ограждений балконов выполняется из нержавеющей стали.';
 const LATE_TEXT = 'Грунты основания — суглинки тугопластичные.';
@@ -105,6 +105,7 @@ beforeAll(async () => {
   const letter = await importEml(st.e.s.eng1, st.e.worker, mailbox, eml({ subject: 'Охрана площадки: закрытая тема', text: LETTER_TEXT, date: new Date().toUTCString() }), { direction: 'inbound' });
   expect(letter.status).toBe('done');
   ids.letterRevision = letter.revisionId!;
+  ids.letterMessage = letter.messageId!;
   await linkMail(st.e.s.eng1, letter.messageId!, st.e.s.tenderA, st.e.s.stageA);
   // Расчёт: те же итоги, другое количество и цена строки штукатурки (110 × 12 → 120 × 11).
   const t = v2Tender();
@@ -340,6 +341,12 @@ describe('сравнение после переиндексации и ново
     await st.e.worker.maintain();
     await drain(st.e.worker);
     expect((await st.db.pool.query("SELECT count(*)::int AS n FROM search_index_version WHERE status = 'retired'")).rows[0].n).toBeGreaterThan(0);
+    // Позднейшие изменения текущего состояния тоже не влияют: связь письма снята, получен новый документ, по событиям
+    // выпущенного комплекта принято решение — входы сравнения закреплены в выпусках и неизменяемых событиях.
+    await unlinkMail(st.e.s.eng1, ids.letterMessage, st.e.s.tenderA);
+    await uploadDocument(st.db, st.e.config, st.e.s.eng1, st.e.s.stageA, 'Документ после второго выпуска.pdf');
+    await drain(st.e.worker);
+    await notApplicable(st, b.candidate.id, 'Поздний документ на выпущенный комплект не влияет');
     const again = await compare(a.releaseId, b.releaseId);
     expect(again.status, again.text).toBe(201);
     expect(again.body.id).not.toBe(cmp.id);
@@ -372,6 +379,7 @@ describe('сравнение выпусков разных этапов', () => 
     expect(r.status, r.text).toBe(201);
     const x = await read(r.body.id as string);
     expect(x.left.releaseId).toBe(a.releaseId);
+    expect(x.left).toMatchObject({ restricted: false, manifestSha256: expect.stringMatching(/^[0-9a-f]{64}$/u) });
     expect(x.right).toMatchObject({ releaseId: c.releaseId, stage: { id: stageId } });
     expect(x.left.stage.id).toBe(st.e.s.stageA);
     const sources = await items(x.id, 'sources');

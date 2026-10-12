@@ -53,7 +53,7 @@ import { requireCtx } from '../http/context.ts';
 import { forbidden, HttpError, notFound } from '../http/errors.ts';
 import { receiveUpload, uploadedBlob, uploadName } from '../http/upload.ts';
 import { candidateVisible, iso, loadVisibleRelease } from '../releaseViews.ts';
-import { contentDisposition } from './documents.ts';
+import { CONTENT_CSP, contentDisposition } from './documents.ts';
 import { conflict } from './reviewScope.ts';
 import { hasTenderCap } from './scope.ts';
 
@@ -276,6 +276,7 @@ const streamBlob = (store: BlobStore, res: import('express').Response, sha256: s
   if (size !== null) res.setHeader('Content-Length', String(size));
   res.setHeader('Content-Disposition', contentDisposition(false, name));
   res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', CONTENT_CSP);
   res.setHeader('Cache-Control', 'private, no-store');
   res.setHeader('X-Content-SHA256', sha256);
   const stream = store.openRead(sha256);

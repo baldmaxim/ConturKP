@@ -253,7 +253,9 @@ export const loadReleaseSnapshot = async (db: Queryable, release: IReleaseRow, m
 
 // ---------------------------------------------------------------- Получено между выпусками (проект §10)
 
-const receivedInputs = async (db: Queryable, tenderId: string, l: IPinnedCandidate, r: IPinnedCandidate, leftRows: readonly IScopeRow[], rightRows: readonly IScopeRow[]): Promise<IReceivedInput[]> => {
+// Все входы блока — неизменяемые записи: редакции и места получения, события этапа, прогоны распознавания, снимки
+// сторон; решения по событиям — только принятые до выпуска правой стороны. Повторный запуск даёт тот же результат.
+const receivedInputs = async (db: Queryable, tenderId: string, l: IPinnedCandidate, r: IPinnedCandidate, rightReleasedAt: Date, leftRows: readonly IScopeRow[], rightRows: readonly IScopeRow[]): Promise<IReceivedInput[]> => {
   const out: IReceivedInput[] = [];
   const empty = r.created_at <= l.created_at;
   const leftRuns = new Map(leftRows.filter((x) => x.document_revision_id).map((x) => [x.document_revision_id!, x.recognition_run_id]));
@@ -278,8 +280,9 @@ const receivedInputs = async (db: Queryable, tenderId: string, l: IPinnedCandida
       `SELECT e.ref_id AS revision_id, h.status, h.decision_id, (h.candidate_id = $3) AS is_right
          FROM stage_input_event e JOIN readiness_hold h ON h.input_event_id = e.id
         WHERE e.ref_type = 'document_revision' AND e.ref_id = ANY($1::uuid[]) AND h.candidate_id IN ($2, $3) AND h.status <> 'open'
+          AND h.resolved_at <= $4
         ORDER BY e.ref_id, (h.candidate_id = $3) DESC, h.resolved_at, h.id`,
-      [outside, l.id, r.id],
+      [outside, l.id, r.id, rightReleasedAt],
     );
     for (const x of rows.rows) if (!dispositions.has(x.revision_id)) dispositions.set(x.revision_id, x);
   }
@@ -325,8 +328,11 @@ const receivedInputs = async (db: Queryable, tenderId: string, l: IPinnedCandida
     for (const o of occurrences.rows) {
       out.push({ ...base, kind: 'document_occurrence', id: o.id, revisionId: o.document_revision_id, sha256: o.blob_sha256, inInterval: true, repeatOccurrence: o.repeat, inRightScope: rightDocs.has(o.document_revision_id), rightRecognized: !!rightDocs.get(o.document_revision_id)?.recognition_run_id });
     }
+    // Письмо «получено» по событию связи с тендером (событие этапа неизменно; текущий статус связи не читается).
     const mail = await db.query<{ message_id: string }>(
-      `SELECT l.message_id FROM mail_message_tender l WHERE l.tender_id = $1 AND l.status = 'linked' AND l.linked_at > $2 AND l.linked_at <= $3 ORDER BY l.linked_at, l.id`,
+      `SELECT e.ref_id AS message_id FROM stage_input_event e JOIN tender_stage s ON s.id = e.stage_id
+        WHERE s.tender_id = $1 AND e.event_type = 'communication_linked' AND e.ref_type = 'mail_message' AND e.created_at > $2 AND e.created_at <= $3
+        GROUP BY e.ref_id ORDER BY min(e.created_at), e.ref_id`,
       [tenderId, l.created_at, r.created_at],
     );
     for (const m of mail.rows) {
@@ -388,7 +394,7 @@ export const createReleaseComparison = async (db: Queryable, d: ICreateReleaseCo
   const [left, right] = [await loadReleaseSnapshot(db, d.left, d.leftManifest), await loadReleaseSnapshot(db, d.right, d.rightManifest)];
   const [leftRows, rightRows] = [await scopeRows(db, lc.evidence_scope_id), await scopeRows(db, rc.evidence_scope_id)];
   const calculation = await calculationOf(db, d, left.calculationRevisionId, right.calculationRevisionId);
-  const result = compareReleaseSnapshots(left, right, await receivedInputs(db, d.tenderId, lc, rc, leftRows, rightRows), calculation);
+  const result = compareReleaseSnapshots(left, right, await receivedInputs(db, d.tenderId, lc, rc, d.right.released_at, leftRows, rightRows), calculation);
   if (result.items.length > 0) {
     await db.query(
       `INSERT INTO release_comparison_item (comparison_id, ordinal, section, change, subject_type, item_key, left_ref, right_ref, left_sha256, right_sha256, detail)

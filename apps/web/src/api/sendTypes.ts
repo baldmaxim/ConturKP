@@ -142,7 +142,8 @@ export interface IComparisonSide {
   stage: { id: string; seq: number; title: string };
   mode: 'test' | 'production';
   releasedAt: string;
-  manifestSha256: string;
+  restricted: boolean;
+  manifestSha256: string | null;
 }
 
 export interface IComparisonBrief {

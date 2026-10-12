@@ -72,25 +72,28 @@ const sidesOf = async (db: Queryable, c: IReleaseComparisonRow): Promise<{ left:
   return { left: r.rows.find((x) => x.id === c.left_release_id)!, right: r.rows.find((x) => x.id === c.right_release_id)! };
 };
 
-const sideView = (s: ISideRow) => ({
+// Сторона сравнения; хэш манифеста выпуска — только тому, кто видит комплект (как в списке выпусков этапа).
+const sideView = (s: ISideRow, visible: boolean) => ({
   releaseId: s.id,
   candidateSeq: Number(s.candidate_seq),
   stage: { id: s.stage_id, seq: Number(s.stage_seq), title: s.stage_title },
   mode: s.mode,
   releasedAt: iso(s.released_at),
-  manifestSha256: s.release_manifest_sha256,
+  restricted: !visible,
+  manifestSha256: visible ? s.release_manifest_sha256 : null,
 });
 
-const brief = async (db: Queryable, c: IReleaseComparisonRow) => {
+const brief = async (db: Queryable, ctx: IAccessContext, c: IReleaseComparisonRow) => {
   const { left, right } = await sidesOf(db, c);
+  const seen = async (s: ISideRow): Promise<boolean> => candidateVisible(db, ctx, (await getCandidate(db, s.candidate_id))!);
   return {
     id: c.id,
     status: c.status,
     failureReason: c.failure_reason,
     methodVersion: c.method_version,
     resultSha256: c.result_sha256,
-    left: sideView(left),
-    right: sideView(right),
+    left: sideView(left, await seen(left)),
+    right: sideView(right, await seen(right)),
     requestedBy: { id: c.requested_by, name: c.requested_by_name },
     createdAt: iso(c.created_at),
     changes: c.summary ? Object.fromEntries(Object.entries(c.summary.sections).map(([k, v]) => [k, Object.values(v.changes).reduce((a, b) => a + b, 0)])) : null,
@@ -156,12 +159,14 @@ export const releaseComparisonsRouter = (pool: Pool, store: BlobStore): Router =
             throw conflict('среди входов комплекта одной из сторон есть то, что вы не можете читать', 'restricted_inputs', t);
           }
         }
-        // Левая сторона — выпущенная раньше (при равном времени — по ID): порядок сторон не зависит от порядка в запросе.
-        const [left, right] = a.released_at.getTime() < b.released_at.getTime() || (a.released_at.getTime() === b.released_at.getTime() && a.id < b.id) ? [a, b] : [b, a];
+        // Левая сторона — выпущенная раньше (при равном времени — по ID): порядок определяет БД с её точностью времени —
+        // тот же, что проверяет охранник; от порядка в запросе он не зависит.
+        const first = (await client.query<{ id: string }>('SELECT id FROM release WHERE id = ANY($1::uuid[]) ORDER BY released_at, id LIMIT 1', [[a.id, b.id]])).rows[0]!.id;
+        const [left, right] = first === a.id ? [a, b] : [b, a];
         const c = await createReleaseComparison(client, { tenderId, left, right, leftManifest: await manifestOf(left), rightManifest: await manifestOf(right), userId: ctx.principal.userId });
         return {
           status: 201,
-          body: await brief(client, c),
+          body: await brief(client, ctx, c),
           audit: [
             {
               action: 'release.comparison.create',
@@ -182,7 +187,7 @@ export const releaseComparisonsRouter = (pool: Pool, store: BlobStore): Router =
       const tenderId = uuidParam(req, 'id', 'tender');
       if (!hasTenderCap(ctx, tenderId, 'tender.read')) throw notFound({ entityType: 'tender', entityId: tenderId });
       const items = [];
-      for (const c of await listReleaseComparisons(pool, tenderId)) items.push(await brief(pool, c));
+      for (const c of await listReleaseComparisons(pool, tenderId)) items.push(await brief(pool, ctx, c));
       res.json({ items });
     }),
   );
@@ -192,7 +197,7 @@ export const releaseComparisonsRouter = (pool: Pool, store: BlobStore): Router =
     query(pool, 'release.comparison.read', 'release_comparison', async (ctx, req, res) => {
       const c = await loadComparison(pool, ctx, uuidParam(req, 'id', 'release_comparison'));
       res.json({
-        ...(await brief(pool, c)),
+        ...(await brief(pool, ctx, c)),
         sections: c.summary?.sections ?? null,
         interval: c.summary?.interval ?? null,
         unrecognizedRight: c.summary?.unrecognizedRight ?? 0,
@@ -222,8 +227,9 @@ export const releaseComparisonsRouter = (pool: Pool, store: BlobStore): Router =
   const loadItem = async (db: Queryable, ctx: IAccessContext, id: string) => {
     const item = await getReleaseComparisonItem(db, id);
     if (!item) throw notFound({ entityType: 'release_comparison_item', entityId: id });
-    const c = await loadComparison(db, ctx, item.comparison_id).catch(() => {
-      throw notFound({ entityType: 'release_comparison_item', entityId: id });
+    const c = await loadComparison(db, ctx, item.comparison_id).catch((err: unknown) => {
+      if (err instanceof HttpError && err.status === 404) throw notFound({ entityType: 'release_comparison_item', entityId: id });
+      throw err;
     });
     return { item, comparison: c };
   };

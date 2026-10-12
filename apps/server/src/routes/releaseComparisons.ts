@@ -8,7 +8,6 @@ import {
   appendReleaseReason,
   CHANGE_NOTE_REASONS_SQL,
   createReleaseComparison,
-  decisionVisibility,
   getCandidate,
   getComparison,
   getRelease,
@@ -31,7 +30,7 @@ import type { BlobStore } from '@kontur/storage';
 import { Router, type Request } from 'express';
 import { command, parseBody, query, uuidParam, versionConflict } from '../http/command.ts';
 import { forbidden, HttpError, notFound } from '../http/errors.ts';
-import { itemViews, reasonView, reasonVisibility } from '../releaseComparisonViews.ts';
+import { decisionsVisibility, itemViews, reasonView, reasonVisibility } from '../releaseComparisonViews.ts';
 import { readStoredBlob } from '../releaseMarkup.ts';
 import { candidateVisible, iso } from '../releaseViews.ts';
 import { conflict } from './reviewScope.ts';
@@ -237,7 +236,7 @@ export const releaseComparisonsRouter = (pool: Pool, store: BlobStore): Router =
       // История причин закрытого вывода — без текста: вывод сначала проверяется по правам читателя.
       const [view] = await itemViews(pool, ctx, { tenderId: comparison.tender_id, leftStageId: left.stage_id, rightStageId: right.stage_id }, [item]);
       const history = await releaseReasonHistory(pool, item.id);
-      const visible = await reasonVisibility(pool, ctx, { id: right.stage_id, tenderId: comparison.tender_id }, history);
+      const visible = await reasonVisibility(pool, ctx, comparison.tender_id, history);
       res.setHeader('ETag', formatEtag(item.id, history[0]?.version ?? 0));
       res.json({ version: history[0]?.version ?? 0, items: history.map((r) => reasonView(r, !view!.closed && visible(r))) });
     }),
@@ -274,12 +273,10 @@ export const releaseComparisonsRouter = (pool: Pool, store: BlobStore): Router =
           ? (await client.query<{ id: string }>('SELECT u.id FROM unnest($1::uuid[]) AS u(id) WHERE fragment_in_stage(u.id, $2) OR fragment_in_stage(u.id, $3)', [fragmentIds, left.stage_id, right.stage_id])).rows.map((x) => x.id)
           : [];
         if (inScope.length !== new Set(fragmentIds).size) throw conflict('основание — фрагмент из снимков этапов сравниваемых выпусков', 'basis_out_of_scope', t);
-        const own = decisionIds.length ? (await client.query<{ id: string; stage_id: string | null }>('SELECT id, stage_id FROM decision WHERE id = ANY($1::uuid[]) AND tender_id = $2', [decisionIds, comparison.tender_id])).rows : [];
+        const own = decisionIds.length ? (await client.query<{ id: string }>('SELECT id FROM decision WHERE id = ANY($1::uuid[]) AND tender_id = $2', [decisionIds, comparison.tender_id])).rows : [];
         if (own.length !== new Set(decisionIds).size) throw conflict('основание — решение этого тендера', 'basis_out_of_scope', t);
-        for (const stageId of new Set(own.map((d) => d.stage_id ?? right.stage_id))) {
-          const vis = await decisionVisibility(client, ctx, { id: stageId, tenderId: comparison.tender_id }, { events: own.filter((d) => (d.stage_id ?? right.stage_id) === stageId).map((d) => ({ refType: 'decision', refId: d.id })) });
-          if (own.some((d) => (d.stage_id ?? right.stage_id) === stageId && !vis.event('decision', d.id))) throw conflict('среди оснований есть решения, предмет которых закрыт для вас', 'restricted_decisions', t);
-        }
+        const decisionVisible = await decisionsVisibility(client, ctx, comparison.tender_id, decisionIds);
+        if (!decisionIds.every(decisionVisible)) throw conflict('среди оснований есть решения, предмет которых закрыт для вас', 'restricted_decisions', t);
         const id = await appendReleaseReason(client, {
           tenderId: comparison.tender_id,
           comparisonId: comparison.id,

@@ -393,7 +393,8 @@ describe('обновление схемы 0037 → 0038', () => {
       c = await view(up, c.id);
       const a = await approve(up, c);
       expect(a.status, a.text).toBe(200);
-      expect(await migrateTo(99)).toBe(1);
+      // Остальные миграции — 0038 и более поздние этапы.
+      expect(await migrateTo(99)).toBe(readdirSync(MIGRATIONS_DIR).filter((f) => /^\d{4}_.*\.sql$/u.test(f)).length - 37);
       expect((await db.pool.query('SELECT tender_capabilities($1, $2) AS caps', [up.e.s.ids.eng1, up.e.s.tenderA])).rows[0].caps).toContain('delivery.manage');
       expect((await db.pool.query("SELECT system, status FROM integration_status WHERE component = 'FsDeliveryTarget' ORDER BY system")).rows).toEqual([
         { system: 'smb', status: 'BLOCKED_EXTERNAL' },

@@ -100,6 +100,9 @@ export interface IStage13Options {
   // Этап 15: данные, с которыми боевой комплект проходит матрицу блокеров (поддельные: в установке их нет) — ревизия
   // расчёта verified по контрактной фикстуре X-01 с правилом итога КП фикстуры и шаблоны без отметки «демо».
   production?: boolean;
+  // Этап 15: готовые ревизии шаблонов (второй этап того же тендера заполняет те же формы) и тексты ТЗ этапа.
+  templates?: { letterRevision: string; conditionsRevision: string };
+  tz?: { plaster: string; paint: string };
 }
 
 // Ревизия расчёта verified по контрактной фикстуре X-01: то же содержимое, что у последней выгрузки, с итогом КП по
@@ -148,18 +151,25 @@ export const buildStage13 = async (o: IStage13Options = {}): Promise<IStage13> =
   requireConverter();
   const db = o.db ?? (await createTestDb());
   const e = await buildEcon(db, testConfig(o.config ?? {}), { chat: quietModel(o.modelError) });
+  return buildStageContent(db, e, o);
+};
+
+// Содержимое этапа `e.s.stageA` поверх готовой экономики: ТЗ, снимок, реестр, покрытие, прогон проверок, шаблоны и
+// заполненные приложения. Этап 15 вызывает и для второго этапа того же тендера (тот же тендер, свой расчёт и ТЗ).
+export const buildStageContent = async (db: ITestDb, e: IEcon, o: IStage13Options = {}): Promise<IStage13> => {
   // Последняя ревизия расчёта этапа закрепляется прогоном проверок и комплектом: verified — до них.
   const calcRevision = o.production ? await addVerifiedRevision(e) : e.rev2;
   const tzRev = await uploadDocument(db, e.config, e.s.eng1, e.s.stageA, 'ТЗ.pdf');
-  const pages = [{ blocks: [TZ.plaster, TZ.paint] }];
+  const tz = o.tz ?? TZ;
+  const pages = [{ blocks: [tz.plaster, tz.paint] }];
   const run1 = await seedEvidenceRun(db.pool, tzRev, o.missingPage ? { pages, missingPages: 1 } : { pages });
   await setWorkingSet(e.s.manager, e.s.stageA, [tzRev], true);
   const scopeId = await fixScope(e.s.manager, e.s.stageA);
   const reg = await e.s.manager.post(`/stages/${e.s.stageA}/requirement-registries`, { evidenceScopeId: scopeId, reason: 'Реестр этапа 13' }, { headers: idem() });
   expect(reg.status, reg.text).toBe(201);
   const st = { e, registryId: reg.body.id as string };
-  const plaster = await requirementOf(st, 'Штукатурка стен по всей площади', await fragmentIdOf(db.pool, run1, TZ.plaster));
-  await requirementOf(st, 'Окраска фасада в два слоя', await fragmentIdOf(db.pool, run1, TZ.paint));
+  const plaster = await requirementOf(st, 'Штукатурка стен по всей площади', await fragmentIdOf(db.pool, run1, tz.plaster));
+  await requirementOf(st, o.tz ? 'Окраска фасада в три слоя' : 'Окраска фасада в два слоя', await fragmentIdOf(db.pool, run1, tz.paint));
   const cov = await e.s.manager.post(
     `/requirement-revisions/${plaster}/coverage`,
     { state: 'covered', objects: [{ type: 'calculation_revision', calculationRevisionId: calcRevision, externalPositionId: E.q.A, externalItemId: PLASTER_LINE, match: 'explicit_line' }] },
@@ -181,10 +191,14 @@ export const buildStage13 = async (o: IStage13Options = {}): Promise<IStage13> =
   const m = compareWithCalculation({ unit: 'млн руб.', currency: 'RUB', scale: 2 }, '0', 'source_grand_total', grand);
   const kpPrice = m.outcome === 'unverified' ? '0' : m.expected;
   const isDemo = !o.production;
-  const letterRevision = (await templateWithMarkedSample(e.s.manager, { name: isDemo ? 'Письмо КП (демо)' : 'Письмо КП (фикстура)', schema: demoSchema('demo-kp-letter'), marked: SAMPLES.letterMarked, original: SAMPLES.letterOriginal, isDemo })).revision.id;
-  const conditionsRevision = (
-    await templateWithMarkedSample(e.s.manager, { name: isDemo ? 'Ключевые условия (демо)' : 'Ключевые условия (фикстура)', schema: demoSchema('demo-key-conditions'), marked: SAMPLES.conditionsMarked, original: SAMPLES.conditionsOriginal, audience: 'internal', isDemo })
-  ).revision.id;
+  const letterRevision =
+    o.templates?.letterRevision ??
+    (await templateWithMarkedSample(e.s.manager, { name: isDemo ? 'Письмо КП (демо)' : 'Письмо КП (фикстура)', schema: demoSchema('demo-kp-letter'), marked: SAMPLES.letterMarked, original: SAMPLES.letterOriginal, isDemo })).revision.id;
+  const conditionsRevision =
+    o.templates?.conditionsRevision ??
+    (
+      await templateWithMarkedSample(e.s.manager, { name: isDemo ? 'Ключевые условия (демо)' : 'Ключевые условия (фикстура)', schema: demoSchema('demo-key-conditions'), marked: SAMPLES.conditionsMarked, original: SAMPLES.conditionsOriginal, audience: 'internal', isDemo })
+    ).revision.id;
   const out: IStage13 = { db, e, tzRev, scopeId, registryId: st.registryId, run, letterRevision, conditionsRevision, kpPrice, drafts: { letter: '', conditions: '' } };
   out.drafts.letter = await filledDraft(out, 'letter', 'Письмо КП');
   out.drafts.conditions = await filledDraft(out, 'conditions', 'Ключевые условия');

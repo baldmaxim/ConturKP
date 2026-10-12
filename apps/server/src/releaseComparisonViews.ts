@@ -5,6 +5,7 @@
 // Закрытый вывод отдаётся без ссылок, названий и значений. Пояснение причины — только при читаемых основаниях.
 import {
   candidateVisibleTo,
+  contentTenderIds,
   currentReleaseReasons,
   decisionVisibility,
   fieldVersionVisibility,
@@ -46,6 +47,45 @@ const refsOf = (items: readonly IReleaseComparisonItemRow[], type: string): stri
 
 const detailId = (i: IReleaseComparisonItemRow, key: string): string | null => (typeof i.detail[key] === 'string' ? (i.detail[key] as string) : null);
 
+// Видимость решений тендера по их предмету (R13-02): решение по событию входа (удержание) — предмет события; исход
+// элемента импорта — содержимое тендера; остальные — `decisionVisibility` (требование, замечание, разногласие).
+// Решение, закрытость которого не определяется, закрыто.
+export const decisionsVisibility = async (db: Queryable, ctx: IAccessContext, tenderId: string, decisionIds: readonly string[]): Promise<(id: string) => boolean> => {
+  const list = await rows<{ id: string; decision_type: string; stage_id: string | null; subject_id: string; tender_id: string }>(
+    db,
+    'SELECT id, decision_type, stage_id, subject_id, tender_id FROM decision WHERE id = ANY($1::uuid[])',
+    decisionIds,
+  );
+  const own = list.filter((d) => d.tender_id === tenderId);
+  const events = new Map(
+    (
+      await rows<{ id: string; stage_id: string; ref_type: string; ref_id: string }>(
+        db,
+        'SELECT id, stage_id, ref_type, ref_id FROM stage_input_event WHERE id = ANY($1::uuid[])',
+        own.filter((d) => d.decision_type === 'input_event_disposition').map((d) => d.subject_id),
+      )
+    ).map((e) => [e.id, e]),
+  );
+  const visible = new Map<string, boolean>();
+  const tenderContent = contentTenderIds(ctx).includes(tenderId);
+  const stages = new Set([...own.map((d) => d.stage_id), ...[...events.values()].map((e) => e.stage_id)].filter((x): x is string => !!x));
+  for (const stageId of stages) {
+    const inStage = own.filter((d) => (d.decision_type === 'input_event_disposition' ? events.get(d.subject_id)?.stage_id : d.stage_id) === stageId);
+    const vis = await decisionVisibility(db, ctx, { id: stageId, tenderId }, {
+      events: inStage.map((d) => {
+        const e = d.decision_type === 'input_event_disposition' ? events.get(d.subject_id) : undefined;
+        return e ? { refType: e.ref_type, refId: e.ref_id } : { refType: 'decision', refId: d.id };
+      }),
+    });
+    for (const d of inStage) {
+      const e = d.decision_type === 'input_event_disposition' ? events.get(d.subject_id) : undefined;
+      visible.set(d.id, d.decision_type === 'import_item_disposition' ? tenderContent : e ? vis.event(e.ref_type, e.ref_id) : vis.event('decision', d.id));
+    }
+  }
+  for (const d of own) if (!visible.has(d.id)) visible.set(d.id, d.decision_type === 'import_item_disposition' && tenderContent);
+  return (id) => visible.get(id) === true;
+};
+
 export const reasonView = (r: IReleaseReasonRow, visible: boolean) => ({
   id: r.id,
   version: r.version,
@@ -61,10 +101,10 @@ export const reasonView = (r: IReleaseReasonRow, visible: boolean) => ({
 });
 
 // Видимость причин: каждый фрагмент-основание читается, каждое решение-основание видимо (R13-02).
-export const reasonVisibility = async (db: Queryable, ctx: IAccessContext, stage: { id: string; tenderId: string }, reasons: readonly IReleaseReasonRow[]): Promise<(r: IReleaseReasonRow) => boolean> => {
+export const reasonVisibility = async (db: Queryable, ctx: IAccessContext, tenderId: string, reasons: readonly IReleaseReasonRow[]): Promise<(r: IReleaseReasonRow) => boolean> => {
   const fragments = await readableFragments(db, ctx, reasons.flatMap((r) => r.fragment_ids));
-  const decisions = await decisionVisibility(db, ctx, stage, { events: reasons.flatMap((r) => r.decision_ids).map((id) => ({ refType: 'decision', refId: id })) });
-  return (r) => r.fragment_ids.every((f) => fragments.has(f)) && r.decision_ids.every((d) => decisions.event('decision', d));
+  const decisions = await decisionsVisibility(db, ctx, tenderId, reasons.flatMap((r) => r.decision_ids));
+  return (r) => r.fragment_ids.every((f) => fragments.has(f)) && r.decision_ids.every(decisions);
 };
 
 export const itemViews = async (
@@ -196,7 +236,8 @@ export const itemViews = async (
   const holdDecisions = new Map(
     (await rows<{ id: string; rationale: string | null }>(db, 'SELECT id, rationale FROM decision WHERE id = ANY($1::uuid[])', refsOf(items, 'hold_decision'))).map((d) => [d.id, d]),
   );
-  // Видимость решений — по этапу предмета (левая и правая стороны могут быть разных этапов).
+  const decisionVisible = await decisionsVisibility(db, ctx, cmp.tenderId, decisionIds);
+  // Видимость рисков и удержаний — по этапу предмета (левая и правая стороны могут быть разных этапов).
   const decisionVis = new Map<string, Awaited<ReturnType<typeof decisionVisibility>>>();
   for (const stageId of new Set([cmp.leftStageId, cmp.rightStageId])) {
     decisionVis.set(
@@ -204,10 +245,7 @@ export const itemViews = async (
       await decisionVisibility(db, ctx, { id: stageId, tenderId: cmp.tenderId }, {
         subjects: [...risks.values()].filter((r) => r.stage_id === stageId).map((r) => ({ type: r.subject_type, id: r.subject_id })),
         findings: [...findings.values()].filter((f) => f.stage_id === stageId).map((f) => f.id),
-        events: [
-          ...[...decisions.values()].filter((d) => d.stage_id === stageId).map((d) => ({ refType: 'decision', refId: d.id })),
-          ...[...events.values()].filter((e) => e.stage_id === stageId).map((e) => ({ refType: e.ref_type, refId: e.ref_id })),
-        ],
+        events: [...events.values()].filter((e) => e.stage_id === stageId).map((e) => ({ refType: e.ref_type, refId: e.ref_id })),
       }),
     );
   }
@@ -276,8 +314,7 @@ export const itemViews = async (
       }
       case 'decision': {
         const d = decisions.get(ref);
-        const vis = d?.stage_id ? decisionVis.get(d.stage_id) : undefined;
-        return make(!!d && !!vis && vis.event('decision', ref), d ? cut(d.statement) : null, d?.decision_type ?? null);
+        return make(!!d && decisionVisible(ref), d ? cut(d.statement) : null, d?.decision_type ?? null);
       }
       case 'risk_acceptance': {
         const r = risks.get(ref);
@@ -322,7 +359,7 @@ export const itemViews = async (
   };
 
   const reasons = await currentReleaseReasons(db, items.map((i) => i.id));
-  const reasonVisible = await reasonVisibility(db, ctx, { id: cmp.rightStageId, tenderId: cmp.tenderId }, [...reasons.values()]);
+  const reasonVisible = await reasonVisibility(db, ctx, cmp.tenderId, [...reasons.values()]);
   const evidenceType: Record<string, string> = {
     document_occurrence: 'document_revision',
     mail_message: 'mail_message_revision',

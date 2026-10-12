@@ -48,7 +48,7 @@ import type { IAppConfig } from '@kontur/config';
 import { summarizeSendMatch } from '@kontur/core';
 import type { BlobStore } from '@kontur/storage';
 import { Router, type Request } from 'express';
-import { command, parseBody, query, requireIfMatch, uuidParam, versionConflict } from '../http/command.ts';
+import { command, parseBody, query, replayId, requireIfMatch, uuidParam, versionConflict } from '../http/command.ts';
 import { requireCtx } from '../http/context.ts';
 import { forbidden, HttpError, notFound } from '../http/errors.ts';
 import { receiveUpload, uploadedBlob, uploadName } from '../http/upload.ts';
@@ -259,15 +259,40 @@ const uploadOf = async (db: Queryable, ctx: IAccessContext, r: IReleaseRow, uplo
   return u;
 };
 
-const sendResult = async (db: Queryable, ctx: IAccessContext, r: IReleaseRow, id: string, status: number, audit: { action: string; details: Record<string, unknown> }) => {
+// Представление одной отправки по текущим правам читателя: им же отвечают команда и её повтор по ключу (R15-01).
+const sendBody = async (db: Queryable, ctx: IAccessContext, r: IReleaseRow, id: string) => {
   const e = (await getSendEvent(db, id))!;
   const all = await sendViews(db, ctx, r, await listSendEvents(db, r.id));
+  return { event: e, body: all.find((x) => x.id === id)!, etag: formatEtag(e.id, e.row_version) };
+};
+
+const sendResult = async (db: Queryable, ctx: IAccessContext, r: IReleaseRow, id: string, status: number, audit: { action: string; details: Record<string, unknown> }) => {
+  const { event: e, body, etag } = await sendBody(db, ctx, r, id);
   return {
     status,
-    body: all.find((x) => x.id === id)!,
-    etag: formatEtag(e.id, e.row_version),
+    body,
+    etag,
+    replayRef: { sendEventId: id },
     audit: [{ action: audit.action, entityType: 'send_event', entityId: e.id, tenderId: r.tender_id, details: { releaseId: r.id, seq: e.seq, channel: e.channel, evidenceKind: e.evidence_kind, status: e.status, attachmentCheck: e.attachment_check, ...audit.details } }],
   };
+};
+
+// Повтор регистрации и решения по лишним вложениям: текущая запись отправки, письмо и причина — по текущим правам.
+const sendReplay = async (db: Queryable, ctx: IAccessContext, ref: unknown) => {
+  const id = replayId(ref, 'sendEventId');
+  const e = await getSendEvent(db, id);
+  if (!e) throw notFound({ entityType: 'send_event', entityId: id });
+  const { release } = await visibleRelease(db, ctx, e.release_id);
+  const { body, etag } = await sendBody(db, ctx, release, id);
+  return { body, etag };
+};
+
+// Нарушение с письмом-основанием: описание открыто, пока читатель читает ящик письма.
+const incidentBody = async (db: Queryable, ctx: IAccessContext, id: string) => {
+  const i = await getIncident(db, id);
+  if (!i) throw notFound({ entityType: 'compliance_incident', entityId: id });
+  const readable = !i.mail_message_revision_id || (await revisionHeads(db, ctx, [i.mail_message_revision_id])).has(i.mail_message_revision_id);
+  return incidentView(i, readable);
 };
 
 const streamBlob = (store: BlobStore, res: import('express').Response, sha256: string, name: string, size: number | null): void => {
@@ -463,6 +488,7 @@ export const sendsRouter = (pool: Pool, store: BlobStore, config: IAppConfig): R
         // Содержимое письма (тема, адреса, имена вложений) в журнал не пишется: журнал видят и те, кто письма не читает.
         return sendResult(client, ctx, r, done.id, 201, { action: 'send.register', details: { repeat: done.repeat, warnings, missing: done.match?.missing.length ?? null, extras: done.match?.extras ?? null } });
       },
+      replay: (client, ctx, _req, ref) => sendReplay(client, ctx, ref),
     }),
   );
 
@@ -504,6 +530,7 @@ export const sendsRouter = (pool: Pool, store: BlobStore, config: IAppConfig): R
         // Причина — в записи решения (закрыта вместе с письмом); в журнал не копируется (R13-02).
         return sendResult(client, ctx, head.release, s.id, 200, { action: 'send.accept_extras', details: { extras: s.check_detail.extras ?? null } });
       },
+      replay: (client, ctx, _req, ref) => sendReplay(client, ctx, ref),
     }),
   );
 
@@ -546,10 +573,12 @@ export const sendsRouter = (pool: Pool, store: BlobStore, config: IAppConfig): R
         const id = await insertIncident(client, { release: r, userId: ctx.principal.userId, idempotencyKey: req.header('idempotency-key')!, kind: body.kind, occurredAt, description: body.description, mail, upload });
         return {
           status: 201,
-          body: incidentView((await getIncident(client, id))!, true),
+          body: await incidentBody(client, ctx, id),
+          replayRef: { incidentId: id },
           audit: [{ action: 'send.incident.register', entityType: 'compliance_incident', entityId: id, tenderId: r.tender_id, details: { releaseId: r.id, mode: r.mode, kind: body.kind, evidence: mail ? 'mail_message' : upload ? 'uploaded_file' : 'none' } }],
         };
       },
+      replay: async (client, ctx, _req, ref) => ({ body: await incidentBody(client, ctx, replayId(ref, 'incidentId')) }),
     }),
   );
 

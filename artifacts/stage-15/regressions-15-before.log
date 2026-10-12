@@ -1,0 +1,317 @@
+# регрессии Review 15-1 до правки: продукт bbf779e (HEAD f5db6a2 — запись ревью, продукт не менялся), 2026-10-12T17:48:00+05:00, linux x64 Node v24.14.1, npx vitest run tests/reviewRegressions15.test.ts --maxWorkers=1 --fileParallelism=false --reporter=verbose
+
+ RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
+
+ ✓ tests/reviewRegressions15.test.ts > sent question text cannot be changed through the API (control) 46ms
+ × tests/reviewRegressions15.test.ts > an already computed comparison retains the historical question status after it is answered 141ms
+   → released historical status must not follow the current question row: expected 'answered' to be 'sent' // Object.is equality
+ × tests/reviewRegressions15.test.ts > a received out-of-scope letter has evidence for its immutable revision 33ms
+   → expected [] to deep equally contain { type: 'mail_message_revision', …(1) }
+ ✓ tests/reviewRegressions15.test.ts > out-of-scope mail remains closed after mail.read is revoked (control) 78ms
+ × tests/reviewRegressions15.test.ts > out-of-scope mail in an existing comparison cannot follow a later imported revision 96ms
+   → expected 'Позднейшая тема, которой ещё не было …' to be 'Исходная тема письма вне снимка' // Object.is equality
+ × tests/reviewRegressions15.test.ts > idempotent send registration rechecks mailbox visibility after access is revoked 335ms
+   → expected '{"id":"f355e439-3f0b-4890-a3f2-9f6585…' not to contain 'Секретная тема'
+ × tests/reviewRegressions15.test.ts > idempotent extras acceptance rechecks the closed basis instead of replaying private rationale 63ms
+   → expected '{"id":"f355e439-3f0b-4890-a3f2-9f6585…' not to contain 'Закрытая причина'
+ × tests/reviewRegressions15.test.ts > idempotent incident registration does not replay text derived from a now closed letter 52ms
+   → expected '{"id":"406f9212-0fb8-4dd2-93a5-7e13ed…' not to contain 'Секретное описание'
+ × tests/reviewRegressions15.test.ts > R15-01: повтор без отзыва прав — та же запись и открытое представление, второй записи нет 29ms
+   → expected { …(21) } to match object { …(4) }
+(24 matching properties omitted from actual)
+ × tests/reviewRegressions15.test.ts > R15-01: после отзыва mail.read повтор отвечает тем же кодом и ограниченным представлением, как чтение 76ms
+   → expected { …(21) } to match object { …(2) }
+(35 matching properties omitted from actual)
+ × tests/reviewRegressions15.test.ts > R15-01: в записи идемпотентности закрытого текста нет — только ссылка на запись 5ms
+   → expected '{"body":{"id":"f355e439-3f0b-4890-a3f…' not to contain 'Секретная тема'
+ ✓ tests/reviewRegressions15.test.ts > R15-01: ключ с другим запросом — отказ; чужой пользователь по тому же ключу записи не получает (контроль) 37ms
+ × tests/reviewRegressions15.test.ts > R15-01: повтор создания сравнения — то же сравнение, представление по текущим правам 44ms
+   → expected { body: { …(10) } } to deeply equal { Object (ref) }
+ × tests/reviewRegressions15.test.ts > R15-02: закрытый к правому выпуску вопрос — слева «отправлен», текущий статус в вывод не попадает 2567ms
+   → expected { …(13) } to match object { change: 'closed', …(4) }
+(10 matching properties omitted from actual)
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/reviewRegressions15.test.ts > an already computed comparison retains the historical question status after it is answered
+AssertionError: released historical status must not follow the current question row: expected 'answered' to be 'sent' // Object.is equality
+
+Expected: "sent"
+Received: "answered"
+
+ ❯ tests/reviewRegressions15.test.ts:92:99
+     90|   const c2 = await st.e.s.eng1.get(`/release-comparisons/${cmpId}`);
+     91|   expect(before.right.note).toBe('sent');
+     92|   expect(after.right.note, 'released historical status must not follow…
+       |                                                                                                   ^
+     93|   // Статус закреплён в самом выводе и покрыт хэшем результата.
+     94|   expect(after.detail).toMatchObject({ rightStatus: 'sent' });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/11]⎯
+
+ FAIL  tests/reviewRegressions15.test.ts > a received out-of-scope letter has evidence for its immutable revision
+AssertionError: expected [] to deep equally contain { type: 'mail_message_revision', …(1) }
+
+- Expected:
+{
+  "id": "b014d991-1f21-441e-b69f-0e1927d5229b",
+  "type": "mail_message_revision",
+}
+
++ Received:
+[]
+
+ ❯ tests/reviewRegressions15.test.ts:104:25
+    102|   expect(item.change).toBe('out_of_scope');
+    103|   expect(item.right.label).toBe(letterSubject);
+    104|   expect(item.evidence).toContainEqual({ type: 'mail_message_revision'…
+       |                         ^
+    105|   const raw = await st.e.db.pool.query<{ sha: string }>('SELECT raw_bl…
+    106|   expect(item.right).toMatchObject({ ref: letterRevision, sha256: raw.…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/11]⎯
+
+ FAIL  tests/reviewRegressions15.test.ts > out-of-scope mail in an existing comparison cannot follow a later imported revision
+AssertionError: expected 'Позднейшая тема, которой ещё не было …' to be 'Исходная тема письма вне снимка' // Object.is equality
+
+Expected: "Исходная тема письма вне снимка"
+Received: "Позднейшая тема, которой ещё не было в выпуске"
+
+ ❯ tests/reviewRegressions15.test.ts:127:29
+    125|   expect(revised.revisionId).not.toBe(letterRevision);
+    126|   const after = (await received()).find((i) => i.subjectType === 'mail…
+    127|   expect(after.right.label).toBe(letterSubject);
+       |                             ^
+    128|   expect(after).toEqual(before);
+    129|   expect(JSON.stringify(await received())).not.toContain(laterSubject);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/11]⎯
+
+ FAIL  tests/reviewRegressions15.test.ts > idempotent send registration rechecks mailbox visibility after access is revoked
+AssertionError: expected '{"id":"f355e439-3f0b-4890-a3f2-9f6585…' not to contain 'Секретная тема'
+
+Expected: "Секретная тема"
+Received: "{"id":"f355e439-3f0b-4890-a3f2-9f658508a185","seq":1,"etag":"\"f355e439-3f0b-4890-a3f2-9f658508a185:1\"","note":null,"check":{"extras":{"inline":0,"unknown":1,"internal":0,"otherRelease":0},"missing":[],"kitFiles":1,"extrasOnly":true},"files":[{"size":3679,"class":"kit","inline":false,"sha256":"387a36d9f64c53aaee7c87807cccf666e7ba2956a8f7151ffd4e22f12e8826d1","kitPath":"01 Письмо КП.docx","ordinal":1,"fileName":"01 Письмо КП.docx","otherReleaseSeq":null},{"size":19,"class":"unknown","inline":false,"sha256":"d1ca2fa5285af06bf23292f521b1c9879f4ced3ec09d1d50b7125fd2651e9da0","kitPath":null,"ordinal":2,"fileName":"Секретное дополнительное вложение.txt","otherReleaseSeq":null}],"repeat":false,"sentAt":"2026-10-12T12:48:15.000Z","status":"disputed","actions":{"acceptExtras":false},"channel":"email","counted":false,"evidence":{"file":null,"kind":"mail_message","mail":{"from":"tender-out@contractor.example.test","copies":[{"folder":null,"messageId":"d279b7b8-d5ed-4c52-bc77-5967a65f3e3c","mailboxName":"Тендерный отдел"}],"subject":"Секретная тема повторного ответа","messageId":"d279b7b8-d5ed-4c52-bc77-5967a65f3e3c","recipients":["customer@example.test"],"restricted":false,"revisionId":"d7f92512-e28c-4c07-b410-7f5e9e1fc2aa","mailboxName":"Тендерный отдел"}},"decisions":[],"releaseId":"1ebd2227-dfe7-48c0-8c8f-38ee328aaa2b","recipients":[],"rowVersion":1,"registeredAt":"2026-10-12T12:48:14.529Z","registeredBy":{"id":"f0fcec33-b8e6-4826-80be-192a733f8eb6","name":"Инженер 1"},"extrasAccepted":false,"attachmentCheck":"mismatched"}"
+
+ ❯ tests/reviewRegressions15.test.ts:184:45
+    182|     expect(current.body.items.find((i: any) => i.id === f.reg.id).evid…
+    183|     const replay = await st.e.s.eng1.post(`/releases/${right.releaseId…
+    184|     expect(JSON.stringify(replay.body)).not.toContain('Секретная тема'…
+       |                                             ^
+    185|     expect(JSON.stringify(replay.body)).not.toContain('Секретное допол…
+    186|   } finally { await redact('eng1', true); }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/11]⎯
+
+ FAIL  tests/reviewRegressions15.test.ts > idempotent extras acceptance rechecks the closed basis instead of replaying private rationale
+AssertionError: expected '{"id":"f355e439-3f0b-4890-a3f2-9f6585…' not to contain 'Закрытая причина'
+
+Expected: "Закрытая причина"
+Received: "{"id":"f355e439-3f0b-4890-a3f2-9f658508a185","seq":1,"etag":"\"f355e439-3f0b-4890-a3f2-9f658508a185:2\"","note":null,"check":{"extras":{"inline":0,"unknown":1,"internal":0,"otherRelease":0},"missing":[],"kitFiles":1,"extrasOnly":true},"files":[{"size":3679,"class":"kit","inline":false,"sha256":"387a36d9f64c53aaee7c87807cccf666e7ba2956a8f7151ffd4e22f12e8826d1","kitPath":"01 Письмо КП.docx","ordinal":1,"fileName":"01 Письмо КП.docx","otherReleaseSeq":null},{"size":19,"class":"unknown","inline":false,"sha256":"d1ca2fa5285af06bf23292f521b1c9879f4ced3ec09d1d50b7125fd2651e9da0","kitPath":null,"ordinal":2,"fileName":"Секретное дополнительное вложение.txt","otherReleaseSeq":null}],"repeat":false,"sentAt":"2026-10-12T12:48:15.000Z","status":"verified","actions":{"acceptExtras":false},"channel":"email","counted":true,"evidence":{"file":null,"kind":"mail_message","mail":{"from":"tender-out@contractor.example.test","copies":[{"folder":null,"messageId":"d279b7b8-d5ed-4c52-bc77-5967a65f3e3c","mailboxName":"Тендерный отдел"}],"subject":"Секретная тема повторного ответа","messageId":"d279b7b8-d5ed-4c52-bc77-5967a65f3e3c","recipients":["customer@example.test"],"restricted":false,"revisionId":"d7f92512-e28c-4c07-b410-7f5e9e1fc2aa","mailboxName":"Тендерный отдел"}},"decisions":[{"actor":{"id":"c74d3830-564b-475e-a013-36a0677cd738","name":"Руководитель"},"action":"accept_extras","reason":"Закрытая причина принятия секретного вложения","createdAt":"2026-10-12T12:48:14.563Z","restricted":false}],"releaseId":"1ebd2227-dfe7-48c0-8c8f-38ee328aaa2b","recipients":[],"rowVersion":2,"registeredAt":"2026-10-12T12:48:14.529Z","registeredBy":{"id":"f0fcec33-b8e6-4826-80be-192a733f8eb6","name":"Инженер 1"},"extrasAccepted":true,"attachmentCheck":"mismatched"}"
+
+ ❯ tests/reviewRegressions15.test.ts:196:45
+    194|     expect(current.body.items.find((i: any) => i.id === f.reg.id).deci…
+    195|     const replay = await st.e.s.manager.post(`/send-events/${f.reg.id}…
+    196|     expect(JSON.stringify(replay.body)).not.toContain('Закрытая причин…
+       |                                             ^
+    197|     expect(JSON.stringify(replay.body)).not.toContain('Секретная тема'…
+    198|   } finally { await redact('manager', true); }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/11]⎯
+
+ FAIL  tests/reviewRegressions15.test.ts > idempotent incident registration does not replay text derived from a now closed letter
+AssertionError: expected '{"id":"406f9212-0fb8-4dd2-93a5-7e13ed…' not to contain 'Секретное описание'
+
+Expected: "Секретное описание"
+Received: "{"id":"406f9212-0fb8-4dd2-93a5-7e13edd8cd7b","kind":"other","evidence":{"file":null,"mail":{"messageId":"d279b7b8-d5ed-4c52-bc77-5967a65f3e3c","restricted":false,"revisionId":"d7f92512-e28c-4c07-b410-7f5e9e1fc2aa"}},"releaseId":"1ebd2227-dfe7-48c0-8c8f-38ee328aaa2b","occurredAt":"2026-10-12T12:48:14.582Z","restricted":false,"description":"Секретное описание нарушения по закрытому письму","registeredAt":"2026-10-12T12:48:14.589Z","registeredBy":{"id":"f0fcec33-b8e6-4826-80be-192a733f8eb6","name":"Инженер 1"}}"
+
+ ❯ tests/reviewRegressions15.test.ts:208:45
+    206|     expect(current.body.incidents.some((i: any) => i.restricted && i.d…
+    207|     const replay = await st.e.s.eng1.post(`/releases/${right.releaseId…
+    208|     expect(JSON.stringify(replay.body)).not.toContain('Секретное описа…
+       |                                             ^
+    209|   } finally { await redact('eng1', true); }
+    210| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/11]⎯
+
+ FAIL  tests/reviewRegressions15.test.ts > R15-01: повтор без отзыва прав — та же запись и открытое представление, второй записи нет
+AssertionError: expected { …(21) } to match object { …(4) }
+(24 matching properties omitted from actual)
+
+- Expected
++ Received
+
+@@ -3,9 +3,9 @@
+      "mail": {
+        "restricted": false,
+        "subject": "Секретная тема повторного ответа",
+      },
+    },
+-   "extrasAccepted": true,
++   "extrasAccepted": false,
+    "id": "f355e439-3f0b-4890-a3f2-9f658508a185",
+-   "status": "verified",
++   "status": "disputed",
+  }
+
+ ❯ tests/reviewRegressions15.test.ts:224:20
+    222|   expect(reg.headers['idempotent-replayed']).toBe('true');
+    223|   // Повтор отвечает текущим представлением записи: её уже подтвердил …
+    224|   expect(reg.body).toMatchObject({ id: f.reg.id, status: 'verified', e…
+       |                    ^
+    225|   expect(reg.headers.etag).toBe(f.accepted.etag);
+    226|   const extras = await st.e.s.manager.post(`/send-events/${f.reg.id}/a…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/11]⎯
+
+ FAIL  tests/reviewRegressions15.test.ts > R15-01: после отзыва mail.read повтор отвечает тем же кодом и ограниченным представлением, как чтение
+AssertionError: expected { …(21) } to match object { …(2) }
+(35 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "evidence": {
+      "mail": {
+-       "restricted": true,
++       "restricted": false,
+      },
+    },
+    "id": "f355e439-3f0b-4890-a3f2-9f658508a185",
+  }
+
+ ❯ tests/reviewRegressions15.test.ts:249:22
+    247|     expect(reg.status, reg.text).toBe(201);
+    248|     expect(reg.headers['idempotent-replayed']).toBe('true');
+    249|     expect(reg.body).toMatchObject({ id: f.reg.id, evidence: { mail: {…
+       |                      ^
+    250|     expect(reg.body.files.every((x: any) => x.fileName === null)).toBe…
+    251|     expect(reg.body.decisions[0]).toMatchObject({ restricted: true, re…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/11]⎯
+
+ FAIL  tests/reviewRegressions15.test.ts > R15-01: в записи идемпотентности закрытого текста нет — только ссылка на запись
+AssertionError: expected '{"body":{"id":"f355e439-3f0b-4890-a3f…' not to contain 'Секретная тема'
+
+Expected: "Секретная тема"
+Received: "{"body":{"id":"f355e439-3f0b-4890-a3f2-9f658508a185","seq":1,"etag":"\"f355e439-3f0b-4890-a3f2-9f658508a185:1\"","note":null,"check":{"extras":{"inline":0,"unknown":1,"internal":0,"otherRelease":0},"missing":[],"kitFiles":1,"extrasOnly":true},"files":[{"size":3679,"class":"kit","inline":false,"sha256":"387a36d9f64c53aaee7c87807cccf666e7ba2956a8f7151ffd4e22f12e8826d1","kitPath":"01 Письмо КП.docx","ordinal":1,"fileName":"01 Письмо КП.docx","otherReleaseSeq":null},{"size":19,"class":"unknown","inline":false,"sha256":"d1ca2fa5285af06bf23292f521b1c9879f4ced3ec09d1d50b7125fd2651e9da0","kitPath":null,"ordinal":2,"fileName":"Секретное дополнительное вложение.txt","otherReleaseSeq":null}],"repeat":false,"sentAt":"2026-10-12T12:48:15.000Z","status":"disputed","actions":{"acceptExtras":false},"channel":"email","counted":false,"evidence":{"file":null,"kind":"mail_message","mail":{"from":"tender-out@contractor.example.test","copies":[{"folder":null,"messageId":"d279b7b8-d5ed-4c52-bc77-5967a65f3e3c","mailboxName":"Тендерный отдел"}],"subject":"Секретная тема повторного ответа","messageId":"d279b7b8-d5ed-4c52-bc77-5967a65f3e3c","recipients":["customer@example.test"],"restricted":false,"revisionId":"d7f92512-e28c-4c07-b410-7f5e9e1fc2aa","mailboxName":"Тендерный отдел"}},"decisions":[],"releaseId":"1ebd2227-dfe7-48c0-8c8f-38ee328aaa2b","recipients":[],"rowVersion":1,"registeredAt":"2026-10-12T12:48:14.529Z","registeredBy":{"id":"f0fcec33-b8e6-4826-80be-192a733f8eb6","name":"Инженер 1"},"extrasAccepted":false,"attachmentCheck":"mismatched"},"etag":"\"f355e439-3f0b-4890-a3f2-9f658508a185:1\""}"
+
+ ❯ tests/reviewRegressions15.test.ts:274:110
+    272|   const stored = await st.e.db.pool.query<{ key: string; response_body…
+    273|   expect(stored.rows).toHaveLength(3);
+    274|   for (const row of stored.rows) for (const secret of SECRETS) expect(…
+       |                                                                                                              ^
+    275|   expect(stored.rows.find((r) => r.key === keys[0])!.response_body).to…
+    276|   expect(stored.rows.find((r) => r.key === keys[2])!.response_body).to…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/11]⎯
+
+ FAIL  tests/reviewRegressions15.test.ts > R15-01: повтор создания сравнения — то же сравнение, представление по текущим правам
+AssertionError: expected { body: { …(10) } } to deeply equal { Object (ref) }
+
+- Expected
++ Received
+
+  {
+-   "ref": {
+-     "comparisonId": "afe74fa5-98db-4cea-8176-59485a50002d",
++   "body": {
++     "changes": {
++       "applications": 0,
++       "decisions": 4,
++       "questions": 1,
++       "received": 1,
++       "requirements": 0,
++       "sources": 0,
++       "terms": 0,
++     },
++     "createdAt": "2026-10-12T12:48:14.963Z",
++     "failureReason": null,
++     "id": "afe74fa5-98db-4cea-8176-59485a50002d",
++     "left": {
++       "candidateSeq": 1,
++       "manifestSha256": "e94ea4963f33e6c544b2daaeadd848db45420187ef73b9c1693809e01800b6c8",
++       "mode": "production",
++       "releaseId": "74617485-5c6d-4ceb-a214-572f0b82d0fa",
++       "releasedAt": "2026-10-12T12:48:11.162Z",
++       "restricted": false,
++       "stage": {
++         "id": "8abfde1b-e5b9-4d9c-a271-8faac9a12a6f",
++         "seq": 1,
++         "title": "Этап A1",
++       },
++     },
++     "methodVersion": "release-compare/15-1",
++     "requestedBy": {
++       "id": "f0fcec33-b8e6-4826-80be-192a733f8eb6",
++       "name": "Инженер 1",
++     },
++     "resultSha256": "7a041cd1f68b7503a12e33360c2700b6403f44f50198cb44a5efd48722f82d49",
++     "right": {
++       "candidateSeq": 2,
++       "manifestSha256": "8fe8880d5b58066395df62b2636348c9373a9c263bac0d37d9922dcc593f6dc0",
++       "mode": "production",
++       "releaseId": "1ebd2227-dfe7-48c0-8c8f-38ee328aaa2b",
++       "releasedAt": "2026-10-12T12:48:13.792Z",
++       "restricted": false,
++       "stage": {
++         "id": "8abfde1b-e5b9-4d9c-a271-8faac9a12a6f",
++         "seq": 1,
++         "title": "Этап A1",
++       },
++     },
++     "status": "ready",
+    },
+  }
+
+ ❯ tests/reviewRegressions15.test.ts:300:41
+    298|   expect(b.body).toEqual(a.body);
+    299|   const stored = await st.e.db.pool.query<{ response_body: unknown }>(…
+    300|   expect(stored.rows[0]!.response_body).toEqual({ ref: { comparisonId:…
+       |                                         ^
+    301| });
+    302|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/11]⎯
+
+ FAIL  tests/reviewRegressions15.test.ts > R15-02: закрытый к правому выпуску вопрос — слева «отправлен», текущий статус в вывод не попадает
+AssertionError: expected { …(13) } to match object { change: 'closed', …(4) }
+(10 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "change": "closed",
+-   "detail": {
+-     "leftStatus": "sent",
+-   },
++   "detail": {},
+    "left": {
+      "label": "Подтвердите гарантию пять лет",
+-     "note": "sent",
++     "note": "answered",
+    },
+    "right": null,
+    "subjectType": "customer_question",
+  }
+
+ ❯ tests/reviewRegressions15.test.ts:311:18
+    309|   const items = (await st.e.s.eng1.get(`/release-comparisons/${c.body.…
+    310|   const closed = items.find((i) => i.left?.ref === newQ)!;
+    311|   expect(closed).toMatchObject({ change: 'closed', subjectType: 'custo…
+       |                  ^
+    312|   expect(JSON.stringify(closed)).not.toContain('answered');
+    313| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/11]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  11 failed | 3 passed (14)
+   Start at  17:48:01
+   Duration  16.41s (tests 82%, transform 14%, import 4%)
+
+exit=1

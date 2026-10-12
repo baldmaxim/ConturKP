@@ -5,14 +5,17 @@ import { cpSync, mkdtempSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import pg from 'pg';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { sendKitSha256 } from '../packages/core/src/index.ts';
 import { createPool, dropDatabase, MIGRATIONS_DIR, migrate, setupDatabase } from '../packages/db/src/index.ts';
 import { acceptAll, approve, assembled, buildStage13, closeStage13, notApplicable, openHolds, release, view, type IStage13 } from './approvalFixtures.ts';
 import { ADMIN_URL, auditRows, createUser, drain, idem, type ITestDb } from './helpers.ts';
 import { setMailAccess } from './mailFixtures.ts';
 import { uploadDocument } from './searchFixtures.ts';
-import { buildStage15, kitAttachments, registerByMail, registerSend, released, sentLetter, sends, type IReleased, type ISendView, type IStage15 } from './sendFixtures.ts';
+import { buildStage15, kitAttachments, registerByMail, registerSend, released, sentLetter, sends, settle, type IReleased, type ISendView, type IStage15 } from './sendFixtures.ts';
+
+// Сценарии собирают настоящие комплекты через LibreOffice: лимит по умолчанию (30 с) на Windows мал (R15-04).
+vi.setConfig({ testTimeout: 300_000, hookTimeout: 300_000 });
 
 let st: IStage15;
 let sent: IReleased;
@@ -63,6 +66,8 @@ beforeAll(async () => {
   unsent = await released(st);
   test = await released(st, 'test');
 }, 600_000);
+// Незавершённая фоновая сборка отказавшего теста не переходит в следующий (R15-04).
+afterEach(async () => settle(st));
 afterAll(async () => closeStage13(st));
 
 describe('закрытость письма-основания', () => {

@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { expect } from 'vitest';
 import { BlobStore } from '../packages/storage/src/index.ts';
 import { acceptAll, approve, assembled, buildStage13, notApplicable, release, view, type ICandidate13, type IStage13, type IStage13Options } from './approvalFixtures.ts';
-import { idem, type TestClient } from './helpers.ts';
+import { drain, idem, type TestClient } from './helpers.ts';
 import { createMailbox, eml, importEml, linkMail, octet, setMailAccess, type IEmlAttachment } from './mailFixtures.ts';
 
 export interface IStage15 extends IStage13 {
@@ -40,6 +40,18 @@ export const released = async (st: IStage13, mode: 'test' | 'production' = 'prod
   const r = await release(st, c, a.body.approval.id as string);
   expect(r.status, r.text).toBe(201);
   return { candidate: await view(st, c.id), releaseId: r.body.release.id as string, releasedAt: r.body.release.releasedAt as string };
+};
+
+// Тест, оборванный отказом или лимитом времени, мог оставить сборку комплекта в работе: следующий тест получил бы
+// «комплект собирается» и чужие записи (R15-04). Ждём, пока очередь заданий опустеет.
+export const settle = async (st: IStage13 | undefined): Promise<void> => {
+  if (!st) return;
+  for (let i = 0; i < 600; i += 1) {
+    await drain(st.e.worker);
+    const busy = await st.e.db.pool.query("SELECT 1 FROM job WHERE status IN ('queued', 'running') LIMIT 1");
+    if (busy.rowCount === 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
 };
 
 const blob = (st: IStage13, sha256: string): Buffer => readFileSync(new BlobStore(st.e.config.storageRoot).pathOf(sha256));

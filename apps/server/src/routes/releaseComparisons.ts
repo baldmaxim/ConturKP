@@ -28,7 +28,7 @@ import {
 } from '@kontur/db';
 import type { BlobStore } from '@kontur/storage';
 import { Router, type Request } from 'express';
-import { command, parseBody, query, uuidParam, versionConflict } from '../http/command.ts';
+import { command, parseBody, query, replayId, uuidParam, versionConflict } from '../http/command.ts';
 import { forbidden, HttpError, notFound } from '../http/errors.ts';
 import { decisionsVisibility, itemViews, reasonView, reasonVisibility } from '../releaseComparisonViews.ts';
 import { readStoredBlob } from '../releaseMarkup.ts';
@@ -167,6 +167,7 @@ export const releaseComparisonsRouter = (pool: Pool, store: BlobStore): Router =
         return {
           status: 201,
           body: await brief(client, ctx, c),
+          replayRef: { comparisonId: c.id },
           audit: [
             {
               action: 'release.comparison.create',
@@ -178,6 +179,8 @@ export const releaseComparisonsRouter = (pool: Pool, store: BlobStore): Router =
           ],
         };
       },
+      // Хэш манифеста стороны закрыт вместе с комплектом: повтор по ключу отвечает по текущим правам (R15-01).
+      replay: async (client, ctx, _req, ref) => ({ body: await brief(client, ctx, await loadComparison(client, ctx, replayId(ref, 'comparisonId'))) }),
     }),
   );
 

@@ -5,7 +5,7 @@
 import { canonicalJson } from '../requirements.ts';
 import { sha256Hex } from '../search.ts';
 
-export const RELEASE_COMPARE_METHOD = 'release-compare/15-1';
+export const RELEASE_COMPARE_METHOD = 'release-compare/15-2';
 
 export type CompareSection = 'sources' | 'requirements' | 'questions' | 'terms' | 'decisions' | 'applications' | 'received';
 export const COMPARE_SECTIONS: readonly CompareSection[] = ['sources', 'requirements', 'questions', 'terms', 'decisions', 'applications', 'received'];
@@ -95,7 +95,8 @@ export interface IReleaseSnapshot {
   review: { requirements: IRequirementSnap[]; facts: IFactSnap[]; openQuestionIds: string[] } | null;
   decisions: IDecisionSnap[];
   risks: IRiskSnap[];
-  reviewRiskFindingIds: string[];
+  // Замечания проверки, принятые как риск: серьёзность — из манифеста выпуска (у самого замечания она изменяема).
+  reviewRisks: { findingId: string; severity: string }[];
   holds: IHoldDecisionSnap[];
   files: IFileSnap[];
   fields: IFieldSnap[];
@@ -263,11 +264,15 @@ const compareQa = (l: readonly IQaUnit[], r: readonly IQaUnit[], out: ICompariso
   return unchanged;
 };
 
+export const OPEN_QUESTION_STATUS = 'sent';
+
 const compareOpenQuestions = (l: readonly string[], r: readonly string[], out: IComparisonItem[]): number => {
   const ls = new Set(l);
   const rs = new Set(r);
-  for (const id of rs) if (!ls.has(id)) out.push(item('questions', 'opened', 'customer_question', `customer_question:${id}`, { rightRef: id }));
-  for (const id of ls) if (!rs.has(id)) out.push(item('questions', 'closed', 'customer_question', `customer_question:${id}`, { leftRef: id }));
+  // Состояние вопроса на стороне — из закреплённого входа проверки: в него входят только отправленные без ответа.
+  // Текущий статус вопроса в вывод не попадает (R15-02).
+  for (const id of rs) if (!ls.has(id)) out.push(item('questions', 'opened', 'customer_question', `customer_question:${id}`, { rightRef: id, detail: { rightStatus: OPEN_QUESTION_STATUS } }));
+  for (const id of ls) if (!rs.has(id)) out.push(item('questions', 'closed', 'customer_question', `customer_question:${id}`, { leftRef: id, detail: { leftStatus: OPEN_QUESTION_STATUS } }));
   return [...ls].filter((id) => rs.has(id)).length;
 };
 
@@ -339,13 +344,13 @@ const compareDecisions = (l: IReleaseSnapshot, r: IReleaseSnapshot, out: ICompar
   }
   for (const [k, a] of lr) if (!rr.has(k)) out.push(item('decisions', 'removed', 'risk_acceptance', `risk:${k}`, { leftRef: a.id, detail: { code: a.code, subjectType: a.subjectType, subjectId: a.subjectId } }));
 
-  const lf = new Set(l.reviewRiskFindingIds);
-  const rf = new Set(r.reviewRiskFindingIds);
-  for (const id of rf) {
+  const lf = mapBy(l.reviewRisks, (x) => x.findingId);
+  const rf = mapBy(r.reviewRisks, (x) => x.findingId);
+  for (const [id, b] of rf) {
     if (lf.has(id)) unchanged += 1;
-    else out.push(item('decisions', 'added', 'finding_risk', `finding_risk:${id}`, { rightRef: id }));
+    else out.push(item('decisions', 'added', 'finding_risk', `finding_risk:${id}`, { rightRef: id, detail: { severity: b.severity } }));
   }
-  for (const id of lf) if (!rf.has(id)) out.push(item('decisions', 'removed', 'finding_risk', `finding_risk:${id}`, { leftRef: id }));
+  for (const [id, a] of lf) if (!rf.has(id)) out.push(item('decisions', 'removed', 'finding_risk', `finding_risk:${id}`, { leftRef: id, detail: { severity: a.severity } }));
 
   const lh = mapBy(l.holds, (h) => h.eventId);
   const rh = mapBy(r.holds, (h) => h.eventId);
@@ -400,7 +405,8 @@ export interface IReceivedInput {
   kind: 'document_revision' | 'document_occurrence' | 'mail_message';
   // Редакция, место получения, письмо.
   id: string;
-  // Редакция документа (у места получения — его редакция); у письма — ревизия письма в правом снимке, если есть.
+  // Редакция документа (у места получения — его редакция); у письма — ревизия из правого снимка, а у письма вне снимка —
+  // последняя ревизия, существовавшая к закреплению правой стороны (R15-03).
   revisionId: string | null;
   sha256: string | null;
   // Получено в интервале (левое закрепление; правое закрепление].
@@ -468,7 +474,7 @@ export const compareReleaseSnapshots = (left: IReleaseSnapshot, right: IReleaseS
   let questionsUnchanged = compareQa(left.qa, right.qa, items);
   if (left.review && right.review) questionsUnchanged += compareOpenQuestions(left.review.openQuestionIds, right.review.openQuestionIds, items);
   sections.questions = summary(left.qa.length + (left.review?.openQuestionIds.length ?? 0), right.qa.length + (right.review?.openQuestionIds.length ?? 0), questionsUnchanged, items, 'questions');
-  const count = (s: IReleaseSnapshot) => s.decisions.length + s.risks.length + s.reviewRiskFindingIds.length + s.holds.length;
+  const count = (s: IReleaseSnapshot) => s.decisions.length + s.risks.length + s.reviewRisks.length + s.holds.length;
   sections.decisions = summary(count(left), count(right), compareDecisions(left, right, items), items, 'decisions');
   sections.applications = summary(left.files.length + left.fields.length, right.files.length + right.fields.length, compareApplications(left, right, items), items, 'applications');
   receivedItems(received, items);

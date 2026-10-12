@@ -1,4 +1,4 @@
-# регрессия на рабочем дереве передачи 15-1: 2026-10-12T15:30:25+05:00, linux x64 Node v24.14.1, artifacts/stage-13/ui-check.mjs, Chromium headless без песочницы, exit 0
+# регрессия на рабочем дереве передачи 15-2: 2026-10-12T18:09:35+05:00, linux x64 Node v24.14.1, artifacts/stage-13/ui-check.mjs, Chromium headless без песочницы, exit 0
 PASS  server + worker готовы
 PASS  вход администратора-руководителя
 PASS  этап подготовлен: ТЗ, снимок, расчёт, требование с покрытием, завершённый проход реестра, прогон проверок без пробелов обработки — complete/complete/200/201/201/completed_with_gaps

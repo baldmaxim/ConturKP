@@ -4,7 +4,7 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { nodeDeliveryFs } from '../packages/storage/src/index.ts';
 import { closeStage13, notApplicable, openHolds } from './approvalFixtures.ts';
 import { createDestination, deliveriesOf, deliveryWorker, place, runDeliveries, tempFolders } from './deliveryFixtures.ts';
@@ -13,7 +13,10 @@ import { auditRows, drain, idem } from './helpers.ts';
 import { createMailbox, eml, importEml, linkMail, setMailAccess } from './mailFixtures.ts';
 import { completeDraft } from './releaseFixtures.ts';
 import { uploadDocument } from './searchFixtures.ts';
-import { buildStage15, internalAttachments, kitAttachments, registerByMail, registerSend, released, sentLetter, sends, uploadEvidence, type IReleased, type ISendView, type IStage15 } from './sendFixtures.ts';
+import { buildStage15, internalAttachments, kitAttachments, registerByMail, registerSend, released, sentLetter, sends, settle, uploadEvidence, type IReleased, type ISendView, type IStage15 } from './sendFixtures.ts';
+
+// Сценарии собирают настоящие комплекты через LibreOffice: лимит по умолчанию (30 с) на Windows мал (R15-04).
+vi.setConfig({ testTimeout: 300_000, hookTimeout: 300_000 });
 
 let st: IStage15;
 let r1: IReleased;
@@ -37,6 +40,8 @@ beforeAll(async () => {
   st = await buildStage15();
   r1 = await released(st);
 }, 600_000);
+// Незавершённая фоновая сборка отказавшего теста не переходит в следующий (R15-04).
+afterEach(async () => settle(st));
 afterAll(async () => closeStage13(st));
 
 describe('нет sent-письма в общей ленте; размещение — не отправка (A31, A33)', () => {

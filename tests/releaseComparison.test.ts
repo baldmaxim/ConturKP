@@ -2,7 +2,7 @@
 // сравнение после переиндексации, новое имя того же документа, новые файлы вне области; A10, A13, A14, A23). Выпуски —
 // тестовые, данные поддельные: поддельный TenderHub, синтетические документы и письмо. Тесты идут по порядку.
 import { randomBytes } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { CHUNKER_VERSION } from '../packages/core/src/index.ts';
 import { createVersion } from '../packages/db/src/index.ts';
 import { buildStage13, buildStageContent, closeStage13, notApplicable, PLASTER_LINE, requirementOf, rerunReview, TZ, type IStage13 } from './approvalFixtures.ts';
@@ -13,7 +13,7 @@ import { auditRows, drain, idem, type TestClient } from './helpers.ts';
 import { createMailbox, eml, importEml, linkMail, setMailAccess, unlinkMail } from './mailFixtures.ts';
 import { completeDraft } from './releaseFixtures.ts';
 import { buildIndex, fixScope, fragmentIdOf, seedEvidenceRun, setWorkingSet, uploadDocument } from './searchFixtures.ts';
-import { released, type IReleased } from './sendFixtures.ts';
+import { released, settle, type IReleased } from './sendFixtures.ts';
 import { n } from '../scripts/tenderhub-fake.ts';
 
 interface ISide {
@@ -50,6 +50,9 @@ interface IComparison {
   reasons: { unknown: number; hypothesis: number; confirmed: number };
   can: { setReason: boolean };
 }
+
+// Сценарии собирают настоящие комплекты через LibreOffice: лимит по умолчанию (30 с) на Windows мал (R15-04).
+vi.setConfig({ testTimeout: 300_000, hookTimeout: 300_000 });
 
 let st: IStage13;
 let a: IReleased;
@@ -145,13 +148,15 @@ beforeAll(async () => {
   await rerunReview(st);
   b = await released(st, 'test');
 }, 900_000);
+// Незавершённая фоновая сборка отказавшего теста не переходит в следующий (R15-04).
+afterEach(async () => settle(st));
 afterAll(async () => closeStage13(st));
 
 describe('сравнение двух выпусков одного этапа', () => {
   it('стороны упорядочены по времени выпуска независимо от порядка в запросе; результат готов и неизменен', async () => {
     const r = await compare(b.releaseId, a.releaseId);
     expect(r.status, r.text).toBe(201);
-    expect(r.body).toMatchObject({ status: 'ready', left: { releaseId: a.releaseId }, right: { releaseId: b.releaseId }, methodVersion: 'release-compare/15-1' });
+    expect(r.body).toMatchObject({ status: 'ready', left: { releaseId: a.releaseId }, right: { releaseId: b.releaseId }, methodVersion: 'release-compare/15-2' });
     cmp = await read(r.body.id as string);
     expect(cmp.resultSha256).toMatch(/^[0-9a-f]{64}$/u);
     expect(cmp.interval.empty).toBe(false);

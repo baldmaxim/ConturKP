@@ -6,18 +6,26 @@ import type { IComparisonItem, IItemSide, TCompareSection } from '../../api/send
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { formatDateTime } from '../../utils/datetime';
+import { SEVERITY_LABELS } from '../../utils/reviewLabels';
 import { CHANGE, COVERAGE, DISPOSITION, REASON_KIND, REASON_STATUS, SUBJECT } from '../../utils/sendLabels';
 import { ItemReasonDialog } from './ItemReasonDialog';
 import styles from './Comparison.module.css';
 
 const valueText = (v: unknown): string => (v === null || v === undefined ? '—' : typeof v === 'string' ? v : JSON.stringify(v));
 
-const Side: FC<{ side: IItemSide; which: 'left' | 'right'; showValue: boolean }> = ({ side, which, showValue }) => (
+// Состояние вопроса и серьёзность принятого замечания — закреплённые в выпуске, а не текущие.
+const noteText = (subjectType: string, note: string): string => {
+  if (subjectType === 'customer_question') return note === 'sent' ? 'на момент выпуска: отправлен, ответа нет' : `на момент выпуска: ${note}`;
+  if (subjectType === 'finding_risk') return `серьёзность на момент выпуска: ${SEVERITY_LABELS[note as keyof typeof SEVERITY_LABELS]?.label ?? note}`;
+  return note;
+};
+
+const Side: FC<{ side: IItemSide; which: 'left' | 'right'; showValue: boolean; subjectType: string }> = ({ side, which, showValue, subjectType }) => (
   <div className={styles.side} data-side={which}>
     <span className={styles.sideLabel}>{which === 'left' ? 'Было' : 'Стало'}</span>
     <span>{side.label ?? '—'}</span>
     {showValue && 'value' in side ? <span>{valueText(side.value)}</span> : null}
-    {side.note ? <span className={styles.muted}>{side.note}</span> : null}
+    {side.note ? <span className={styles.muted}>{noteText(subjectType, side.note)}</span> : null}
     {side.sha256 ? <span className={styles.mono}>{`SHA-256 ${side.sha256.slice(0, 16)}…`}</span> : null}
   </div>
 );
@@ -103,8 +111,8 @@ export const ComparisonItems: FC<IComparisonItemsProps> = ({ comparisonId, secti
               ) : (
                 <>
                   <div className={styles.sides}>
-                    {i.left ? <Side side={i.left} which="left" showValue={i.subjectType === 'field_version'} /> : null}
-                    {i.right ? <Side side={i.right} which="right" showValue={i.subjectType === 'field_version'} /> : null}
+                    {i.left ? <Side side={i.left} which="left" showValue={i.subjectType === 'field_version'} subjectType={i.subjectType} /> : null}
+                    {i.right ? <Side side={i.right} which="right" showValue={i.subjectType === 'field_version'} subjectType={i.subjectType} /> : null}
                   </div>
                   {detail ? <p className={styles.muted}>{detail}</p> : null}
                   {i.evidence.length > 0 ? (

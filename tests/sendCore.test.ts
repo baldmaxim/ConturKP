@@ -66,7 +66,7 @@ const snap = (o: Partial<IReleaseSnapshot> = {}): IReleaseSnapshot => ({
   review: { requirements: [], facts: [], openQuestionIds: [] },
   decisions: [],
   risks: [],
-  reviewRiskFindingIds: [],
+  reviewRisks: [],
   holds: [],
   files: [],
   fields: [],
@@ -100,6 +100,19 @@ describe('сравнение снимков выпусков', () => {
     expect(res.items.find((i) => i.section === 'requirements' && i.change === 'removed')!.leftRef).toBe('v4');
     expect(res.sections.requirements.unchanged).toBe(1);
     expect(changes(res, 'questions')).toEqual(['closed:customer_question', 'opened:customer_question']);
+    // Состояние вопроса — из закреплённого входа («отправлен, ответа нет»), в самом выводе (R15-02).
+    expect(res.items.find((i) => i.change === 'opened')).toMatchObject({ rightRef: 'x3', leftRef: null, detail: { rightStatus: 'sent' } });
+    expect(res.items.find((i) => i.change === 'closed')).toMatchObject({ leftRef: 'x1', rightRef: null, detail: { leftStatus: 'sent' } });
+  });
+
+  it('принятые замечания проверки: серьёзность стороны — из манифеста её выпуска, в самом выводе (R15-02)', () => {
+    const l = snap({ reviewRisks: [{ findingId: 'f1', severity: 'major' }, { findingId: 'f2', severity: 'minor' }] });
+    const r = snap({ releaseId: 'R', reviewRisks: [{ findingId: 'f2', severity: 'critical' }, { findingId: 'f3', severity: 'critical' }] });
+    const res = compareReleaseSnapshots(l, r, [], same);
+    expect(changes(res, 'decisions')).toEqual(['added:finding_risk', 'removed:finding_risk']);
+    expect(res.items.find((i) => i.change === 'added')).toMatchObject({ rightRef: 'f3', detail: { severity: 'critical' } });
+    expect(res.items.find((i) => i.change === 'removed')).toMatchObject({ leftRef: 'f1', detail: { severity: 'major' } });
+    expect(res.sections.decisions).toMatchObject({ left: 2, right: 2, unchanged: 1 });
   });
 
   it('нет закреплённого входа прогона у стороны — раздел «нет данных», а не «нет изменений» (I07)', () => {
@@ -169,6 +182,14 @@ describe('получено между выпусками', () => {
     expect(receivedStatus({ ...base, kind: 'document_occurrence', repeatOccurrence: true })).toBe('same_content_new_name');
     expect(receivedStatus({ ...base, kind: 'document_occurrence' })).toBeNull();
     expect(receivedStatus({ ...base, kind: 'mail_message', inRightScope: false })).toBe('out_of_scope');
+  });
+
+  it('письмо вне снимка несёт закреплённую ревизию и её хэш; другая ревизия — другой результат (R15-03)', () => {
+    const mail = (revisionId: string, sha: string): IReceivedInput => ({ ...base, kind: 'mail_message', id: 'm1', revisionId, sha256: sha, inRightScope: false, rightRecognized: false });
+    const one = compareReleaseSnapshots(snap(), snap({ releaseId: 'R' }), [mail('v1', h('a'))], same);
+    expect(one.items[0]).toMatchObject({ section: 'received', change: 'out_of_scope', subjectType: 'mail_message', leftRef: null, rightRef: 'v1', rightSha256: h('a'), detail: { subjectId: 'm1' } });
+    const other = compareReleaseSnapshots(snap(), snap({ releaseId: 'R' }), [mail('v2', h('b'))], same);
+    expect(other.resultSha256).not.toBe(one.resultSha256);
   });
 
   it('файл вне области попадает только в блок «получено» и не меняет разделы', () => {

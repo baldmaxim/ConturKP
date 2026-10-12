@@ -242,7 +242,7 @@ export const loadReleaseSnapshot = async (db: Queryable, release: IReleaseRow, m
     review: await reviewOf(db, c.id),
     decisions: decisionIds.map((id) => ({ id, supersedes: chain.filter((x) => x.root === id).map((x) => x.id) })),
     risks: manifest.acceptedRisks.map((a) => ({ id: a.id, code: a.code, subjectType: a.subjectType, subjectId: a.subjectId, subjectKey: a.subjectKey })),
-    reviewRiskFindingIds: manifest.reviewRisks.map((x) => x.findingId),
+    reviewRisks: manifest.reviewRisks.map((x) => ({ findingId: x.findingId, severity: x.severity })),
     holds: manifest.holds
       .map((h) => ({ eventId: holdBySeq.get(h.eventSeq)?.event_id ?? '', decision: h.decision === 'не влияет' ? ('not_applicable' as const) : ('requires_new_candidate' as const), decisionId: holdBySeq.get(h.eventSeq)?.decision_id ?? null }))
       .filter((h) => h.eventId !== ''),
@@ -329,15 +329,21 @@ const receivedInputs = async (db: Queryable, tenderId: string, l: IPinnedCandida
       out.push({ ...base, kind: 'document_occurrence', id: o.id, revisionId: o.document_revision_id, sha256: o.blob_sha256, inInterval: true, repeatOccurrence: o.repeat, inRightScope: rightDocs.has(o.document_revision_id), rightRecognized: !!rightDocs.get(o.document_revision_id)?.recognition_run_id });
     }
     // Письмо «получено» по событию связи с тендером (событие этапа неизменно; текущий статус связи не читается).
-    const mail = await db.query<{ message_id: string }>(
-      `SELECT e.ref_id AS message_id FROM stage_input_event e JOIN tender_stage s ON s.id = e.stage_id
-        WHERE s.tender_id = $1 AND e.event_type = 'communication_linked' AND e.ref_type = 'mail_message' AND e.created_at > $2 AND e.created_at <= $3
-        GROUP BY e.ref_id ORDER BY min(e.created_at), e.ref_id`,
+    // Доказательство письма вне правого снимка — его последняя ревизия, существовавшая к закреплению правой стороны:
+    // ревизии неизменяемы, редакция письма, импортированная позже, прежний вывод не меняет (R15-03).
+    const mail = await db.query<{ message_id: string; revision_id: string | null; raw_blob_sha256: string | null }>(
+      `SELECT x.message_id, v.id AS revision_id, v.raw_blob_sha256
+         FROM (SELECT e.ref_id AS message_id, min(e.created_at) AS linked_at FROM stage_input_event e JOIN tender_stage s ON s.id = e.stage_id
+                WHERE s.tender_id = $1 AND e.event_type = 'communication_linked' AND e.ref_type = 'mail_message' AND e.created_at > $2 AND e.created_at <= $3
+                GROUP BY e.ref_id) x
+         LEFT JOIN LATERAL (SELECT rv.id, rv.raw_blob_sha256 FROM mail_message_revision rv
+                             WHERE rv.message_id = x.message_id AND rv.created_at <= $3 ORDER BY rv.seq DESC LIMIT 1) v ON true
+        ORDER BY x.linked_at, x.message_id`,
       [tenderId, l.created_at, r.created_at],
     );
     for (const m of mail.rows) {
       const unit = rightMail.get(m.message_id);
-      out.push({ ...base, kind: 'mail_message', id: m.message_id, revisionId: unit?.mail_message_revision_id ?? null, sha256: unit?.raw_blob_sha256 ?? null, inInterval: true, inRightScope: !!unit, rightRecognized: !!unit });
+      out.push({ ...base, kind: 'mail_message', id: m.message_id, revisionId: unit?.mail_message_revision_id ?? m.revision_id, sha256: unit?.raw_blob_sha256 ?? m.raw_blob_sha256, inInterval: true, inRightScope: !!unit, rightRecognized: !!unit });
     }
   }
   return out;

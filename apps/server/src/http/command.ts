@@ -27,6 +27,13 @@ export interface ICommandResult {
   audit: AuditRecord[];
   // Побочные заголовки ответа (cookie); при повторе по ключу идемпотентности не вызываются.
   respond?: (res: Response) => void;
+  // Ссылка на созданную запись для команд с replay: в записи идемпотентности хранится она, а не тело ответа (R15-01).
+  replayRef?: unknown;
+}
+
+export interface IReplayedResponse {
+  body: unknown;
+  etag?: string;
 }
 
 export interface ICommandSpec {
@@ -43,6 +50,10 @@ export interface ICommandSpec {
   // поступивших событий этапа — её результат сохраняется, даже если сама команда получит отказ.
   prepare?: (client: PoolClient, ctx: IAccessContext, req: Request) => Promise<void>;
   run: (client: PoolClient, ctx: IAccessContext, req: Request) => Promise<ICommandResult>;
+  // Ответ с содержимым, закрытость которого зависит от прав читателя (письмо-основание, причина решения по нему):
+  // тело ответа не сохраняется, а при повторе строится заново по текущим правам из replayRef (R15-01). Отзыв права
+  // после команды закрывает текст и в повторном ответе; второй записи повтор не создаёт.
+  replay?: (client: PoolClient, ctx: IAccessContext, req: Request, ref: unknown) => Promise<IReplayedResponse>;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -67,6 +78,13 @@ export const requireIfMatch = (req: Request, id: string): number => {
     throw new HttpError(412, 'VERSION_CONFLICT', 'If-Match не относится к этому объекту');
   }
   return parsed.rowVersion;
+};
+
+// Идентификатор записи из ссылки сохранённого ответа; ссылка иного вида ответа не даёт.
+export const replayId = (ref: unknown, key: string): string => {
+  const id = ref && typeof ref === 'object' ? (ref as Record<string, unknown>)[key] : undefined;
+  if (typeof id !== 'string') throw new HttpError(409, 'STATE_CONFLICT', 'сохранённый ответ команды недоступен: перечитайте объект');
+  return id;
 };
 
 export const versionConflict = (current: unknown): HttpError =>
@@ -121,7 +139,15 @@ export const command =
             if (stored.requestHash !== requestHash) {
               throw new HttpError(422, 'IDEMPOTENCY_KEY_REUSED', 'ключ уже использован с другим запросом');
             }
-            const saved = stored.body as { body: unknown; etag?: string };
+            const saved = stored.body as { body?: unknown; etag?: string; ref?: unknown };
+            if (spec.replay) {
+              // Сохранённого тела у такой команды нет; запись без ссылки заново не показывается.
+              if (saved.ref === undefined) throw new HttpError(409, 'STATE_CONFLICT', 'сохранённый ответ команды недоступен: перечитайте объект');
+              const again = await spec.replay(client, ctx, req, saved.ref);
+              const rebuilt: ICommandResult & { replay: boolean } = { status: stored.status, body: again.body, audit: [], replay: true };
+              if (again.etag) rebuilt.etag = again.etag;
+              return rebuilt;
+            }
             const replayed: ICommandResult & { replay: boolean } = { status: stored.status, body: saved.body, audit: [], replay: true };
             if (saved.etag) replayed.etag = saved.etag;
             return replayed;
@@ -138,10 +164,11 @@ export const command =
           });
         }
         if (key) {
+          if (spec.replay && r.replayRef === undefined) throw new Error(`команда ${spec.action}: replay без replayRef`);
           await saveIdempotent(client, ctx.principal.userId, key, {
             requestHash,
             status: r.status,
-            body: { body: r.body, ...(r.etag ? { etag: r.etag } : {}) },
+            body: spec.replay ? { ref: r.replayRef } : { body: r.body, ...(r.etag ? { etag: r.etag } : {}) },
           });
         }
         return { ...r, replay: false };

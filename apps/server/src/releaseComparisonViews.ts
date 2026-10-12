@@ -3,6 +3,9 @@
 // права источника; требование и вопрос — замыкание закрытости этапа 08; факт — его фрагменты; решения, риски и
 // удержания — `decisionVisibility` (R13-02); поле приложения — `fieldVersionVisibility`; файл — видимость комплекта.
 // Закрытый вывод отдаётся без ссылок, названий и значений. Пояснение причины — только при читаемых основаниях.
+// Состояние стороны берётся только из закреплённого: статус вопроса и серьёзность принятого замечания — из вывода
+// (`detail`), письмо — по закреплённой ревизии; текущие строки вопроса, замечания и письма состояние не подменяют
+// (R15-02, R15-03). Название и тип документа — текущая карточка документа, а не состояние выпуска.
 import {
   candidateVisibleTo,
   contentTenderIds,
@@ -11,7 +14,6 @@ import {
   fieldVersionVisibility,
   readableDocumentRevisions,
   readableFragments,
-  readableMailboxIds,
   readableMailRevisions,
   stageVisibility,
   type IAccessContext,
@@ -134,19 +136,6 @@ export const itemViews = async (
     (await rows<{ id: string; subject: string | null; sent_at: Date | null; direction: string }>(db, 'SELECT id, subject, sent_at, direction FROM mail_message_revision WHERE id = ANY($1::uuid[])', mailRevisionIds)).map((m) => [m.id, m]),
   );
   const readableMail = await readableMailRevisions(db, ctx, mailRevisionIds);
-  const mailMessageIds = items.filter((i) => i.subject_type === 'mail_message').map((i) => detailId(i, 'subjectId')).filter((x): x is string => !!x);
-  const mailMessages = new Map(
-    (
-      await rows<{ id: string; mailbox_id: string; subject: string | null; sent_at: Date | null }>(
-        db,
-        `SELECT m.id, m.mailbox_id, lr.subject, lr.sent_at FROM mail_message m
-           JOIN LATERAL (SELECT r.subject, r.sent_at FROM mail_message_revision r WHERE r.message_id = m.id ORDER BY r.seq DESC LIMIT 1) lr ON true
-          WHERE m.id = ANY($1::uuid[])`,
-        mailMessageIds,
-      )
-    ).map((m) => [m.id, m]),
-  );
-  const mailboxes = new Set(readableMailboxIds(ctx));
   const transcripts = new Map(
     (
       await rows<{ id: string; seq: number; title: string | null }>(
@@ -168,7 +157,7 @@ export const itemViews = async (
     ).map((r) => [r.id, r]),
   );
   const questions = new Map(
-    (await rows<{ id: string; stage_id: string; text: string; status: string }>(db, 'SELECT id, stage_id, text, status FROM customer_question WHERE id = ANY($1::uuid[])', refsOf(items, 'customer_question'))).map((q) => [q.id, q]),
+    (await rows<{ id: string; stage_id: string; text: string }>(db, 'SELECT id, stage_id, text FROM customer_question WHERE id = ANY($1::uuid[])', refsOf(items, 'customer_question'))).map((q) => [q.id, q]),
   );
   const stageIds = new Set([cmp.leftStageId, cmp.rightStageId, ...[...requirements.values()].map((r) => r.stage_id), ...[...questions.values()].map((q) => q.stage_id)]);
   const stageVis = new Map<string, Awaited<ReturnType<typeof stageVisibility>>>();
@@ -221,7 +210,7 @@ export const itemViews = async (
   );
   const findingIds = refsOf(items, 'finding_risk');
   const findings = new Map(
-    (await rows<{ id: string; title: string; stage_id: string; severity: string }>(db, 'SELECT id, title, stage_id, severity FROM finding WHERE id = ANY($1::uuid[])', findingIds)).map((f) => [f.id, f]),
+    (await rows<{ id: string; title: string; stage_id: string }>(db, 'SELECT id, title, stage_id FROM finding WHERE id = ANY($1::uuid[])', findingIds)).map((f) => [f.id, f]),
   );
   const holdItems = items.filter((i) => i.subject_type === 'hold_decision');
   const events = new Map(
@@ -302,7 +291,8 @@ export const itemViews = async (
       }
       case 'customer_question': {
         const q = questions.get(ref);
-        return make(!!q && stageVis.get(q.stage_id)!.visible('question', q.id), q ? cut(q.text) : null, q?.status ?? null);
+        // Текст отправленного вопроса неизменяем (миграция 0019); статус — закреплённый в выводе, не текущий.
+        return make(!!q && stageVis.get(q.stage_id)!.visible('question', q.id), q ? cut(q.text) : null, detailId(i, which === 'left' ? 'leftStatus' : 'rightStatus'));
       }
       case 'qa_item_revision': {
         const q = qa.get(ref);
@@ -324,7 +314,7 @@ export const itemViews = async (
       case 'finding_risk': {
         const f = findings.get(ref);
         const vis = f ? decisionVis.get(f.stage_id) : undefined;
-        return make(!!f && !!vis && vis.finding(ref), f ? cut(f.title) : null, f?.severity ?? null);
+        return make(!!f && !!vis && vis.finding(ref), f ? cut(f.title) : null, detailId(i, 'severity'));
       }
       case 'hold_decision': {
         const e = events.get(detailId(i, 'eventId') ?? '');
@@ -345,12 +335,10 @@ export const itemViews = async (
     }
   };
 
-  // Вывод без ссылок (письмо вне правого снимка): видимость — по ящику письма.
+  // Письмо без закреплённой ревизии закрыто: показывать по нему нечего, а текущую ревизию вывод не читает (R15-03).
+  // Решение по удержанию без записи решения: видимость — по событию.
   const extraVisible = (i: IReleaseComparisonItemRow): boolean => {
-    if (i.subject_type === 'mail_message') {
-      const m = mailMessages.get(detailId(i, 'subjectId') ?? '');
-      return !!m && mailboxes.has(m.mailbox_id);
-    }
+    if (i.subject_type === 'mail_message') return !!i.right_ref;
     if (i.subject_type === 'hold_decision') {
       const e = events.get(detailId(i, 'eventId') ?? '');
       return !!e && (decisionVis.get(e.stage_id)?.event(e.ref_type, e.ref_id) ?? false);
@@ -376,20 +364,13 @@ export const itemViews = async (
     const base = { id: i.id, ordinal: Number(i.ordinal), section: i.section, change: i.change, subjectType: i.subject_type, reasonVersion: reason?.version ?? 0, reasonStatus: reason?.reason_status ?? ('unknown' as const) };
     if (closed) return { ...base, closed: true, left: null, right: null, detail: {}, evidence: [], reason: reason ? reasonView(reason, false) : null };
     const type = evidenceType[i.subject_type] ?? i.subject_type;
-    const mail = i.subject_type === 'mail_message' ? mailMessages.get(detailId(i, 'subjectId') ?? '') : undefined;
     // Решение по удержанию без ссылки на запись решения: подпись — по событию.
     const event = i.subject_type === 'hold_decision' && !l.side && !r.side ? events.get(detailId(i, 'eventId') ?? '') : undefined;
     return {
       ...base,
       closed: false,
       left: l.side,
-      right:
-        r.side ??
-        (mail
-          ? { ref: null, sha256: null, label: mail.subject ?? '(без темы)', note: mail.sent_at ? mail.sent_at.toISOString() : null }
-          : event
-            ? { ref: null, sha256: null, label: `событие № ${event.seq}: ${event.event_type}`, note: null }
-            : null),
+      right: r.side ?? (event ? { ref: null, sha256: null, label: `событие № ${event.seq}: ${event.event_type}`, note: null } : null),
       detail: i.detail,
       evidence: [...new Set([i.left_ref, i.right_ref].filter((x): x is string => !!x))].map((id) => ({ type, id })),
       reason: reason ? reasonView(reason, reasonVisible(reason)) : null,

@@ -2,9 +2,9 @@
 // запроса не дублирует запись (A37); цитата должна существовать и относиться к области. Данные поддельные.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { WorkerRuntime } from '../apps/worker/src/runtime.ts';
-import { buildScenario, createTestDb, makeApp, makeWorker, testConfig, type IScenario, type ITestDb } from './helpers.ts';
+import { auditRows, buildScenario, createTestDb, idem, makeApp, makeWorker, testConfig, type IScenario, type ITestDb } from './helpers.ts';
 import { callTool, issueToken, mcpClient, startMcp, type IMcpEndpoint } from './mcpFixtures.ts';
-import { buildIndex, fragmentIdOf, seedEvidenceRun, setWorkingSet, uploadDocument } from './searchFixtures.ts';
+import { buildIndex, fixScope, fragmentIdOf, seedEvidenceRun, setWorkingSet, uploadDocument } from './searchFixtures.ts';
 
 let db: ITestDb;
 let s: IScenario;
@@ -46,6 +46,7 @@ beforeAll(async () => {
   ids.runB = await seedEvidenceRun(db.pool, ids.revB!, { pages: [{ blocks: ['Отдельное условие тендера B'] }] });
   await setWorkingSet(s.eng1, s.stageA, [ids.revA!], true);
   await setWorkingSet(s.eng3, s.stageB, [ids.revB!]);
+  await fixScope(s.eng1, s.stageA);
   await buildIndex(db, worker);
   ids.fragA = await fragmentIdOf(db.pool, ids.runA!, FACADE);
   ids.fragB = await fragmentIdOf(db.pool, ids.runB!, 'Отдельное условие тендера B');
@@ -160,6 +161,88 @@ describe('цитаты и область', () => {
     expect(noCitations.isError).toBe(true);
     expect(await counts()).toEqual(before);
     await client.close();
+  });
+});
+
+describe('решение человека в портале', () => {
+  const propose = async (tool: string, args: Record<string, unknown>) => {
+    const client = await mcpClient(mcp.url, proposer.token);
+    const r = await callTool(client, tool, { tenderId: s.tenderA, stageId: s.stageA, ...args });
+    await client.close();
+    expect(r.isError, r.text).toBe(false);
+    return r.body.proposal.id as string;
+  };
+  const listed = async (client = s.eng2) => (await client.get(`/stages/${s.stageA}/mcp-proposals`)).body.items as any[];
+  const etagOf = async (id: string) => (await listed()).find((p) => p.id === id).etag as string;
+
+  it('список предложений этапа виден участникам тендера; не участнику — 404', async () => {
+    const id = await propose('propose_finding', { title: 'Нет позиции под облицовку', body: 'В расчёте нет позиции под керамогранит.', citedFragmentIds: [ids.fragA], requestId: 'req-human-list-0001' });
+    const mine = (await listed()).find((p) => p.id === id);
+    expect(mine).toMatchObject({ kind: 'finding', status: 'open', restricted: false, title: 'Нет позиции под облицовку', citedFragmentIds: [ids.fragA], proposedVia: 'chat', proposedOnBehalfOf: { id: s.ids.eng1 }, can: { decide: true } });
+    expect((await s.eng3.get(`/stages/${s.stageA}/mcp-proposals`)).status).toBe(404);
+    expect((await s.eng2.get(`/stages/${s.stageA}/mcp-proposals?status=accepted`)).body.items.every((p: any) => p.status === 'accepted')).toBe(true);
+  });
+
+  it('принятие замечания: автор — человек, серьёзность задаёт он; предложение принято один раз', async () => {
+    const id = await propose('propose_finding', { title: 'Толщина облицовки не подтверждена', body: 'В ТЗ 10 мм, в расчёте позиции нет.', citedFragmentIds: [ids.fragA], severityHint: 'critical', requestId: 'req-human-accept-0001' });
+    const before = await counts();
+    const noSeverity = await s.eng2.post(`/mcp-proposals/${id}/accept`, {}, { headers: { 'If-Match': await etagOf(id), ...idem() } });
+    expect(noSeverity.status).toBe(400);
+    const stale = await s.eng2.post(`/mcp-proposals/${id}/accept`, { severity: 'minor', confidence: 'medium' }, { headers: { 'If-Match': `"${id}:99"`, ...idem() } });
+    expect(stale.status).toBe(412);
+    const key = idem();
+    const etag = await etagOf(id);
+    const ok = await s.eng2.post(`/mcp-proposals/${id}/accept`, { severity: 'minor', confidence: 'medium' }, { headers: { 'If-Match': etag, ...key } });
+    expect(ok.status, ok.text).toBe(200);
+    expect(ok.body).toMatchObject({ status: 'accepted', decidedBy: { id: s.ids.eng2 }, result: { type: 'finding' }, can: { decide: false } });
+    const finding = (await db.pool.query('SELECT created_by, origin, kind, severity, title FROM finding WHERE id = $1', [ok.body.result.id])).rows[0];
+    // Автор — принявший человек; подсказка модели («критичное») серьёзностью не стала.
+    expect(finding).toMatchObject({ created_by: s.ids.eng2, origin: 'human', kind: 'human', severity: 'minor', title: 'Толщина облицовки не подтверждена' });
+    expect(await counts()).toEqual({ ...before, findings: Number(before.findings) + 1 });
+    // Повтор той же команды записи не дублирует; новая команда по принятому предложению — отказ.
+    const replay = await s.eng2.post(`/mcp-proposals/${id}/accept`, { severity: 'minor', confidence: 'medium' }, { headers: { 'If-Match': etag, ...key } });
+    expect(replay.status).toBe(200);
+    const again = await s.eng2.post(`/mcp-proposals/${id}/accept`, { severity: 'major', confidence: 'high' }, { headers: { 'If-Match': ok.body.etag, ...idem() } });
+    expect(again.status).toBe(409);
+    expect(again.body.current).toMatchObject({ reason: 'proposal_not_open' });
+    expect(await counts()).toEqual({ ...before, findings: Number(before.findings) + 1 });
+    const audit = await auditRows(db.pool, "action = 'mcp.proposal.accept' AND outcome = 'allowed' AND entity_id = $1", [id]);
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({ actor_user_id: s.ids.eng2 });
+    expect(JSON.stringify(audit[0]!.details)).not.toContain('облицовки');
+  });
+
+  it('вопрос принимается черновиком вопроса заказчику; текст условия — без записи; отклонение — с причиной', async () => {
+    const question = await propose('propose_question', { text: 'Подтвердите марку керамогранита', requestId: 'req-human-question-0001' });
+    const before = await counts();
+    const accepted = await s.manager.post(`/mcp-proposals/${question}/accept`, {}, { headers: { 'If-Match': await etagOf(question), ...idem() } });
+    expect(accepted.status, accepted.text).toBe(200);
+    expect(accepted.body.result).toMatchObject({ type: 'customer_question' });
+    expect((await db.pool.query('SELECT status, text, created_by FROM customer_question WHERE id = $1', [accepted.body.result.id])).rows[0]).toEqual({ status: 'draft', text: 'Подтвердите марку керамогранита', created_by: s.ids.manager });
+    expect(await counts()).toEqual({ ...before, questions: Number(before.questions) + 1 });
+
+    const condition = await propose('propose_condition_text', { text: 'Гарантия 5 лет с даты подписания акта', fieldKey: 'warranty.term', requestId: 'req-human-condition-0001' });
+    const taken = await s.eng2.post(`/mcp-proposals/${condition}/accept`, {}, { headers: { 'If-Match': await etagOf(condition), ...idem() } });
+    expect(taken.status, taken.text).toBe(200);
+    expect(taken.body).toMatchObject({ status: 'accepted', result: null, body: 'Гарантия 5 лет с даты подписания акта', detail: { fieldKey: 'warranty.term' } });
+
+    const other = await propose('propose_question', { text: 'Лишний вопрос', requestId: 'req-human-reject-0001' });
+    expect((await s.eng2.post(`/mcp-proposals/${other}/reject`, {}, { headers: { 'If-Match': await etagOf(other), ...idem() } })).status).toBe(400);
+    const rejected = await s.eng2.post(`/mcp-proposals/${other}/reject`, { reason: 'Вопрос уже задан заказчику' }, { headers: { 'If-Match': await etagOf(other), ...idem() } });
+    expect(rejected.status, rejected.text).toBe(200);
+    expect(rejected.body).toMatchObject({ status: 'rejected', decisionReason: 'Вопрос уже задан заказчику', result: null });
+  });
+
+  it('решить может только участник тендера с нужной возможностью; чат-клиент решить не может', async () => {
+    const id = await propose('propose_question', { text: 'Вопрос для проверки прав', requestId: 'req-human-rights-0001' });
+    const etag = await etagOf(id);
+    expect((await s.eng3.post(`/mcp-proposals/${id}/accept`, {}, { headers: { 'If-Match': etag, ...idem() } })).status).toBe(404);
+    expect([403, 404]).toContain((await s.admin.post(`/mcp-proposals/${id}/accept`, {}, { headers: { 'If-Match': etag, ...idem() } })).status);
+    // Через MCP инструмента принятия нет ни у одного токена.
+    const client = await mcpClient(mcp.url, proposer.token);
+    expect((await client.listTools()).tools.map((t) => t.name).filter((n) => /accept|reject|decide/i.test(n))).toEqual([]);
+    await client.close();
+    expect((await listed()).find((p) => p.id === id).status).toBe('open');
   });
 });
 

@@ -33,6 +33,7 @@ import { approvalsRouter } from './routes/approvals.ts';
 import { deliveriesRouter } from './routes/deliveries.ts';
 import { mcpRouter } from './mcp/http.ts';
 import { apiTokensRouter } from './routes/apiTokens.ts';
+import { mcpProposalsRouter } from './routes/mcpProposals.ts';
 import { releaseComparisonsRouter } from './routes/releaseComparisons.ts';
 import { sendsRouter } from './routes/sends.ts';
 import { communicationsRouter } from './routes/communications.ts';
@@ -106,6 +107,7 @@ export const createApp = (deps: IAppDeps): express.Express => {
   api.use(sendsRouter(pool, store, config));
   api.use(releaseComparisonsRouter(pool, store));
   api.use(apiTokensRouter(pool));
+  api.use(mcpProposalsRouter(pool));
   api.use(mailboxesRouter(pool, store, config));
   api.use(mailMessagesRouter(pool, store));
   api.use(communicationsRouter(pool, store, config));

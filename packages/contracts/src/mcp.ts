@@ -17,3 +17,18 @@ export const IssueApiTokenRequest = z
   })
   .strict();
 export type IssueApiTokenRequest = z.infer<typeof IssueApiTokenRequest>;
+
+// Решение человека по предложению чат-клиента (проект §6). Для замечания человек сам задаёт серьёзность и уверенность:
+// подсказка модели значением не становится.
+export const AcceptMcpProposalRequest = z
+  .object({
+    severity: z.enum(['critical', 'major', 'minor']).optional(),
+    confidence: z.enum(['low', 'medium', 'high']).optional(),
+  })
+  .strict();
+export type AcceptMcpProposalRequest = z.infer<typeof AcceptMcpProposalRequest>;
+
+export const RejectMcpProposalRequest = z.object({ reason: z.string().trim().min(1).max(1000) }).strict();
+export type RejectMcpProposalRequest = z.infer<typeof RejectMcpProposalRequest>;
+
+export const McpProposalsQuery = z.object({ status: z.enum(['open', 'accepted', 'rejected']).optional() }).strict();

@@ -60,3 +60,4 @@ export * from './decisionVisibility.ts';
 export * from './sends.ts';
 export * from './releaseComparisons.ts';
 export * from './apiTokens.ts';
+export * from './mcpProposals.ts';

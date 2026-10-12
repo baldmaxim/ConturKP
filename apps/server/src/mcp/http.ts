@@ -12,12 +12,23 @@ import { createRedactor } from './redact.ts';
 import type { IMcpSession } from './session.ts';
 import { callTool, type IMcpTool, type IToolRuntime } from './tools.ts';
 import { integrationStatusTool, listCasesTool } from './tools/cases.ts';
+import { proposeChangeReasonTool, proposeConditionTextTool, proposeFindingTool, proposeQuestionTool } from './tools/propose.ts';
 import { getCitationTool, getSearchRunTool, searchEvidenceTool } from './tools/search.ts';
 
 export const MCP_SERVER_NAME = 'kontur-kp';
 export const MCP_SERVER_VERSION = '16.0.0';
 
-export const MCP_TOOLS: readonly IMcpTool[] = [listCasesTool, searchEvidenceTool, getSearchRunTool, getCitationTool, integrationStatusTool];
+export const MCP_TOOLS: readonly IMcpTool[] = [
+  listCasesTool,
+  searchEvidenceTool,
+  getSearchRunTool,
+  getCitationTool,
+  integrationStatusTool,
+  proposeFindingTool,
+  proposeQuestionTool,
+  proposeConditionTextTool,
+  proposeChangeReasonTool,
+];
 
 const INSTRUCTIONS =
   'Портал «Контур КП»: чтение материалов тендера и предложения. Начните с list_cases и передавайте tenderId и stageId (или releaseId) в остальные инструменты: ' +

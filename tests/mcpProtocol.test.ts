@@ -30,7 +30,7 @@ describe('протокол', () => {
     const client = await mcpClient(mcp.url, eng1.token);
     const tools = (await client.listTools()).tools;
     const names = tools.map((t) => t.name).sort();
-    expect(names).toEqual(['get_citation', 'get_integration_status', 'get_search_run', 'list_cases', 'search_evidence']);
+    expect(names).toEqual(['compare_releases', 'get_calculation', 'get_case_overview', 'get_citation', 'get_economics', 'get_integration_status', 'get_readiness', 'get_search_run', 'list_cases', 'list_decisions', 'list_documents', 'list_findings', 'list_questions', 'list_requirements', 'search_evidence']);
     expect(names.some((n) => n.startsWith('propose_'))).toBe(false);
     for (const t of tools) {
       expect(t.description, t.name).toBeTruthy();

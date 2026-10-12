@@ -13,6 +13,7 @@ import { createRedactor } from './redact.ts';
 import type { IMcpSession } from './session.ts';
 import { callTool, type IMcpTool, type IToolRuntime } from './tools.ts';
 import { integrationStatusTool, listCasesTool } from './tools/cases.ts';
+import { compareReleasesTool } from './tools/compare.ts';
 import { proposeChangeReasonTool, proposeConditionTextTool, proposeFindingTool, proposeQuestionTool } from './tools/propose.ts';
 import { caseOverviewTool, getCalculationTool, getEconomicsTool, getReadinessTool, listDecisionsTool, listDocumentsTool, listFindingsTool, listQuestionsTool, listRequirementsTool } from './tools/reads.ts';
 import { getCitationTool, getSearchRunTool, searchEvidenceTool } from './tools/search.ts';
@@ -34,6 +35,7 @@ export const MCP_TOOLS: readonly IMcpTool[] = [
   listQuestionsTool,
   listDecisionsTool,
   getReadinessTool,
+  compareReleasesTool,
   integrationStatusTool,
   proposeFindingTool,
   proposeQuestionTool,

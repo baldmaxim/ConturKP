@@ -34,3 +34,37 @@ export interface IIssueApiTokenBody {
   propose: boolean;
   lifetimeDays: 7 | 30 | 90;
 }
+
+// Предложения чат-клиента на этапе: принимает или отклоняет человек.
+export type TChatProposalKind = 'finding' | 'question' | 'condition_text' | 'change_reason';
+
+export interface IChatProposal {
+  id: string;
+  stageId: string;
+  kind: TChatProposalKind;
+  status: 'open' | 'accepted' | 'rejected';
+  restricted: boolean;
+  title: string | null;
+  body: string | null;
+  detail: Record<string, unknown>;
+  citedFragmentIds: string[];
+  citations: number;
+  proposedOnBehalfOf: { id: string; name: string };
+  createdAt: string;
+  decidedBy: { id: string; name: string } | null;
+  decidedAt: string | null;
+  decisionReason: string | null;
+  result: { type: string; id: string } | null;
+  etag: string;
+  can: { decide: boolean };
+}
+
+export interface IChatProposalList {
+  items: IChatProposal[];
+  open: number;
+}
+
+export interface IAcceptChatProposalBody {
+  severity?: 'critical' | 'major' | 'minor';
+  confidence?: 'low' | 'medium' | 'high';
+}

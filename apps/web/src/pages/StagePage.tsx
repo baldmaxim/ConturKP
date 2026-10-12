@@ -12,6 +12,7 @@ import form from '../styles/form.module.css';
 import { DocumentsTab } from './sources/DocumentsTab';
 import { ImportBatchList } from './sources/ImportBatchList';
 import { DialogsTab } from './answers/DialogsTab';
+import { ChatProposalsTab } from './mcp/ChatProposalsTab';
 import { CalculationTab } from './calculation/CalculationTab';
 import { EconomicsTab } from './economics/EconomicsTab';
 import { ApplicationsTab } from './forms/ApplicationsTab';
@@ -40,6 +41,7 @@ const TABS: ITab[] = [
   { id: 'discrepancies', label: 'Разногласия', icon: 'file-exclamation-point' },
   { id: 'applications', label: 'Приложения', icon: 'file-signature' },
   { id: 'release', label: 'Комплект', icon: 'archive' },
+  { id: 'proposals', label: 'Предложения из чата', icon: 'message-square' },
 ];
 
 export const StagePage: FC = () => {
@@ -117,6 +119,7 @@ export const StagePage: FC = () => {
         {active === 'discrepancies' ? <FindingsTab stageId={stage.id} tenderId={stage.tenderId} /> : null}
         {active === 'applications' ? <ApplicationsTab stageId={stage.id} tenderId={stage.tenderId} caps={caps} /> : null}
         {active === 'release' ? <CandidatesTab stageId={stage.id} /> : null}
+        {active === 'proposals' ? <ChatProposalsTab stageId={stage.id} /> : null}
       </div>
     </>
   );

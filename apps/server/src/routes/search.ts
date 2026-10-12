@@ -104,6 +104,7 @@ export const startScopedSearch = async (
   limit: number,
   config: IAppConfig,
   clock: () => Date,
+  viaMcp = false,
 ): Promise<{ runId: string; scopeHash: string; excluded: number }> => {
   const tenderId = t.owner.kind === 'tender' ? t.owner.tenderId : null;
   // G05-03: без активной версии поиск не работает «по чему-то текущему» — явный отказ.
@@ -129,6 +130,7 @@ export const startScopedSearch = async (
     mode: t.mode,
     evidenceScopeId: t.evidenceScopeId,
     requestedBy: ctx.principal.userId,
+    ...(viaMcp ? { viaMcp: true } : {}),
     rawQuery: query,
     limit,
     deadlineMs: config.search.semanticDeadlineMs,
@@ -191,22 +193,28 @@ export const searchRouter = (pool: Pool, config: IAppConfig, clock: () => Date):
     '/search-runs/:id',
     query(pool, 'search.run.read', 'search_run', async (ctx, req, res) => {
       const id = uuidParam(req, 'id', 'search_run');
-      const run = await getScopedSearchRun(pool, ctx, id);
-      if (!run) throw notFound({ entityType: 'search_run', entityId: id });
-      // Попутная терминализация по сроку; основной путь — проход обслуживания worker (G05-02).
-      if (run.status === 'pending' && run.deadline_at.getTime() < clock().getTime()) {
-        await withTransaction(pool, (c) => degradeIfExpired(c, id));
-      }
-      // Права поверх закреплённой области проверяются при каждом чтении (ADR-008 §4, D-022 OD-3, AD-07-1a):
-      // единица договора без contract.read, письмо или вложение без mail.read или без связи с тендером — отказ,
-      // результат не проецируется; переиндексация для этого не нужна.
-      const lost = await unitsNotPermitted(pool, ctx, run.allowed_source_unit_ids, run.tender_id, run.mode);
-      if (lost.length > 0) {
-        throw new HttpError(409, 'STATE_CONFLICT', 'права на часть области поиска отозваны; выполните поиск заново', { current: { reason: 'scope_changed' } }, { tenderId: run.tender_id, entityId: id });
-      }
-      res.json(await searchRunView(pool, id));
+      res.json((await readScopedSearchRun(pool, ctx, id, clock)).view);
     }),
   );
 
   return router;
+};
+
+// Чтение прогона поиска его автором с проверкой текущих прав на закреплённую область. Общий путь GET /search-runs/{id}
+// и инструмента MCP `get_search_run` (этап 16).
+export const readScopedSearchRun = async (pool: Pool, ctx: IAccessContext, id: string, clock: () => Date) => {
+  const run = await getScopedSearchRun(pool, ctx, id);
+  if (!run) throw notFound({ entityType: 'search_run', entityId: id });
+  // Попутная терминализация по сроку; основной путь — проход обслуживания worker (G05-02).
+  if (run.status === 'pending' && run.deadline_at.getTime() < clock().getTime()) {
+    await withTransaction(pool, (c) => degradeIfExpired(c, id));
+  }
+  // Права поверх закреплённой области проверяются при каждом чтении (ADR-008 §4, D-022 OD-3, AD-07-1a):
+  // единица договора без contract.read, письмо или вложение без mail.read или без связи с тендером — отказ,
+  // результат не проецируется; переиндексация для этого не нужна.
+  const lost = await unitsNotPermitted(pool, ctx, run.allowed_source_unit_ids, run.tender_id, run.mode);
+  if (lost.length > 0) {
+    throw new HttpError(409, 'STATE_CONFLICT', 'права на часть области поиска отозваны; выполните поиск заново', { current: { reason: 'scope_changed' } }, { tenderId: run.tender_id, entityId: id });
+  }
+  return { run, view: await searchRunView(pool, id) };
 };

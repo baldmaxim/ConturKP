@@ -149,6 +149,13 @@ export interface IDeliveryConfig {
   operationTimeoutMs: number;
 }
 
+// Этап 16 (ADR-010; проект §2, §7): MCP-сервер портала. Выключен по умолчанию; лимит вызовов инструментов — на токен.
+export interface IMcpConfig {
+  enabled: boolean;
+  callsPerMinute: number;
+  callsPerHour: number;
+}
+
 export interface IAppConfig {
   env: KonturEnv;
   databaseUrl: string;
@@ -178,6 +185,7 @@ export interface IAppConfig {
   answer: IAnswerConfig;
   office: IOfficeConfig;
   delivery: IDeliveryConfig;
+  mcp: IMcpConfig;
 }
 
 interface IConfigKey {
@@ -259,6 +267,10 @@ export const CONFIG_KEYS: IConfigKey[] = [
   // Этап 14 (D-034): Яндекс Диск — локальная синхронизируемая папка, сетевая папка — права учётной записи службы worker;
   // токена и пароля нет (YANDEX_DISK_TOKEN, SMB_USERNAME, SMB_PASSWORD убраны). Пути назначений — в БД, задаёт администратор.
   { name: 'DELIVERY_OPERATION_TIMEOUT_SECONDS', secret: false, required: false, purpose: 'срок одной файловой операции размещения, по умолчанию 60' },
+  // Этап 16 (ADR-010): точка /mcp для чат-клиентов. Токены выпускают пользователи в портале; в настройках их нет.
+  { name: 'MCP_ENABLED', secret: false, required: false, purpose: 'включить MCP-сервер портала (true / false), по умолчанию false' },
+  { name: 'MCP_CALLS_PER_MINUTE', secret: false, required: false, purpose: 'лимит вызовов инструментов MCP на токен в минуту, по умолчанию 60' },
+  { name: 'MCP_CALLS_PER_HOUR', secret: false, required: false, purpose: 'лимит вызовов инструментов MCP на токен в час, по умолчанию 600' },
 ];
 
 const localRecognitionFrom = (env: Env, problems: string[]): ILocalRecognitionConfig => {
@@ -518,6 +530,11 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
     answer: answerFrom(env, problems),
     office: { sofficePath: env.SOFFICE_PATH?.trim() || null, convertTimeoutMs: intFrom(env, 'OFFICE_CONVERT_TIMEOUT_SECONDS', 120, problems) * 1000 },
     delivery: { operationTimeoutMs: intFrom(env, 'DELIVERY_OPERATION_TIMEOUT_SECONDS', 60, problems) * 1000 },
+    mcp: {
+      enabled: (env.MCP_ENABLED ?? 'false').trim().toLowerCase() === 'true',
+      callsPerMinute: intFrom(env, 'MCP_CALLS_PER_MINUTE', 60, problems),
+      callsPerHour: intFrom(env, 'MCP_CALLS_PER_HOUR', 600, problems),
+    },
   };
   for (const root of config.intakeRoots) {
     if (!isAbsolute(root)) problems.push(`INTAKE_ROOTS: «${root}» должен быть абсолютным путём`);

@@ -80,6 +80,7 @@ export interface ISearchStart {
   mode: 'working' | 'review';
   evidenceScopeId: string | null;
   requestedBy: string;
+  viaMcp?: boolean;
   rawQuery: string;
   limit: number;
   deadlineMs: number;
@@ -108,6 +109,7 @@ export const startSearch = async (db: Queryable, s: ISearchStart): Promise<ISear
     mode: s.mode,
     evidenceScopeId: s.evidenceScopeId,
     requestedBy: s.requestedBy,
+    ...(s.viaMcp ? { viaMcp: true } : {}),
     queryText: query,
     querySha256: sha256Hex(query),
     queryNormalizationVersion: QUERY_NORMALIZATION_VERSION,

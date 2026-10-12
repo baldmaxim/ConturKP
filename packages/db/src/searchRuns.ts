@@ -261,6 +261,8 @@ export interface INewSearchRun {
   embeddingModelFingerprint: string | null;
   semanticStatus: 'queued' | 'running';
   deadlineMs: number;
+  // Прогон создан чат-клиентом от имени пользователя (ADR-010): вид участника закрепляется при создании.
+  viaMcp?: boolean;
 }
 
 // Прогон создаётся pending всегда, даже если итог будет получен в той же транзакции (G05-02).
@@ -268,9 +270,10 @@ export const createSearchRun = async (db: Queryable, r: INewSearchRun): Promise<
   const q = await db.query<{ id: string }>(
     `INSERT INTO search_run (context_kind, tender_id, contract_id, stage_id, mode, evidence_scope_id, requested_by, query_text, query_sha256,
                              query_normalization_version, result_limit, scope_hash, allowed_source_unit_ids, scope_counts,
-                             index_version_id, ranking_version, embedding_model, embedding_model_fingerprint, semantic_status, deadline_at)
+                             index_version_id, ranking_version, embedding_model, embedding_model_fingerprint, semantic_status, deadline_at,
+                             principal_kind, on_behalf_of_user_id)
      VALUES ($19, $1, $20, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::uuid[], $12::jsonb, $13, $14, $15, $16, $17,
-             now() + make_interval(secs => $18::double precision / 1000))
+             now() + make_interval(secs => $18::double precision / 1000), $21, $22)
      RETURNING id`,
     [
       r.owner.kind === 'tender' ? r.owner.tenderId : null,
@@ -293,6 +296,8 @@ export const createSearchRun = async (db: Queryable, r: INewSearchRun): Promise<
       r.deadlineMs,
       r.owner.kind,
       r.owner.kind === 'contract' ? r.owner.contractId : null,
+      r.viaMcp ? 'model_via_mcp' : 'human',
+      r.viaMcp ? r.requestedBy : null,
     ],
   );
   return q.rows[0]!.id;

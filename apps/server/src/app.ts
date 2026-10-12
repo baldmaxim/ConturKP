@@ -31,6 +31,7 @@ import { formTemplatesRouter } from './routes/formTemplates.ts';
 import { releaseCandidatesRouter } from './routes/releaseCandidates.ts';
 import { approvalsRouter } from './routes/approvals.ts';
 import { deliveriesRouter } from './routes/deliveries.ts';
+import { mcpRouter } from './mcp/http.ts';
 import { apiTokensRouter } from './routes/apiTokens.ts';
 import { releaseComparisonsRouter } from './routes/releaseComparisons.ts';
 import { sendsRouter } from './routes/sends.ts';
@@ -114,6 +115,8 @@ export const createApp = (deps: IAppDeps): express.Express => {
   api.use(stageRecordsRouter(pool));
   api.use((_req: Request, _res: Response, next: NextFunction) => next(new HttpError(404, 'NOT_FOUND', 'Маршрут не найден')));
   app.use('/api/v1', api);
+  // MCP портала (этап 16): отдельная точка вне /api/v1 — только токен, без cookie и без проверки CSRF.
+  app.use('/mcp', mcpRouter({ pool, config, clock, logError }));
   app.use('/api', (_req: Request, _res: Response, next: NextFunction) => next(new HttpError(404, 'NOT_FOUND', 'Маршрут не найден')));
 
   const webDist = config.webDistDir ?? DEFAULT_WEB_DIST;

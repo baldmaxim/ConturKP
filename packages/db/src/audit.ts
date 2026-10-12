@@ -15,13 +15,15 @@ export interface IAuditInput {
   requestId?: string | null;
   outcome: AuditOutcome;
   details?: Record<string, unknown>;
+  // Вызов чат-клиента (principalKind = model_via_mcp): пользователь, от имени которого действует токен (ADR-010).
+  onBehalfOfUserId?: string | null;
 }
 
 export const writeAudit = async (db: Queryable, e: IAuditInput): Promise<void> => {
   await db.query(
     `INSERT INTO audit_event (actor_user_id, principal_id, principal_kind, action, entity_type, entity_id,
-                              tender_id, request_id, outcome, details)
-     VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                              tender_id, request_id, outcome, details, on_behalf_of_user_id)
+     VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
     [
       e.actorUserId,
       e.principalKind,
@@ -32,6 +34,7 @@ export const writeAudit = async (db: Queryable, e: IAuditInput): Promise<void> =
       e.requestId ?? null,
       e.outcome,
       JSON.stringify(e.details ?? {}),
+      e.onBehalfOfUserId ?? null,
     ],
   );
 };

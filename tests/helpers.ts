@@ -112,6 +112,7 @@ export const testConfig = (overrides: Partial<IAppConfig> = {}): IAppConfig => (
   // Этап 12: конвертер LibreOffice обязателен (D-032 В-12-2) — путь из KONTUR_TEST_SOFFICE или поиск в PATH.
   office: { sofficePath: process.env.KONTUR_TEST_SOFFICE ?? null, convertTimeoutMs: 120_000 },
   delivery: { operationTimeoutMs: 30_000 },
+  mcp: { enabled: true, callsPerMinute: 10_000, callsPerHour: 100_000 },
   ...overrides,
 });
 

@@ -121,11 +121,23 @@
     gap: var(--space-1);
   }
 
+  /* Блок действий может сжиматься: имя пользователя обрезается многоточием, а не раздвигает шапку шире экрана
+     (у администратора с пятью разделами на 1280 px она не помещалась — S14-10). */
   .actions {
     display: flex;
     align-items: center;
     gap: var(--space-2);
     margin-left: auto;
+    min-width: 0;
+  }
+
+  .actions .user {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .actions > :not(.user) {
+    flex-shrink: 0;
   }
 
   .menuButton,

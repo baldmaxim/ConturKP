@@ -185,6 +185,7 @@ export const ApiTokensDialog: FC<IApiTokensDialogProps> = ({ onClose }) => {
           {data.canIssue ? (
             <form
               className={styles.form}
+              noValidate
               onSubmit={(event) => {
                 event.preventDefault();
                 void submit();

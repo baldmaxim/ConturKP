@@ -31,6 +31,8 @@ import { formTemplatesRouter } from './routes/formTemplates.ts';
 import { releaseCandidatesRouter } from './routes/releaseCandidates.ts';
 import { approvalsRouter } from './routes/approvals.ts';
 import { deliveriesRouter } from './routes/deliveries.ts';
+import { releaseComparisonsRouter } from './routes/releaseComparisons.ts';
+import { sendsRouter } from './routes/sends.ts';
 import { communicationsRouter } from './routes/communications.ts';
 import { requirementCandidatesRouter } from './routes/requirementCandidates.ts';
 import { requirementItemsRouter } from './routes/requirementItems.ts';
@@ -99,6 +101,8 @@ export const createApp = (deps: IAppDeps): express.Express => {
   api.use(releaseCandidatesRouter(pool, store));
   api.use(approvalsRouter(pool, store));
   api.use(deliveriesRouter(pool, store));
+  api.use(sendsRouter(pool, store, config));
+  api.use(releaseComparisonsRouter(pool, store));
   api.use(mailboxesRouter(pool, store, config));
   api.use(mailMessagesRouter(pool, store));
   api.use(communicationsRouter(pool, store, config));

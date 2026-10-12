@@ -5,8 +5,11 @@
 // образцами, «заполненные» приложения, тестовый комплект собирается на настоящем worker и LibreOffice.
 import { chmodSync, readFileSync, writeFileSync } from 'node:fs';
 import { expect } from 'vitest';
-import { compareWithCalculation } from '../packages/core/src/index.ts';
+import { runPortalCapture, TenderHubApiSource, TenderHubHttpClient } from '../packages/adapters/src/index.ts';
+import { calculationContentHash, compareWithCalculation, type ICalcContent } from '../packages/core/src/index.ts';
+import { primaryCalculationSource, recordSourceRevision, withTransaction } from '../packages/db/src/index.ts';
 import { BlobStore } from '../packages/storage/src/index.ts';
+import { TH_KEY } from './calculationFixtures.ts';
 import { buildEcon, closeEcon, E, type IEcon } from './economicsFixtures.ts';
 import { createDraft, demoSchema, fillAll, KEY_FILLED, KP_FILLED } from './formsFixtures.ts';
 import { createTestDb, drain, idem, testConfig, type ITestDb, type TestClient } from './helpers.ts';
@@ -94,7 +97,40 @@ export interface IStage13Options {
   config?: Parameters<typeof testConfig>[0];
   // Готовая база (тест обновления схемы); по умолчанию — новая со всеми миграциями.
   db?: ITestDb;
+  // Этап 15: данные, с которыми боевой комплект проходит матрицу блокеров (поддельные: в установке их нет) — ревизия
+  // расчёта verified по контрактной фикстуре X-01 с правилом итога КП фикстуры и шаблоны без отметки «демо».
+  production?: boolean;
 }
+
+// Ревизия расчёта verified по контрактной фикстуре X-01: то же содержимое, что у последней выгрузки, с итогом КП по
+// правилу фикстуры. Выгрузка вида tenderhub_revision в продукте не создаётся (адаптера ревизий нет, BLOCKED_EXTERNAL).
+export const addVerifiedRevision = async (e: IEcon, ref = 'TH-REV-FIXTURE-1'): Promise<string> => {
+  const http = new TenderHubHttpClient({ baseUrl: e.hub.url, apiKey: TH_KEY, timeoutMs: 2000, rateLimitPerMinute: 1000, maxResponseBytes: 8 << 20, rateLimitWaits: 0 });
+  const captured = await runPortalCapture(new TenderHubApiSource(http), E.v2);
+  const base = captured.content!;
+  const content: ICalcContent = { ...base, header: { ...base.header, kpTotal: base.header.sourceGrandTotal, kpTotalCurrency: 'RUB', kpTotalRule: 'fixture-source-grand-total' } };
+  const src = (await primaryCalculationSource(e.db.pool, e.s.stageA))!;
+  const bundle = (await e.db.pool.query<{ sha: string }>('SELECT raw_bundle_sha256 AS sha FROM calculation_capture WHERE revision_id = $1', [e.rev2])).rows[0]!.sha;
+  const cap = await e.db.pool.query<{ id: string }>(
+    `INSERT INTO calculation_capture (stage_id, tender_id, source_id, system, external_tender_id, capture_kind, transport, trigger, requested_by)
+     VALUES ($1, $2, $3, 'tenderhub', $4, 'tenderhub_revision', 'api', 'manual', $5) RETURNING id`,
+    [e.s.stageA, e.s.tenderA, src.id, E.v2, e.s.ids.eng1],
+  );
+  const r = await withTransaction(e.db.pool, (client) =>
+    recordSourceRevision(client, {
+      captureId: cap.rows[0]!.id,
+      externalRevisionRef: ref,
+      content,
+      contentHash: calculationContentHash(content),
+      headerLexemes: captured.headerLexemes,
+      kpTotalSemantics: { status: 'fixture_rule', note: 'правило итога КП — фикстура тестов этапа 15; Q-05 владельцем не закрыт' },
+      rawBundleSha256: bundle,
+      contractVersion: 'x01-contract-fixture',
+    }),
+  );
+  expect(r.created).toBe(true);
+  return r.revisionId;
+};
 
 export const requirementOf = async (st: { e: IEcon; registryId: string }, statement: string, fragmentId: string): Promise<string> => {
   const c = await st.e.s.eng1.post(
@@ -112,6 +148,8 @@ export const buildStage13 = async (o: IStage13Options = {}): Promise<IStage13> =
   requireConverter();
   const db = o.db ?? (await createTestDb());
   const e = await buildEcon(db, testConfig(o.config ?? {}), { chat: quietModel(o.modelError) });
+  // Последняя ревизия расчёта этапа закрепляется прогоном проверок и комплектом: verified — до них.
+  const calcRevision = o.production ? await addVerifiedRevision(e) : e.rev2;
   const tzRev = await uploadDocument(db, e.config, e.s.eng1, e.s.stageA, 'ТЗ.pdf');
   const pages = [{ blocks: [TZ.plaster, TZ.paint] }];
   const run1 = await seedEvidenceRun(db.pool, tzRev, o.missingPage ? { pages, missingPages: 1 } : { pages });
@@ -124,7 +162,7 @@ export const buildStage13 = async (o: IStage13Options = {}): Promise<IStage13> =
   await requirementOf(st, 'Окраска фасада в два слоя', await fragmentIdOf(db.pool, run1, TZ.paint));
   const cov = await e.s.manager.post(
     `/requirement-revisions/${plaster}/coverage`,
-    { state: 'covered', objects: [{ type: 'calculation_revision', calculationRevisionId: e.rev2, externalPositionId: E.q.A, externalItemId: PLASTER_LINE, match: 'explicit_line' }] },
+    { state: 'covered', objects: [{ type: 'calculation_revision', calculationRevisionId: calcRevision, externalPositionId: E.q.A, externalItemId: PLASTER_LINE, match: 'explicit_line' }] },
     { headers: idem() },
   );
   expect(cov.status, cov.text).toBe(201);
@@ -139,12 +177,13 @@ export const buildStage13 = async (o: IStage13Options = {}): Promise<IStage13> =
     await drain(e.worker);
     run = (await e.s.eng1.get(`/review-runs/${started.body.id}`)).body as IRunView;
   }
-  const grand = (await db.pool.query<{ g: string }>('SELECT cc.source_grand_total AS g FROM calculation_revision r JOIN calculation_content cc ON cc.id = r.content_id WHERE r.id = $1', [e.rev2])).rows[0]!.g;
+  const grand = (await db.pool.query<{ g: string }>('SELECT cc.source_grand_total AS g FROM calculation_revision r JOIN calculation_content cc ON cc.id = r.content_id WHERE r.id = $1', [calcRevision])).rows[0]!.g;
   const m = compareWithCalculation({ unit: 'млн руб.', currency: 'RUB', scale: 2 }, '0', 'source_grand_total', grand);
   const kpPrice = m.outcome === 'unverified' ? '0' : m.expected;
-  const letterRevision = (await templateWithMarkedSample(e.s.manager, { name: 'Письмо КП (демо)', schema: demoSchema('demo-kp-letter'), marked: SAMPLES.letterMarked, original: SAMPLES.letterOriginal })).revision.id;
+  const isDemo = !o.production;
+  const letterRevision = (await templateWithMarkedSample(e.s.manager, { name: isDemo ? 'Письмо КП (демо)' : 'Письмо КП (фикстура)', schema: demoSchema('demo-kp-letter'), marked: SAMPLES.letterMarked, original: SAMPLES.letterOriginal, isDemo })).revision.id;
   const conditionsRevision = (
-    await templateWithMarkedSample(e.s.manager, { name: 'Ключевые условия (демо)', schema: demoSchema('demo-key-conditions'), marked: SAMPLES.conditionsMarked, original: SAMPLES.conditionsOriginal, audience: 'internal' })
+    await templateWithMarkedSample(e.s.manager, { name: isDemo ? 'Ключевые условия (демо)' : 'Ключевые условия (фикстура)', schema: demoSchema('demo-key-conditions'), marked: SAMPLES.conditionsMarked, original: SAMPLES.conditionsOriginal, audience: 'internal', isDemo })
   ).revision.id;
   const out: IStage13 = { db, e, tzRev, scopeId, registryId: st.registryId, run, letterRevision, conditionsRevision, kpPrice, drafts: { letter: '', conditions: '' } };
   out.drafts.letter = await filledDraft(out, 'letter', 'Письмо КП');

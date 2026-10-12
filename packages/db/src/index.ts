@@ -57,3 +57,5 @@ export * from './standardAttachments.ts';
 export * from './approvals.ts';
 export * from './deliveries.ts';
 export * from './decisionVisibility.ts';
+export * from './sends.ts';
+export * from './releaseComparisons.ts';

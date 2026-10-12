@@ -67,7 +67,11 @@ export type TenderCapability =
   | 'candidate.release'
   // Этап 14 (D-034 В-14-5): размещение выпуска, повтор, «повторить после проверки», перенаправление и подтверждение облака —
   // участник тендера (инженер и руководитель), только human. Назначения — администратор. БД — tender_capabilities (0038).
-  | 'delivery.manage';
+  | 'delivery.manage'
+  // Этап 15 (D-035; state-machines §17, ADR-006 п. 3): регистрация отправки и нарушения — инженер тендера; лишние
+  // вложения письма об отправке принимает руководитель тендера (В-15-1); только human. БД — tender_capabilities (0039).
+  | 'send.register'
+  | 'send.accept_extras';
 
 export const ROLES: readonly Role[] = ['admin', 'manager', 'engineer'];
 export const MEMBER_ROLES: readonly MemberRole[] = ['engineer', 'manager'];
@@ -132,7 +136,9 @@ export const tenderCapabilities = (
   if (role === 'manager') caps.push('finding.accept_risk', 'source_priority.manage');
   if (role === 'manager') caps.push('template.manage');
   if (role === 'manager') caps.push('candidate.approve', 'risk.accept');
+  if (role === 'manager') caps.push('send.accept_extras');
   if (role === 'engineer') caps.push('candidate.release');
+  if (role === 'engineer') caps.push('send.register');
   if (role === 'manager' || roles.has('admin')) caps.push('audit.read');
   if (roles.has('admin')) caps.push('admin.tender');
   return caps;

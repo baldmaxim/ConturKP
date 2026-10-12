@@ -169,7 +169,19 @@
 
 ### На поддельных данных
 
-{{CHECKS}}
+Все прогоны — на рабочем дереве передачи 15-1 (код — `c229d20`; после него менялись только документы и журналы).
+
+| Команда / сценарий | Среда и данные | Exit/result | Артефакт |
+|---|---|---|---|
+| `npm run typecheck` | Linux, Node 24.14.1 | PASS | `artifacts/stage-15/typecheck.log` |
+| `npm run build` | то же | PASS | `artifacts/stage-15/build.log` |
+| `npx vitest run --maxWorkers=1 --fileParallelism=false` | PostgreSQL 18 + pgvector в контейнере; поддельные TenderHub и модель, настоящий LibreOffice, синтетические документы и письма | PASS: 1306 / 1306 в 136 файлах (было 1254; +52 этапа 15) | `artifacts/stage-15/tests.log` |
+| тесты этапа 15, подробный вывод | 4 файла; боевой выпуск — на данных фикстуры | PASS: 52 / 52 (`sendFlow` 17, `sendSchema` 11, `releaseComparison` 12, `sendCore` 12) | `artifacts/stage-15/stage-tests.log` |
+| `SMOKE_STAGE=stage-15 npm run smoke` | настоящие server + worker, 39 миграций с нуля; выпуска в демо-этапе нет | PASS: 109 шагов (было 103; +6 этапа 15) | `artifacts/stage-15/smoke.log` |
+| `CHROME_NO_SANDBOX=1 node artifacts/stage-15/ui-check.mjs` | Chromium headless (CDP), настоящие server + worker, LibreOffice; боевой выпуск — на данных фикстуры; письма — синтетические EML; 360, 390, 430, 1280 px, тёмная тема | PASS: 52 шага | `artifacts/stage-15/ui-check.log` |
+| регрессия интерфейса этапов 02–14 | Chromium headless через обёртку с `--no-sandbox` (`EDGE_PATH`, `CHROME_PATH`) | PASS: 12 · 15 · 29 · 19 · 22 · 26 · 33 · 32 · 41 · 29 · 29 · 20 · 16 · 19 · 24 · 34 шагов (02, 03, 04, 05, 05a, 06, 06a, 07, 08, 08a, 09, 10, 11, 12, 13, 14), всего 400, на рабочем дереве передачи 15-1; журналы прежних этапов не изменены | `artifacts/stage-15/ui-check-stageNN-regression.log` |
+
+Что прогоны не доказывают: работу на Windows; регистрацию отправки на боевых данных установки; сверку вложений настоящего письма почтового клиента; чтение MailHub.
 
 ### На реальных интеграциях
 

@@ -24,7 +24,7 @@ const cases = (JSON.parse(readFileSync(join(ROOT, 'contracts-core.json'), 'utf8'
 const manifestStatuses = (): Map<string, string> => {
   const out = new Map<string, string>();
   for (const line of readFileSync(MANIFEST, 'utf8').split('\n')) {
-    const m = /^\| \d+ \| `(pv2-[a-z0-9-]+)` \|[^|]*\|[^|]*\| `(stage05a?|stage08a|deferred:[0-9a-z]+)` \|/u.exec(line);
+    const m = /^\| \d+ \| `(pv2-[a-z0-9-]+)` \|[^|]*\|[^|]*\| `(stage05a?|stage08a|stage16|deferred:[0-9a-z]+)` \|/u.exec(line);
     if (m) out.set(m[1]!, m[2]!);
   }
   return out;
@@ -79,8 +79,10 @@ describe('манифест переноса (AR05-05)', () => {
     expect([...statuses.values()].filter((v) => v === 'stage05a')).toHaveLength(3);
     // Случаи deferred:08a закрыты этапом 08a (stage08a, tests/answersLocus.test.ts); случай 11 — граф фактов D-018 (D-028).
     expect([...statuses.values()].filter((v) => v === 'stage08a')).toHaveLength(3);
+    // Случаи deferred:16 закрыты этапом 16 (stage16, tests/mcpProtocol.test.ts): без области инструмент MCP отвечает needs_selection.
+    expect([...statuses.entries()].filter(([, v]) => v === 'stage16').map(([k]) => k).sort()).toEqual(['pv2-all-projects-advance', 'pv2-ambiguous-sokolniki']);
     const deferred = [...statuses.values()].filter((v) => v.startsWith('deferred:'));
-    expect(deferred.sort()).toEqual(['deferred:16', 'deferred:16']);
+    expect(deferred).toEqual([]);
   });
 });
 

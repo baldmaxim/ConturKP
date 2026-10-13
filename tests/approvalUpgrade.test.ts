@@ -12,6 +12,7 @@ import pg from 'pg';
 import { describe, expect, it, vi } from 'vitest';
 import { createPool, dropDatabase, migrate, MIGRATIONS_DIR, setupDatabase } from '../packages/db/src/index.ts';
 import { ADMIN_URL, drain, idem, type ITestDb } from './helpers.ts';
+import { addQuestionOrigin, dropQuestionOrigin } from './legacySchema.ts';
 import { acceptAll, approve, assembled, buildStage13, closeStage13, codes, notApplicable, release, rerunReview, view, type ICandidate13, type IStage13 } from './approvalFixtures.ts';
 
 vi.setConfig({ testTimeout: 300_000, hookTimeout: 300_000 });
@@ -51,6 +52,7 @@ const upgradeCase = (from: number) => async () => {
   let st: IStage13 | undefined;
   try {
     expect(await migrateTo(from)).toBe(from);
+    await addQuestionOrigin(urlFor('kontur_migrator'));
     st = await buildStage13({ db: up });
     const stage = st;
     const su = new pg.Client({ connectionString: urlFor(null) });
@@ -67,6 +69,7 @@ const upgradeCase = (from: number) => async () => {
     const created = await stage.e.s.eng1.post(`/stages/${stage.e.s.stageA}/release-candidates`, { mode: 'test', draftIds: [stage.drafts.letter, stage.drafts.conditions] }, { headers: idem() });
     expect(created.status, created.text).toBe(201);
     await drain(stage.e.worker);
+    await dropQuestionOrigin(urlFor('kontur_migrator'));
     expect(await migrateTo(LATEST)).toBe(LATEST - from);
 
     const readyToApprove = async (id?: string): Promise<ICandidate13> => {

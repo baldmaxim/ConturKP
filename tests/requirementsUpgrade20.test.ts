@@ -16,6 +16,7 @@ import { BlobStore } from '../packages/storage/src/index.ts';
 import { startFakeTenderHub, type IFakeTenderHub } from '../scripts/tenderhub-fake.ts';
 import { adminMember, captureNow, linkSource, standardTender, TH, TH_KEY, tenderHubConfig } from './calculationFixtures.ts';
 import { ADMIN_URL, idem, makeWorker, testConfig, type ITestDb } from './helpers.ts';
+import { addQuestionOrigin } from './legacySchema.ts';
 import { buildStage08, confirm, propose, supports, type IStage08 } from './requirementFixtures.ts';
 
 const name = `kontur_kp_test_upgrade20_${Date.now().toString(36)}`;
@@ -47,6 +48,7 @@ let calc1: string;
 beforeAll(async () => {
   await setupDatabase(ADMIN_URL, name);
   expect(await migrateTo(19)).toBe(19);
+  await addQuestionOrigin(urlFor('kontur_migrator'));
   const m = new pg.Client({ connectionString: urlFor('kontur_migrator') });
   await m.connect();
   await m.query('ALTER TABLE calculation_capture ADD COLUMN source_instance_id text, ADD COLUMN source_origin text').finally(() => m.end());

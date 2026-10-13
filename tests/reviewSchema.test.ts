@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createPool, dropDatabase, migrate, MIGRATIONS_DIR, setupDatabase } from '../packages/db/src/index.ts';
 import { ADMIN_URL, createTestDb, drain, idem, testConfig, type ITestDb } from './helpers.ts';
 import { negotiationManifest, postManifest } from './mailFixtures.ts';
+import { addQuestionOrigin } from './legacySchema.ts';
 import { buildStage08, workerWithChat } from './requirementFixtures.ts';
 import { buildStage09, closeHub, cover, findings, line, requirement, RT, runReview, type IStage09 } from './reviewFixtures.ts';
 import { fixScope } from './searchFixtures.ts';
@@ -286,6 +287,7 @@ describe('обновление схемы 0023 → 0025', () => {
     const up: ITestDb = { name, appUrl: urlFor('kontur_app'), migratorUrl: urlFor('kontur_migrator'), pool: createPool(urlFor('kontur_app'), 5), drop: async () => undefined };
     try {
       expect(await migrateTo(23)).toBe(23);
+      await addQuestionOrigin(up.migratorUrl);
       const s08 = await buildStage08(up, config);
       const before = (await up.pool.query('SELECT count(*)::int AS n FROM requirement_registry')).rows[0].n;
       expect(await migrateTo(25)).toBe(2);

@@ -1,7 +1,8 @@
 // Допущения, вопросы заказчику и пометки этапа (OD-08-6, вариант A): отдельные типы, не требования и не факты.
 // Допущение — ревизии со статусом (подтверждение и отклонение — requirement.confirm); вопрос — статусы и ответ
 // из ревизии Q&A или пояснение, отправки нет (C04); пометка — заметка вне полноты, фактов и входа модели.
-// Текст допущения и вопроса, связанного с требованием, — по замыканию закрытости (R08-02, requirementTaint.ts).
+// Текст допущения и вопроса — по замыканию закрытости (R08-02, requirementTaint.ts): вопрос наследует закрытость
+// каждого требования, с которым был связан, и цитат предложения из чата, принятием которого создан (R16-01).
 import { CreateAssumptionRequest, CreateCustomerQuestionRequest, CreateStageNoteRequest, ReviseAssumptionRequest, UpdateCustomerQuestionRequest } from '@kontur/contracts';
 import { formatEtag } from '@kontur/core';
 import {

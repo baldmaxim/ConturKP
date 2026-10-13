@@ -329,12 +329,14 @@ export const toAssumption = (a: IAssumptionRow, links: readonly IEvidenceLinkRow
   };
 };
 
-// Вопрос, связанный с требованием, мог повторить его текст (R08-02): текст и пояснение — по видимости вопроса.
+// Вопрос, связанный с требованием, мог повторить его текст (R08-02), а вопрос из принятого предложения чата повторяет
+// текст предложения (R16-01): текст и пояснение — по видимости вопроса.
 export const toCustomerQuestion = (q: ICustomerQuestionRow, visible: boolean) => ({
   id: q.id,
   stageId: q.stage_id,
   requirementId: q.requirement_id,
   requirementCode: q.requirement_code,
+  sourceProposalId: q.source_proposal_id,
   visible,
   text: visible ? q.text : null,
   status: q.status,

@@ -100,6 +100,12 @@ const SHOTS = process.env.UI_SHOTS ?? null;
 const shot = async (name) => {
   if (!SHOTS) return;
   mkdirSync(SHOTS, { recursive: true });
+  // Снимок — после завершения переходов (Review 16-1: кадр диалога принятия был снят в начале анимации).
+  for (let i = 0; i < 20; i += 1) {
+    const idle = await send('Runtime.evaluate', { expression: "document.getAnimations().every((a) => a.playState !== 'running')", returnByValue: true });
+    if (idle.result?.result?.value === true) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
   const r = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   if (r.result?.data) writeFileSync(join(SHOTS, `${name}.png`), Buffer.from(r.result.data, 'base64'));
 };
@@ -331,6 +337,45 @@ try {
   record('предложение принято: отметка «Принято» и кто принял', await waitFor(`${text('Принято')} && ${text('Принял')} && !document.querySelector('dialog[open]')`, 20_000), await lacks('Принято', 'Принял'));
   const created = ((await api(`/stages/${STAGE}/customer-questions`)).body.items ?? []).find((q) => q.text === QUESTION);
   record('создан черновик вопроса заказчику; автор — человек, принявший предложение', created?.status === 'draft' && created?.createdBy === me.id, JSON.stringify({ status: created?.status, createdBy: created?.createdBy }));
+  // ---- Происхождение вопроса (Review 16-1, R16-01): вопрос хранит ссылку на предложение, запись этапа помечена
+  record('вопрос хранит ссылку на принятое предложение', created?.sourceProposalId === p1.data.proposal.id && created?.visible === true, JSON.stringify({ sourceProposalId: created?.sourceProposalId ?? null }));
+  // Раздел «Допущения и вопросы» открывается при реестре требований: документ, замороженный состав, снимок, реестр.
+  const post = (path, body, extra = {}) => api(path, { method: 'POST', headers: { ...json, 'Idempotency-Key': key(), ...extra }, body: JSON.stringify(body) });
+  const upload = await evaluate(`(async () => {
+    const csrf = decodeURIComponent((document.cookie.split('; ').find((c) => c.startsWith('kkp_csrf=')) ?? '').slice(9));
+    const r = await fetch('/api/v1/stages/${STAGE}/imports?name=' + encodeURIComponent('тз-происхождение.csv'), {
+      method: 'POST', headers: { 'X-CSRF-Token': csrf, 'Content-Type': 'application/octet-stream', 'Idempotency-Key': ${JSON.stringify(key())} },
+      body: new TextEncoder().encode('Позиция;Требование\\nГарантия;Банковская гарантия на срок действия договора\\n') });
+    return { status: r.status, body: await r.json() };
+  })()`);
+  const revision = await poll(async () => {
+    const b = (await api(`/imports/${upload.body.id}`)).body;
+    return b?.status === 'completed' ? b.items[0].documentRevisionId : null;
+  }, 30_000);
+  await post(`/document-revisions/${revision}/local-recognitions`, {});
+  await poll(async () => {
+    const r = (await api(`/document-revisions/${revision}/recognition-runs`)).body.items?.[0];
+    return r && ['complete', 'partial', 'failed'].includes(r.status) ? r : null;
+  }, 60_000);
+  const draftSet = await post(`/stages/${STAGE}/source-set-revisions`, {});
+  const items = await api(`/source-set-revisions/${draftSet.body.id}/items`, { method: 'PUT', headers: { ...json, 'If-Match': draftSet.etag }, body: JSON.stringify({ items: [{ documentRevisionId: revision, inclusion: 'included' }] }) });
+  await post(`/source-set-revisions/${draftSet.body.id}/freeze`, {}, { 'If-Match': items.etag });
+  const scope = await post(`/stages/${STAGE}/evidence-scopes`, {});
+  const registry = await post(`/stages/${STAGE}/requirement-registries`, { evidenceScopeId: scope.body?.id, reason: 'Реестр проверки интерфейса этапа 16' });
+  await send('Page.navigate', { url: `${BASE}/stages/${STAGE}?tab=requirements` });
+  await waitFor(text('Допущения и вопросы'), 20_000);
+  await clickButton('Допущения и вопросы');
+  record(
+    'записи этапа: вопрос из чата помечен «из предложения чата», текст виден принявшему',
+    await waitFor(`${text(QUESTION)} && ${text('из предложения чата')}`, 20_000),
+    `реестр ${registry.status} ${JSON.stringify(registry.body ?? null).slice(0, 300)}; область ${scope.status} ${JSON.stringify(scope.body ?? null).slice(0, 300)}; ${await lacks(QUESTION, 'из предложения чата')}`,
+  );
+  record('записи этапа на 390 px без горизонтальной прокрутки', (await noHorizontalScroll()) === true, await overflowers());
+  await evaluate(`(() => { const li = [...document.querySelectorAll('li')].find((x) => x.innerText.includes(${JSON.stringify(QUESTION)})); li?.scrollIntoView({ block: 'center' }); return !!li; })()`);
+  await sleep(300);
+  await shot('390-question-origin');
+  await send('Page.navigate', { url: `${BASE}/stages/${STAGE}?tab=proposals` });
+  await waitFor(`${text(EXTRA)} && ${text('Ждёт решения')}`, 20_000);
   await clickFor(EXTRA, 'Отклонить');
   await waitFor(`document.querySelector('dialog[open]')`);
   await clickInDialog('Отклонить');

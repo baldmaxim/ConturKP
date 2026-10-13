@@ -10,7 +10,8 @@
 //   факт и кандидат факта — так же;
 //   решение         ← требование-предмет и заменённое решение;
 //   допущение       ← все ревизии, связанное требование, заменённое им допущение;
-//   вопрос          ← связанное требование;
+//   вопрос          ← каждое требование, с которым он был связан (отвязка наследование не снимает), и предложение
+//                     из чата, принятием которого он создан: цитаты предложения (Review 16-1, R16-01);
 //   оценка покрытия ← требование, фрагменты и решения — объекты оценки.
 // Замыкание считается по графу этапа; любое закрытое основание в замыкании скрывает производные поля — роль
 // основания значения не имеет. Цитата по-прежнему открывается только по правам источника (GET /evidence/{id}).
@@ -106,9 +107,16 @@ export const loadTaintGraph = async (db: Queryable, stageId: string): Promise<IT
     // Новое допущение могло повторить текст заменённого.
     if (r.superseded_by) add(edges, taintKey('assumption', r.superseded_by), k);
   }
-  for (const r of await q<{ id: string; requirement_id: string | null }>('SELECT id, requirement_id FROM customer_question WHERE stage_id = $1')) {
+  // Происхождение вопроса (миграция 0041): история связей с требованиями и цитаты принятого предложения из чата.
+  for (const r of await q<{ id: string; requirement_id: string | null; fragment_id: string | null }>(
+    `SELECT c.id, b.requirement_id, pf.fragment_id
+       FROM customer_question c
+       LEFT JOIN LATERAL unnest(array_append(c.basis_requirement_ids, c.requirement_id)) AS b(requirement_id) ON true
+       LEFT JOIN mcp_proposal_fragment pf ON pf.proposal_id = c.source_proposal_id
+      WHERE c.stage_id = $1`,
+  )) {
     const k = taintKey('question', r.id);
-    add(links, k, null);
+    add(links, k, r.fragment_id);
     if (r.requirement_id) add(edges, k, taintKey('requirement', r.requirement_id));
   }
   for (const r of await q<{ id: string; requirement_id: string; fragment_id: string | null; decision_id: string | null }>(

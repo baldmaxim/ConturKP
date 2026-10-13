@@ -3,6 +3,9 @@
 // правам владельца токена, вопрос без области — needs_selection, предложение сохраняется открытым и не дублируется,
 // отозванный токен не принимается. Запросы — JSON-RPC по HTTP, как их шлёт клиент; подключением Codex или Cursor это не
 // является (живая проверка клиентов — отдельно). Вызывается из scripts/smoke.mjs.
+// Review 16-1 (R16-01): принятое предложение создаёт вопрос со ссылкой на предложение — по ней наследуется закрытость цитат.
+import { randomBytes } from 'node:crypto';
+
 export const smokeMcp = async ({ base, api, record, json, tenderId, stageId, secretMarker }) => {
   const rpc = async (token, method, params, headers = {}) => {
     const r = await fetch(`${base}/mcp`, {
@@ -82,9 +85,21 @@ export const smokeMcp = async ({ base, api, record, json, tenderId, stageId, sec
     `HTTP ${first.status}`,
   );
 
+  const second = await tool(token, 'propose_question', { tenderId, stageId, text: 'Smoke: уточните порядок приёмки работ', requestId: 'smoke-16-question-0002' });
+  const secondId = second.data?.proposal?.id ?? null;
+  const etag = (await (await api(`/stages/${stageId}/mcp-proposals`)).json()).items?.find((p) => p.id === secondId)?.etag;
+  const accepted = await api(`/mcp-proposals/${secondId}/accept`, { method: 'POST', headers: { ...json, 'Idempotency-Key': `smoke-16-${randomBytes(8).toString('hex')}`, 'If-Match': etag }, body: '{}' });
+  const acceptedBody = accepted.status === 200 ? await accepted.json() : null;
+  const question = ((await (await api(`/stages/${stageId}/customer-questions`)).json()).items ?? []).find((q) => q.id === acceptedBody?.result?.id);
+  record(
+    'этап 16: принятое человеком предложение создаёт черновик вопроса заказчику со ссылкой на это предложение',
+    accepted.status === 200 && acceptedBody?.result?.type === 'customer_question' && question?.status === 'draft' && question?.sourceProposalId === secondId && Boolean(secondId),
+    `HTTP ${accepted.status}`,
+  );
+
   const revoked = await api(`/api-tokens/${issuedBody?.id}`, { method: 'DELETE' });
   const afterRevoke = await rpc(token, 'tools/list', {});
   record('этап 16: отозванный токен точка /mcp не принимает', revoked.status === 200 && afterRevoke.status === 401, `HTTP ${revoked.status}/${afterRevoke.status}`);
 
-  return { tokenId: issuedBody?.id ?? null, proposalId: first.data?.proposal?.id ?? null, stageId };
+  return { tokenId: issuedBody?.id ?? null, proposalId: first.data?.proposal?.id ?? null, acceptedProposalId: secondId, questionId: question?.id ?? null, stageId };
 };

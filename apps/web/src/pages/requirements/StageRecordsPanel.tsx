@@ -99,12 +99,17 @@ export const StageRecordsPanel: FC<{ stageId: string; caps: string[] }> = ({ sta
               <div className={styles.headLine}>
                 <Badge tone={q.status === 'answered' ? 'success' : q.status === 'closed' ? 'muted' : 'warning'} icon={q.status === 'answered' ? 'check' : 'message-square'} label={QUESTION_LABELS[q.status]} />
                 {q.askedAt ? <span className={styles.muted}>{`отправлен ${formatDateTime(q.askedAt)} МСК`}</span> : null}
+                {q.sourceProposalId ? <span className={styles.muted}>из предложения чата</span> : null}
               </div>
               {q.requirementCode ? <span className={styles.code}>{q.requirementCode}</span> : null}
               {q.visible ? (
                 <p className={styles.statement}>{q.text}</p>
               ) : (
-                <p className={styles.restricted}>Текст скрыт: вопрос связан с требованием, основание которого вам недоступно.</p>
+                <p className={styles.restricted}>
+                  {q.sourceProposalId
+                    ? 'Текст скрыт: вопрос создан из предложения чата с цитатой источника, который вам недоступен.'
+                    : 'Текст скрыт: вопрос связан с требованием, основание которого вам недоступно.'}
+                </p>
               )}
               {q.visible && (q.answerNote || q.answerQaItemNo) ? <p className={styles.quote}>{`Ответ: ${q.answerNote ?? ''}${q.answerQaItemNo ? ` (вопрос–ответ № ${q.answerQaItemNo})` : ''}`}</p> : null}
               {canCreate && q.visible && NEXT[q.status] ? (

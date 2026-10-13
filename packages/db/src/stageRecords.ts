@@ -85,6 +85,8 @@ export interface ICustomerQuestionRow {
   stage_id: string;
   requirement_id: string | null;
   requirement_code: string | null;
+  // Происхождение (миграция 0041, R16-01): предложение из чата, принятием которого создан вопрос; неизменно.
+  source_proposal_id: string | null;
   text: string;
   status: CustomerQuestionStatus;
   asked_at: Date | null;
@@ -114,13 +116,13 @@ export const getCustomerQuestion = async (db: Queryable, id: string): Promise<IC
 
 export const createCustomerQuestion = async (
   db: Queryable,
-  r: { tenderId: string; stageId: string; requirementId: string | null; text: string; responsibleUserId: string | null; userId: string },
+  r: { tenderId: string; stageId: string; requirementId: string | null; text: string; responsibleUserId: string | null; userId: string; sourceProposalId?: string | null },
 ): Promise<string> =>
   (
     await db.query<{ id: string }>(
-      `INSERT INTO customer_question (tender_id, stage_id, requirement_id, text, responsible_user_id, created_by, updated_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $6) RETURNING id`,
-      [r.tenderId, r.stageId, r.requirementId, r.text, r.responsibleUserId, r.userId],
+      `INSERT INTO customer_question (tender_id, stage_id, requirement_id, text, responsible_user_id, created_by, updated_by, source_proposal_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $6, $7) RETURNING id`,
+      [r.tenderId, r.stageId, r.requirementId, r.text, r.responsibleUserId, r.userId, r.sourceProposalId ?? null],
     )
   ).rows[0]!.id;
 

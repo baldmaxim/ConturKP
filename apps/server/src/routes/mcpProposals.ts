@@ -1,6 +1,8 @@
 // Этап 16 (проект §6): предложения чат-клиента в портале. Предложение ничего не меняет, пока его не принял человек:
 // принятие — обычная команда человека с If-Match, под его именем и той возможностью, что нужна для такой записи.
 // Текст предложения закрыт вместе с его цитатами; нельзя решать по тому, чего не можешь прочитать (R08-02, S15a-01).
+// Запись, созданная принятием, несёт все цитаты предложения: замечание и причина — основаниями, вопрос — ссылкой на
+// предложение (R16-01; вторая линия — охранник mcp_proposal, миграция 0041).
 import { AcceptMcpProposalRequest, McpProposalsQuery, RejectMcpProposalRequest } from '@kontur/contracts';
 import { formatEtag, type IEvidenceDraft, type TenderCapability } from '@kontur/core';
 import {
@@ -169,7 +171,16 @@ export const mcpProposalsRouter = (pool: Pool): Router => {
           await requireFindingVisible(client, ctx, (await getFinding(client, id))!);
           result = { type: 'finding', id };
         } else if (p.kind === 'question') {
-          const id = await createCustomerQuestion(client, { tenderId: p.tender_id, stageId: p.stage_id, requirementId: null, text: p.body, responsibleUserId: null, userId: ctx.principal.userId });
+          // Вопрос наследует закрытость цитат предложения через ссылку на него (R16-01): принятие права на источник не снимает.
+          const id = await createCustomerQuestion(client, {
+            tenderId: p.tender_id,
+            stageId: p.stage_id,
+            requirementId: null,
+            text: p.body,
+            responsibleUserId: null,
+            userId: ctx.principal.userId,
+            sourceProposalId: p.id,
+          });
           result = { type: 'customer_question', id };
         } else if (p.kind === 'change_reason') {
           result = { type: 'release_comparison_reason', id: await acceptReason(client, ctx, p, fragmentIds) };

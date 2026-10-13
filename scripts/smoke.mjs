@@ -569,6 +569,11 @@ try {
     'этап 16: после перезапуска отозванный токен и открытое предложение — из PostgreSQL',
     Boolean(mcp16.tokenId) && tokensAfter.find((t) => t.id === mcp16.tokenId)?.state === 'revoked' && proposalsAfter.find((p) => p.id === mcp16.proposalId)?.status === 'open',
   );
+  const questionsAfter = (await (await api(`/stages/${mcp16.stageId}/customer-questions`)).json()).items ?? [];
+  record(
+    'этап 16: после перезапуска вопрос из принятого предложения хранит ссылку на него',
+    Boolean(mcp16.questionId) && questionsAfter.find((q) => q.id === mcp16.questionId)?.sourceProposalId === mcp16.acceptedProposalId && proposalsAfter.find((p) => p.id === mcp16.acceptedProposalId)?.result?.id === mcp16.questionId,
+  );
   const me = await fetch(`${BASE}/api/v1/me`, { headers: { Cookie: cookieHeader() } });
   record('перезапуск server — сессия действительна', me.status === 200);
 

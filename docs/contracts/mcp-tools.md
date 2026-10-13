@@ -54,11 +54,13 @@
 | Инструмент | Вход | После принятия человеком |
 |---|---|---|
 | `propose_finding` | `tenderId`, `stageId`, `title`, `body`, `citedFragmentIds` (1–20), `severityHint?`, `requestId` | замечание от имени принявшего; серьёзность и уверенность задаёт он |
-| `propose_question` | `tenderId`, `stageId`, `text`, `citedFragmentIds?`, `requestId` | черновик вопроса заказчику от имени принявшего |
+| `propose_question` | `tenderId`, `stageId`, `text`, `citedFragmentIds?`, `requestId` | черновик вопроса заказчику от имени принявшего; вопрос хранит ссылку на предложение |
 | `propose_condition_text` | `tenderId`, `stageId`, `fieldKey?`, `text`, `citedFragmentIds?`, `requestId` | записи нет: человек переносит текст в поле приложения сам |
 | `propose_change_reason` | `comparisonId`, `itemId` (из `compare_releases`), `reasonKind`, `text`, `citedFragmentIds` (1–20), `requestId` | причина вывода сравнения со статусом «гипотеза» от имени принявшего |
 
 Валидация до записи: каждая цитата существует, читается пользователем сейчас и относится к тендеру области (у причины — входит в снимки этапов сравниваемых выпусков); иначе `invalid_citation` без создания записи.
+
+Принятие не снимает прав на источник (Review 16-1, R16-01). Запись, созданная принятием, несёт все цитаты предложения: замечание и причина — основаниями, вопрос — ссылкой на предложение. Её текст получает только тот, кто читает каждую цитату сейчас: остальным `list_questions` и `list_findings` возвращают запись без текста (`visible: false` / `restricted: true`), в том числе автору предложения после отзыва у него права на источник.
 
 ## 4. Чего нет
 

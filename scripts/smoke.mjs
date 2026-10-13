@@ -12,6 +12,7 @@
 // проверки в режиме --fixture; после перезапуска — назначения и результаты проверки из БД.
 // Этап 15 (scripts/smoke-15.mjs): отправки и сравнение выпусков — маршруты и права без выпуска, статус MailHub
 // BLOCKED_EXTERNAL; полный путь регистрации отправки и сравнения — интеграционные тесты и проверка интерфейса.
+// Этап 16 (scripts/smoke-16.mjs): MCP портала — токен, точка /mcp, инструменты по правам владельца, предложение.
 // База kontur_kp_smoke_test создаётся заново и удаляется в конце. Пароль генерируется и не выводится.
 // Результат: artifacts/stage-02/smoke.log; код 0 только если все шаги PASS.
 import { spawn, spawnSync } from 'node:child_process';
@@ -33,6 +34,7 @@ import { smokeRelease } from './smoke-12.mjs';
 import { smokeApproval } from './smoke-13.mjs';
 import { smokeDelivery } from './smoke-14.mjs';
 import { smokeSends } from './smoke-15.mjs';
+import { smokeMcp } from './smoke-16.mjs';
 import { PRECISE_RATE, TH, standardTender, startFakeTenderHub } from './tenderhub-fake.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -79,6 +81,8 @@ const env = {
   INTAKE_STABILITY_SECONDS: '1',
   // Генеративная модель этапа 08 — поддельный провайдер: живой модели на машине разработки нет (U-08).
   MODEL_PROVIDER: 'fake',
+  // Этап 16: MCP-сервер портала включается настройкой (по умолчанию выключен).
+  MCP_ENABLED: 'true',
 };
 
 const lines = [];
@@ -509,6 +513,9 @@ try {
   // ---- Этап 15: отправки и сравнение выпусков — маршруты, права и статус MailHub — scripts/smoke-15.mjs
   const sends15 = await smokeSends({ base: BASE, api, api2, record, idem, json, tenderId: demo.id });
 
+  // ---- Этап 16: MCP портала — токен, точка /mcp, инструменты, предложение — scripts/smoke-16.mjs
+  const mcp16 = await smokeMcp({ base: BASE, api, record, json, tenderId: demo.id, stageId, secretMarker: SECRET_MARKER });
+
   await stopProc(server);
   server = startProc('server', 'apps/server/src/main.ts');
   ready = await waitReady(30_000);
@@ -556,6 +563,12 @@ try {
   const releasesAfter = await api(`/tenders/${sends15.tenderId}/releases`);
   const integrationsAfter = ((await (await api('/mailboxes')).json()).integrations ?? []).find((i) => i.component === 'MailHubSentReader');
   record('этап 15: после перезапуска выпуски тендера читаются, статус MailHubSentReader — BLOCKED_EXTERNAL из PostgreSQL', releasesAfter.status === 200 && integrationsAfter?.status === 'BLOCKED_EXTERNAL');
+  const tokensAfter = (await (await api('/me/api-tokens')).json()).items ?? [];
+  const proposalsAfter = (await (await api(`/stages/${mcp16.stageId}/mcp-proposals`)).json()).items ?? [];
+  record(
+    'этап 16: после перезапуска отозванный токен и открытое предложение — из PostgreSQL',
+    Boolean(mcp16.tokenId) && tokensAfter.find((t) => t.id === mcp16.tokenId)?.state === 'revoked' && proposalsAfter.find((p) => p.id === mcp16.proposalId)?.status === 'open',
+  );
   const me = await fetch(`${BASE}/api/v1/me`, { headers: { Cookie: cookieHeader() } });
   record('перезапуск server — сессия действительна', me.status === 200);
 

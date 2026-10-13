@@ -284,7 +284,7 @@ describe('сравнение двух выпусков', () => {
     await withClient(proposer.token, async (c) => {
       const cmp = await ok(c, 'compare_releases', { tenderId: st.e.s.tenderA, leftReleaseId: first.releaseId, rightReleaseId: second.releaseId });
       const item = cmp.items.find((i: any) => !i.closed);
-      if (!item) return;
+      expect(item, 'у сравнения есть открытый для читателя вывод').toBeDefined();
       const requirements = await ok(c, 'list_requirements', scope());
       const fragmentId = requirements.requirements.find((x: any) => x.evidence.length > 0).evidence[0].fragmentId;
       const before = (await st.db.pool.query('SELECT count(*)::int AS n FROM release_comparison_reason')).rows[0].n;
@@ -293,6 +293,20 @@ describe('сравнение двух выпусков', () => {
       expect((await st.db.pool.query('SELECT count(*)::int AS n FROM release_comparison_reason')).rows[0].n).toBe(before);
       expect((await callTool(c, 'propose_change_reason', { comparisonId: cmp.comparisonId, itemId: NIL, reasonKind: 'document', text: 'x', citedFragmentIds: [fragmentId], requestId: 'req-reason-16-0002' })).body.error).toMatchObject({ code: 'out_of_scope' });
       expect((await ok(c, 'get_case_overview', scope())).openChatProposals).toBe(1);
+
+      // Человек принимает предложение в портале: причина записана к выводу как гипотеза, от его имени.
+      const listed = (await st.e.s.manager.get(`/stages/${st.e.s.stageA}/mcp-proposals`)).body.items.find((p: any) => p.id === r.proposal.id);
+      expect(listed).toMatchObject({ kind: 'change_reason', status: 'open', restricted: false, can: { decide: true } });
+      const accepted = await st.e.s.manager.post(`/mcp-proposals/${r.proposal.id}/accept`, {}, { headers: { 'If-Match': listed.etag, ...idem() } });
+      expect(accepted.status, accepted.text).toBe(200);
+      expect(accepted.body).toMatchObject({ status: 'accepted', result: { type: 'release_comparison_reason' }, decidedBy: { id: st.e.s.ids.manager } });
+      const reason = (await st.db.pool.query('SELECT reason_status, reason_kind, rationale, actor_user_id FROM release_comparison_reason WHERE id = $1', [accepted.body.result.id])).rows[0];
+      expect(reason).toEqual({ reason_status: 'hypothesis', reason_kind: 'document', rationale: 'Изменение следует из уточнённого ТЗ', actor_user_id: st.e.s.ids.manager });
+      expect((await st.db.pool.query('SELECT count(*)::int AS n FROM release_comparison_reason')).rows[0].n).toBe(before + 1);
+      // Чат-клиент видит ту же причину у вывода — со статусом «гипотеза», не «подтверждена».
+      const after = await ok(c, 'compare_releases', { tenderId: st.e.s.tenderA, leftReleaseId: first.releaseId, rightReleaseId: second.releaseId });
+      expect(after.items.find((i: any) => i.id === item.id)).toMatchObject({ reasonStatus: 'hypothesis', reasonVersion: 1 });
+      expect((await ok(c, 'get_case_overview', scope())).openChatProposals).toBe(0);
     });
   });
 });

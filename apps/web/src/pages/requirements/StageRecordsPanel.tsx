@@ -108,7 +108,9 @@ export const StageRecordsPanel: FC<{ stageId: string; caps: string[] }> = ({ sta
                 <p className={styles.restricted}>
                   {q.sourceProposalId
                     ? 'Текст скрыт: вопрос создан из предложения чата с цитатой источника, который вам недоступен.'
-                    : 'Текст скрыт: вопрос связан с требованием, основание которого вам недоступно.'}
+                    : q.basisUnknown
+                      ? 'Текст скрыт: прежние связи вопроса с требованиями не установлены, и среди требований этапа есть те, основания которых вам недоступны.'
+                      : 'Текст скрыт: вопрос связан или был связан с требованием, основание которого вам недоступно.'}
                 </p>
               )}
               {q.visible && (q.answerNote || q.answerQaItemNo) ? <p className={styles.quote}>{`Ответ: ${q.answerNote ?? ''}${q.answerQaItemNo ? ` (вопрос–ответ № ${q.answerQaItemNo})` : ''}`}</p> : null}

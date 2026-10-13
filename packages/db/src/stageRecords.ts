@@ -87,6 +87,9 @@ export interface ICustomerQuestionRow {
   requirement_code: string | null;
   // Происхождение (миграция 0041, R16-01): предложение из чата, принятием которого создан вопрос; неизменно.
   source_proposal_id: string | null;
+  // Миграция 0042 (R16-02): прежние связи вопроса с требованиями установить не удалось — вопрос закрыт по всем
+  // требованиям этапа, которые были на момент обновления.
+  basis_unknown: boolean;
   text: string;
   status: CustomerQuestionStatus;
   asked_at: Date | null;

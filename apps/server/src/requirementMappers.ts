@@ -337,6 +337,7 @@ export const toCustomerQuestion = (q: ICustomerQuestionRow, visible: boolean) =>
   requirementId: q.requirement_id,
   requirementCode: q.requirement_code,
   sourceProposalId: q.source_proposal_id,
+  basisUnknown: q.basis_unknown,
   visible,
   text: visible ? q.text : null,
   status: q.status,

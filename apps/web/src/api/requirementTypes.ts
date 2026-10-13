@@ -248,6 +248,7 @@ export interface ICustomerQuestion {
   requirementId: string | null;
   requirementCode: string | null;
   sourceProposalId: string | null;
+  basisUnknown: boolean;
   visible: boolean;
   text: string | null;
   status: 'draft' | 'sent' | 'answered' | 'closed';

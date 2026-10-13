@@ -213,3 +213,47 @@ describe('R16-02: обновление базы с вопросами прежн
     expect(await questionOf(s.eng1, id)).toMatchObject({ visible: false, text: null });
   });
 });
+
+describe('R16-02: база, на которой миграция 0041 уже применена', () => {
+  // Так выглядит установка, обновлённая кодом передачи 16-2: история связей ведётся с 0041, прежние связи потеряны.
+  it('0042 восстанавливает связи, снятые до 0041, и не трогает историю, которую уже ведёт охранник', async () => {
+    const secret = 'ДВА-ШАГА-16-70933';
+    const two = await buildLegacyStage('twostep', secret);
+    try {
+      const { db, st } = two;
+      const { s } = st;
+      const patch = (client: TestClient, id: string, body: Record<string, unknown>) => ok(legacyPatch(db, client, id, body));
+      const view = async (client: TestClient, id: string) => ((await client.get(`/stages/${s.stageA}/customer-questions`)).body.items as IQuestionView[]).find((x) => x.id === id)!;
+      const basis = async (id: string) => (await db.pool.query<{ ids: string[]; unknown: boolean }>('SELECT basis_requirement_ids AS ids, basis_unknown AS unknown FROM customer_question WHERE id = $1', [id])).rows[0]!;
+
+      const detached = await legacyQuestion(s.manager, s.stageA, { text: `Подтвердите ${secret}`, requirementId: two.closedRequirement });
+      await patch(s.manager, detached, { requirementId: null });
+      const edited = await legacyQuestion(s.eng2, s.stageA, { text: 'Черновик' });
+      await patch(s.eng2, edited, { text: 'Уточните толщину утеплителя' });
+      expect(await two.upgrade(41)).toBe(1);
+
+      // Состояние передачи 16-2: текст открыт участнику без права на основание, он отмечает вопрос отправленным.
+      expect(await view(s.eng1, detached)).toMatchObject({ visible: true, text: `Подтвердите ${secret}` });
+      await patch(s.eng1, detached, { status: 'sent' });
+      // После 0041 историю ведёт охранник: вторая правка черновика и новый вопрос со снятой связью.
+      await patch(s.eng2, edited, { status: 'sent' });
+      const fresh = await legacyQuestion(s.manager, s.stageA, { text: `Новый ${secret}`, requirementId: two.closedRequirement });
+      await patch(s.manager, fresh, { requirementId: null });
+      await patch(s.manager, fresh, { requirementId: two.openRequirement });
+
+      expect(await two.upgrade()).toBe(LATEST_MIGRATION - 41);
+      expect(await basis(detached)).toEqual({ ids: [two.closedRequirement], unknown: false });
+      expect(await view(s.eng1, detached)).toMatchObject({ visible: false, text: null, status: 'sent' });
+      expect((await s.eng1.get(`/stages/${s.stageA}/customer-questions`)).text).not.toContain(secret);
+      expect((await legacyPatch(db, s.eng1, detached, { status: 'closed' })).status).toBe(409);
+      // До 0041 у вопроса одна правка черновика, вторая — уже под охранником: история установлена, вопрос открыт.
+      expect(await basis(edited)).toEqual({ ids: [], unknown: false });
+      expect(await view(s.eng1, edited)).toMatchObject({ visible: true, text: 'Уточните толщину утеплителя', status: 'sent' });
+      expect([...(await basis(fresh)).ids].sort()).toEqual([two.closedRequirement, two.openRequirement].sort());
+      expect((await basis(fresh)).unknown).toBe(false);
+      expect(await view(s.eng1, fresh)).toMatchObject({ visible: false, text: null });
+    } finally {
+      await two.close();
+    }
+  });
+});

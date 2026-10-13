@@ -24,8 +24,8 @@ export interface ILegacyStage {
   // Требование с основанием из договора, который читает только руководитель; инженер 1 договор не читает.
   closedRequirement: string;
   openRequirement: string;
-  // Обновление до последней миграции: возвращает число применённых миграций.
-  upgrade: () => Promise<number>;
+  // Обновление до миграции `max` (по умолчанию — до последней): возвращает число применённых миграций.
+  upgrade: (max?: number) => Promise<number>;
   close: () => Promise<void>;
 }
 
@@ -78,11 +78,15 @@ export const buildLegacyStage = async (label: string, secret: string): Promise<I
     };
     const closedRequirement = await requirement(`Условие ${secret}`, [...supports(st.frag.facade), { fragmentId: fragment, role: 'clarifies' }]);
     const openRequirement = await requirement('Кровля плоская с внутренним водостоком', supports(st.frag.roof));
-    const upgrade = async (): Promise<number> => {
-      await dropQuestionOrigin(db.migratorUrl, false);
-      const columns = await db.pool.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'customer_question' AND column_name IN ('source_proposal_id', 'basis_requirement_ids', 'basis_unknown')");
-      expect(columns.rowCount).toBe(0);
-      return migrateTo(LATEST_MIGRATION);
+    let prepared = true;
+    const upgrade = async (max = LATEST_MIGRATION): Promise<number> => {
+      if (prepared) {
+        prepared = false;
+        await dropQuestionOrigin(db.migratorUrl, false);
+        const columns = await db.pool.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'customer_question' AND column_name IN ('source_proposal_id', 'basis_requirement_ids', 'basis_unknown')");
+        expect(columns.rowCount).toBe(0);
+      }
+      return migrateTo(max);
     };
     return { db, st, closedRequirement, openRequirement, upgrade, close };
   } catch (e) {

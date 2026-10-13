@@ -1,4 +1,4 @@
-# регрессия на рабочем дереве передачи 16-2: 2026-10-13T15:19:21+05:00, linux x64 Node v24.14.1, artifacts/stage-02/ui-check.mjs, Chromium headless без песочницы, exit 0
+# регрессия на рабочем дереве передачи 16-3: 2026-10-13T17:12:14+05:00, linux x64 Node v24.14.1, artifacts/stage-02/ui-check.mjs, Chromium headless без песочницы, exit 0
 PASS  server + worker готовы
 PASS  без входа открывается форма входа
 PASS  вход инженера через форму — список тендеров — 390 px

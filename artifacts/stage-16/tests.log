@@ -1,14 +1,14 @@
-# 2026-10-13T15:27:59+05:00, linux x64 Node v24.14.1, npx vitest run --maxWorkers=1 --fileParallelism=false
+# 2026-10-13T16:51:29+05:00, linux x64 Node v24.14.1, npx vitest run --maxWorkers=1 --fileParallelism=false
 
  RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
 
 
- Test Files  147 passed (147)
-      Tests  1411 passed (1411)
-   Start at  15:27:59
-   Duration  886.96s (tests 91%, import 8%, transform 1%)
+ Test Files  149 passed (149)
+      Tests  1427 passed (1427)
+   Start at  16:51:30
+   Duration  1070.54s (tests 92%, import 7%, transform 1%)
 
-    Isolate  147 workers spawned · ~102ms startup each (spawn + environment, per file)
-             at least ~14.96s faster with isolate: false — reuses workers across files instead of one per file
+    Isolate  149 workers spawned · ~117ms startup each (spawn + environment, per file)
+             at least ~17.29s faster with isolate: false — reuses workers across files instead of one per file
 
 exit=0

@@ -61,7 +61,7 @@ export interface IMcpDeps {
 export const mcpRouter = (deps: IMcpDeps): Router => {
   const { pool, store, config, clock } = deps;
   const router = Router();
-  const runtime: IToolRuntime = { limiter: new CallLimiter(config.mcp.callsPerMinute, config.mcp.callsPerHour), redact: createRedactor(config) };
+  const runtime: IToolRuntime = { limiter: new CallLimiter(config.mcp.callsPerMinute, config.mcp.callsPerHour), redact: createRedactor(config), logError: deps.logError };
 
   // Сервер создаётся на каждый запрос и видит только инструменты областей своего токена: у токена без `propose`
   // инструментов предложений нет и в списке (mcp-tools.md §4 — «на уровне схемы»).

@@ -1,5 +1,6 @@
 // Этап 16 (ADR-010; проект §2–§4, §7–§8): точка `/mcp` — протокол официальным клиентом SDK, аутентификация токеном,
 // область вызова (`needs_selection`, чужой тендер), аудит от имени пользователя, лимит вызовов. Данные поддельные.
+import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { auditRows, buildScenario, createTestDb, makeApp, testConfig, type IScenario, type ITestDb } from './helpers.ts';
 import { callTool, issueToken, mcpClient, rawPost, startMcp, type IMcpEndpoint } from './mcpFixtures.ts';
@@ -76,6 +77,21 @@ describe('протокол', () => {
     expect(denied.length).toBeGreaterThanOrEqual(4);
     expect(JSON.stringify(denied)).not.toContain(temp.token);
     expect(denied.map((d) => d.details.reason)).toEqual(expect.arrayContaining(['no_token', 'invalid_token']));
+  });
+
+  it('истёкший токен не принимается, хотя не отозван', async () => {
+    const value = `kkp_${'e'.repeat(43)}`;
+    const sha = createHash('sha256').update(value).digest('hex');
+    // Токен, выпущенный восемь дней назад на семь дней: срок вышел вчера.
+    await db.pool.query(
+      `INSERT INTO api_token (user_id, name, client_kind, token_sha256, token_prefix, scopes, lifetime_days, created_at, expires_at)
+       VALUES ($1, 'истёкший', 'other', $2, 'kkp_eeee', '{read}', 7, now() - interval '8 days', now() - interval '8 days' + interval '7 days')`,
+      [s.ids.eng2, sha],
+    );
+    const r = await rawPost(mcp.url, { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }, { Authorization: `Bearer ${value}` });
+    expect(r.status).toBe(401);
+    const listed = (await s.eng2.get('/me/api-tokens')).body.items.find((t: any) => t.name === 'истёкший');
+    expect(listed).toMatchObject({ state: 'expired', revokedAt: null });
   });
 
   it('выключенный MCP-сервер не отвечает и с верным токеном', async () => {

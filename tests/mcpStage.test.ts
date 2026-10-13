@@ -167,6 +167,28 @@ describe('расчёт и экономика', () => {
     });
   });
 
+  it('неверный вид цены: итог запрошенного вида или отказ — сумма другого вида вместо него не возвращается', async () => {
+    await withClient(eng1.token, async (c) => {
+      const cost = await ok(c, 'get_economics', { ...scope(), priceKind: 'cost' });
+      const commercial = await ok(c, 'get_economics', { ...scope(), priceKind: 'commercial' });
+      expect(cost).toMatchObject({ priceKind: 'cost', total: { priceKind: 'cost' } });
+      expect(commercial).toMatchObject({ priceKind: 'commercial', total: { priceKind: 'commercial' } });
+      // В ответе на один вид цены нет сумм другого вида.
+      expect(JSON.stringify(cost.total)).not.toContain('"commercial"');
+      expect(JSON.stringify(commercial.total)).not.toContain('"priceKind":"cost"');
+      expect(cost.availableKinds).toEqual(['cost', 'commercial']);
+      // Вид цены, которого в портале нет (розничная, с НДС), — отказ с перечнем допустимых значений.
+      for (const priceKind of ['retail', 'with_vat', 'КП']) {
+        const r = await c.callTool({ name: 'get_economics', arguments: { ...scope(), priceKind } }).then(
+          (x) => x as { isError?: boolean; content?: { text?: string }[] },
+          (e: unknown) => ({ isError: true, content: [{ text: String(e) }] }),
+        );
+        expect(r.isError, priceKind).toBe(true);
+        expect(JSON.stringify(r.content)).toMatch(/cost|commercial/);
+      }
+    });
+  });
+
   it('неверный вид данных расчёта — отказ, а не подмена другим видом', async () => {
     await withClient(eng1.token, async (c) => {
       for (const view of ['profit', 'price', '']) {

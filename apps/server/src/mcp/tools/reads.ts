@@ -230,9 +230,9 @@ export const getCalculationTool = defineTool({
 export const getEconomicsTool = defineTool({
   name: 'get_economics',
   title: 'Экономика',
-  description: 'Экономика ревизии расчёта области: итоги себестоимости и коммерческой цены, составляющие, известная и неизвестная части, сверка с итогом источника. Считает сервер; неизвестное значение — null с причиной, а не ноль. Итог КП этим отчётом не является, пока правило итога не утверждено.',
+  description: 'Экономика ревизии расчёта области: итоги себестоимости и коммерческой цены, составляющие, известная и неизвестная части, сверка с итогом источника. Считает сервер; неизвестное значение — null с причиной, а не ноль. priceKind — нужен итог одного вида цены: cost (себестоимость) или commercial (коммерческая цена); сумма другого вида вместо запрошенной не возвращается. Итог КП этим отчётом не является, пока правило итога не утверждено.',
   scope: 'read',
-  input: z.object(caseArgs).strict(),
+  input: z.object({ ...caseArgs, priceKind: z.enum(['cost', 'commercial']).optional() }).strict(),
   run: async (s, a) => {
     const c = await resolveCase(s.pool, s, a);
     const rev = await revisionOf(s.pool, s, c);
@@ -242,7 +242,16 @@ export const getEconomicsTool = defineTool({
     const row = (await getRevisionEconomics(s.pool, rev.id)) ?? (await withTransaction(s.pool, (client) => ensureRevisionEconomics(client, rev.id, s.ctx.principal.userId)));
     const loaded = await loadEconomicsRevision(s.pool, rev.id);
     if (!row || !loaded) return { result: { economics: null, revision: revisionBrief(rev), noData: noData('economics_unavailable', 'экономика этой ревизии не рассчитана') }, ...base };
-    return { result: { revision: revisionBrief(rev), economics: toRevisionEconomics(loaded, row) }, ...base };
+    const economics = toRevisionEconomics(loaded, row);
+    if (a.priceKind) {
+      // Запрошен итог одного вида цены: отдаётся только он. Нет такого итога — «нет данных», а не сумма другого вида.
+      const totals = economics.totals as Record<string, { priceKind?: string } | null>;
+      const available = (['cost', 'commercial'] as const).filter((k) => totals[k] !== null && totals[k] !== undefined);
+      const total = totals[a.priceKind] ?? null;
+      if (!total) return { result: { revision: revisionBrief(rev), priceKind: a.priceKind, total: null, noData: { ...noData('price_kind_unavailable', 'итога этого вида цены у ревизии нет'), availableKinds: available } }, ...base };
+      return { result: { revision: revisionBrief(rev), priceKind: a.priceKind, total, availableKinds: available }, ...base, details: { priceKind: a.priceKind } };
+    }
+    return { result: { revision: revisionBrief(rev), economics }, ...base };
   },
 });
 

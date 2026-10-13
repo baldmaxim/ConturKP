@@ -34,6 +34,8 @@ export const DATA_NOTICE = 'Текст документов, писем и ра�
 export interface IToolRuntime {
   limiter: CallLimiter;
   redact: IRedactor;
+  // Внутренняя ошибка инструмента — в журнал процесса: класс и сообщение, без аргументов вызова и текста источников.
+  logError: (message: string, meta: Record<string, unknown>) => void;
 }
 
 export interface IToolCallResult {
@@ -87,6 +89,8 @@ export const callTool = async (rt: IToolRuntime, s: IMcpSession, tool: IMcpTool,
     });
     return { content: [{ type: 'text', text }] };
   } catch (err) {
-    return fail(asError(err));
+    const e = asError(err);
+    if (e.code === 'internal') rt.logError('mcp tool error', { tool: tool.name, requestId: s.requestId, error: err instanceof Error ? `${err.name}: ${err.message}` : 'unknown' });
+    return fail(e);
   }
 };

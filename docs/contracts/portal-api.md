@@ -35,7 +35,8 @@
 | `GET /admin/users`, `POST /admin/users` | `admin.users` | IK | пользователи; открытой регистрации нет, первого администратора создаёт bootstrap с консоли сервера (этап 02) |
 | `PATCH /admin/users/{id}`, `POST /admin/users/{id}/password` | `admin.users` | IM | имя, статус, роли, сброс пароля; отключение и сброс отзывают сессии; последнего администратора снять нельзя (этап 02) |
 | `GET /admin/audit-events` | `admin.audit` | — | журнал событий вне тендеров: входы, пользователи, отказы Origin/CSRF (этап 02) |
-| `POST /me/api-tokens`, `DELETE /me/api-tokens/{id}` | `mcp.propose` | IK | выпуск и отзыв MCP-токена; секрет показывается один раз |
+| `GET /me/api-tokens`, `POST /me/api-tokens` | роль инженера или руководителя | — | токены чат-клиентов (этап 16, D-037): список своих; выпуск `{ name, clientKind: codex \| cursor \| other, propose?, lifetimeDays?: 7 \| 30 \| 90 }` — область `read` всегда, `propose` по флагу; значение токена — только в ответе выпуска (`201`), в БД — хэш. Ключа идемпотентности у выпуска нет: значение нигде не сохраняется. Не больше пяти действующих — иначе `409 token_limit`. Только сессия человека: токеном выпустить токен нельзя |
+| `DELETE /api-tokens/{id}` | владелец или `admin.users` | — | отзыв токена; повторный отзыв ничего не меняет; чужой токен не администратору — `404` |
 | `GET /settings`, `PUT /settings/{key}` | `admin.settings` | IM | часовой пояс отображения, политика внешней обработки |
 | `GET /tenders/{id}/intake-channels` | участник или `admin.tender` | — | каналы поступления, признак свежести `current`, последний успешный скан, ошибка, число файлов, ожидающих стабильности (этап 03) |
 | `POST /tenders/{id}/intake-channels` | `admin.intake` | IK | наблюдаемая папка (`origin`: `local`/`yandex_disk`/`smb`) только внутри `INTAKE_ROOTS` (этап 03) |
@@ -347,6 +348,17 @@
 | (этап 15) ошибки отправки и сравнения | — | — | `409 STATE_CONFLICT` с `current.reason`: `RELEASE_IS_TEST`, `not_ready` (`state`: `held` / `excluded` / `intake_not_current`, события), `evidence_already_registered` (`sendEventId`), `sent_before_release`, `sent_in_future`, `mail_not_linked`, `mail_not_outbound`, `mail_revision_outdated`, `mail_date_missing`, `not_disputed`, `not_extras_only`, `restricted_mail`, `incident_kind_mismatch`, `release_ready`, `restricted_inputs`, `restricted_item`, `restricted_fragments`, `restricted_decisions`, `basis_out_of_scope`; письмо из нечитаемого ящика и чужая загрузка — `404`; `403` — нет `send.register` / `send.accept_extras` / `economics.compare` / `change_reason.confirm`; `412` — устаревший ETag |
 | (этап 14) ошибки размещения | — | — | `409 STATE_CONFLICT` с `current.reason`: `not_failed`, `not_conflict`, `not_delivered`, `not_yandex`, `already_confirmed`, `version_not_newer`, `destination_inactive`, `restricted_basis` (внутренний набор — манифест выпуска закрыт для вас: «Разместить», повтор, перенаправление на внутреннюю версию; R14-01); коды ошибок доставки worker — в т. ч. `RESTRICTED_BASIS` (права запросившего отозваны до записи), `NO_ATOMIC_MOVE` (нет жёстких ссылок, R14-02), `INVALID_PATH` (в т. ч. физическое пересечение корня и служебной папки, R14-03); `412` — устаревший ETag; `403` — нет `delivery.manage` / `admin.delivery`; пути назначений — только администратору, остальным — папка выпуска относительно корня |
 | `GET /tenders/{id}/audit-events` | `audit.read` | — | журнал действий; руководитель тендера — все события, администратор без назначения — только действия с карточкой и участниками (R02-02) |
+
+### 2.13. MCP портала и предложения из чата (этап 16; ADR-010, D-037)
+
+Точка `POST /mcp` — вне `/api/v1`: только `Authorization: Bearer <токен>`, без cookie и CSRF; инструменты и ошибки — `docs/contracts/mcp-tools.md`. Маршруты `/api/v1` токен не принимают (`401`).
+
+| Маршрут | Право | Ключи | Что делает |
+|---|---|---|---|
+| `GET /stages/{id}/mcp-proposals?status=` | `tender.read` | — | предложения чат-клиента на этапе: вид (`finding` / `question` / `condition_text` / `change_reason`), статус (`open` / `accepted` / `rejected`), от чьего имени, кто решил. Текст, цитаты и причина отклонения — только тому, кто читает все цитаты предложения; иначе `restricted: true` без текста |
+| `POST /mcp-proposals/{id}/accept` | по виду: `finding.write` / `requirement.create` / `application.fill` / `change_reason.confirm` | IM, IK | принятие человеком: замечание (`{ severity, confidence }` обязательны — подсказка чата значением не становится), черновик вопроса заказчику, причина вывода сравнения со статусом «гипотеза»; у текста условия записи нет. Автор созданной записи — принявший |
+| `POST /mcp-proposals/{id}/reject` | то же | IM, IK | отклонение с причиной `{ reason }` |
+| (этап 16) ошибки | — | — | `409 STATE_CONFLICT` с `current.reason`: `token_limit`, `proposal_not_open`, `restricted_fragments` (среди цитат есть то, что решающий не читает), `comparison_not_ready`, `restricted_item`, `basis_out_of_scope`, `invalid_proposal`; `412` — устаревший ETag; `403` — нет возможности по виду предложения; не участник — `404` |
 
 ## 3. Правила ответов
 

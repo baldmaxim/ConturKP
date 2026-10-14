@@ -22,7 +22,7 @@ const main = async (): Promise<void> => {
     process.exitCode = 3;
     return;
   }
-  const store = new BlobStore(config.storageRoot);
+  const store = new BlobStore(config.storageRoot, config.storageSpace);
   await store.init();
   const startedAt = new Date();
   const processId = `worker:${hostname()}:${process.pid}:${startedAt.getTime()}`;

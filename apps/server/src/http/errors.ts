@@ -1,6 +1,7 @@
 // Ошибки API — RFC 9457 (application/problem+json) с машинным кодом (portal-api §1).
 import type { ErrorCode, IProblem } from '@kontur/contracts';
 import type { Response } from 'express';
+import { isStorageFull, StorageFullError } from '@kontur/storage';
 import { ZodError } from 'zod';
 
 export interface IAuditTarget {
@@ -38,6 +39,7 @@ const TITLES: Record<ErrorCode, string> = {
   IDEMPOTENCY_KEY_REUSED: 'Ключ идемпотентности использован с другим запросом',
   BLOCKER_PRESENT: 'Действие запрещено блокерами',
   RATE_LIMITED: 'Слишком много попыток',
+  STORAGE_FULL: 'Нет места в хранилище',
   INTERNAL: 'Внутренняя ошибка',
 };
 
@@ -49,6 +51,10 @@ export const validation = (err: ZodError): HttpError =>
   new HttpError(400, 'VALIDATION_FAILED', 'Проверьте поля запроса', {
     errors: err.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
   });
+
+// Нехватка места в хранилище (этап 17, ADR-011 §10): явный отказ 507, а не внутренняя ошибка.
+export const fromStorageError = (err: unknown): HttpError | null =>
+  isStorageFull(err) ? new HttpError(507, 'STORAGE_FULL', err instanceof Error && err instanceof StorageFullError ? err.message : 'в хранилище закончилось место') : null;
 
 // Ошибки PostgreSQL, означающие нарушение правил данных, а не сбой.
 export const fromPgError = (err: unknown): HttpError | null => {

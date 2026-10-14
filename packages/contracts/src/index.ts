@@ -410,6 +410,8 @@ export type ErrorCode =
   // Этап 13: матрица блокеров запрещает действие (state-machines §11.1, D-033); список — в поле blockers.
   | 'BLOCKER_PRESENT'
   | 'RATE_LIMITED'
+  // Этап 17 (ADR-011 §10): в хранилище свободно меньше порога остановки записи — 507.
+  | 'STORAGE_FULL'
   | 'INTERNAL';
 
 export interface IProblem {

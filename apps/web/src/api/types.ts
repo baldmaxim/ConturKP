@@ -190,6 +190,7 @@ export type TProblemCode =
   | 'IDEMPOTENCY_KEY_REUSED'
   | 'RATE_LIMITED'
   | 'STATE_CONFLICT'
+  | 'STORAGE_FULL'
   | 'INTERNAL';
 
 export interface IProblemFieldError {

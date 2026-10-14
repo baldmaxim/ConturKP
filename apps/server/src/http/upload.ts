@@ -46,6 +46,8 @@ export const receiveUpload = (o: IReceiveUploadOptions): RequestHandler => {
       const declared = Number(req.header('content-length') ?? '0');
       if (declared > o.config.limits.maxUploadBytes) throw new BlobLimitError(o.config.limits.maxUploadBytes);
       await o.store.ensureDirs();
+      // Известный размер не помещается до порога остановки записи — отказ до чтения тела (этап 17).
+      await o.store.space.assertWritable(declared);
       uploads.set(req, await o.store.putStream(req, o.config.limits.maxUploadBytes, false));
       next();
     } catch (err) {

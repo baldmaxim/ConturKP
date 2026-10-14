@@ -7,7 +7,7 @@ import type { Pool } from '@kontur/db';
 import { BlobStore, localOcrFactory } from '@kontur/storage';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { requestIdOf } from './http/context.ts';
-import { HttpError, sendProblem } from './http/errors.ts';
+import { fromStorageError, HttpError, sendProblem } from './http/errors.ts';
 import { csrfGuard, securityHeaders, sessionMiddleware } from './http/security.ts';
 import { adminRouter } from './routes/admin.ts';
 import { authRouter } from './routes/auth.ts';
@@ -65,7 +65,7 @@ export const DEFAULT_WEB_DIST = resolve(import.meta.dirname, '..', '..', 'web', 
 export const createApp = (deps: IAppDeps): express.Express => {
   const { config, pool } = deps;
   const clock = deps.clock ?? (() => new Date());
-  const store = deps.store ?? new BlobStore(config.storageRoot);
+  const store = deps.store ?? new BlobStore(config.storageRoot, config.storageSpace);
   const logError = deps.logError ?? ((message, meta) => console.error(message, meta));
   const app = express();
   app.disable('x-powered-by');
@@ -74,7 +74,7 @@ export const createApp = (deps: IAppDeps): express.Express => {
 
   const api = express.Router();
   api.use(express.json({ limit: '100kb' }));
-  api.use(healthRouter(config, pool));
+  api.use(healthRouter(config, pool, store));
   api.use(sessionMiddleware(config, pool, clock));
   api.use(csrfGuard(config, pool));
   api.use(authRouter(config, pool, clock));
@@ -144,7 +144,10 @@ export const createApp = (deps: IAppDeps): express.Express => {
     if (err instanceof HttpError) return sendProblem(res, err, requestId);
     const e = err as { type?: string; status?: number };
     if (e.type === 'entity.parse.failed') return sendProblem(res, new HttpError(400, 'VALIDATION_FAILED', 'тело запроса — некорректный JSON'), requestId);
-    if (e.type === 'entity.too.large') return sendProblem(res, new HttpError(400, 'VALIDATION_FAILED', 'тело запроса слишком большое'), requestId);
+    // Тело сверх лимита — 413, как у загрузок (этап 17, S17-11).
+    if (e.type === 'entity.too.large') return sendProblem(res, new HttpError(413, 'VALIDATION_FAILED', 'тело запроса слишком большое'), requestId);
+    const storage = fromStorageError(err);
+    if (storage) return sendProblem(res, storage, requestId);
     // В журнал — только класс и сообщение ошибки, без тела запроса и заголовков (секреты, cookie).
     logError('unhandled error', { requestId, error: err instanceof Error ? `${err.name}: ${err.message}` : 'unknown' });
     return sendProblem(res, new HttpError(500, 'INTERNAL', 'внутренняя ошибка; см. журнал по requestId'), requestId);

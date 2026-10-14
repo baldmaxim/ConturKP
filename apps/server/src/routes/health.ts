@@ -7,7 +7,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { IAppConfig } from '@kontur/config';
 import { checkSchema, freshWorkerCount, staleRunningJobs, type Pool } from '@kontur/db';
-import { physicalPath } from '@kontur/storage';
+import { BlobStore, physicalPath } from '@kontur/storage';
 import { Router } from 'express';
 
 interface ICheck {
@@ -23,7 +23,7 @@ const safe = async (fn: () => Promise<ICheck>, failure: string): Promise<ICheck>
   }
 };
 
-export const healthRouter = (config: IAppConfig, pool: Pool): Router => {
+export const healthRouter = (config: IAppConfig, pool: Pool, store: BlobStore = new BlobStore(config.storageRoot, config.storageSpace)): Router => {
   const router = Router();
 
   router.get('/health', (_req, res) => {
@@ -48,6 +48,11 @@ export const healthRouter = (config: IAppConfig, pool: Pool): Router => {
       const probe = join(dir, `ready-${randomUUID()}`);
       await writeFile(probe, 'ok');
       await rm(probe);
+      // Уровень свободного места без чисел: точка открыта без входа (этап 17, ADR-011 §10).
+      const space = await store.space.level(0, true);
+      if (space.level === 'stop') return { ok: false, detail: 'мало места: запись остановлена' };
+      if (space.level === 'warn') return { ok: true, detail: 'доступно на запись; мало места — предупреждение' };
+      if (space.level === 'unknown') return { ok: true, detail: 'доступно на запись; свободное место не измерено' };
       return { ok: true, detail: 'доступно на запись' };
     }, 'недоступно на запись');
     const worker = database.ok

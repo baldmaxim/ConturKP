@@ -186,6 +186,8 @@ export interface IAppConfig {
   // restore_check — worker на восстановленной копии (проект §4.4): без внешних действий — размещений, сканов
   // наблюдаемых папок и выгрузок TenderHub; пути назначений в копии указывают на настоящие папки.
   workerMode: 'normal' | 'restore_check';
+  // Свободное место хранилища (ADR-011 §10): предупреждение и остановка записи; 0 — проверка выключена.
+  storageSpace: { warnFreeBytes: number; stopFreeBytes: number };
   recognition: IRecognitionLimits;
   embedding: IEmbeddingConfig;
   search: ISearchConfig;
@@ -288,6 +290,8 @@ export const CONFIG_KEYS: IConfigKey[] = [
   // Этап 17: остановка служб и очередь.
   { name: 'SHUTDOWN_GRACE_SECONDS', secret: false, required: false, purpose: 'срок штатной остановки server и worker, по умолчанию 20; stoptimeout службы — на 10 с больше' },
   { name: 'GPU_TAKEOVER_GRACE_SECONDS', secret: false, required: false, purpose: 'защитный интервал перехвата слота GPU после аренды, по умолчанию 180; не меньше таймаута модели + 30' },
+  { name: 'STORAGE_WARN_FREE_MB', secret: false, required: false, purpose: 'предупреждение о свободном месте хранилища, МБ, по умолчанию 10240; 0 — выключено' },
+  { name: 'STORAGE_STOP_FREE_MB', secret: false, required: false, purpose: 'остановка записи в хранилище с явной ошибкой, МБ, по умолчанию 2048; 0 — выключено' },
   { name: 'WORKER_MODE', secret: false, required: false, purpose: 'normal (по умолчанию) или restore_check — worker на восстановленной копии без внешних действий' },
   { name: 'EMBEDDING_PROBE_INTERVAL_SECONDS', secret: false, required: false, purpose: 'период пробы модели эмбеддингов, пока она отвечает, по умолчанию 3600 (проба загружает модель в LM Studio)' },
   { name: 'DELIVERY_OPERATION_TIMEOUT_SECONDS', secret: false, required: false, purpose: 'срок одной файловой операции размещения, по умолчанию 60' },
@@ -326,6 +330,9 @@ type Env = Record<string, string | undefined>;
 
 const isLoopback = (host: string): boolean =>
   host === '127.0.0.1' || host === '::1' || host === 'localhost';
+
+// Как intFrom, но 0 допустим — «выключено».
+const nonNegativeIntFrom = (env: Env, name: string, fallback: number, problems: string[]): number => (env[name] === '0' ? 0 : intFrom(env, name, fallback, problems));
 
 const intFrom = (env: Env, name: string, fallback: number, problems: string[]): number => {
   const raw = env[name];
@@ -532,6 +539,10 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
     gpuTakeoverGraceSeconds: intFrom(env, 'GPU_TAKEOVER_GRACE_SECONDS', 180, problems),
     shutdownGraceSeconds: intFrom(env, 'SHUTDOWN_GRACE_SECONDS', 20, problems),
     workerMode: env.WORKER_MODE === 'restore_check' ? 'restore_check' : 'normal',
+    storageSpace: {
+      warnFreeBytes: nonNegativeIntFrom(env, 'STORAGE_WARN_FREE_MB', 10240, problems) * MIB,
+      stopFreeBytes: nonNegativeIntFrom(env, 'STORAGE_STOP_FREE_MB', 2048, problems) * MIB,
+    },
     recognition: {
       maxMetadataBytes: intFrom(env, 'RECOGNITION_MAX_METADATA_MB', 64, problems) * MIB,
       maxMetadataTotalBytes: intFrom(env, 'RECOGNITION_MAX_METADATA_TOTAL_MB', 128, problems) * MIB,
@@ -588,6 +599,8 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
     problems.push(`GPU_TAKEOVER_GRACE_SECONDS не меньше ${longestModelStepSeconds + 30}: наибольший таймаут модели (${longestModelStepSeconds} с) плюс 30 с`);
   }
   if (config.shutdownGraceSeconds < 5) problems.push('SHUTDOWN_GRACE_SECONDS не меньше 5');
+  const sp = config.storageSpace;
+  if (sp.warnFreeBytes > 0 && sp.warnFreeBytes < sp.stopFreeBytes) problems.push('STORAGE_WARN_FREE_MB не меньше STORAGE_STOP_FREE_MB');
   if (env.WORKER_MODE && env.WORKER_MODE !== 'normal' && env.WORKER_MODE !== 'restore_check') problems.push('WORKER_MODE — normal или restore_check');
   if (problems.length > 0) throw new ConfigError(problems);
   return config;

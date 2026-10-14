@@ -17,7 +17,7 @@ import {
 import type { Request, Response } from 'express';
 import type { ZodType } from 'zod';
 import { requireCtx, stateOf } from './context.ts';
-import { fromPgError, HttpError, validation } from './errors.ts';
+import { fromPgError, fromStorageError, HttpError, validation } from './errors.ts';
 
 export type AuditRecord = Omit<IAuditInput, 'actorUserId' | 'principalKind' | 'requestId' | 'outcome'>;
 
@@ -110,7 +110,7 @@ const auditFailure = async (pool: Pool, req: Request, action: string, entityType
   });
 };
 
-export const toHttpError = (err: unknown): HttpError | null => (err instanceof HttpError ? err : fromPgError(err));
+export const toHttpError = (err: unknown): HttpError | null => (err instanceof HttpError ? err : (fromStorageError(err) ?? fromPgError(err)));
 
 export const command =
   (pool: Pool, spec: ICommandSpec) =>

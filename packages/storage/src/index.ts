@@ -7,6 +7,7 @@ import { createReadStream, type ReadStream } from 'node:fs';
 import { chmod, link, mkdir, open, readdir, realpath, rm, stat } from 'node:fs/promises';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import type { Readable } from 'node:stream';
+import { FreeSpaceGuard, isStorageFull, StorageFullError, type ISpacePolicy } from './space.ts';
 
 export const HEAD_BYTES = 64;
 
@@ -41,6 +42,7 @@ export const storageKeyOf = (sha256: string): string => {
 };
 
 const TMP_MAX_AGE_MS = 24 * 3600_000;
+const SPACE_CHECK_BYTES = 32 * 1024 * 1024;
 
 // Физический путь каталога, который может ещё не существовать: realpath ближайшего существующего предка и оставшиеся
 // компоненты. Путь из конфигурации может идти через junction, символическую ссылку или короткое имя Windows (8.3);
@@ -66,9 +68,12 @@ export class BlobStore {
   // Физический корень (R03-06, R08-05): все операции хранилища после `physicalRoot()` / `ensureDirs()` идут по нему, а не
   // через junction или ссылку из конфигурации; по нему же — проверки пересечения с наблюдаемыми папками.
   private canonical: string | null = null;
+  // Свободное место (этап 17, ADR-011 §10): без политики — проверки нет (прежнее поведение).
+  readonly space: FreeSpaceGuard;
 
-  constructor(root: string) {
+  constructor(root: string, space: ISpacePolicy = { warnFreeBytes: 0, stopFreeBytes: 0 }) {
     this.root = resolve(root);
+    this.space = new FreeSpaceGuard(() => this.canonicalRoot(), space);
   }
 
   canonicalRoot(): string {
@@ -116,10 +121,13 @@ export class BlobStore {
   // destroyOnLimit = false — источник не разрушается при превышении лимита (HTTP-запрос дочитывается
   // вызывающим, чтобы клиент получил ответ 413, а не обрыв соединения).
   async putStream(source: Readable, maxBytes: number, destroyOnLimit = true): Promise<IStoredBlob> {
+    // Порог остановки записи проверяется до файла и каждые 32 МиБ (этап 17, ADR-011 §10).
+    await this.space.assertWritable();
     const tmp = join(this.canonicalRoot(), 'tmp', `${randomUUID()}.part`);
     const hash = createHash('sha256');
     const handle = await open(tmp, 'wx');
     let size = 0;
+    let checkedAt = 0;
     let head = Buffer.alloc(0);
     try {
       for await (const chunk of source) {
@@ -129,6 +137,10 @@ export class BlobStore {
           if (destroyOnLimit) source.destroy();
           throw new BlobLimitError(maxBytes);
         }
+        if (size - checkedAt >= SPACE_CHECK_BYTES) {
+          checkedAt = size;
+          await this.space.assertWritable(0, true);
+        }
         if (head.length < HEAD_BYTES) head = Buffer.concat([head, buf.subarray(0, HEAD_BYTES - head.length)]);
         hash.update(buf);
         await handle.write(buf);
@@ -137,6 +149,11 @@ export class BlobStore {
     } catch (err) {
       await handle.close().catch(() => undefined);
       await rm(tmp, { force: true });
+      // Источник при нехватке места закрывается без ошибки: иначе распаковка приняла бы элемент за повреждённый.
+      if (isStorageFull(err)) {
+        if (destroyOnLimit) source.destroy();
+        throw err instanceof StorageFullError ? err : new StorageFullError(null, 0);
+      }
       throw err;
     }
     await handle.close();
@@ -190,3 +207,4 @@ export class BlobStore {
 export * from './ocrModels.ts';
 export * from './deliveryFs.ts';
 export * from './backup.ts';
+export * from './space.ts';

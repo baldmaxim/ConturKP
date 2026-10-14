@@ -41,7 +41,7 @@ import {
   type Pool,
   type PoolClient,
 } from '@kontur/db';
-import { localOcrFactory, nodeDeliveryFs, type BlobStore } from '@kontur/storage';
+import { isStorageFull, localOcrFactory, nodeDeliveryFs, type BlobStore } from '@kontur/storage';
 import { runSearchMaintenance, type IMaintenanceReport } from './maintenance.ts';
 
 export class LeaseLostError extends Error {
@@ -144,6 +144,9 @@ export type WorkerLoop = 'background' | 'interactive' | 'queue' | 'search';
 // планируются — пути назначений, папки и TenderHub в копии настоящие (проект §4.4, толкование §16 п. 3).
 export const EXTERNAL_KINDS: readonly string[] = ['delivery.place', 'delivery.probe', 'calculation.capture', 'intake.scan'];
 
+// Задание, остановленное нехваткой места, повторяется не раньше чем через 5 минут.
+export const STORAGE_FULL_DELAY_MS = 300_000;
+
 const pause = (ms: number, signal: AbortSignal): Promise<void> =>
   new Promise((resolve) => {
     if (signal.aborted) return resolve();
@@ -244,7 +247,8 @@ export class WorkerRuntime {
           if (recovered.length > 0) this.log(`возвращено в очередь после истечения аренды: ${recovered.length}`);
         },
       ],
-      ['сканы', () => (this.restoreCheck ? Promise.resolve(0) : this.scheduleScans())],
+      // При остановке записи хранилища новые сканы не ставятся: файлы всё равно не запишутся (ADR-011 §10).
+      ['сканы', async () => (this.restoreCheck || (await this.o.store.space.level()).level === 'stop' ? 0 : this.scheduleScans())],
       ['выгрузки по сроку', () => (this.restoreCheck ? Promise.resolve(0) : this.scheduleCalculationCaptures())],
       ['локальное распознавание', () => this.scheduleLocalRecognition()],
       ['извлечение фактов', () => this.scheduleFactExtraction()],
@@ -522,6 +526,18 @@ export class WorkerRuntime {
   }
 
   private async onError(job: IJobRow, token: string, err: unknown, spec: IJobHandlerSpec | null, ctx: IJobContext): Promise<void> {
+    // Нет места в хранилище (ADR-011 §10): задание ждёт с явным кодом и без списания попытки — продолжится само,
+    // когда место освободят; доменный отказ не пишется (этап 17, проект §6).
+    if (isStorageFull(err)) {
+      const ok = await releaseJob(this.o.pool, job, token, {
+        code: 'storage_full',
+        message: err instanceof Error ? err.message : 'в хранилище закончилось место',
+        delayMs: STORAGE_FULL_DELAY_MS,
+        refundAttempt: true,
+      }).catch(() => false);
+      this.log(`задание ${job.kind} ${job.id}: нет места в хранилище → ${ok ? 'ждёт в очереди' : 'аренда потеряна'}`);
+      return;
+    }
     if (err instanceof LeaseLostError) {
       // Аренда перехвачена: ничего не пишем (R01-06 п. 1).
       this.log(`задание ${job.id}: аренда потеряна, результат не записан`);

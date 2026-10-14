@@ -1,0 +1,12 @@
+# npm run ops:preflight на машине разработки — проверка скрипта, не целевой ПК; JSON (с адресами) не сохраняется
+Осмотр adm3.hlab.kz (Linux 7.0.0-31-generic #31-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 04:26:38 UTC 2026), 2026-10-14T08:42:47.007Z
+OK      node              Node v24.14.1; нужен >=24.11 <25 (package.json engines)
+N/A     postgres_service  службы Windows — только на целевом ПК
+OK      docker            Docker 29.8.1
+OK      pg_dump           pg_dump (PostgreSQL) 18.6 (Ubuntu 18.6-0ubuntu0.26.04.1)
+WARN    gpu               nvidia-smi не найден или не ответил: живая модель на GPU невозможна
+WARN    model_server      OpenAI-совместимый сервер модели не отвечает
+OK      libreoffice       LibreOffice 26.2.6.3 620(Build:3)
+OK      disk /            свободно 154.4 из 256 ГБ (порог предупреждения хранилища — 10 ГБ)
+WARN    mkcert            mkcert не найден: нужен для сертификата на IP (U-02)
+

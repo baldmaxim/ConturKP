@@ -266,7 +266,7 @@ describe('проходы прав по всем маршрутам', () => {
     expect(wrong).toEqual([]);
   });
 
-  it('инженер тендера на действиях руководителя — 403', async () => {
+  it('A25: инженер тендера на действиях руководителя — 403', async () => {
     const wrong: string[] = [];
     let real = 0;
     for (const r of MANAGER_ONLY) {

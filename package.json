@@ -31,12 +31,15 @@
     "tenderhub:live-smoke": "node --env-file-if-exists=.env scripts/tenderhub-live-smoke.ts",
     "delivery:live-smoke": "node --env-file-if-exists=.env scripts/delivery-live-smoke.ts",
     "delivery:compare": "node scripts/delivery-compare.ts",
+    "model:live-smoke": "node --env-file-if-exists=.env scripts/model-live-smoke.ts",
     "ops:preflight": "node --env-file-if-exists=.env scripts/ops/preflight.ts",
     "ops:backup": "node --env-file-if-exists=.env scripts/ops/backup.ts",
     "ops:restore-check": "node --env-file-if-exists=.env scripts/ops/restore-check.ts",
     "ops:rehearsal": "node scripts/ops/rehearsal.ts",
     "ops:integration-verify": "node --env-file-if-exists=.env scripts/ops/integration-verify.ts",
-    "ops:service": "node scripts/ops/service.ts"
+    "ops:service": "node scripts/ops/service.ts",
+    "ops:measure": "node scripts/ops/measure.ts",
+    "ops:acceptance-matrix": "node scripts/ops/acceptance-matrix.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/express": "2.0.2",

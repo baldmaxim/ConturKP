@@ -122,7 +122,7 @@ describe('вывод значений', () => {
 });
 
 describe('генерация и превью (ADR-013; D-032 В-12-2, В-12-8, В-12-10)', () => {
-  it('DOCX: значения на месте, плейсхолдеров нет, отметки видны в документе и PDF, кириллица и длинный текст целиком, шрифт встроен', async () => {
+  it('A41: DOCX — значения на месте, плейсхолдеров нет, отметки видны в документе и PDF, кириллица и длинный текст целиком, шрифт встроен', async () => {
     const data = renderData(LETTER, letterValues(), 'docx');
     const marks = documentMarks('test', true);
     const docx = renderDocx(letterMarked, data, marks);

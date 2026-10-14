@@ -193,7 +193,7 @@ describe('пустая область', () => {
 });
 
 describe('два прогона одного PDF (RT-02, A10, A11)', () => {
-  it('поздний прогон ранжируется выше; рабочий состав берёт его, снимок E1 — только ранний даже при limit = 1', async () => {
+  it('RT-01: поздний прогон ранжируется выше; рабочий состав берёт его, снимок E1 — только ранний даже при limit = 1', async () => {
     ids.runKj2 = await seedEvidenceRun(db.pool, ids.revKj!, { pages: [{ blocks: ['Бетон класса B30 для фундаментов монолитной плиты'] }] });
     await buildIndex(db, worker);
     const v = (await getActiveVersion(db.pool))!;

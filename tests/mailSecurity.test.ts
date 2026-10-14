@@ -58,7 +58,7 @@ describe('видимость письма: ящик × тендер × связ�
     unlinked = (await importEml(s.eng1, worker, m.boxA, eml({ messageId: 'free@example.test', subject: 'Без связи', text: 'Письмо без связи с тендером' }))).messageId!;
   });
 
-  it('1. письмо без связи и без mail.read — невидимо: ни письма, ни ящика, ни списка тендера', async () => {
+  it('1. A35: письмо без связи и без mail.read — невидимо: ни письма, ни ящика, ни списка тендера', async () => {
     expect((await s.eng2.get(`/mail-messages/${unlinked}`)).status).toBe(404);
     expect((await s.eng2.get(`/mailboxes/${m.boxA}/messages`)).status).toBe(404);
     expect(ids(await s.eng2.get(`/tenders/${s.tenderA}/mail-messages`))).not.toContain(unlinked);
@@ -189,7 +189,7 @@ describe('импорт: идемпотентность, ревизии, хран
     expect(first.body.body.map((x: { text: string }) => x.text).join('\n')).toContain('Первая редакция');
   });
 
-  it('13. одинаковое вложение у двух писем: байты хранятся раз, доступ не объединяется', async () => {
+  it('13. A35: одинаковое вложение у двух писем: байты хранятся раз, доступ не объединяется', async () => {
     const same = Buffer.from('Общий файл;1\n', 'utf8');
     const a = await importEml(s.eng1, worker, m.boxA, eml({ subject: 'Вложение A', text: 'a', attachments: [{ name: 'общий.csv', type: 'text/csv', bytes: same }] }));
     const b = await importEml(s.eng3, worker, m.boxB, eml({ subject: 'Вложение B', text: 'b', attachments: [{ name: 'общий.csv', type: 'text/csv', bytes: same }] }));

@@ -21,3 +21,9 @@ export const freshWorkerCount = async (db: Queryable, staleSeconds: number): Pro
   );
   return r.rows[0]?.n ?? 0;
 };
+
+// Штатная остановка: своя строка перестаёт быть свежей сразу, иначе /ready ещё workerStaleSeconds
+// показывал бы готовность по экземпляру, которого уже нет (этап 17, S17-06). Строка не удаляется.
+export const retireHeartbeat = async (db: Queryable, processId: string): Promise<void> => {
+  await db.query('UPDATE process_heartbeat SET last_seen_at = to_timestamp(0) WHERE process_id = $1', [processId]);
+};

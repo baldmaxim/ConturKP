@@ -1,42 +1,51 @@
 // Процесс server: API, раздача интерфейса, health/readiness (ADR-001 §6, ADR-011 §4).
-import { createServer as createHttpServer } from 'node:http';
-import { createServer as createHttpsServer } from 'node:https';
-import { ConfigError, loadConfig, readTls } from '@kontur/config';
+// Остановка и коды выхода — общий модуль жизненного цикла (этап 17, проект §3.4).
+import { ConfigError, EXIT_FATAL, installShutdown, loadConfig } from '@kontur/config';
 import { checkSchema, createPool } from '@kontur/db';
 import { createApp } from './app.ts';
+import { closeListener, createListener } from './listen.ts';
 
 const log = (message: string): void => console.log(`${new Date().toISOString()} [server] ${message}`);
 
 const main = async (): Promise<void> => {
   const config = loadConfig();
-  const pool = createPool(config.databaseUrl);
+  const pool = createPool(config.databaseUrl, 10, log);
   const schema = await checkSchema(pool);
   if (!schema.ok) {
     log(`схема БД не совпадает с кодом: ${schema.problem}. Выполните npm run db:migrate`);
     await pool.end();
-    process.exit(3);
+    process.exitCode = 3;
+    return;
   }
   const app = createApp({ config, pool });
-  const server = config.tls ? createHttpsServer(readTls(config.tls), app) : createHttpServer(app);
+  const server = createListener(config, app);
+  server.on('error', (err) => {
+    log(`прослушивание невозможно: ${err.message}`);
+    process.exitCode = EXIT_FATAL;
+    void pool.end();
+  });
   server.listen(config.httpPort, config.httpHost, () => {
     log(`слушает ${config.tls ? 'https' : 'http'}://${config.httpHost}:${config.httpPort} (режим ${config.env}, схема ${schema.dbVersion})`);
   });
-  const stop = (signal: string): void => {
-    log(`остановка по ${signal}`);
-    server.close(() => {
-      void pool.end().then(() => process.exit(0));
-    });
-    setTimeout(() => process.exit(0), 5000).unref();
-  };
-  process.on('SIGINT', () => stop('SIGINT'));
-  process.on('SIGTERM', () => stop('SIGTERM'));
+  const graceMs = config.shutdownGraceSeconds * 1000;
+  installShutdown({
+    name: 'server',
+    graceMs,
+    log,
+    stop: async () => {
+      await closeListener(server, graceMs - 2000);
+      await pool.end();
+      return true;
+    },
+  });
 };
 
 main().catch((err: unknown) => {
   if (err instanceof ConfigError) {
     for (const p of err.problems) log(`конфигурация: ${p}`);
-    process.exit(2);
+    process.exitCode = 2;
+    return;
   }
   log(`ошибка запуска: ${err instanceof Error ? err.message : 'unknown'}`);
-  process.exit(1);
+  process.exitCode = 1;
 });

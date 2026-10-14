@@ -4,5 +4,6 @@
 export interface IOfficeConverter {
   readonly name: 'libreoffice';
   version(): Promise<string>;
-  toPdf(bytes: Buffer, ext: 'docx' | 'xlsx' | 'doc'): Promise<Buffer>;
+  // signal — остановка задания: процесс конвертера завершается, а не остаётся сиротой (этап 17, S17-19).
+  toPdf(bytes: Buffer, ext: 'docx' | 'xlsx' | 'doc', signal?: AbortSignal): Promise<Buffer>;
 }

@@ -58,9 +58,9 @@ const prepareProfile = async (dir: string): Promise<string> => {
   return pathToFileURL(profile).href;
 };
 
-const run = (file: string, args: string[], timeoutMs: number, env: NodeJS.ProcessEnv): Promise<{ stdout: string; stderr: string }> =>
+const run = (file: string, args: string[], timeoutMs: number, env: NodeJS.ProcessEnv, signal?: AbortSignal): Promise<{ stdout: string; stderr: string }> =>
   new Promise((resolve, reject) => {
-    execFile(file, args, { timeout: timeoutMs, env, windowsHide: true, maxBuffer: 4 * 1024 * 1024 }, (err, stdout, stderr) => {
+    execFile(file, args, { timeout: timeoutMs, env, windowsHide: true, maxBuffer: 4 * 1024 * 1024, ...(signal ? { signal } : {}) }, (err, stdout, stderr) => {
       if (err) reject(Object.assign(err, { stdout, stderr }));
       else resolve({ stdout: String(stdout), stderr: String(stderr) });
     });
@@ -93,7 +93,7 @@ export class LibreOfficeConverter implements IOfficeConverter {
     }
   }
 
-  async toPdf(bytes: Buffer, ext: 'docx' | 'xlsx' | 'doc'): Promise<Buffer> {
+  async toPdf(bytes: Buffer, ext: 'docx' | 'xlsx' | 'doc', signal?: AbortSignal): Promise<Buffer> {
     const dir = await mkdtemp(join(tmpdir(), 'kontur-lo-'));
     try {
       const input = join(dir, `document.${ext}`);
@@ -105,6 +105,7 @@ export class LibreOfficeConverter implements IOfficeConverter {
           ['--headless', '--norestore', '--nologo', '--nolockcheck', '--nodefault', `-env:UserInstallation=${profile}`, '--convert-to', 'pdf', '--outdir', dir, input],
           this.timeoutMs,
           { ...process.env, HOME: dir },
+          signal,
         );
       } catch (err) {
         const e = err as Error & { killed?: boolean; stderr?: string };

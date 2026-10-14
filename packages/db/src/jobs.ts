@@ -291,16 +291,54 @@ export const requeueJob = async (
     return true;
   });
 
+// Возврат задания самим владельцем без результата (этап 17, проект §3.1): штатная остановка worker или
+// нехватка места в хранилище. Тот же протокол, что у requeueJob: слот → задание, владение подтверждается
+// до любой записи, слот освобождается сразу. Попытка может возвращаться: захват уже увеличил attempts, а
+// остановка службы — не ошибка задания. Устаревший владелец получает false и ничего не меняет (R03-13).
+export const releaseJob = async (
+  db: Queryable,
+  job: Pick<IJobRow, 'id'>,
+  token: string,
+  o: { code: string; message: string; delayMs: number; refundAttempt: boolean },
+): Promise<boolean> =>
+  inTransaction(db, async (client) => {
+    const own = await lockOwnership(client, job.id, token);
+    if (!own.ok) return false;
+    if (own.gpu) await releaseSlot(client, job.id, token);
+    await client.query(
+      `UPDATE job SET status = 'queued', lease_token = NULL, locked_by = NULL, locked_until = NULL,
+              run_after = now() + make_interval(secs => $3::double precision / 1000),
+              attempts = CASE WHEN $6::boolean THEN GREATEST(attempts - 1, 0) ELSE attempts END,
+              last_error_code = $4, last_error_message = $5, updated_at = now()
+        WHERE id = $1 AND lease_token = $2`,
+      [job.id, token, o.delayMs, o.code, o.message.slice(0, 500), o.refundAttempt],
+    );
+    return true;
+  });
+
 // Recovery-проход: задания с истёкшей арендой возвращаются в очередь, токен обнуляется (A15).
 // Слот GPU не освобождается: новый захват слота возможен только после защитного интервала.
-export const recoverExpiredJobs = async (db: Queryable): Promise<string[]> => {
+// exceptIds — задания, которые этот же экземпляр worker сейчас выполняет: heartbeat задания многошаговый и
+// мог бы проиграть одиночному UPDATE после долгого синхронного участка — worker отобрал бы задание сам у себя.
+// Чужие экземпляры такие задания восстанавливают как раньше.
+export const recoverExpiredJobs = async (db: Queryable, exceptIds: readonly string[] = []): Promise<string[]> => {
   const r = await db.query<{ id: string }>(
     `UPDATE job SET status = 'queued', lease_token = NULL, locked_by = NULL, locked_until = NULL, updated_at = now(),
             last_error_code = coalesce(last_error_code, 'lease_expired')
-      WHERE status = 'running' AND locked_until < now()
+      WHERE status = 'running' AND locked_until < now() AND NOT (id = ANY($1::uuid[]))
       RETURNING id`,
+    [exceptIds],
   );
   return r.rows.map((x) => x.id);
+};
+
+// Признак для /ready: задания running, чья аренда просрочена дольше порога, — recovery не идёт.
+export const staleRunningJobs = async (db: Queryable, overdueSeconds: number): Promise<number> => {
+  const r = await db.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM job WHERE status = 'running' AND locked_until < now() - make_interval(secs => $1::double precision)`,
+    [overdueSeconds],
+  );
+  return r.rows[0]?.n ?? 0;
 };
 
 // Отмена: queued — сразу; running — флаг, подтверждает действующий владелец или следующий захват.
@@ -321,4 +359,13 @@ export const requestCancel = async (db: Queryable, id: string): Promise<JobStatu
 export const getJob = async (db: Queryable, id: string): Promise<IJobRow | null> => {
   const r = await db.query<IJobRow>('SELECT * FROM job WHERE id = $1', [id]);
   return r.rows[0] ?? null;
+};
+
+// Слот GPU занят живой арендой: проба модели в это время не запускается (этап 17, S17-07). Без блокировки —
+// только чтение; захват слота заданием и так сериализован FOR UPDATE в claimJob.
+export const gpuSlotBusy = async (db: Queryable): Promise<boolean> => {
+  const r = await db.query<{ busy: boolean }>(
+    "SELECT (holder_job_id IS NOT NULL AND locked_until > now()) AS busy FROM resource_slot WHERE slot_key = 'gpu'",
+  );
+  return r.rows[0]?.busy ?? false;
 };

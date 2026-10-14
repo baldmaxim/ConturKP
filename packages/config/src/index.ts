@@ -3,6 +3,8 @@
 import { readFileSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 
+export * from './lifecycle.ts';
+
 const MIB = 1024 * 1024;
 
 export type KonturEnv = 'development' | 'test' | 'production';
@@ -61,8 +63,11 @@ export interface ISearchConfig {
   indexBuildUnitsPerBatch: number;
   // Проход обслуживания worker: просроченные прогоны, задания индексации, активация, удаление.
   maintenanceIntervalMs: number;
-  // Проверка доступности модели и пробного вектора (отпечаток).
+  // Проверка доступности модели и пробного вектора (отпечаток). Проба — настоящий запрос к модели:
+  // у LM Studio он загружает модель и продлевает её срок в памяти, поэтому редко (этап 17, S17-07).
   modelCheckIntervalMs: number;
+  // Повтор пробы, пока модель недоступна: такой запрос модель не загружает.
+  modelRetryIntervalMs: number;
 }
 
 // TenderHub (этап 06, ADR-007 §5–8): только чтение официального API по X-API-Key. Ключ живёт
@@ -175,6 +180,8 @@ export interface IAppConfig {
   intakeStabilitySeconds: number;
   jobLeaseSeconds: number;
   gpuTakeoverGraceSeconds: number;
+  // Срок штатной остановки процесса (этап 17, проект §3.4); stoptimeout службы — не меньше срока + 10 с.
+  shutdownGraceSeconds: number;
   recognition: IRecognitionLimits;
   embedding: IEmbeddingConfig;
   search: ISearchConfig;
@@ -266,6 +273,10 @@ export const CONFIG_KEYS: IConfigKey[] = [
   { name: 'MAILHUB_TOKEN', secret: true, required: false, purpose: 'интеграция MailHub (этап 07)' },
   // Этап 14 (D-034): Яндекс Диск — локальная синхронизируемая папка, сетевая папка — права учётной записи службы worker;
   // токена и пароля нет (YANDEX_DISK_TOKEN, SMB_USERNAME, SMB_PASSWORD убраны). Пути назначений — в БД, задаёт администратор.
+  // Этап 17: остановка служб и очередь.
+  { name: 'SHUTDOWN_GRACE_SECONDS', secret: false, required: false, purpose: 'срок штатной остановки server и worker, по умолчанию 20; stoptimeout службы — на 10 с больше' },
+  { name: 'GPU_TAKEOVER_GRACE_SECONDS', secret: false, required: false, purpose: 'защитный интервал перехвата слота GPU после аренды, по умолчанию 180; не меньше таймаута модели + 30' },
+  { name: 'EMBEDDING_PROBE_INTERVAL_SECONDS', secret: false, required: false, purpose: 'период пробы модели эмбеддингов, пока она отвечает, по умолчанию 3600 (проба загружает модель в LM Studio)' },
   { name: 'DELIVERY_OPERATION_TIMEOUT_SECONDS', secret: false, required: false, purpose: 'срок одной файловой операции размещения, по умолчанию 60' },
   // Этап 16 (ADR-010): точка /mcp для чат-клиентов. Токены выпускают пользователи в портале; в настройках их нет.
   { name: 'MCP_ENABLED', secret: false, required: false, purpose: 'включить MCP-сервер портала (true / false), по умолчанию false' },
@@ -505,7 +516,8 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
       .filter(Boolean),
     intakeStabilitySeconds: intFrom(env, 'INTAKE_STABILITY_SECONDS', 10, problems),
     jobLeaseSeconds: intFrom(env, 'JOB_LEASE_SECONDS', 60, problems),
-    gpuTakeoverGraceSeconds: 120,
+    gpuTakeoverGraceSeconds: intFrom(env, 'GPU_TAKEOVER_GRACE_SECONDS', 180, problems),
+    shutdownGraceSeconds: intFrom(env, 'SHUTDOWN_GRACE_SECONDS', 20, problems),
     recognition: {
       maxMetadataBytes: intFrom(env, 'RECOGNITION_MAX_METADATA_MB', 64, problems) * MIB,
       maxMetadataTotalBytes: intFrom(env, 'RECOGNITION_MAX_METADATA_TOTAL_MB', 128, problems) * MIB,
@@ -518,7 +530,8 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
       semanticDeadlineMs: intFrom(env, 'SEARCH_SEMANTIC_DEADLINE_SECONDS', 60, problems) * 1000,
       indexBuildUnitsPerBatch: 5,
       maintenanceIntervalMs: 5000,
-      modelCheckIntervalMs: 60_000,
+      modelCheckIntervalMs: intFrom(env, 'EMBEDDING_PROBE_INTERVAL_SECONDS', 3600, problems) * 1000,
+      modelRetryIntervalMs: 60_000,
     },
     tenderhub: tenderhubFrom(env, problems),
     localRecognition: localRecognitionFrom(env, problems),
@@ -555,6 +568,12 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
   }
   if (m.provider === 'fake' && config.env === 'production') problems.push('MODEL_PROVIDER=fake в production запрещён: поддельная модель не рабочая');
   if (m.maxInputChars < 500) problems.push('MODEL_MAX_INPUT_CHARS не меньше 500');
+  // ADR-004 §7: перехват слота GPU — только когда шаг прежнего держателя заведомо закончился (S17-08).
+  const longestModelStepSeconds = Math.ceil(Math.max(m.timeoutMs, e.timeoutMs) / 1000);
+  if (config.gpuTakeoverGraceSeconds < longestModelStepSeconds + 30) {
+    problems.push(`GPU_TAKEOVER_GRACE_SECONDS не меньше ${longestModelStepSeconds + 30}: наибольший таймаут модели (${longestModelStepSeconds} с) плюс 30 с`);
+  }
+  if (config.shutdownGraceSeconds < 5) problems.push('SHUTDOWN_GRACE_SECONDS не меньше 5');
   if (problems.length > 0) throw new ConfigError(problems);
   return config;
 };

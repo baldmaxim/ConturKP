@@ -12,8 +12,18 @@ export type Pool = pg.Pool;
 export type PoolClient = pg.PoolClient;
 export type Queryable = Pick<pg.Pool, 'query'> | Pick<pg.PoolClient, 'query'>;
 
-export const createPool = (connectionString: string, max = 10): pg.Pool =>
-  new pg.Pool({ connectionString, max, application_name: 'kontur-kp' });
+// Обрыв соединения (перезапуск PostgreSQL, сеть) не должен ронять процесс (этап 17, S17-02): ошибку
+// простаивающего клиента pg-pool отдаёт событием пула, а у выданного клиента собственного слушателя нет —
+// pg шлёт `error` на клиенте. Запрос и так завершается отказом, а клиент с ошибкой выбрасывается при release.
+export const createPool = (connectionString: string, max = 10, onError?: (message: string) => void): pg.Pool => {
+  const pool = new pg.Pool({ connectionString, max, application_name: 'kontur-kp', keepAlive: true });
+  const report = (err: Error): void => onError?.(`соединение с БД: ${err.message}`);
+  pool.on('error', report);
+  pool.on('connect', (client) => {
+    client.on('error', report);
+  });
+  return pool;
+};
 
 export const withTransaction = async <T>(pool: pg.Pool, fn: (client: pg.PoolClient) => Promise<T>): Promise<T> => {
   const client = await pool.connect();

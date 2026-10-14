@@ -143,8 +143,10 @@ const previewOf = async (
 ): Promise<{ pdf: Buffer; pages: number; fonts: string[] }> => {
   let pdf: Buffer;
   try {
-    pdf = format === 'pdf' ? bytes : await converter.toPdf(bytes, format);
+    pdf = format === 'pdf' ? bytes : await converter.toPdf(bytes, format, ctx.signal);
   } catch (err) {
+    // Конвертация прервана остановкой, отменой или потерей аренды — это не отказ сборки.
+    ctx.throwIfStopped();
     if (err instanceof OfficeError) throw new AssemblyFailure(err.code, `${path}: ${err.message}`);
     throw err;
   }

@@ -1,10 +1,12 @@
-// /health — процесс жив; /ready — БД, версия схемы, хранилище, heartbeat worker (ADR-011 §4).
+// /health — процесс жив; /ready — БД, версия схемы, хранилище, heartbeat worker (ADR-011 §4) и ход очереди:
+// задание running с арендой, просроченной дольше двух аренд, значит, recovery не идёт (этап 17, S17-06).
+// Heartbeat worker пишется только при живости всех его циклов.
 // Ответ содержит только признаки готовности, без путей, адресов и значений конфигурации.
 import { randomUUID } from 'node:crypto';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { IAppConfig } from '@kontur/config';
-import { checkSchema, freshWorkerCount, type Pool } from '@kontur/db';
+import { checkSchema, freshWorkerCount, staleRunningJobs, type Pool } from '@kontur/db';
 import { physicalPath } from '@kontur/storage';
 import { Router } from 'express';
 
@@ -54,7 +56,13 @@ export const healthRouter = (config: IAppConfig, pool: Pool): Router => {
           return n > 0 ? { ok: true, detail: 'heartbeat свежий' } : { ok: false, detail: `нет heartbeat за ${config.workerStaleSeconds} с` };
         }, 'не удалось проверить')
       : { ok: false, detail: 'БД недоступна' };
-    const checks = { database, schema, storage, worker };
+    const queue = database.ok
+      ? await safe(async () => {
+          const n = await staleRunningJobs(pool, config.jobLeaseSeconds * 2);
+          return n === 0 ? { ok: true, detail: 'аренды заданий продлеваются' } : { ok: false, detail: 'есть задания с давно истёкшей арендой: recovery не идёт' };
+        }, 'не удалось проверить')
+      : { ok: false, detail: 'БД недоступна' };
+    const checks = { database, schema, storage, worker, queue };
     const ready = Object.values(checks).every((c) => c.ok);
     res.status(ready ? 200 : 503).json({ ready, checks });
   });

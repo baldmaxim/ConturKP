@@ -1,5 +1,5 @@
 // Причина сетевого отказа для пользователя и журнала (этап 17, проект §7.1, спецификация §12 «источник ошибки виден»):
-// fetch (undici) кладёт код ОС в err.cause.code. Адресов, ключей и тел здесь нет — только класс причины и код.
+// Встроенный HTTP-клиент Node (undici) кладёт код ОС в err.cause.code. Адресов, ключей и тел здесь нет — только класс причины и код.
 export type NetworkCause = 'dns' | 'refused' | 'timeout' | 'reset' | 'tls' | 'network';
 
 const TLS_RE = /^(CERT_|UNABLE_TO_VERIFY|DEPTH_ZERO_SELF_SIGNED|SELF_SIGNED_CERT|ERR_TLS_|ERR_SSL_)/u;

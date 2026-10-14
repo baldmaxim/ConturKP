@@ -80,10 +80,10 @@ export const scheduleCalculationCaptures = async (pool: Pool, config: IAppConfig
 // без успешного локального прогона и без прогона текущей идентичности. PDF с политикой auto сюда
 // не попадает никогда — его распознаёт только явная команда (OD-1).
 export const scheduleLocalRecognition = async (
-pool: Pool,
-config: IAppConfig,
-localOcr: ILocalOcrEngineFactory | null,
-log: (line: string) => void,
+  pool: Pool,
+  config: IAppConfig,
+  localOcr: ILocalOcrEngineFactory | null,
+  log: (line: string) => void,
 ): Promise<number> => {
   const settings = localSettings(config, localOcr);
   const formats: LocalInputFormat[] = ['pdf', 'docx', 'xlsx', 'csv'];

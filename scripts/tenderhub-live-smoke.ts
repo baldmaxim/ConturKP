@@ -26,7 +26,7 @@ import {
   type IRawResponse,
   type ITenderHubError,
 } from '../packages/adapters/src/index.ts';
-import { loadTenderHubConfig } from '../packages/config/src/index.ts';
+import { buildId, loadTenderHubConfig } from '../packages/config/src/index.ts';
 import { argValue, fail } from './cli.ts';
 import {
   collectSensitive,
@@ -85,6 +85,8 @@ const finish = (sections: Section[], status: 'PASS' | 'FAIL' | 'NOT_RUN', sensit
   const final = safe.redacted > 0 && status === 'PASS' ? 'FAIL' : status;
   const text = [
     `# tenderhub live-smoke — ${new Date().toISOString()}`,
+    // Этап 17: режим и сборка — для записи живой проверки в базу установки (ops:integration-verify).
+    `# Режим: LIVE; Сборка: ${buildId() ?? 'не задана'}`,
     `# адаптер ${TENDERHUB_CONTRACT_VERSION}; только GET; ключ, данные тендера и сырые ответы не записываются`,
     ...safe.lines,
     '## 10. Безопасность журнала',

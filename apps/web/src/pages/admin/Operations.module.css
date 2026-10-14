@@ -1,0 +1,71 @@
+/* Состояние установки (этап 17): от 360 px — одна колонка карточек; от 768 px — две; от 1280 px — три.
+   Таблицы прокручиваются внутри своей обёртки, страница — без горизонтальной прокрутки. Цвета — только токены темы. */
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.plain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+
+.problem {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 768px) {
+  .mobileOnly {
+    display: none;
+  }
+
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

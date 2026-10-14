@@ -5,6 +5,7 @@
 // без темы, адресов, тела, имён файлов и вложений. Ни путь к файлу, ни его имя в журнал не пишутся.
 // Запуск: node scripts/real-eml-check.mjs <письмо.eml> → artifacts/stage-07/real-eml-check.log (REAL_EML_LOG — другой путь)
 // Требует: npm run build не нужен; PostgreSQL ≥ 17 с pgvector (KONTUR_TEST_ADMIN_URL).
+import { buildId } from '../packages/config/src/index.ts';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
@@ -335,7 +336,7 @@ const summary = `Итог: ${failed ? 'FAIL' : 'PASS'}`;
 writeFileSync(
   logPath,
   `# real-eml-check — ${new Date().toISOString()}, Node ${process.version}, PostgreSQL ${ADMIN.replace(/\/\/[^@]*@/u, '//***@')}, настоящие server + worker, временная база ${DB}\n` +
-    `# в журнале нет темы, адресов, тела, имён файлов и вложений письма (Review 07-1)\n${lines.join('\n')}\n${summary}\n`,
+    `# в журнале нет темы, адресов, тела, имён файлов и вложений письма (Review 07-1)\n# Режим: LIVE; Сборка: ${buildId() ?? 'не задана'}\n${lines.join('\n')}\n${summary}\n`,
 );
 console.log(summary);
 process.exit(failed ? 1 : 0);

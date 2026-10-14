@@ -13,6 +13,7 @@
 // --fixture — прогон на временных папках (smoke): журнал помечается FIXTURE, это не живая проверка.
 // В журнал — коды, относительные пути папок проверки и хэши; полных путей пользователя нет.
 // Код выхода: 0 — PASS (оба назначения), 1 — FAIL, 3 — NOT_RUN (назначение не настроено; второе — PASS или не настроено).
+import { buildId } from '../packages/config/src/index.ts';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { userInfo } from 'node:os';
@@ -206,6 +207,7 @@ const run = async (): Promise<number> => {
   const text = [
     `# npm run delivery:live-smoke — ${new Date().toISOString()}`,
     `# Режим: ${FIXTURE ? 'FIXTURE (временные папки, не живая проверка)' : 'LIVE (настоящие назначения)'}; Node ${process.version}, ${process.platform}`,
+    `# Сборка: ${buildId() ?? 'не задана'}`,
     ...lines,
     `Итог: ${final}`,
     '',

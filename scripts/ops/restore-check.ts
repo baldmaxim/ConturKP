@@ -35,6 +35,16 @@ const run = (file: string, args: string[]) =>
     execFile(file, args, { windowsHide: true, timeout: 60_000 }, (err, stdout) => done({ code: err ? (typeof err.code === 'number' ? err.code : null) : 0, stdout: String(stdout) }));
   });
 
+interface ISearchView {
+  searchRunId: string;
+  status: string;
+  incomplete?: boolean;
+  scope?: { chunksWithoutVectors?: number };
+  semantic?: { status: string; reason: string | null };
+  lexical?: { items: unknown[] } | null;
+  fused?: { items: unknown[] } | null;
+}
+
 const stamp = (): string => new Date().toISOString().replace(/[-:T]/gu, '').slice(0, 12);
 
 const main = async (): Promise<number> => {
@@ -93,12 +103,26 @@ const main = async (): Promise<number> => {
     MCP_ENABLED: 'false',
     WORKER_MODE: 'restore_check',
   });
-  const worker = startNode('worker', 'apps/worker/src/main.ts', { cwd: ROOT, env: childEnv });
+  // Сначала только server: первый поиск идёт до запуска worker, пока векторы не достроены, — смысловая ветка
+  // обязана честно отказать (A42). Затем worker: /ready и достройка векторов.
   const server = startNode('server', 'apps/server/src/main.ts', { cwd: ROOT, env: childEnv });
-  try {
+  let worker: ReturnType<typeof startNode> | null = null;
+  const startWorker = async (): Promise<boolean> => {
+    if (worker) return true;
+    worker = startNode('worker', 'apps/worker/src/main.ts', { cwd: ROOT, env: childEnv });
     const ready = await waitReady(base, 60_000);
-    record('server и worker на копии — /ready', ready.ok, JSON.stringify((ready.body as { checks?: unknown } | null)?.checks ?? null));
-    if (!ready.ok) return 1;
+    record('worker на копии — /ready', ready.ok, JSON.stringify((ready.body as { checks?: unknown } | null)?.checks ?? null));
+    return ready.ok;
+  };
+  try {
+    let health = 0;
+    const healthUntil = Date.now() + 60_000;
+    while (health !== 200 && Date.now() < healthUntil) {
+      health = await fetch(`${base}/api/v1/health`).then((x) => x.status).catch(() => 0);
+      if (health !== 200) await sleep(500);
+    }
+    record('server на копии — /health', health === 200, `HTTP ${health}`);
+    if (health !== 200) return 1;
 
     const release = await pool.query<{ id: string; tender_id: string; stage_id: string; manifest_sha256: string }>(
       'SELECT id, tender_id, stage_id, release_manifest_blob_sha256 AS manifest_sha256 FROM release ORDER BY released_at DESC LIMIT 1',
@@ -121,10 +145,18 @@ const main = async (): Promise<number> => {
         record('манифест выпуска совпадает по SHA-256', manifest.status === 200 && sha === rel.manifest_sha256, `HTTP ${manifest.status}, SHA-256 ${sha}`);
       }
       // Цитата и поиск — в тендере выпуска, а без выпусков — в тендере, где --login участник (не зависят от выпуска).
+      // Поиск режима working ищет по рабочему составу этапа: фрагмент берётся из документа, включённого в последнюю
+      // ревизию этого состава, — иначе область пуста и «найдено 0» ничего не говорит о копии.
       const frag = await pool.query<{ id: string; text: string; tender_id: string; stage_id: string }>(
         `SELECT f.id, f.text, f.tender_id, s.id AS stage_id
            FROM evidence_fragment f
            JOIN tender_stage s ON s.tender_id = f.tender_id
+           JOIN LATERAL (
+             SELECT r.id FROM source_set_revision r JOIN source_set ss ON ss.id = r.source_set_id
+              WHERE ss.stage_id = s.id AND ss.purpose = 'working' ORDER BY r.seq DESC LIMIT 1
+           ) w ON true
+           JOIN source_set_item i ON i.source_set_revision_id = w.id AND i.document_revision_id = f.document_revision_id
+                                 AND i.inclusion <> 'excluded_not_applicable'
           WHERE length(f.text) > 20
             AND ($1::uuid IS NULL OR f.tender_id = $1)
             AND EXISTS (SELECT 1 FROM tender_member m JOIN app_user u ON u.id = m.user_id WHERE m.tender_id = f.tender_id AND u.login = $2 AND m.removed_at IS NULL)
@@ -133,19 +165,30 @@ const main = async (): Promise<number> => {
       );
       const f = frag.rows[0];
       if (!f) {
-        record('цитата и поиск', null, `у ${login} нет тендера с распознанным текстом в копии`);
+        record('цитата и поиск', null, `у ${login} нет этапа с распознанным документом в рабочем составе`);
       } else {
         const cite = await api.call(`/evidence/${f.id}`);
         record('цитата открывается', cite.status === 200, `HTTP ${cite.status}`);
         const words = f.text.split(/\s+/u).filter((w) => w.length >= 4).slice(0, 3).join(' ');
         const body = { context: { kind: 'tender', tenderId: f.tender_id, mode: 'working', stageId: f.stage_id }, query: words, limit: 5 };
-        const first = (await (await api.call('/search', { method: 'POST', body, headers: { 'Idempotency-Key': `restore-${stamp()}-1` } })).json()) as {
-          semantic?: { status: string; reason: string | null };
-          lexical?: { items: unknown[] } | null;
-          fused?: { items: unknown[] } | null;
+        // Прогон поиска асинхронен: смысловая ветка может ждать задания. Итог — по GET /search-runs/{id}.
+        const search = async (key: string): Promise<ISearchView> => {
+          let view = (await (await api.call('/search', { method: 'POST', body, headers: { 'Idempotency-Key': key } })).json()) as ISearchView;
+          const until = Date.now() + 120_000;
+          while (view.status === 'pending' && Date.now() < until) {
+            await sleep(500);
+            view = (await (await api.call(`/search-runs/${view.searchRunId}`)).json()) as ISearchView;
+          }
+          return view;
         };
+        const first = await search(`restore-${stamp()}-1`);
         const hits = (first.fused?.items ?? first.lexical?.items ?? []).length;
-        record('поиск на копии: точный и полнотекстовый', hits > 0, `найдено ${hits}; смысловой — ${first.semantic?.status} (${first.semantic?.reason ?? '—'})`);
+        record(
+          'поиск на копии до достройки векторов: точный и полнотекстовый находят, смысловой недоступен',
+          hits > 0 && first.semantic?.status === 'unavailable',
+          `найдено ${hits}; прогон ${first.status}; смысловой — ${first.semantic?.status} (${first.semantic?.reason ?? '—'})`,
+        );
+        if (!(await startWorker())) return 1;
         const vectorsWanted = (env.EMBEDDING_PROVIDER ?? 'none') !== 'none';
         if (!vectorsWanted) {
           record('достройка векторов', null, 'модель эмбеддингов не настроена: смысловая ветка останется недоступной (index_without_embeddings / index_vectors_missing)');
@@ -162,13 +205,18 @@ const main = async (): Promise<number> => {
             if (missing === 0) break;
             await sleep(5000);
           }
-          const again = (await (await api.call('/search', { method: 'POST', body, headers: { 'Idempotency-Key': `restore-${stamp()}-2` } })).json()) as { semantic?: { status: string } };
-          record('достройка векторов и смысловой поиск', missing === 0 && again.semantic?.status !== 'unavailable', `без векторов осталось ${missing}; смысловой — ${again.semantic?.status}`);
+          const again = await search(`restore-${stamp()}-2`);
+          record(
+            'достройка векторов и смысловой поиск',
+            missing === 0 && again.semantic?.status === 'complete' && !again.incomplete,
+            `без векторов осталось ${missing}; прогон ${again.status}; смысловой — ${again.semantic?.status}; неполный — ${again.incomplete ? 'да' : 'нет'}`,
+          );
         }
       }
     }
+    if (!(await startWorker())) return 1;
   } finally {
-    const codes = await Promise.all([stopNode(server, 30_000), stopNode(worker, 30_000)]);
+    const codes = await Promise.all([stopNode(server, 30_000), ...(worker ? [stopNode(worker, 30_000)] : [])]);
     record('штатная остановка server и worker по IPC', codes.every((c) => c === 0), `коды выхода ${codes.join(', ')}`);
     await pool.end().catch(() => undefined);
   }

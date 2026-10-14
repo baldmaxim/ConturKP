@@ -229,6 +229,17 @@ const main = async (): Promise<void> => {
     const d = dup.rows[0] as { runs: number; frags: number; keys: number };
     record('задание восстановлено после аренды и выполнено один раз', finished === 'complete' && d.runs === 1 && d.frags === d.keys && d.frags > 0, `итог ${finished}, прогонов ${d.runs}, фрагментов ${d.frags}`);
 
+    // Документ — в рабочий состав этапа: поиск режима working ищет только по составу, иначе проверка поиска на копии
+    // видит пустую область.
+    const draft = await api2.call(`/stages/${stageId}/source-set-revisions`, { method: 'POST', body: {}, headers: { 'Idempotency-Key': `reh-${randomBytes(6).toString('hex')}` } });
+    const draftId = ((await draft.json()) as { id?: string }).id;
+    const items = await api2.call(`/source-set-revisions/${draftId}/items`, {
+      method: 'PUT',
+      headers: { 'If-Match': draft.headers.get('etag') ?? '' },
+      body: { items: [{ documentRevisionId: revId, inclusion: 'included' }] },
+    });
+    record('документ включён в рабочий состав этапа', [200, 201].includes(draft.status) && items.status === 200, `HTTP ${draft.status}, ${items.status}`);
+
     const idle = await waitReady(base, 60_000);
     const pid = worker.child.pid;
     const t0 = Date.now();

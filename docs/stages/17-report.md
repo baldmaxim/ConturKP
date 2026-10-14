@@ -1,0 +1,306 @@
+# Этап 17 — сквозная надёжность и эксплуатация
+
+Дата: 2026-10-14
+Статус: **READY_FOR_REVIEW** — передача 17-1. Проверки у разработчика выполнены на синтетических данных: Linux, поддельные TenderHub и модель, без GPU, LM Studio и Windows. Установку на целевом ПК, службы, копию и восстановление там, живые интеграции и замеры выполняет ревьюер (решение владельца 2026-10-14, раздел «Передача»). До этих проверок ввод в эксплуатацию заблокирован (`docs/stages/17-acceptance-matrix.md`). Ответов владельца на вопросы D-040 (В-17-1…В-17-7) ещё нет. Это не разрешение боевого выпуска: Q-01/X-01, Q-05, Q-08 в силе.
+Базовый коммит: `8964017` (`main` = `stage-16`, этап 16 принят, D-039).
+Проверяемый коммит: коммит передачи 17-1 — последний в ветке `stage-17`; полный хэш — на странице передачи и в комментарии ZIP.
+Ветка: `stage-17` от `main`; в origin не отправлялась.
+Коммиты этапа:
+- `4226bed` — проект до кода;
+- `d4dfc8c` — осмотр целевого ПК;
+- `d455bca` — П1, жизненный цикл процессов;
+- `b68216b` — П2, копия и восстановление, миграция 0043;
+- `3715494` — репетиция эксплуатации;
+- `5b85b47` — П4, свободное место;
+- `e422280` — П5, деградация и статусы;
+- `da7c972` — П6, время;
+- `c9425e0` — П7, права по всем маршрутам;
+- `f88ba06` — П8, TLS;
+- `b16a7a2` — П9, состояние для администратора;
+- `d948733` — П10, службы Windows и runbook;
+- `e645ab6` — П11, матрица и замеры;
+- `c01a3e1` — smoke этапа и независимость проверки восстановления от выпуска;
+- `588cc4d` — разделение `runtime.ts`, исправление S17-21, удаление неиспользуемого пакета;
+- `fc7b599` — комментарий `netCause.ts`, на котором сработал сторож A38 в первом полном прогоне;
+- `e8b20f5` — эксплуатационные пункты в матрице приёмки;
+- `4dedecc` — проверка восстановления: первый поиск до запуска worker, поиск по рабочему составу этапа, итог прогона;
+- далее — документы, журналы и этот отчёт.
+
+Рабочее дерево: чистое после коммита передачи.
+Задание: `docs/spec/prompts/stage-17.md`. Решения: ADR-004, ADR-006, ADR-011, ADR-012; ответы владельца перед планом (2026-10-14, ниже). Проект: `docs/architecture/17-operations-design.md` (§20 — отличия реализации от проекта).
+Среда разработки: Ubuntu 26.04 (Linux x64, 8 vCPU, 31 ГБ), Node 24.14.1, PostgreSQL 18.6 с pgvector в контейнере `kontur-pg`, `pg_dump`/`pg_restore` 18.6, LibreOffice 26.2.6, Chromium headless без песочницы, Docker 29.8. GPU, LM Studio, mkcert и Windows нет.
+
+## Результат для пользователя
+
+- **Администратор → «Состояние».** Сборка и схема, процессы, очередь по видам, просроченные аренды, держатель слота GPU, свободное место, последняя копия и статусы интеграций. Данные обновляются каждые 15 с. На смартфоне — карточки, от 768 px — таблицы.
+- **Установка на Windows.** Runbook — `docs/runbooks/release.md`. Службы `kontur-server` и `kontur-worker` через WinSW: без окон, автозапуск, перезапуск после сбоя, журналы с ротацией (`npm run ops:service`). Осмотр ПК — `npm run ops:preflight`.
+- **Копия и проверка восстановления.** `npm run ops:backup` снимает согласованную копию базы и файлов с манифестом. `npm run ops:restore-check` восстанавливает её только в новую базу и пустой каталог. Затем проверяет хэши, исторический выпуск, цитату и поиск на запущенной копии. Поверх рабочей системы восстановить нельзя. Runbook — `docs/runbooks/backup-restore.md`, отчёт — `docs/stages/17-backup-restore-report.md`.
+- **Остановка и перезапуск.** Штатная остановка возвращает начатые задания в очередь без потери попытки и сразу освобождает GPU. Перезапуск PostgreSQL процессы переживают.
+- **Мало места.** Загрузка отвечает понятным отказом «нет места» (`507`), задания ждут, пока место не освободят. Порог предупреждения виден в `/ready` и на экране «Состояние».
+- **Сбои интеграций видны.** Отозванный ключ, сбой DNS, отказ соединения и тайм-аут показываются с причиной и без секретов. Статусы интеграций может прочитать любой вошедший пользователь.
+- **Время по Москве.** В диалогах регистрации отправки и нарушения время теперь вводится и показывается по МСК, а не в поясе браузера.
+- **HTTPS по IP.** Адрес — `https://<IP ПК>:3200`, сертификат mkcert; адрес чат-клиентов — `https://<IP>:3200/mcp`.
+- **Живая проверка в базе установки.** `npm run ops:integration-verify` записывает `VERIFIED_LIVE` только по журналу живой проверки этой сборки с итогом PASS.
+
+## Объём
+
+| Что | Где |
+|---|---|
+| проект | `docs/architecture/17-operations-design.md` |
+| миграция | `docs/migrations/0043_backup_restore.sql`: права `kontur_backup`, `search_path` функций ограничений |
+| жизненный цикл | `packages/config/src/lifecycle.ts`, `build.ts`; `packages/db/src/jobs.ts` (`releaseJob`, `recoverExpiredJobs`, `staleRunningJobs`), `pool.ts`, `heartbeat.ts`; `apps/worker/src/runtime.ts`, `jobTypes.ts`, `scheduling.ts`, `loopUtils.ts`, `main.ts`; `apps/server/src/listen.ts`, `main.ts` |
+| копия и восстановление | `packages/db/src/backup.ts`, `packages/storage/src/backup.ts`, `scripts/ops/pgTools.ts`, `backup*.ts`, `restore*.ts`, `procs.ts`, `rehearsal.ts` |
+| свободное место | `packages/storage/src/space.ts`; `507 STORAGE_FULL`; задание `storage_full` |
+| деградация | `packages/adapters/src/netCause.ts`; пределы ответов модели и эмбеддингов; `TRUNCATED`; задание `model.probe` (`apps/worker/src/handlers/modelProbe.ts`) |
+| состояние и статусы | `apps/server/src/routes/operations.ts`, `packages/db/src/integrations.ts`; `apps/web/src/pages/admin/OperationsPanel.tsx` |
+| живые проверки в базе установки | `scripts/ops/integration-verify*.ts`; шапки живых журналов |
+| время | `packages/core/src/portalTime.ts`; диалоги `apps/web/src/pages/send/` |
+| TLS | `packages/config/src/tls.ts`, `scripts/config-check.ts` |
+| Windows | `scripts/ops/preflight*.ts`, `service*.ts` |
+| приёмка и замеры | `tests/acceptance/cases.ts`, `scripts/ops/acceptance-*.ts`, `measure.ts`, `scripts/model-live-smoke.ts` |
+| runbook | `docs/runbooks/release.md`, `backup-restore.md`; обновлены `README.md`, `clean-start.md`, `docs/integrations/mcp-clients.md` |
+| тесты | `workerShutdown`, `gpuConcurrency`, `backupGrants`, `backupRestore`, `storageSpace`, `degradation`, `timeZones`, `routeAccess` (+ `routeInventory.ts`), `tls` (+ `tlsFixture.ts`), `integrationVerify`, `opsService`, `opsPreflight`, `acceptanceCases` |
+| smoke, интерфейс | `scripts/smoke-17.mjs`, `artifacts/stage-17/ui-check.mjs` |
+
+### Изменения существующего кода
+
+| Файл | Причина |
+|---|---|
+| `apps/worker/src/runtime.ts` | остановка с возвратом заданий, реестр активных, четыре цикла, живость, защита шлюзов модели, место; типы, планирование и утилиты вынесены — файл короче 500 строк |
+| `apps/worker/src/main.ts`, `apps/server/src/main.ts` | общий модуль жизненного цикла, коды выхода, снятие своей отметки heartbeat |
+| `apps/server/src/routes/health.ts` | `/ready`: ход очереди и уровень места |
+| `apps/server/src/app.ts`, `http/command.ts`, `http/errors.ts`, `http/upload.ts` | `413` для тела JSON, `507 STORAGE_FULL`, ранняя проверка места загрузки, маршруты эксплуатации |
+| `apps/worker/src/handlers/answer.ts`, `candidates.ts`, `index.ts`; `office/libreoffice.ts` | неполнота смысловой ветки, остановка при конвертации, `model.probe` |
+| `packages/db/src/searchService.ts`, `searchIndex.ts`, `reviewInputs.ts`; `apps/server/src/searchMappers.ts` | честность смысловой ветки по области (S17-09), дата вопроса по МСК (S17-16) |
+| `packages/adapters/src/model/*`, `embeddings/openaiCompatible.ts`, `tenderhub/http.ts`, `office/converterTypes.ts` | пределы ответов, `TRUNCATED`, причины сетевых сбоев, сигнал конвертации |
+| `packages/config/src/index.ts` | новые настройки: `SHUTDOWN_GRACE_SECONDS`, `GPU_TAKEOVER_GRACE_SECONDS`, `WORKER_MODE`, `STORAGE_*_FREE_MB`, `BACKUP_ROOT`, `EMBEDDING_PROBE_INTERVAL_SECONDS` и др. |
+| `packages/storage/src/index.ts` | `BlobStore` проверяет место до записи и каждые 32 МиБ |
+| `apps/web/src/pages/AdminPage.tsx`, `send/RegisterSendDialog.tsx`, `IncidentDialog.tsx`, `search/SearchRunView.tsx`, `api/*` | вкладка «Состояние», время МСК, сообщение о неполном смысловом поиске, `STORAGE_FULL` |
+| `scripts/config-check.ts`, `cli.ts`, `smoke.mjs`, живые скрипты | проверка TLS, шапки журналов «Режим: LIVE; Сборка», шаги smoke этапа 17 |
+| `tests/helpers.ts`, `searchFixtures.ts`, `approvalFixtures.ts`, `deliveryFixtures.ts`, `globalSetup.ts` | новые настройки, настоящие файлы хранилища для A40, очистка баз `kontur_restore_test_%` |
+| `tests/mailSecurity.test.ts`, `releaseCore.test.ts`, `search.test.ts` | метки сценариев A35, A41, RT-01 в именах тестов (матрица) |
+| `package.json`, `package-lock.json` | команды `ops:*`, `model:live-smoke`; удалён неиспользуемый `@modelcontextprotocol/express` (вместе с `cors`, `object-assign`) |
+
+Принятые миграции 0001–0042 не менялись.
+
+## Решения владельца и толкования
+
+Ответы владельца перед планом (2026-10-14):
+- целевой ПК — ПК ревьюера (Windows 11, `MSTROY\odintsov.a.a`); установку, живые проверки и замеры выполняет ревьюер;
+- U-02 — `https://<IP>:3200`, сертификат mkcert на IP, без домена;
+- U-03 — размещение PostgreSQL решить по осмотру ПК;
+- размер тендера — числа даст владелец на странице вопросов;
+- пояс отображения — Europe/Moscow, настройку пояса не делать.
+
+Вопросы D-040 (страница вопросов этапа 17, проект §15): В-17-1 — числа тендера; В-17-2 — обязательные живые интеграции; В-17-3 — место и срок копий; В-17-4 — учётные записи служб и Яндекс Диск без входа пользователя; В-17-5 — порядок согласования SLO; В-17-6 — толкования; В-17-7 — отдать осмотр ПК раньше (передача 17-pre). **Ответов нет**: осмотр уходит вместе с передачей 17-1; до них действует колонка «предложение исполнителя», а строки SLO и обязательных интеграций в матрице — `BLOCKED`.
+
+Толкования исполнителя (проект §16, не решения владельца):
+- после восстановления векторы достраиваются в активной версии индекса, а не в новой;
+- бюджет шага `index.embed` — размером пачки по замеру на целевом ПК;
+- копия запускается в режиме `restore_check` без внешних действий;
+- при штатной остановке попытка задания возвращается, при падении процесса — списывается;
+- срок TenderHub без пояса — UTC;
+- пороги места по умолчанию — 2 ГБ и 10 ГБ;
+- `GET /integrations/status` доступен любому вошедшему пользователю.
+
+## Находки этапа
+
+| ID | Что | Состояние |
+|---|---|---|
+| S17-01 | роль копии не читала 85 из 174 таблиц — `pg_dump` отказывал | исправлено, 0043 |
+| S17-02 | перезапуск PostgreSQL ронял `server` и `worker` | исправлено |
+| S17-03 | остановка не возвращала задание, держала слот GPU; на Windows `SIGTERM` не доходит | исправлено |
+| S17-04 | прерванный вызов модели записывался как «модель недоступна» | исправлено |
+| S17-05 | recovery и планирование стояли, пока фоновая полоса занята | исправлено |
+| S17-06 | `/ready` не видел зависший цикл и вечную аренду | исправлено |
+| S17-07 | проба модели раз в минуту вне слота GPU держала модель LM Studio в памяти | задание `model.probe` со слотом, раз в час |
+| S17-08 | защитный интервал GPU зашит и равен таймауту модели | `GPU_TAKEOVER_GRACE_SECONDS` с проверкой |
+| S17-09 | частичные векторы давали «полный» смысловой поиск | исправлено |
+| S17-10 | нет контроля места, `ENOSPC` → `500` | исправлено |
+| S17-11 | тело JSON сверх лимита → `400` | `413` |
+| S17-12 | нет `GET /integrations/status`, статус генеративной модели не обновлялся, `VERIFIED_LIVE` нечем записать | исправлено |
+| S17-13 | ответ модели без предела, усечение видно как «невалидный JSON» | исправлено |
+| S17-14 | сетевые сбои неразличимы | исправлено |
+| S17-15 | диалоги отправки брали пояс браузера | исправлено |
+| S17-16 | дата вопроса по UTC | исправлено |
+| S17-17 | бюджет `index.embed` по времени в коде не исполнялся | толкование: размер пачки по замеру |
+| S17-18 | устаревшие README, `clean-start.md`, `mcp-clients.md` | обновлены |
+| S17-19 | LibreOffice без сигнала остановки | исправлено |
+| S17-20 | дамп не восстанавливался (`search_path` функций `CHECK`) | исправлено, 0043; старые дампы — тремя разделами |
+| S17-21 | recovery мог вернуть в очередь своё задание: список активных читался до получения соединения | исправлено (`588cc4d`) |
+
+Значимые находки — в `docs/defects.md` (`FIXED_PENDING_REVIEW`).
+
+## Проверка критериев
+
+| Пункт задания / инвариант | Реализация | Доказательство | Статус |
+|---|---|---|---|
+| сценарии `05_ACCEPTANCE_CASES.md` | матрица по JSON-отчёту vitest и колонке живых проверок | `docs/stages/17-acceptance-matrix.md`; `tests/acceptanceCases.test.ts` — каждый сценарий закреплён в тестах | PASS на поддельных данных: 54 / 54; живьём — BLOCKED: 15 до целевого ПК, 5 внешних доработок, 4 до данных владельца |
+| серверные роли (I13, A25) | 269 маршрутов × аноним, токен без cookie, неназначенный инженер, инженер на действиях руководителя | `tests/routeAccess.test.ts` | PASS (поддельные данные) |
+| конкурентность | A24, A26, гонки остановки и захвата | `tests/workerShutdown.test.ts`, тесты этапов 11–15 | PASS |
+| восстановление заданий (I14, RT-06) | возврат при остановке, recovery без своих заданий, kill -9 | `workerShutdown`, `queue`; репетиция | PASS у разработчика; служба и `taskkill` — на целевом ПК |
+| метрики | `GET /admin/operations`, «Состояние» | smoke, `ui-check` | PASS |
+| дедлайны, пояса (F24) | МСК в диалогах, дата вопроса, независимость от пояса сессии | `tests/timeZones.test.ts`, `ui-check` | PASS |
+| деградация зависимостей (A39, A42, A43) | причины сбоев, пределы ответов, `TRUNCATED`, PostgreSQL под процессами | `degradation`, `workerShutdown`, `backupRestore`; репетиция | PASS (поддельные отказы); живое отключение сети — ревьюер |
+| ограничение GPU-задач (U-05) | слот = 1 для всех видов, включая пробу | `tests/gpuConcurrency.test.ts` | PASS; настоящая GPU — ревьюер |
+| LM Studio и агент MailHub | портал не управляет моделью; только `/chat/completions`, `/embeddings`, `GET /models` в живой проверке | `gpuConcurrency`; `model:live-smoke` | BLOCKED до целевого ПК |
+| установка на Windows, службы без окон, restart/shutdown | WinSW, runbook | `opsService`, `opsPreflight` (разбор вывода Windows) | BLOCKED до целевого ПК |
+| миграция и обновление | обновление с `8964017`: копия `--pre-update` → `db:migrate` → проверки | репетиция | PASS у разработчика |
+| размещение PostgreSQL (U-03) | по осмотру | — | BLOCKED: ждёт `ops:preflight` |
+| копия БД и файлов, восстановление на чистой среде, сверка манифеста (A40, I15, I19) | `ops:backup`, `ops:restore-check` | `backupGrants`, `backupRestore`; репетиция; `17-backup-restore-report.md` | PASS у разработчика; на целевом ПК — ревьюер |
+| destructive restore поверх рабочей системы | невозможен: охранники без ключа обхода | `backupRestore` (охранники) | PASS |
+| время импорта, поиска, проверки, генерации; SLO | `ops:measure` | `artifacts/stage-17/measure-dev.log` — проверка скрипта | BLOCKED: числа владельца (В-17-1) и целевой ПК |
+| ограничение хранилища | `FreeSpaceGuard`, `507`, задание ждёт | `tests/storageSpace.test.ts` | PASS |
+| сбой DNS/сети | причины `dns`, `refused`, `timeout`, `reset`, `tls` | `degradation` | PASS (поддельные отказы) |
+| потеря токена (A39) | статус и экран без секрета | `degradation` | PASS (поддельные серверы) |
+| большие ответы | 8 МиБ чат, 64 МиБ эмбеддинги, `413` API, TenderHub — прежний предел | `degradation`, `storageSpace` | PASS |
+| обязательные живые интеграции проверены или блокируют | предложение §13.2; запись в базу установки | `integrationVerify`; матрица | BLOCKED: ревьюер и В-17-2 |
+| секреты (I17) | журналы копии, осмотра, процессов и TLS без секретов | `backupRestore`, `opsPreflight`, `degradation`, `tls`; репетиция «журналы без пароля» | PASS |
+
+## Инварианты БД (миграция 0043)
+
+- `kontur_backup` читает все таблицы и последовательности, писать не может; будущие объекты мигратора получают `SELECT` сами (`ALTER DEFAULT PRIVILEGES`). Сторож — `tests/backupGrants.test.ts`.
+- Нет функций `SECURITY DEFINER`.
+- Функции, вызываемые из `CHECK` при восстановлении, имеют `search_path = pg_catalog, public`; новая такая функция без него ловится проверкой `restoreSafetyProblems` перед копией и тестом.
+
+## Фактически выполненные проверки
+
+### На поддельных данных
+
+Полный набор и тесты этапа — на коде `fc7b599`. После него менялись только скрипты `scripts/ops/acceptance-matrix.ts`, `restore-check.ts`, `rehearsal.ts`, тесты их не импортируют. Smoke — на `e8b20f5`; репетиция, интерфейс и регрессия интерфейса — на `4dedecc`; дальше — только документы и журналы.
+
+| Команда / сценарий | Среда и данные | Exit/result | Артефакт |
+|---|---|---|---|
+| `npm run typecheck` | Linux, Node 24.14.1 | PASS | `artifacts/stage-17/typecheck.log` |
+| `npm run build` | то же | PASS | `artifacts/stage-17/build.log` |
+| `npx vitest run --maxWorkers=1 --fileParallelism=false` | PostgreSQL 18.6 + pgvector в контейнере; поддельные TenderHub и модель, настоящий LibreOffice | PASS: 1506 / 1506 в 162 файлах, 948 с (этап 16 — 1427 в 149) | `artifacts/stage-17/tests.log`, `vitest-results.json` |
+| тесты этапа 17, подробный вывод | то же | PASS: 79 / 79 в 13 файлах: `workerShutdown` 21, `backupRestore` 9, `routeAccess` 7, `tls` 6, `opsPreflight` 6, `degradation` 6, `timeZones` 5, `storageSpace` 4, `backupGrants` 4, `acceptanceCases` 4, `opsService` 3, `integrationVerify` 3, `gpuConcurrency` 1 | `artifacts/stage-17/stage-tests.log` |
+| `SMOKE_STAGE=stage-17 npm run smoke` | настоящие server + worker, 43 миграции с нуля | PASS: 122 / 122 шагов (этап 16 — 118) | `artifacts/stage-17/smoke.log` |
+| `npm run ops:rehearsal` | код `8964017` и новый код; рабочий кластер `kontur-pg` и временный чистый `pgvector/pgvector:pg18` на отдельном порту | PASS: 45 шагов, 1 `NOT_RUN` (исторический выпуск: в данных репетиции выпусков нет; проверен тестом `backupRestore`) | `artifacts/stage-17/ops-rehearsal.log` |
+| `CHROME_NO_SANDBOX=1 node artifacts/stage-17/ui-check.mjs` | Chromium headless, настоящие server + worker; 360, 390, 430 px, 1280 px в тёмной теме | PASS: 17 / 17 шагов | `artifacts/stage-17/ui-check.log` |
+| регрессия интерфейса этапов 02–16 | Chromium headless через обёртку с `--no-sandbox` | PASS: 12 · 15 · 29 · 19 · 22 · 26 · 33 · 32 · 41 · 29 · 29 · 20 · 16 · 19 · 24 · 34 · 52 · 37 шагов (02, 03, 04, 05, 05a, 06, 06a, 07, 08, 08a, 09, 10, 11, 12, 13, 14, 15, 16), всего 489 / 489; журналы прежних этапов не изменены | `artifacts/stage-17/ui-check-stageNN-regression.log` |
+| `npm run ops:measure -- --profile dev` | синтетический тендер: 93 позиции, 2325 строк, 50 текстовых документов, 5 сканов, 20 запросов; поддельная модель | PASS: все 9 шагов выполнены (сборка `4dedecc`) | `artifacts/stage-17/measure-dev.log` |
+| `npm run ops:preflight` | машина разработки — проверка скрипта | PASS: 5 OK, 3 WARN (нет GPU, сервера модели, mkcert), 1 N/A (службы Windows) | `artifacts/stage-17/preflight-dev.log` |
+| `npm run ops:acceptance-matrix` | JSON-отчёт полного прогона | матрица собрана | `docs/stages/17-acceptance-matrix.md` |
+
+Первый полный прогон на `588cc4d` — 1505 / 1506: сторож A38 («в исходниках адаптеров нет сетевых вызовов») проверяет текст и сработал на слове «fetch (» в комментарии нового `netCause.ts`. Сетевых вызовов там нет; комментарий переписан (`fc7b599`), полный прогон повторён — строка выше.
+
+Репетиция на `e8b20f5` — FAIL на шаге «поиск на копии»: проверка искала по составу этапа, в котором документа не было, и получала «найдено 0»; смысловую ветку она не дожидалась. Исправлено в `4dedecc`: фрагмент берётся из рабочего состава этапа, итог прогона ждётся через `GET /search-runs/{id}`, первый поиск идёт до запуска worker. В результате отказ смысловой ветки до достройки векторов (A42) виден детерминированно. Репетиция повторена — строка выше.
+
+Плавающий тест: «своё активное задание recovery не трогает» (`workerShutdown`) падал примерно в половине одиночных прогонов после разделения `runtime.ts` — так найдена S17-21. После исправления в одном прогоне 19 файлов он упал ещё раз; подробности того прогона не сохранились, причина не установлена. Дальше — 22 прогона подряд без падений и полный набор выше.
+
+Что прогоны не доказывают:
+- работу на Windows, под службами и после выключения ПК;
+- работу с настоящей GPU и LM Studio, в том числе рядом с агентом MailHub;
+- работу по HTTPS с сертификатом mkcert на телефонах;
+- время на реальном размере тендера;
+- работу настоящих TenderHub, MailHub, Яндекс Диска и сетевой папки на этой сборке.
+
+### Замеры у разработчика
+
+Только проверка скрипта на машине разработки, профиль `dev`; для SLO не используются.
+
+| Шаг | Время |
+|---|---|
+| выгрузка расчёта: 93 позиции, 2325 строк (поддельный TenderHub) | 1,1 с |
+| импорт архива: 55 файлов, 1,8 МБ | 1,6 с |
+| локальное распознавание: 55 документов, из них 5 сканов OCR | 15,6 с |
+| поиск: 20 запросов, предварительный итог | p50 80 мс, p95 294 мс |
+| поиск: все прогоны завершены | 2,4 с |
+| прогон проверки этапа | 1,1 с |
+| сборка комплекта: DOCX и XLSX по формам, PDF-превью LibreOffice | 2,3 с |
+| копия `ops:backup` | 0,9 с |
+| объём после прогона | база 27 МБ, файлы 5,9 МБ |
+
+SLO: предложение по числам целевого ПК → решение владельца (В-17-5); до этого строка SLO в матрице — `BLOCKED`.
+
+### На реальных интеграциях
+
+У разработчика — `NOT_RUN`: GPU, LM Studio, Windows, Яндекс Диска, сетевой папки и mkcert нет. Живой набор (проект §13.2) — задание ревьюеру. Результат каждой проверки записывается в базу установки через `ops:integration-verify`.
+
+## Интеграции
+
+| Система | Статус | Ограничение |
+|---|---|---|
+| TenderHub (чтение) | `VERIFIED_LIVE` (Review 06-1) | на сборке 17 и с целевого ПК не проверялось; запись в базу установки — `tenderhub:live-smoke` + `ops:integration-verify` |
+| Яндекс Диск, сетевая папка | `VERIFIED_LIVE` (Review 14-2, тестовые папки) | рабочие назначения под службой worker — не проверялись |
+| ручной импорт EML | `VERIFIED_LIVE` (Review 07-2) | на сборке 17 не повторялся |
+| генеративная модель, эмбеддинги (LM Studio) | `VERIFIED_FIXTURE` | живой прогон — целевой ПК (`model:live-smoke`) |
+| локальное распознавание на Windows | `VERIFIED_FIXTURE` | OCR-минимум U-08 — целевой ПК |
+| LibreOffice | `VERIFIED_FIXTURE` у разработчика | под учётной записью службы — целевой ПК |
+| Codex, Cursor (CLI) | `VERIFIED_LIVE` (Review 16-2, тестовый сервер, HTTP) | по HTTPS на установке — не проверялось |
+| MailHub (ящики, отправленные), ревизия TenderHub, API RDWeb, переговоры | `BLOCKED_EXTERNAL` | X-03, X-01, X-05, Q-06 — без изменений |
+
+## Непроверенное
+
+- Всё, что требует Windows, GPU, LM Studio, mkcert и целевого ПК, — `NOT_RUN` (матрица, колонка «живые проверки»).
+- Репетиция: в её данных нет выпусков, поэтому шаг «исторический выпуск» на восстановленной копии — `NOT_RUN`. Исторический выпуск, его манифест, оригинал и цитата на копии проверены тестом `backupRestore` («сервер на копии»). Достройка векторов на копии — в репетиции и в тесте на поддельной модели эмбеддингов; с настоящей моделью — на целевом ПК.
+- `ops:service install/start/stop` выполнялись только как генерация XML: WinSW на Linux не запускается.
+- Отсутствие окон у служб, остановка Windows, `taskkill /F`, сбой питания — не проверялись.
+- Права по маршрутам: из 190 маршрутов объектов чужого тендера 140 проверены на настоящих объектах, 50 — на несуществующих идентификаторах. Проход «руководитель на `GET`» отдельно не делался (проект §20).
+- Восстановление проверено на копиях до нескольких мегабайт; копия и восстановление реального объёма — на целевом ПК.
+- Контроль места БД и каталога копий — только проверка места перед копией; отдельного контроля места базы нет.
+- Отказ сети и DNS проверен на поддельных серверах, живым отключением не проверялся.
+
+## Риски и блокировки
+
+| ID | Влияние | Ответственный | Условие снятия |
+|---|---|---|---|
+| ввод в эксплуатацию | не подтверждена установка и живые интеграции на целевом ПК | ревьюер | Review 17-1: установка по runbook, службы, копия и восстановление, обновление, живой набор, замеры — журналы в `artifacts/stage-17/review-17-1/` |
+| D-040 | список обязательных интеграций, место копий, учётные записи, SLO не согласованы | владелец процесса | ответы на В-17-1…В-17-7 |
+| U-03 | размещение PostgreSQL не выбрано | администратор | `ops:preflight` на целевом ПК |
+| U-06 / SLO | нет чисел тендера — нет SLO | владелец процесса | В-17-1, замер на целевом ПК, В-17-5 |
+| В-17-4 | клиент Яндекс Диска синхронизирует только в сеансе пользователя: служба worker пишет в папку, но без входа пользователя файлы не уйдут | владелец процесса | решение В-17-4 |
+| `npm audit` (2026-10-14: 1 low, 3 high) | `pdfjs-dist` 5.7.284 — GHSA-hq66-cqwq-w95j: выполнение JavaScript при открытии вредоносного PDF, если включены сценарии pdf.js и нет CSP на `script-src`. В портале оба условия смягчения выполнены: сценарии pdf.js не используются (нет `PDFViewer`, только `getDocument` и отрисовка страниц), CSP всех ответов — `script-src 'self'`. Остальные — средства сборки: `sharp` (иконки из своего SVG), `source-map-js`, `serialize-javascript` (low) | исполнитель, владелец процесса | обновление `pdfjs-dist` до 6.2.108 — отдельной правкой: старшая версия, меняется отпечаток локального распознавателя (повторное распознавание), нужна регрессия этапов 04, 05a, 12 |
+| лимиты в памяти | лимиты входа и MCP — в памяти одного процесса | — | достаточно для одного `server`; иначе — общий счётчик |
+| рост таблиц | `job`, `session`, `idempotency_record` не чистятся | исполнитель | политика очистки после пилота |
+| S15-08 | регистрация отправки требует решения руководителя по письму | владелец процесса | решение владельца |
+| Q-01 / X-01, Q-05, Q-08 | боевого выпуска нет | владелец процесса | как раньше |
+| S14-10 | исправлено на этапе 16, статус `FIXED_PENDING_REVIEW`: в Review 16 не упомянут | ревьюер | закрыть по регрессии интерфейса 02–16 |
+
+## Передача независимому ревьюеру
+
+Передача 17-1. Область ревью:
+- миграция 0043;
+- жизненный цикл: `packages/config/src/lifecycle.ts`, `packages/db/src/jobs.ts` (`releaseJob`, `recoverExpiredJobs`), `pool.ts`, `apps/worker/src/runtime.ts`, `main.ts`, `apps/server/src/main.ts`, `listen.ts`, `routes/health.ts`;
+- копия и восстановление: `packages/db/src/backup.ts`, `packages/storage/src/backup.ts`, `scripts/ops/backup*.ts`, `restore*.ts`, `pgTools.ts`;
+- место: `packages/storage/src/space.ts`;
+- деградация и статусы: `packages/adapters/src/netCause.ts`, адаптеры модели и эмбеддингов, `apps/server/src/routes/operations.ts`, `scripts/ops/integration-verify*.ts`;
+- Windows: `scripts/ops/preflight*.ts`, `service*.ts`, `docs/runbooks/release.md`, `backup-restore.md`;
+- тесты этапа; проект §20 — где реализация разошлась с проектом.
+
+Что проверить в первую очередь на коде:
+1. Можно ли восстановить поверх рабочей системы: имена баз, пути, символические ссылки и junction на Windows, совпадение адресов, повторный запуск.
+2. Согласованность копии: снимок, перечень `blob`, файлы, записанные во время копии; подмена файла копии.
+3. Остановка: задание, прерванное посреди доменной транзакции; GPU-задание; повтор сигнала; остановка во время recovery.
+4. `VERIFIED_LIVE` в базе установки: можно ли записать без живого журнала этой сборки.
+5. Права по маршрутам: маршруты, проверенные на несуществующих идентификаторах (50 из 190).
+6. Утечки: журналы копии, осмотра, служб, `/ready`, `/integrations/status`, `/admin/operations`.
+
+Задания на целевом ПК (проект §18). Журналы — в `artifacts/stage-17/review-17-1/`, без секретов:
+1. `npm ci`, `npm run ops:preflight` — журнал осмотра; по нему выбираются PostgreSQL и диск копий (U-03).
+2. Установка по `docs/runbooks/release.md`: PostgreSQL, TLS mkcert на IP, брандмауэр, службы WinSW.
+3. Службы: стоп, старт, перезапуск; остановка во время GPU-задания и импорта; `taskkill /F` worker; перезапуск PostgreSQL; выключение и включение ПК. Проверить журналы, `/ready` и отсутствие окон.
+4. Копия (`ops:backup`) и восстановление (`ops:restore-check`) на втором чистом кластере или в новой базе того же ПК — никогда поверх рабочей.
+5. Обновление установки с `8964017` на проверяемый коммит (`ops:backup -- --pre-update`, `db:migrate`).
+6. Живой набор (проект §13.2): `tenderhub:live-smoke`, `real-eml-check`, `delivery:live-smoke` под учётной записью службы worker, OCR-минимум U-08, `page-review`, `model:live-smoke` (без нагрузки и рядом с агентом MailHub), Codex и Cursor по HTTPS (`docs/integrations/mcp-clients.md` §4), телефоны руководителя. Каждый PASS — в базу установки через `ops:integration-verify`.
+7. Замеры `ops:measure` на числах владельца (после В-17-1).
+8. Полный набор, smoke, интерфейс 17 и регрессия интерфейса 02–16 на Windows.
+
+Команды воспроизведения у разработчика:
+
+```text
+npm ci
+npm run typecheck
+npm run build
+npx vitest run --maxWorkers=1 --fileParallelism=false
+npx vitest run tests/workerShutdown.test.ts tests/gpuConcurrency.test.ts tests/backupGrants.test.ts tests/backupRestore.test.ts tests/storageSpace.test.ts tests/degradation.test.ts tests/timeZones.test.ts tests/routeAccess.test.ts tests/tls.test.ts tests/integrationVerify.test.ts tests/opsService.test.ts tests/opsPreflight.test.ts tests/acceptanceCases.test.ts --maxWorkers=1 --fileParallelism=false --reporter=verbose
+SMOKE_STAGE=stage-17 npm run smoke
+npm run ops:rehearsal
+node artifacts/stage-17/ui-check.mjs
+npm run ops:acceptance-matrix -- --results artifacts/stage-17/vitest-results.json --out docs/stages/17-acceptance-matrix.md
+```
+
+`ops:rehearsal` нужен Docker: чистый кластер — временный контейнер `pgvector/pgvector:pg18` на отдельном порту, удаляется в конце. Без Docker — `NOT_RUN` (код 3).
+
+Остаточные вопросы: ответы владельца D-040; решение по SLO после замеров; S15-08.

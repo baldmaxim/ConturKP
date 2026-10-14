@@ -17,7 +17,9 @@
 | Область | ресурсы тендера доступны только участникам; иначе `404` (ADR-006) |
 | Аудит | каждая команда и каждый отказ пишут `audit_event` |
 
-Коды ошибок (`code`): `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `PRECONDITION_REQUIRED`, `VERSION_CONFLICT`, `STATE_CONFLICT`, `VALIDATION_FAILED`, `IDEMPOTENCY_KEY_REUSED`, `BLOCKER_PRESENT`, `RELEASE_IS_TEST`, `ENVIRONMENT_MISMATCH`, `INTEGRATION_UNAVAILABLE`, `INTEGRATION_BLOCKED`, `RATE_LIMITED`, `INTERNAL`.
+Коды ошибок (`code`): `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `PRECONDITION_REQUIRED`, `VERSION_CONFLICT`, `STATE_CONFLICT`, `VALIDATION_FAILED`, `IDEMPOTENCY_KEY_REUSED`, `BLOCKER_PRESENT`, `RELEASE_IS_TEST`, `ENVIRONMENT_MISMATCH`, `INTEGRATION_UNAVAILABLE`, `INTEGRATION_BLOCKED`, `RATE_LIMITED`, `STORAGE_FULL`, `INTERNAL`.
+
+Этап 17 (S17-11, ADR-011 §10): тело JSON сверх лимита — `413` с `VALIDATION_FAILED` (раньше `400`); нехватка места в хранилище при записи файла — `507 STORAGE_FULL` (запись не начата или прервана, частичных файлов нет). Загрузка с `Content-Length` больше доступного сверх порога остановки отклоняется до чтения тела.
 
 Ответ `BLOCKER_PRESENT` содержит список блокеров с кодами из матрицы (`state-machines.md` §11.1), классом и пояснением.
 
@@ -43,8 +45,9 @@
 | `PATCH /intake-channels/{id}` | `admin.intake` / `hold.resolve` (только отключение) | IM | настройки канала; отключение — с причиной, может руководитель тендера (state-machines §1.1) |
 | `POST /intake-channels/{id}/scan` | `source.write` | — | внеочередной скан (одно активное задание на канал) |
 | `GET /delivery-destinations`, `POST /delivery-destinations`, `POST /delivery-destinations/{id}/versions` | `admin.delivery` | IK | назначения; среда задаётся при создании и не меняется; корень и политика — новой версией (R01-05) |
-| `GET /integrations/status` | `tender.read` | — | статусы интеграций и время последней проверки |
-| `GET /health`, `GET /ready` | — | — | эксплуатация (ADR-011) |
+| `GET /integrations/status` | любой вошедший пользователь | — | статусы интеграций (этап 17): `items: [{ system, component, status, evidenceRef, verifiedAt, lastCheckedAt, lastSuccessAt, lastErrorCode }]` — без адресов, ключей и данных тендеров; поэтому право тендера не требуется (толкование этапа 17, проект §7.4) |
+| `GET /health`, `GET /ready` | — | — | эксплуатация (ADR-011). `/ready` (этап 17): `checks.database`, `schema`, `storage` (проба записи и уровень места без чисел; уровень `stop` — не готов), `worker` (свежий heartbeat; worker пишет его только при живости всех своих циклов), `queue` (нет заданий `running` с арендой, просроченной дольше двух сроков аренды); любой не готов — `503` |
+| `GET /admin/operations` | `admin.audit` | — | состояние установки (этап 17, проект §11): сборка, среда, режим worker, схема, процессы по отметкам живости, очередь по видам и статусам, возраст старейшего ожидающего, просроченные аренды, отказы за 24 ч, держатель слота GPU, свободное место и пороги, объём `blob`, последняя полная копия из `BACKUP_ROOT` (имя, время, версия схемы, число и объём файлов), статусы интеграций. Без адресов, путей и секретов |
 
 ### 2.2. Тендеры, этапы, участники
 

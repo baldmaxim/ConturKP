@@ -520,6 +520,8 @@ Review 13-3 (миграция `0037_stage_content_fingerprint_v3.sql`; прое�
 | `process_heartbeat` | mutable | `process_id`, `kind` (`worker`), `pid`, `started_at`, `last_seen_at` | служебная таблица для `/ready` (ADR-011 §4), добавлена на этапе 02; не бизнес-данные |
 | `schema_migration` | служебная | `version`, `name`, `sha256`, `applied_at` | ведёт раннер миграций (ADR-002 §5) |
 
+Миграция 0043 (этап 17, S17-01, S17-20; ADR-011): новых таблиц нет. Роль `kontur_backup` получает `SELECT` на все таблицы и последовательности, а `ALTER DEFAULT PRIVILEGES FOR ROLE kontur_migrator` выдаёт его на будущие объекты: до 0043 роль не читала 85 из 174 таблиц и `pg_dump` под ней отказывал. Прав записи и `SECURITY DEFINER` у роли нет (сторож — `tests/backupGrants.test.ts`). Функции, вызываемые из `CHECK` при `COPY` восстановления (`search_prepare`, `local_recognizer_valid`, `evidence_locator_valid`), получают `SET search_path = pg_catalog, public`: `pg_restore` идёт с пустым `search_path`, и без этого восстановление `evidence_fragment` падало. Копии, снятые до 0043, восстанавливаются тремя разделами с исправлением функций между ними (`scripts/ops/restore-lib.ts`). Из дампа по данным исключаются `search_chunk_vector`, `embedding_cache`, `process_heartbeat` — производные или служебные; векторы достраиваются worker после восстановления (ADR-012, поправка этапа 17).
+
 ### 4.13. Индекс и поиск (этап 05; ADR-012, D-021)
 
 | Таблица | Класс | Ключевые колонки | Ограничения |

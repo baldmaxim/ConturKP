@@ -1,0 +1,35 @@
+# npm run build — 2026-10-14T14:19:27+05:00, коммит fc7b599
+
+> build
+> npm run build -w @kontur/web
+
+
+> build
+> tsc -p tsconfig.json --noEmit && vite build
+
+vite v8.3.0 building client environment for production...
+transforming...
+✓ 301 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                      1.80 kB │ gzip:   0.78 kB
+dist/assets/pdf.worker.min-iDqQPrd3.mjs          1,232.30 kB
+dist/assets/index-B8Ca4_ow.css                      80.46 kB │ gzip:  13.05 kB
+dist/assets/workbox-window.prod.es5-Bd17z0YL.js      5.65 kB │ gzip:   2.20 kB
+dist/assets/pdf-B49cYKoj.js                        409.76 kB │ gzip: 121.72 kB
+dist/assets/index-DnOUp4PA.js                      879.96 kB │ gzip: 242.53 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 1.37s
+
+PWA v1.3.0
+mode      generateSW
+precache  18 entries (1363.17 KiB)
+files generated
+  dist/sw.js
+  dist/workbox-98f7a950.js
+exit 0

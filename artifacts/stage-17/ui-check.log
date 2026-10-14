@@ -1,4 +1,4 @@
-# ui-check — 2026-10-14T08:21:04.320Z, linux x64, Node v24.14.1, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker; данные ПОДДЕЛЬНЫЕ: демонстрационные тендеры, поддельные модель и эмбеддинги; копия — настоящей командой ops:backup
+# ui-check — 2026-10-14T09:46:29.713Z, linux x64, Node v24.14.1, Chromium headless (CDP), без песочницы (--no-sandbox, AppArmor), реальные server + worker; данные ПОДДЕЛЬНЫЕ: демонстрационные тендеры, поддельные модель и эмбеддинги; копия — настоящей командой ops:backup
 PASS  копия перед запуском: npm run ops:backup
 PASS  server + worker готовы
 PASS  вход администратора

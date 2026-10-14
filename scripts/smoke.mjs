@@ -35,6 +35,7 @@ import { smokeApproval } from './smoke-13.mjs';
 import { smokeDelivery } from './smoke-14.mjs';
 import { smokeSends } from './smoke-15.mjs';
 import { smokeMcp } from './smoke-16.mjs';
+import { smokeOperations } from './smoke-17.mjs';
 import { PRECISE_RATE, TH, standardTender, startFakeTenderHub } from './tenderhub-fake.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -515,6 +516,9 @@ try {
 
   // ---- Этап 16: MCP портала — токен, точка /mcp, инструменты, предложение — scripts/smoke-16.mjs
   const mcp16 = await smokeMcp({ base: BASE, api, record, json, tenderId: demo.id, stageId, secretMarker: SECRET_MARKER });
+
+  // ---- Этап 17: эксплуатационные точки — scripts/smoke-17.mjs
+  await smokeOperations({ base: BASE, api, api2, record, secretMarker: SECRET_MARKER });
 
   await stopProc(server);
   server = startProc('server', 'apps/server/src/main.ts');

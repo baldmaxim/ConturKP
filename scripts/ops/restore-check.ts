@@ -119,42 +119,51 @@ const main = async (): Promise<number> => {
         const bytes = Buffer.from(await manifest.arrayBuffer());
         const sha = (await import('node:crypto')).createHash('sha256').update(bytes).digest('hex');
         record('манифест выпуска совпадает по SHA-256', manifest.status === 200 && sha === rel.manifest_sha256, `HTTP ${manifest.status}, SHA-256 ${sha}`);
-        const frag = await pool.query<{ id: string; text: string }>(
-          "SELECT f.id, f.text FROM evidence_fragment f WHERE f.tender_id = $1 AND length(f.text) > 20 ORDER BY f.id LIMIT 1",
-          [rel.tender_id],
-        );
-        const f = frag.rows[0];
-        if (f) {
-          const cite = await api.call(`/evidence/${f.id}`);
-          record('цитата открывается', cite.status === 200, `HTTP ${cite.status}`);
-          const words = f.text.split(/\s+/u).filter((w) => w.length >= 4).slice(0, 3).join(' ');
-          const body = { context: { kind: 'tender', tenderId: rel.tender_id, mode: 'working', stageId: rel.stage_id }, query: words, limit: 5 };
-          const first = (await (await api.call('/search', { method: 'POST', body, headers: { 'Idempotency-Key': `restore-${stamp()}-1` } })).json()) as {
-            semantic?: { status: string; reason: string | null };
-            lexical?: { items: unknown[] } | null;
-            fused?: { items: unknown[] } | null;
-          };
-          const hits = (first.fused?.items ?? first.lexical?.items ?? []).length;
-          record('поиск на копии: точный и полнотекстовый', hits > 0, `найдено ${hits}; смысловой — ${first.semantic?.status} (${first.semantic?.reason ?? '—'})`);
-          const vectorsWanted = (env.EMBEDDING_PROVIDER ?? 'none') !== 'none';
-          if (!vectorsWanted) {
-            record('достройка векторов', null, 'модель эмбеддингов не настроена: смысловая ветка останется недоступной (index_without_embeddings / index_vectors_missing)');
-          } else {
-            const timeoutMs = Number(argValue('vectors-timeout') ?? '1800') * 1000;
-            const until = Date.now() + timeoutMs;
-            let missing = -1;
-            while (Date.now() < until) {
-              const m = await pool.query<{ n: number }>(
-                `SELECT count(*)::int AS n FROM search_chunk c JOIN search_index_version v ON v.id = c.index_version_id AND v.status = 'active'
-                  WHERE v.embedding_model IS NOT NULL AND NOT EXISTS (SELECT 1 FROM search_chunk_vector x WHERE x.chunk_id = c.id)`,
-              );
-              missing = m.rows[0]!.n;
-              if (missing === 0) break;
-              await sleep(5000);
-            }
-            const again = (await (await api.call('/search', { method: 'POST', body, headers: { 'Idempotency-Key': `restore-${stamp()}-2` } })).json()) as { semantic?: { status: string } };
-            record('достройка векторов и смысловой поиск', missing === 0 && again.semantic?.status !== 'unavailable', `без векторов осталось ${missing}; смысловой — ${again.semantic?.status}`);
+      }
+      // Цитата и поиск — в тендере выпуска, а без выпусков — в тендере, где --login участник (не зависят от выпуска).
+      const frag = await pool.query<{ id: string; text: string; tender_id: string; stage_id: string }>(
+        `SELECT f.id, f.text, f.tender_id, s.id AS stage_id
+           FROM evidence_fragment f
+           JOIN tender_stage s ON s.tender_id = f.tender_id
+          WHERE length(f.text) > 20
+            AND ($1::uuid IS NULL OR f.tender_id = $1)
+            AND EXISTS (SELECT 1 FROM tender_member m JOIN app_user u ON u.id = m.user_id WHERE m.tender_id = f.tender_id AND u.login = $2 AND m.removed_at IS NULL)
+          ORDER BY (s.id = $3::uuid) DESC, f.id LIMIT 1`,
+        [rel?.tender_id ?? null, login, rel?.stage_id ?? null],
+      );
+      const f = frag.rows[0];
+      if (!f) {
+        record('цитата и поиск', null, `у ${login} нет тендера с распознанным текстом в копии`);
+      } else {
+        const cite = await api.call(`/evidence/${f.id}`);
+        record('цитата открывается', cite.status === 200, `HTTP ${cite.status}`);
+        const words = f.text.split(/\s+/u).filter((w) => w.length >= 4).slice(0, 3).join(' ');
+        const body = { context: { kind: 'tender', tenderId: f.tender_id, mode: 'working', stageId: f.stage_id }, query: words, limit: 5 };
+        const first = (await (await api.call('/search', { method: 'POST', body, headers: { 'Idempotency-Key': `restore-${stamp()}-1` } })).json()) as {
+          semantic?: { status: string; reason: string | null };
+          lexical?: { items: unknown[] } | null;
+          fused?: { items: unknown[] } | null;
+        };
+        const hits = (first.fused?.items ?? first.lexical?.items ?? []).length;
+        record('поиск на копии: точный и полнотекстовый', hits > 0, `найдено ${hits}; смысловой — ${first.semantic?.status} (${first.semantic?.reason ?? '—'})`);
+        const vectorsWanted = (env.EMBEDDING_PROVIDER ?? 'none') !== 'none';
+        if (!vectorsWanted) {
+          record('достройка векторов', null, 'модель эмбеддингов не настроена: смысловая ветка останется недоступной (index_without_embeddings / index_vectors_missing)');
+        } else {
+          const timeoutMs = Number(argValue('vectors-timeout') ?? '1800') * 1000;
+          const until = Date.now() + timeoutMs;
+          let missing = -1;
+          while (Date.now() < until) {
+            const m = await pool.query<{ n: number }>(
+              `SELECT count(*)::int AS n FROM search_chunk c JOIN search_index_version v ON v.id = c.index_version_id AND v.status = 'active'
+                WHERE v.embedding_model IS NOT NULL AND NOT EXISTS (SELECT 1 FROM search_chunk_vector x WHERE x.chunk_id = c.id)`,
+            );
+            missing = m.rows[0]!.n;
+            if (missing === 0) break;
+            await sleep(5000);
           }
+          const again = (await (await api.call('/search', { method: 'POST', body, headers: { 'Idempotency-Key': `restore-${stamp()}-2` } })).json()) as { semantic?: { status: string } };
+          record('достройка векторов и смысловой поиск', missing === 0 && again.semantic?.status !== 'unavailable', `без векторов осталось ${missing}; смысловой — ${again.semantic?.status}`);
         }
       }
     }

@@ -30,7 +30,8 @@
     "search:index": "node --env-file-if-exists=.env scripts/search-index.ts",
     "tenderhub:live-smoke": "node --env-file-if-exists=.env scripts/tenderhub-live-smoke.ts",
     "delivery:live-smoke": "node --env-file-if-exists=.env scripts/delivery-live-smoke.ts",
-    "delivery:compare": "node scripts/delivery-compare.ts"
+    "delivery:compare": "node scripts/delivery-compare.ts",
+    "ops:preflight": "node --env-file-if-exists=.env scripts/ops/preflight.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/express": "2.0.2",

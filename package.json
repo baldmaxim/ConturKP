@@ -33,7 +33,8 @@
     "delivery:compare": "node scripts/delivery-compare.ts",
     "ops:preflight": "node --env-file-if-exists=.env scripts/ops/preflight.ts",
     "ops:backup": "node --env-file-if-exists=.env scripts/ops/backup.ts",
-    "ops:restore-check": "node --env-file-if-exists=.env scripts/ops/restore-check.ts"
+    "ops:restore-check": "node --env-file-if-exists=.env scripts/ops/restore-check.ts",
+    "ops:rehearsal": "node scripts/ops/rehearsal.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/express": "2.0.2",

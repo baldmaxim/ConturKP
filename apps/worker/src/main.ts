@@ -29,7 +29,9 @@ const main = async (): Promise<void> => {
   const embeddings = createEmbeddings(config.embedding);
   const runtime = new WorkerRuntime({ pool, store, config, handlers: HANDLERS, workerId: processId, log, embeddings });
   let lastStale = '';
-  const tick = async (): Promise<void> => {
+  // Запись heartbeat в полёте: остановка ждёт её, иначе она перезаписала бы снятую строку (/ready ещё 60 с «готов»).
+  let inflight: Promise<void> = Promise.resolve();
+  const tickOnce = async (): Promise<void> => {
     if (runtime.isStopping) return;
     const live = runtime.liveness(config.workerStaleSeconds * 1000);
     if (!live.ok) {
@@ -45,6 +47,7 @@ const main = async (): Promise<void> => {
       log(`heartbeat не записан: ${err instanceof Error ? err.message : 'unknown'}`);
     }
   };
+  const tick = (): Promise<void> => (inflight = inflight.then(tickOnce));
   await tick();
   const timer = setInterval(() => void tick(), config.workerHeartbeatSeconds * 1000);
   const controller = new AbortController();
@@ -63,6 +66,7 @@ const main = async (): Promise<void> => {
       // Срок на возврат заданий — с запасом до принудительного выхода.
       const r = await runtime.shutdown({ deadlineMs: Math.max(1000, graceMs - 3000), refundAttempt: !fatal });
       if (r.released + r.abandoned > 0) log(`задания при остановке: возвращено ${r.released}, не завершилось ${r.abandoned}`);
+      await inflight;
       await retireHeartbeat(pool, processId).catch(() => undefined);
       // Незавершённое задание остаётся running до истечения аренды; его вернёт recovery (проект §3.2).
       if (r.abandoned > 0) return false;

@@ -1,0 +1,48 @@
+# Репетиция эксплуатации этапа 17 — 2026-10-14T07:53:22.474Z, Node v24.14.1, linux
+PASS  дерево принятого этапа 16 (8964017) — /tmp/kontur-reh-16-oa9Elr
+PASS  этап 16: db:setup — база kontur_kp_rehearsal_test: создана; роли и права выставлены
+PASS  этап 16: db:migrate — 42 миграции — готово, применено миграций: 42
+PASS  этап 16: bootstrap
+PASS  этап 16: демо-данные
+PASS  этап 16: server и worker — /ready
+PASS  этап 16: вход — HTTP 200
+PASS  этап 16: документ импортирован — HTTP 202
+# данные этапа 16: редакций 1, событий аудита 5
+PASS  копия перед обновлением (--pre-update, роль kontur_migrator) — 2026-10-14T07:54:07.780Z [backup] копия завершена: /tmp/kontur-reh-backup-WiqUko/kontur-20261014T075407Z
+PASS  копия ролью kontur_backup до 0043 — отказ с понятной причиной — 2026-10-14T07:54:08.272Z [backup] копия не снята (backup_role): права роли копии: нет SELECT: answer_claim, answer_evidence, answer_run, api_token, application_draft, application_template, approval, audit_event_seq_seq, calculation_comparison, candidate_check, candidate_file, candidate_input, candidate_return, change_explanation, change_explanation_basis, change_reason_suggestion, change_reason_suggestion_evidence, comparison_effect, comparison_unit, compliance_incident, decision_requirement_revision, delivery, delivery_attempt, delivery_destination, delivery_destination_probe, delivery_destination_version, delivery_event, delivery_file_state, dialog, dialog_message, discrepancy, discrepancy_basis, discrepancy_status_event, draft_field, draft_field_basis, draft_field_version, evidence_dependency, evidence_fact, evidence_fact_fragment, evidence_fact_type, evidence_invalidation, fact_decision, fact_extraction_run, fact_graph, fact_remark, fact_state, field_suggestion, field_suggestion_evidence, field_suggestion_run, field_suggestion_run_input, finding, finding_event, finding_evidence, finding_occurrence, mcp_proposal, mcp_proposal_fragment, model_suggestion, model_suggestion_evidence, position_lineage_seq_seq, readiness_hold, reason_run, reason_run_input, release, release_candidate, release_comparison, release_comparison_item, release_comparison_reason, release_comparison_reason_basis, review_check, review_check_result, review_finding_kind, review_run, review_run_input, revision_economics, revision_line_check, risk_acceptance, send_event, send_event_decision, send_event_file, send_evidence_upload, source_priority_revision, stage_input_event_processing, standard_attachment, standard_attachment_revision, template_revision, wording, wording_version. Выполните npm run db:migrate
+PASS  обновление: db:migrate новым кодом — одна новая миграция (0043) — готово, применено миграций: 1
+PASS  после обновления: /ready — {"database":{"ok":true,"detail":"доступна"},"schema":{"ok":true,"detail":"версия 43"},"storage":{"ok":true,"detail":"доступно на запись"},"worker":{"ok":true,"detail":"heartbeat свежий"},"queue":{"ok":true,"detail":"аренды заданий продлеваются"}}
+PASS  после обновления: вход, тендеры и документы на месте
+PASS  kill -9 worker посреди задания OCR — HTTP 202
+PASS  /ready замечает остановку worker
+PASS  задание восстановлено после аренды и выполнено один раз — итог complete, прогонов 1, фрагментов 5
+PASS  штатная остановка worker по IPC: код 0, своя строка heartbeat снята сразу — код 0, 62 мс
+PASS  повторный запуск worker — /ready
+PASS  копия ролью kontur_backup после обновления — 2026-10-14T07:54:30.560Z [backup] дамп: 1517870 байт, SHA-256 2fff5bfb62c99ef210130801de298b85573222034fdd091eecc9bddffe57f72c
+PASS  чистый кластер pgvector/pgvector:pg18 на отдельном порту
+    # Проверка восстановления — 2026-10-14T07:54:32.508Z, adm3.hlab.kz, Node v24.14.1, linux
+    # Копия: /tmp/kontur-reh-backup-WiqUko/kontur-20261014T075430Z; база проверки: kontur_restore_rehearsal; каталог: /tmp/kontur-reh-restore-aqZ0on
+    # Инструмент: pg_dump (PostgreSQL) 18.6 (Ubuntu 18.6-0ubuntu0.26.04.1) (локально)
+    PASS  охранники: новая база, пустой каталог, не рабочая система — база kontur_restore_rehearsal, каталог пуст
+    PASS  манифест копии — kontur.backup.v1, создан 2026-10-14T07:54:30.244Z, схема 43, файлов 1, перечень 7695c1c8a90083a3dbc73dbc61d1be2483ad8b7da532f54b18ac0cac898dffd8
+    PASS  дамп совпадает с манифестом — SHA-256 2fff5bfb62c99ef210130801de298b85573222034fdd091eecc9bddffe57f72c, 1517870 байт
+    PASS  пустая база создана — db:setup → kontur_restore_rehearsal (роли, локаль builtin, vector, pg_trgm)
+    PASS  pg_restore pre-data — pg_restore --single-transaction --exit-on-error --no-password --section=pre-data --dbname=kontur_restore_rehearsal → код 0
+    PASS  функции ограничений с search_path — исправлять нечего (дамп после миграции 0043)
+    PASS  pg_restore data — pg_restore --single-transaction --exit-on-error --no-password --section=data --dbname=kontur_restore_rehearsal → код 0
+    PASS  pg_restore post-data — pg_restore --single-transaction --exit-on-error --no-password --section=post-data --dbname=kontur_restore_rehearsal → код 0
+    PASS  версия схемы — в базе 43, в манифесте 43
+    PASS  файлы хранилища: SHA-256 каждого = манифест — восстановлено 1 из 1
+    PASS  перечень blob базы = перечень манифеста — строк 1, SHA-256 перечня 7695c1c8a90083a3dbc73dbc61d1be2483ad8b7da532f54b18ac0cac898dffd8
+    PASS  ссылки на файлы — таблиц со ссылками 18; ссылок из выпусков, кандидатов, размещений и отправок — 0
+    PASS  выпуски, согласования, фрагменты на месте; векторов нет (не копируются) — выпусков 0, согласований 0, фрагментов 5, чанков 1, векторов 0
+    PASS  server и worker на копии — /ready — {"database":{"ok":true,"detail":"доступна"},"schema":{"ok":true,"detail":"версия 43"},"storage":{"ok":true,"detail":"доступно на запись"},"worker":{"ok":true,"detail":"heartbeat свежий"},"queue":{"ok":true,"detail":"аренды заданий продлеваются"}}
+    PASS  вход demo.eng1 на копии — HTTP 200
+    NOT_RUN  исторический выпуск — в копии нет выпусков
+    PASS  штатная остановка server и worker по IPC — коды выхода 0, 0
+    Итог: PASS
+PASS  ops:restore-check на чистом кластере — код 0
+PASS  перезапуск PostgreSQL: server и worker не упали, /ready снова 200 — коды процессов: работает, работает
+PASS  штатная остановка процессов на копии — коды 0, 0
+PASS  журналы процессов без пароля
+Итог: PASS

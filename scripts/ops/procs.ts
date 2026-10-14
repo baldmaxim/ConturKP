@@ -78,7 +78,8 @@ export class ApiClient {
     this.origin = origin;
   }
 
-  async call(path: string, o: { method?: string; body?: unknown; headers?: Record<string, string> } = {}): Promise<Response> {
+  // body — JSON; raw — двоичное тело (загрузка файла).
+  async call(path: string, o: { method?: string; body?: unknown; raw?: Buffer; headers?: Record<string, string> } = {}): Promise<Response> {
     const headers: Record<string, string> = { ...(o.headers ?? {}) };
     if (this.cookies.size > 0) headers.Cookie = [...this.cookies].map(([k, v]) => `${k}=${v}`).join('; ');
     const method = o.method ?? 'GET';
@@ -88,7 +89,9 @@ export class ApiClient {
       if (csrf) headers['X-CSRF-Token'] = decodeURIComponent(csrf);
     }
     if (o.body !== undefined) headers['Content-Type'] = 'application/json';
-    const r = await fetch(`${this.base}/api/v1${path}`, { method, headers, ...(o.body !== undefined ? { body: JSON.stringify(o.body) } : {}) });
+    if (o.raw !== undefined) headers['Content-Type'] = 'application/octet-stream';
+    const body = o.raw !== undefined ? new Uint8Array(o.raw) : o.body !== undefined ? JSON.stringify(o.body) : undefined;
+    const r = await fetch(`${this.base}/api/v1${path}`, { method, headers, ...(body !== undefined ? { body } : {}) });
     for (const c of r.headers.getSetCookie()) {
       const pair = c.split(';')[0] ?? '';
       const i = pair.indexOf('=');

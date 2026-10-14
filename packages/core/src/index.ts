@@ -1,4 +1,5 @@
 export * from './capabilities.ts';
+export * from './portalTime.ts';
 export * from './password.ts';
 export * from './etag.ts';
 export * from './fileTypes.ts';

@@ -17,6 +17,7 @@ import { formatDateTime } from '../../utils/datetime';
 import { SEND_CHANNEL, SEND_WARNING } from '../../utils/sendLabels';
 import styles from '../release/Release.module.css';
 import own from './Send.module.css';
+import { isoToMoscowInput, moscowInputToIso } from '../../utils/datetime';
 
 type TKind = 'mail_message' | 'uploaded_file' | 'manual_note';
 
@@ -39,10 +40,8 @@ const candidateNote = (c: ISendCandidate): string => {
   return `состав не совпадает — ${parts.join('; ')}`;
 };
 
-const localNow = (): string => {
-  const d = new Date();
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-};
+// Время вводится и показывается по Москве, как везде в портале (этап 17, S17-15): пояс браузера не участвует.
+const localNow = (): string => isoToMoscowInput(new Date().toISOString());
 
 interface IRegisterSendDialogProps {
   releaseId: string;
@@ -72,7 +71,8 @@ export const RegisterSendDialog: FC<IRegisterSendDialogProps> = ({ releaseId, wa
   const list = candidates.data?.items ?? [];
 
   const noteShort = kind === 'manual_note' && note.trim().length < 10;
-  const invalid = kind === 'mail_message' ? revisionId === '' : sentAt === '' || noteShort || (kind === 'uploaded_file' && !file);
+  const sentIso = moscowInputToIso(sentAt);
+  const invalid = kind === 'mail_message' ? revisionId === '' : sentIso === null || noteShort || (kind === 'uploaded_file' && !file);
 
   const fail = (e: unknown): void => {
     setBusy(false);
@@ -91,7 +91,8 @@ export const RegisterSendDialog: FC<IRegisterSendDialogProps> = ({ releaseId, wa
     if (invalid) return;
     setBusy(true);
     if (kind === 'mail_message') return send({ evidence: { kind, mailMessageRevisionId: revisionId } });
-    const manual = { channel, sentAt: new Date(sentAt).toISOString(), recipients: recipients.split('\n').map((x) => x.trim()).filter(Boolean), note: note.trim() || null };
+    if (sentIso === null) return;
+    const manual = { channel, sentAt: sentIso, recipients: recipients.split('\n').map((x) => x.trim()).filter(Boolean), note: note.trim() || null };
     if (kind === 'manual_note') return send({ evidence: { kind }, ...manual });
     uploadSendEvidence(releaseId, file!, idem.keyFor({ upload: file!.name, size: file!.size })).promise.then((u) => {
       idem.reset();
@@ -155,7 +156,7 @@ export const RegisterSendDialog: FC<IRegisterSendDialogProps> = ({ releaseId, wa
       ) : (
         <>
           <SelectField label="Канал" value={channel} onValueChange={(v) => setChannel(v as TSendChannel)} required options={Object.entries(SEND_CHANNEL).map(([value, label]) => ({ value, label }))} />
-          <TextField label="Когда отправлено" type="datetime-local" value={sentAt} onValueChange={setSentAt} required error={touched && sentAt === '' ? 'Укажите время отправки' : undefined} />
+          <TextField label="Когда отправлено, МСК" type="datetime-local" value={sentAt} onValueChange={setSentAt} required error={touched && sentIso === null ? 'Укажите время отправки' : undefined} />
           <TextAreaField label="Адресаты (по одному в строке)" value={recipients} onValueChange={setRecipients} rows={2} maxLength={4000} />
           {kind === 'uploaded_file' ? (
             <label className={own.file}>

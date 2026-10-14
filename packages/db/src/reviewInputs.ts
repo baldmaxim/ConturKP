@@ -5,6 +5,7 @@ import {
   calcObjectKey,
   FACT_RULES_VERSION,
   hasPdUncertainty,
+  portalDate,
   sourceKindOf,
   type ICalcObjectText,
   type IBasisFragment,
@@ -279,11 +280,12 @@ const newerRevisions = async (db: Queryable, revisionIds: readonly string[]): Pr
   return new Map(r.rows.filter((x) => x.newer).map((x) => [x.id, x.newer!]));
 };
 
-// Вопросы без ответа (C10): отправленные вопросы заказчику этапа и открытые вопросы–ответы снимка.
+// Вопросы без ответа (C10): отправленные вопросы заказчику этапа и открытые вопросы–ответы снимка. Дата отправки —
+// в поясе портала, а не в UTC (этап 17, S17-16): вопрос, отправленный в 01:30 МСК, — тем же днём.
 const unansweredQuestions = async (db: Queryable, stageId: string, scopeId: string): Promise<IReviewQuestion[]> => {
   const cq = (
     await db.query<{ id: string; asked_at: Date | null }>("SELECT id, asked_at FROM customer_question WHERE stage_id = $1 AND status = 'sent' ORDER BY asked_at, id", [stageId])
-  ).rows.map((q): IReviewQuestion => ({ kind: 'customer_question', id: q.id, revisionId: null, fragmentIds: [], askedAt: q.asked_at ? q.asked_at.toISOString().slice(0, 10) : null }));
+  ).rows.map((q): IReviewQuestion => ({ kind: 'customer_question', id: q.id, revisionId: null, fragmentIds: [], askedAt: q.asked_at ? portalDate(q.asked_at) : null }));
   const qa = (
     await db.query<{ item_id: string; revision_id: string; asked_at: Date | null; fragment_ids: string[] }>(
       `SELECT r.item_id, r.id AS revision_id, r.asked_at,
@@ -292,7 +294,7 @@ const unansweredQuestions = async (db: Queryable, stageId: string, scopeId: stri
         WHERE i.scope_id = $1 AND r.status = 'open' ORDER BY r.item_id`,
       [scopeId],
     )
-  ).rows.map((q): IReviewQuestion => ({ kind: 'qa_item', id: q.item_id, revisionId: q.revision_id, fragmentIds: q.fragment_ids, askedAt: q.asked_at ? q.asked_at.toISOString().slice(0, 10) : null }));
+  ).rows.map((q): IReviewQuestion => ({ kind: 'qa_item', id: q.item_id, revisionId: q.revision_id, fragmentIds: q.fragment_ids, askedAt: q.asked_at ? portalDate(q.asked_at) : null }));
   return [...cq, ...qa];
 };
 

@@ -13,11 +13,10 @@ import { useToast } from '../../hooks/useToast';
 import { INCIDENT_KIND } from '../../utils/sendLabels';
 import styles from '../release/Release.module.css';
 import own from './Send.module.css';
+import { isoToMoscowInput, moscowInputToIso } from '../../utils/datetime';
 
-const localNow = (): string => {
-  const d = new Date();
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-};
+// Время вводится и показывается по Москве, как везде в портале (этап 17, S17-15): пояс браузера не участвует.
+const localNow = (): string => isoToMoscowInput(new Date().toISOString());
 
 interface IIncidentDialogProps {
   releaseId: string;
@@ -46,8 +45,10 @@ export const IncidentDialog: FC<IIncidentDialogProps> = ({ releaseId, testReleas
     setBusy(false);
     toast.push({ kind: 'error', text: describeError(e) });
   };
+  const occurredIso = moscowInputToIso(occurredAt);
   const send = (uploadId: string | null): void => {
-    const body = { kind, occurredAt: new Date(occurredAt).toISOString(), description: description.trim(), uploadId };
+    if (occurredIso === null) return;
+    const body = { kind, occurredAt: occurredIso, description: description.trim(), uploadId };
     registerIncident(releaseId, body, idem.keyFor(body)).then(() => {
       idem.reset();
       setBusy(false);
@@ -57,7 +58,7 @@ export const IncidentDialog: FC<IIncidentDialogProps> = ({ releaseId, testReleas
   };
   const submit = (): void => {
     setTouched(true);
-    if (short || occurredAt === '') return;
+    if (short || occurredIso === null) return;
     setBusy(true);
     if (!file) return send(null);
     uploadSendEvidence(releaseId, file, idem.keyFor({ upload: file.name, size: file.size })).promise.then((u) => {
@@ -85,7 +86,7 @@ export const IncidentDialog: FC<IIncidentDialogProps> = ({ releaseId, testReleas
     >
       <p className={styles.muted}>Нарушение — не отправка: выпуск оно не подтверждает и его режим и готовность не меняет. Запись неизменна.</p>
       <SelectField label="Что произошло" value={kind} onValueChange={(v) => setKind(v as IIncidentView['kind'])} required options={kinds.map((k) => ({ value: k, label: INCIDENT_KIND[k]! }))} />
-      <TextField label="Когда произошло" type="datetime-local" value={occurredAt} onValueChange={setOccurredAt} required error={touched && occurredAt === '' ? 'Укажите время' : undefined} />
+      <TextField label="Когда произошло, МСК" type="datetime-local" value={occurredAt} onValueChange={setOccurredAt} required error={touched && occurredIso === null ? 'Укажите время' : undefined} />
       <TextAreaField label="Описание" value={description} onValueChange={setDescription} required rows={3} maxLength={4000} error={touched && short ? 'Описание — не короче 10 символов' : undefined} />
       <label className={own.file}>
         <span className={styles.label}>Файл-основание (по желанию)</span>

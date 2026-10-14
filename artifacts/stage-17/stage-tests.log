@@ -1,75 +1,82 @@
-# тесты этапа 17, подробный вывод — 2026-10-14T14:35:33+05:00, коммит fc7b599, Linux, PostgreSQL 18.6 + pgvector
+# тесты этапа 17 и регрессии Review 17-1, подробный вывод — 2026-10-14T18:28:02+05:00, коммит cd25ba6, Linux, PostgreSQL 18.6 + pgvector
 
  RUN  v5.0.1 /home/usrr/VSCode/Odintsov/ConturKP
 
  ✓ tests/backupRestore.test.ts > A40: копия БД и файлов > все строки blob данных этапа — настоящие файлы хранилища 2ms
- ✓ tests/backupRestore.test.ts > A40: копия БД и файлов > копия ролью kontur_backup: дамп со снимком, файлы по перечню, манифест; векторы исключены 283ms
- ✓ tests/backupRestore.test.ts > A40: копия БД и файлов > вторая копия связывает неизменные файлы с прошлой, не копируя заново 324ms
- ✓ tests/backupRestore.test.ts > A40: копия БД и файлов > каталог копий внутри хранилища, роль приложения вместо роли копии — отказ без каталога копии 14ms
- ✓ tests/backupRestore.test.ts > A40: восстановление на чистой среде > охранники: рабочая база, существующая база, чужое имя, непустой каталог, рабочее хранилище — отказ 29ms
- ✓ tests/backupRestore.test.ts > A40: восстановление на чистой среде > новая база и пустой каталог: схема, SHA-256 файлов, перечень, выпуски и согласования; векторов нет 1302ms
- ✓ tests/backupRestore.test.ts > A40: восстановление на чистой среде > сервер на копии: исторический выпуск, манифест, оригинал и цитата совпадают с рабочими 266ms
- ✓ tests/backupRestore.test.ts > A40: восстановление на чистой среде > A42: поиск на копии — точный и полнотекстовый работают, смысловой честно недоступен; после достройки векторов — снова полный 203ms
- ✓ tests/backupRestore.test.ts > первое обновление установки этапов 14–16 (до миграции 0043) > копия владельцем схемы (--pre-update) и восстановление старого дампа: функции ограничений исправляются до загрузки 1672ms
- ✓ tests/tls.test.ts > HTTPS-прослушиватель процесса server > /health по TLS 1.2 или 1.3, заголовок HSTS 12ms
- ✓ tests/tls.test.ts > HTTPS-прослушиватель процесса server > cookie сессии — Secure, HttpOnly, SameSite=Strict 75ms
- ✓ tests/tls.test.ts > HTTPS-прослушиватель процесса server > клиент без доверия к корню отказывает; обычный HTTP на порт не проходит 8ms
- ✓ tests/tls.test.ts > HTTPS-прослушиватель процесса server > несовпадающая пара: процесс server не стартует (код 1), ключ в журнал не попадает 10727ms
- ✓ tests/tls.test.ts > config:check — TLS > пара совпадает, адрес из ALLOWED_ORIGINS в сертификате, срок — без замечаний 3ms
- ✓ tests/tls.test.ts > config:check — TLS > чужой ключ, адрес вне сертификата, скорое и прошедшее истечение — названы 1ms
- ✓ tests/routeAccess.test.ts > инвентарь маршрутов > перечисленные маршруты совпадают с инвентарём в обе стороны; перечисление видит все роутеры 3ms
- ✓ tests/routeAccess.test.ts > проходы прав по всем маршрутам > аноним: 401 на всём, кроме открытых точек 1588ms
- ✓ tests/routeAccess.test.ts > проходы прав по всем маршрутам > токен чат-клиента без cookie: API портала его не принимает — 401 1013ms
- ✓ tests/routeAccess.test.ts > проходы прав по всем маршрутам > неназначенный инженер на объектах чужого тендера: только 400/401/403/404 1619ms
- ✓ tests/routeAccess.test.ts > проходы прав по всем маршрутам > прочие изменяющие маршруты неназначенному инженеру без ролей и выдач не дают успеха 344ms
- ✓ tests/routeAccess.test.ts > проходы прав по всем маршрутам > A25: инженер тендера на действиях руководителя — 403 118ms
- ✓ tests/routeAccess.test.ts > проходы прав по всем маршрутам > после всех проходов данные и хранилище не изменились (кроме журнала отказов) 61ms
- ✓ tests/degradation.test.ts > причина сетевого сбоя > DNS, отказ соединения и сертификат различаются; кода ОС достаточно, адреса в тексте нет 13ms
+ ✓ tests/backupRestore.test.ts > A40: копия БД и файлов > копия ролью kontur_backup: дамп со снимком, файлы по перечню, манифест; векторы исключены 326ms
+ ✓ tests/backupRestore.test.ts > A40: копия БД и файлов > вторая копия связывает неизменные файлы с прошлой, не копируя заново 348ms
+ ✓ tests/backupRestore.test.ts > A40: копия БД и файлов > каталог копий внутри хранилища, роль приложения вместо роли копии — отказ без каталога копии 13ms
+ ✓ tests/backupRestore.test.ts > A40: восстановление на чистой среде > охранники: рабочая база, существующая база, чужое имя, непустой каталог, рабочее хранилище — отказ 33ms
+ ✓ tests/backupRestore.test.ts > A40: восстановление на чистой среде > новая база и пустой каталог: схема, SHA-256 файлов, перечень, выпуски и согласования; векторов нет 1425ms
+ ✓ tests/backupRestore.test.ts > A40: восстановление на чистой среде > сервер на копии: исторический выпуск, манифест, оригинал и цитата совпадают с рабочими 232ms
+ ✓ tests/backupRestore.test.ts > A40: восстановление на чистой среде > A42: поиск на копии — точный и полнотекстовый работают, смысловой честно недоступен; после достройки векторов — снова полный 210ms
+ ✓ tests/backupRestore.test.ts > первое обновление установки этапов 14–16 (до миграции 0043) > копия владельцем схемы (--pre-update) и восстановление старого дампа: функции ограничений исправляются до загрузки 1989ms
+ ✓ tests/tls.test.ts > HTTPS-прослушиватель процесса server > /health по TLS 1.2 или 1.3, заголовок HSTS 11ms
+ ✓ tests/tls.test.ts > HTTPS-прослушиватель процесса server > cookie сессии — Secure, HttpOnly, SameSite=Strict 77ms
+ ✓ tests/tls.test.ts > HTTPS-прослушиватель процесса server > клиент без доверия к корню отказывает; обычный HTTP на порт не проходит 10ms
+ ✓ tests/tls.test.ts > HTTPS-прослушиватель процесса server > несовпадающая пара: процесс server не стартует (код 1), ключ в журнал не попадает 10863ms
+ ✓ tests/tls.test.ts > config:check — TLS > пара совпадает, адрес из ALLOWED_ORIGINS в сертификате, срок — без замечаний 4ms
+ ✓ tests/tls.test.ts > config:check — TLS > чужой ключ, адрес вне сертификата, скорое и прошедшее истечение — названы 2ms
+ ✓ tests/routeAccess.test.ts > инвентарь маршрутов > перечисленные маршруты совпадают с инвентарём в обе стороны; перечисление видит все роутеры 2ms
+ ✓ tests/routeAccess.test.ts > проходы прав по всем маршрутам > аноним: 401 на всём, кроме открытых точек 1665ms
+ ✓ tests/routeAccess.test.ts > проходы прав по всем маршрутам > токен чат-клиента без cookie: API портала его не принимает — 401 1029ms
+ ✓ tests/routeAccess.test.ts > проходы прав по всем маршрутам > неназначенный инженер на объектах чужого тендера: только 400/401/403/404 1480ms
+ ✓ tests/routeAccess.test.ts > проходы прав по всем маршрутам > прочие изменяющие маршруты неназначенному инженеру без ролей и выдач не дают успеха 327ms
+ ✓ tests/routeAccess.test.ts > проходы прав по всем маршрутам > A25: инженер тендера на действиях руководителя — 403 131ms
+ ✓ tests/routeAccess.test.ts > проходы прав по всем маршрутам > после всех проходов данные и хранилище не изменились (кроме журнала отказов) 54ms
+ ✓ tests/degradation.test.ts > причина сетевого сбоя > DNS, отказ соединения и сертификат различаются; кода ОС достаточно, адреса в тексте нет 12ms
  ✓ tests/degradation.test.ts > причина сетевого сбоя > шлюзы модели и эмбеддингов называют причину отказа сети 7ms
- ✓ tests/degradation.test.ts > большие и усечённые ответы модели > finish_reason=length — TRUNCATED с подсказкой, а не «невалидный JSON» 11ms
- ✓ tests/degradation.test.ts > большие и усечённые ответы модели > ответ больше предела не читается в память целиком 9ms
- ✓ tests/degradation.test.ts > A39: истёк или отозван ключ модели > статус генеративной модели показывает отказ, ключ нигде не печатается, задание не объявлено успешным 142ms
- ✓ tests/degradation.test.ts > маршруты состояния > статусы интеграций — только после входа; состояние установки — только администратору 242ms
- ✓ tests/gpuConcurrency.test.ts > ограничение GPU-заданий портала > обе полосы и проба: одновременно к модели не больше одного запроса; только два пути API 2351ms
- ✓ tests/workerShutdown.test.ts > releaseJob: возврат задания владельцем > обычное задание — queued, попытка возвращена, аренда снята 37ms
- ✓ tests/workerShutdown.test.ts > releaseJob: возврат задания владельцем > GPU-задание — слот освобождён сразу: второй worker берёт GPU без защитного интервала 25ms
- ✓ tests/workerShutdown.test.ts > releaseJob: возврат задания владельцем > устаревший владелец получает false и не трогает задание и слот (R03-13) 440ms
- ✓ tests/workerShutdown.test.ts > WorkerRuntime.shutdown > прерывает задание: доменная запись после остановки закрыта, задание вернулось с той же попыткой 24ms
- ✓ tests/workerShutdown.test.ts > WorkerRuntime.shutdown > фатальная остановка списывает попытку 26ms
- ✓ tests/workerShutdown.test.ts > WorkerRuntime.shutdown > обработчик не реагирует на прерывание — задание остаётся running до аренды (abandoned) 328ms
- ✓ tests/workerShutdown.test.ts > WorkerRuntime.shutdown > задание, захваченное после начала остановки, не выполняется и сразу возвращается 31ms
- ✓ tests/workerShutdown.test.ts > WorkerRuntime.shutdown > гонка остановки и выполнения: в обоих порядках не остаётся running с токеном этого worker 39ms
- ✓ tests/workerShutdown.test.ts > WorkerRuntime.shutdown > отмена, пришедшая до остановки, проходит доменной отменой, а не возвратом 375ms
- ✓ tests/workerShutdown.test.ts > WorkerRuntime.shutdown > прерванный вызов модели не записывается как отказ модели (S17-04) 20ms
+ ✓ tests/degradation.test.ts > большие и усечённые ответы модели > finish_reason=length — TRUNCATED с подсказкой, а не «невалидный JSON» 12ms
+ ✓ tests/degradation.test.ts > большие и усечённые ответы модели > ответ больше предела не читается в память целиком 17ms
+ ✓ tests/degradation.test.ts > A39: истёк или отозван ключ модели > статус генеративной модели показывает отказ, ключ нигде не печатается, задание не объявлено успешным 133ms
+ ✓ tests/degradation.test.ts > маршруты состояния > статусы интеграций — только после входа; состояние установки — только администратору 159ms
+ ✓ tests/reviewRegressions17.test.ts > R17-01: тайм-аут и отмена модели после заголовков > генеративная модель: тело не дописано — тайм-аут 150 мс срабатывает (TIMEOUT_UNKNOWN_OUTCOME) 164ms
+ ✓ tests/reviewRegressions17.test.ts > R17-01: тайм-аут и отмена модели после заголовков > генеративная модель: отмена после заголовков прерывает чтение тела, это не тайм-аут 207ms
+ ✓ tests/reviewRegressions17.test.ts > R17-01: тайм-аут и отмена модели после заголовков > эмбеддинги: тело не дописано — тайм-аут 150 мс срабатывает (TIMEOUT_UNKNOWN_OUTCOME) 154ms
+ ✓ tests/reviewRegressions17.test.ts > R17-01: тайм-аут и отмена модели после заголовков > эмбеддинги: отмена после заголовков прерывает чтение тела, это не тайм-аут 205ms
+ ✓ tests/reviewRegressions17.test.ts > R17-01: тайм-аут и отмена модели после заголовков > контроль: полный ответ в пределах тайм-аута принимается, таймер после ответа не мешает 1217ms
+ ✓ tests/reviewRegressions17.test.ts > R17-02 и R17-03: worker и восстановление > R17-02: остановка worker прерывает пробу модели, которая ещё не получила заголовков 59ms
+ ✓ tests/reviewRegressions17.test.ts > R17-02 и R17-03: worker и восстановление > R17-03: инструмент восстановления подключится к другому кластеру — отказ до записи: базы нет, pg_restore не запускался 647ms
+ ✓ tests/gpuConcurrency.test.ts > ограничение GPU-заданий портала > обе полосы и проба: одновременно к модели не больше одного запроса; только два пути API 2547ms
+ ✓ tests/workerShutdown.test.ts > releaseJob: возврат задания владельцем > обычное задание — queued, попытка возвращена, аренда снята 28ms
+ ✓ tests/workerShutdown.test.ts > releaseJob: возврат задания владельцем > GPU-задание — слот освобождён сразу: второй worker берёт GPU без защитного интервала 15ms
+ ✓ tests/workerShutdown.test.ts > releaseJob: возврат задания владельцем > устаревший владелец получает false и не трогает задание и слот (R03-13) 422ms
+ ✓ tests/workerShutdown.test.ts > WorkerRuntime.shutdown > прерывает задание: доменная запись после остановки закрыта, задание вернулось с той же попыткой 12ms
+ ✓ tests/workerShutdown.test.ts > WorkerRuntime.shutdown > фатальная остановка списывает попытку 15ms
+ ✓ tests/workerShutdown.test.ts > WorkerRuntime.shutdown > обработчик не реагирует на прерывание — задание остаётся running до аренды (abandoned) 325ms
+ ✓ tests/workerShutdown.test.ts > WorkerRuntime.shutdown > задание, захваченное после начала остановки, не выполняется и сразу возвращается 22ms
+ ✓ tests/workerShutdown.test.ts > WorkerRuntime.shutdown > гонка остановки и выполнения: в обоих порядках не остаётся running с токеном этого worker 57ms
+ ✓ tests/workerShutdown.test.ts > WorkerRuntime.shutdown > отмена, пришедшая до остановки, проходит доменной отменой, а не возвратом 397ms
+ ✓ tests/workerShutdown.test.ts > WorkerRuntime.shutdown > прерванный вызов модели не записывается как отказ модели (S17-04) 29ms
  ✓ tests/workerShutdown.test.ts > WorkerRuntime.shutdown > WorkerStoppingError — остановка, а не ошибка задания 1ms
- ✓ tests/workerShutdown.test.ts > циклы worker и живость > обслуживание очереди не ждёт занятую фоновую полосу; своё активное задание recovery не трогает 64ms
- ✓ tests/workerShutdown.test.ts > циклы worker и живость > заблокированная очередь останавливает ход обслуживания — живость падает, heartbeat не пишется 600ms
- ✓ tests/workerShutdown.test.ts > циклы worker и живость > retireHeartbeat: строка остановленного экземпляра перестаёт быть свежей 11ms
- ✓ tests/workerShutdown.test.ts > циклы worker и живость > /ready: задание с давно истёкшей арендой — очередь не готова 55ms
- ✓ tests/workerShutdown.test.ts > проба модели эмбеддингов (S17-07) > проба — задание model.probe класса gpu: ждёт слот, как любое GPU-задание; пока модель отвечает — не чаще интервала 74ms
- ✓ tests/workerShutdown.test.ts > обрыв соединений БД (S17-02) > простаивающий и выданный клиенты: ошибка не роняет процесс, следующий запрос проходит 52ms
+ ✓ tests/workerShutdown.test.ts > циклы worker и живость > обслуживание очереди не ждёт занятую фоновую полосу; своё активное задание recovery не трогает 89ms
+ ✓ tests/workerShutdown.test.ts > циклы worker и живость > заблокированная очередь останавливает ход обслуживания — живость падает, heartbeat не пишется 653ms
+ ✓ tests/workerShutdown.test.ts > циклы worker и живость > retireHeartbeat: строка остановленного экземпляра перестаёт быть свежей 16ms
+ ✓ tests/workerShutdown.test.ts > циклы worker и живость > /ready: задание с давно истёкшей арендой — очередь не готова 78ms
+ ✓ tests/workerShutdown.test.ts > проба модели эмбеддингов (S17-07) > проба — задание model.probe класса gpu: ждёт слот, как любое GPU-задание; пока модель отвечает — не чаще интервала 64ms
+ ✓ tests/workerShutdown.test.ts > обрыв соединений БД (S17-02) > простаивающий и выданный клиенты: ошибка не роняет процесс, следующий запрос проходит 63ms
  ✓ tests/workerShutdown.test.ts > жизненный цикл процесса (installShutdown) > SIGINT, SIGTERM, SIGBREAK, SIGHUP и IPC запускают одну штатную остановку с кодом 0 2ms
- ✓ tests/workerShutdown.test.ts > жизненный цикл процесса (installShutdown) > повторный сигнал — немедленный выход 4; незавершённая остановка — код 4; срок — выход 4 0ms
+ ✓ tests/workerShutdown.test.ts > жизненный цикл процесса (installShutdown) > повторный сигнал — немедленный выход 4; незавершённая остановка — код 4; срок — выход 4 1ms
  ✓ tests/workerShutdown.test.ts > жизненный цикл процесса (installShutdown) > необработанная ошибка — остановка с признаком fatal и код 1 0ms
  ✓ tests/workerShutdown.test.ts > конфигурация остановки и слота GPU (S17-08) > защитный интервал меньше таймаута модели + 30 с — ошибка конфигурации 2ms
  ✓ tests/timeZones.test.ts > пояс отображения — Europe/Moscow > интерфейс и сервер используют один пояс 2ms
- ✓ tests/timeZones.test.ts > пояс отображения — Europe/Moscow > ввод и показ на границах суток и года: UTC ↔ МСК 2ms
+ ✓ tests/timeZones.test.ts > пояс отображения — Europe/Moscow > ввод и показ на границах суток и года: UTC ↔ МСК 1ms
  ✓ tests/timeZones.test.ts > пояс отображения — Europe/Moscow > дата вопроса для проверки — по Москве, а не по UTC 0ms
- ✓ tests/timeZones.test.ts > пояс отображения — Europe/Moscow > срок TenderHub: со смещением — точный момент, без пояса — UTC (толкование, поведение не меняется) 1ms
- ✓ tests/timeZones.test.ts > ответ API не зависит от пояса сессии БД > срок подачи этапа: ввод со смещением, чтение — тот же момент UTC при TimeZone=Asia/Almaty и Pacific/Kiritimati 982ms
- ✓ tests/storageSpace.test.ts > пороги свободного места > ok / warn / stop / unknown; без политики проверки нет 3ms
- ✓ tests/storageSpace.test.ts > пороги свободного места > BlobStore: отказ до записи и посреди потока — временного файла не остаётся 7ms
- ✓ tests/storageSpace.test.ts > сервер и worker при нехватке места > загрузка — 507 STORAGE_FULL с понятным текстом и аудитом отказа; /ready — запись остановлена 216ms
- ✓ tests/storageSpace.test.ts > сервер и worker при нехватке места > задание при нехватке места ждёт с кодом storage_full, попытка не списана, доменный отказ не записан 34ms
+ ✓ tests/timeZones.test.ts > пояс отображения — Europe/Moscow > срок TenderHub: со смещением — точный момент, без пояса — UTC (толкование, поведение не меняется) 0ms
+ ✓ tests/timeZones.test.ts > ответ API не зависит от пояса сессии БД > срок подачи этапа: ввод со смещением, чтение — тот же момент UTC при TimeZone=Asia/Almaty и Pacific/Kiritimati 1037ms
  ✓ tests/integrationVerify.test.ts > запись живой проверки в базу установки > требования к журналу: LIVE, эта сборка, Итог: PASS 3ms
- ✓ tests/integrationVerify.test.ts > запись живой проверки в базу установки > VERIFIED_LIVE со ссылкой на журнал и SHA-256, событие аудита от администратора 10ms
- ✓ tests/integrationVerify.test.ts > запись живой проверки в базу установки > не администратор, неизвестная интеграция, фикстурный журнал — отказ без записи 7ms
- ✓ tests/backupGrants.test.ts > роль резервной копии > после всех миграций: всё читается, записи, создания объектов и SECURITY DEFINER нет 54ms
- ✓ tests/backupGrants.test.ts > роль резервной копии > таблица и последовательность новой миграции получают SELECT для копии сами (права по умолчанию) 40ms
- ✓ tests/backupGrants.test.ts > роль резервной копии > восстановимость дампа: функции ограничений, индексов и вычисляемых столбцов задают search_path (S17-20) 66ms
- ✓ tests/backupGrants.test.ts > роль резервной копии > снимок экспортирует роль копии: версия схемы, перечень blob в том же снимке 42ms
- ✓ tests/acceptanceCases.test.ts > приёмочная матрица > сценарии матрицы — ровно A01–A46 пакета и RT-01…RT-08 плана тестов 3ms
- ✓ tests/acceptanceCases.test.ts > приёмочная матрица > каждый сценарий закреплён в тестах своим идентификатором 410ms
+ ✓ tests/integrationVerify.test.ts > запись живой проверки в базу установки > VERIFIED_LIVE со ссылкой на журнал и SHA-256, событие аудита от администратора 7ms
+ ✓ tests/integrationVerify.test.ts > запись живой проверки в базу установки > не администратор, неизвестная интеграция, фикстурный журнал — отказ без записи 10ms
+ ✓ tests/storageSpace.test.ts > пороги свободного места > ok / warn / stop / unknown; без политики проверки нет 3ms
+ ✓ tests/storageSpace.test.ts > пороги свободного места > BlobStore: отказ до записи и посреди потока — временного файла не остаётся 3ms
+ ✓ tests/storageSpace.test.ts > сервер и worker при нехватке места > загрузка — 507 STORAGE_FULL с понятным текстом и аудитом отказа; /ready — запись остановлена 99ms
+ ✓ tests/storageSpace.test.ts > сервер и worker при нехватке места > задание при нехватке места ждёт с кодом storage_full, попытка не списана, доменный отказ не записан 11ms
+ ✓ tests/backupGrants.test.ts > роль резервной копии > после всех миграций: всё читается, записи, создания объектов и SECURITY DEFINER нет 21ms
+ ✓ tests/backupGrants.test.ts > роль резервной копии > таблица и последовательность новой миграции получают SELECT для копии сами (права по умолчанию) 30ms
+ ✓ tests/backupGrants.test.ts > роль резервной копии > восстановимость дампа: функции ограничений, индексов и вычисляемых столбцов задают search_path (S17-20) 38ms
+ ✓ tests/backupGrants.test.ts > роль резервной копии > снимок экспортирует роль копии: версия схемы, перечень blob в том же снимке 35ms
+ ✓ tests/acceptanceCases.test.ts > приёмочная матрица > сценарии матрицы — ровно A01–A46 пакета и RT-01…RT-08 плана тестов 2ms
+ ✓ tests/acceptanceCases.test.ts > приёмочная матрица > каждый сценарий закреплён в тестах своим идентификатором 401ms
  ✓ tests/acceptanceCases.test.ts > приёмочная матрица > идентификатор не совпадает с соседними: A1 ≠ A10, RT-01 ≠ RT-010 1ms
  ✓ tests/acceptanceCases.test.ts > приёмочная матрица > статус: тесты с меткой важнее файла; отказ любого — FAIL; нет тестов — NOT_RUN 1ms
  ✓ tests/opsPreflight.test.ts > осмотр целевого ПК > Windows: службы PostgreSQL, vector, GPU, шрифты, питание, сеть разобраны; оценки по требованиям 6ms
@@ -77,14 +84,14 @@
  ✓ tests/opsPreflight.test.ts > осмотр целевого ПК > PostgreSQL 16 без vector — предупреждение; Node 25 — отказ; нет LibreOffice — отказ 1ms
  ✓ tests/opsPreflight.test.ts > осмотр целевого ПК > сервер модели не отвечает или требует ключ — предупреждение, ключ не посылается 1ms
  ✓ tests/opsPreflight.test.ts > осмотр целевого ПК > Linux: проверки Windows не выполняются, службы — n/a 1ms
- ✓ tests/opsPreflight.test.ts > осмотр целевого ПК > разбор строк: путь службы, схема питания, индекс, вид адреса 1ms
+ ✓ tests/opsPreflight.test.ts > осмотр целевого ПК > разбор строк: путь службы, схема питания, индекс, вид адреса 0ms
  ✓ tests/opsService.test.ts > службы WinSW > server: node.exe напрямую, файл окружения, автозапуск, перезапуск, журнал с ротацией, зависимость от PostgreSQL 3ms
- ✓ tests/opsService.test.ts > службы WinSW > worker без нативной службы PostgreSQL (Docker): зависимости нет; срок остановки — по SHUTDOWN_GRACE_SECONDS + 10 0ms
+ ✓ tests/opsService.test.ts > службы WinSW > worker без нативной службы PostgreSQL (Docker): зависимости нет; срок остановки — по SHUTDOWN_GRACE_SECONDS + 10 1ms
  ✓ tests/opsService.test.ts > службы WinSW > расписание копии: ежедневно, пароль задачи спрашивается скрыто (/RP *), команда — node backup.ts с файлом окружения 0ms
 
- Test Files  13 passed (13)
-      Tests  79 passed (79)
-   Start at  14:35:34
-   Duration  66.23s (tests 87%, import 9%, transform 4%)
+ Test Files  14 passed (14)
+      Tests  86 passed (86)
+   Start at  18:28:02
+   Duration  69.23s (tests 87%, import 9%, transform 4%)
 
 exit 0

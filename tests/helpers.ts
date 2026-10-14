@@ -53,10 +53,40 @@ export const createTestDb = async (): Promise<ITestDb> => {
     migratorUrl,
     pool,
     drop: async () => {
-      await pool.end();
-      await dropDatabase(ADMIN_URL, name);
+      // Диагностика очистки (Review 17-1, R17-04): закрытие пула или удаление базы ждут дольше 20 с — в вывод теста
+      // пишутся счётчики пула и сеансы этой базы (какой запрос держит соединение). Ожидание и тайм-ауты не меняются.
+      const started = Date.now();
+      let phase = 'pool.end';
+      const watchdog = setTimeout(() => void dropDiagnostics(name, pool, phase, started), 20_000);
+      watchdog.unref();
+      try {
+        await pool.end();
+        phase = 'DROP DATABASE';
+        await dropDatabase(ADMIN_URL, name);
+      } finally {
+        clearTimeout(watchdog);
+      }
     },
   };
+};
+
+const dropDiagnostics = async (name: string, pool: Pool, phase: string, started: number): Promise<void> => {
+  const head = `[drop-diag] база ${name}: ${phase} ждёт ${Math.round((Date.now() - started) / 1000)} с; пул: всего ${pool.totalCount}, свободно ${pool.idleCount}, ждут ${pool.waitingCount}`;
+  const c = new pg.Client({ connectionString: ADMIN_URL, connectionTimeoutMillis: 5000, query_timeout: 5000 });
+  c.on('error', () => undefined);
+  try {
+    await c.connect();
+    const r = await c.query(
+      `SELECT pid, state, wait_event_type, wait_event, now() - xact_start AS xact_age, now() - query_start AS query_age, left(query, 200) AS query
+         FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`,
+      [name],
+    );
+    console.error(`${head}\n[drop-diag] сеансы базы: ${JSON.stringify(r.rows)}`);
+  } catch (err) {
+    console.error(`${head}\n[drop-diag] сеансы не прочитаны: ${err instanceof Error ? err.message : 'unknown'}`);
+  } finally {
+    await c.end().catch(() => undefined);
+  }
 };
 
 export const testConfig = (overrides: Partial<IAppConfig> = {}): IAppConfig => ({

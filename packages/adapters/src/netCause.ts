@@ -50,3 +50,34 @@ export const readTextLimited = async (res: Response, maxBytes: number): Promise<
   }
   return Buffer.concat(chunks).toString('utf8');
 };
+
+// Граница всей операции запроса — от отправки до конца чтения и разбора тела (R17-01): тайм-аут и внешняя отмена
+// действуют, пока тело не прочитано; снимаются в dispose() из finally всей операции. timedOut() отличает
+// истечение тайм-аута от отмены вызывающим (остановка worker, отмена поиска).
+export interface IOperationGuard {
+  signal: AbortSignal;
+  timedOut: () => boolean;
+  cancelled: () => boolean;
+  dispose: () => void;
+}
+
+export const operationGuard = (timeoutMs: number, external?: AbortSignal): IOperationGuard => {
+  const controller = new AbortController();
+  let expired = false;
+  const timer = setTimeout(() => {
+    expired = true;
+    controller.abort();
+  }, timeoutMs);
+  const onAbort = (): void => controller.abort();
+  if (external?.aborted) controller.abort();
+  else external?.addEventListener('abort', onAbort, { once: true });
+  return {
+    signal: controller.signal,
+    timedOut: () => expired,
+    cancelled: () => !expired && Boolean(external?.aborted),
+    dispose: () => {
+      clearTimeout(timer);
+      external?.removeEventListener('abort', onAbort);
+    },
+  };
+};

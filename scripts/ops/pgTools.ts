@@ -1,7 +1,9 @@
-// pg_dump и pg_restore для копии и проверки восстановления (этап 17, проект §4.3). Поиск: PG_BIN_DIR → PATH →
-// docker exec <PG_DOCKER_CONTAINER> (кластер в контейнере, как у ревьюера). Старший номер версии клиента — не ниже
-// сервера. Пароль — только в окружении дочернего процесса (PGPASSWORD), не в аргументах и не в журнале;
-// shell: false, windowsHide: true. У docker exec нет -t: псевдотерминал испортил бы двоичный поток дампа.
+// pg_dump и pg_restore для копии и проверки восстановления (этап 17, проект §4.3). Поиск: явно заданные PG_BIN_DIR,
+// затем PG_DOCKER_CONTAINER (docker exec — кластер в контейнере, как у ревьюера), затем PATH. Старший номер версии
+// клиента — не ниже сервера. Пароль — только в окружении дочернего процесса (PGPASSWORD), не в аргументах и не в
+// журнале; shell: false, windowsHide: true. У docker exec нет -t: псевдотерминал испортил бы двоичный поток дампа.
+// В режиме docker инструмент подключается к серверу внутри своего контейнера, а не к адресу из URL: какой это
+// кластер, сверяет clusterIdentityProblem через psql того же маршрута (R17-03).
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
@@ -15,6 +17,8 @@ export interface IPgTool {
   prefix: string[];
   dump: string;
   restore: string;
+  // psql того же маршрута — сверка кластера и базы, к которым подключатся pg_dump и pg_restore; null — не найден.
+  psql: string | null;
   version: string;
   major: number;
   container: string | null;
@@ -48,26 +52,33 @@ const DOCKER_ENV = ['PGUSER', 'PGDATABASE', 'PGHOST', 'PGPORT', 'PGPASSWORD', 'P
 export const findPgTools = async (t: IToolEnv): Promise<IPgTool | { error: string }> => {
   const p = t.platform === 'win32' ? win32 : posix;
   const exe = (name: string): string => (t.platform === 'win32' ? `${name}.exe` : name);
-  const candidates: Array<{ mode: 'native'; dump: string; restore: string }> = [];
-  if (t.env.PG_BIN_DIR) candidates.push({ mode: 'native', dump: p.join(t.env.PG_BIN_DIR, exe('pg_dump')), restore: p.join(t.env.PG_BIN_DIR, exe('pg_restore')) });
-  candidates.push({ mode: 'native', dump: exe('pg_dump'), restore: exe('pg_restore') });
-  for (const c of candidates) {
-    const v = await t.run(c.dump, ['--version']).catch(() => ({ code: null, stdout: '' }));
-    const r = await t.run(c.restore, ['--version']).catch(() => ({ code: null, stdout: '' }));
-    if (v.code === 0 && r.code === 0) {
-      const version = v.stdout.trim().split(/\r?\n/u)[0] ?? '';
-      return { mode: 'native', prefix: [], dump: c.dump, restore: c.restore, version, major: majorOf(version), container: null };
-    }
+  const ok = async (file: string, args: string[]): Promise<{ code: number | null; stdout: string }> => t.run(file, args).catch(() => ({ code: null, stdout: '' }));
+  const native = async (dir: string | null): Promise<IPgTool | null> => {
+    const at = (name: string): string => (dir ? p.join(dir, exe(name)) : exe(name));
+    const v = await ok(at('pg_dump'), ['--version']);
+    const r = await ok(at('pg_restore'), ['--version']);
+    if (v.code !== 0 || r.code !== 0) return null;
+    const q = await ok(at('psql'), ['--version']);
+    const version = v.stdout.trim().split(/\r?\n/u)[0] ?? '';
+    return { mode: 'native', prefix: [], dump: at('pg_dump'), restore: at('pg_restore'), psql: q.code === 0 ? at('psql') : null, version, major: majorOf(version), container: null };
+  };
+  // Явная настройка важнее PATH: администратор, задавший контейнер, имеет в виду его (R17-03).
+  if (t.env.PG_BIN_DIR) {
+    const found = await native(t.env.PG_BIN_DIR);
+    if (found) return found;
   }
   const container = t.env.PG_DOCKER_CONTAINER;
   if (container) {
-    const v = await t.run('docker', ['exec', container, 'pg_dump', '--version']).catch(() => ({ code: null, stdout: '' }));
+    const v = await ok('docker', ['exec', container, 'pg_dump', '--version']);
     if (v.code === 0) {
+      const q = await ok('docker', ['exec', container, 'psql', '--version']);
       const version = v.stdout.trim().split(/\r?\n/u)[0] ?? '';
       const prefix = ['docker', 'exec', '-i', ...DOCKER_ENV.flatMap((n) => ['-e', n]), container];
-      return { mode: 'docker', prefix, dump: 'pg_dump', restore: 'pg_restore', version, major: majorOf(version), container };
+      return { mode: 'docker', prefix, dump: 'pg_dump', restore: 'pg_restore', psql: q.code === 0 ? 'psql' : null, version, major: majorOf(version), container };
     }
   }
+  const fromPath = await native(null);
+  if (fromPath) return fromPath;
   return { error: 'не найдены pg_dump и pg_restore: задайте PG_BIN_DIR (каталог bin PostgreSQL) или PG_DOCKER_CONTAINER (контейнер с PostgreSQL)' };
 };
 
@@ -153,3 +164,38 @@ export const runPgRestore = async (
   const code = await exited;
   return { code, stderr: stderr.slice(0, STDERR_LIMIT), command: [a.file, ...a.args].join(' ') };
 };
+
+// Один запрос через psql того же маршрута, что у pg_dump и pg_restore: ответ — без заголовков, одна строка.
+export const runPsql = async (tool: IPgTool, url: string, sql: string, env: Record<string, string | undefined> = process.env): Promise<IRunResult & { stdout: string }> => {
+  if (!tool.psql) return { code: null, stderr: 'psql не найден рядом с pg_restore', stdout: '' };
+  const a = argv(tool, tool.psql, ['-X', '-A', '-t', '-q', '-v', 'ON_ERROR_STOP=1', '-c', sql]);
+  const child = spawn(a.file, a.args, { env: childEnv(pgEnvOf(url, tool, env)), stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, shell: false });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', (d: Buffer) => {
+    if (stdout.length < STDERR_LIMIT) stdout += d.toString('utf8');
+  });
+  child.stderr.on('data', (d: Buffer) => {
+    if (stderr.length < STDERR_LIMIT) stderr += d.toString('utf8');
+  });
+  const code = await new Promise<number | null>((resolve) => {
+    child.on('close', (c) => resolve(c));
+    child.on('error', () => resolve(null));
+  });
+  return { code, stdout: stdout.trim(), stderr: stderr.slice(0, STDERR_LIMIT) };
+};
+
+// Текстом: идентификатор кластера больше безопасного int8 разборщика pg (pool.ts).
+export const CLUSTER_ID_SQL = 'SELECT system_identifier::text AS system_identifier FROM pg_control_system()';
+
+// Кластер, к которому подключится инструмент, — тот же, что у прямого подключения по URL (R17-03): в режиме docker
+// pg_restore идёт в сервер своего контейнера, и без сверки охранники и запись смотрели бы в разные кластеры.
+// directId — идентификатор кластера, прочитанный прямым подключением по тому же URL. null — совпадает.
+export const clusterIdentityProblem = async (tool: IPgTool, url: string, directId: string, env: Record<string, string | undefined> = process.env): Promise<string | null> => {
+  const r = await runPsql(tool, url, CLUSTER_ID_SQL, env);
+  const where = tool.mode === 'docker' ? `контейнер PG_DOCKER_CONTAINER=${tool.container}` : 'клиент PostgreSQL';
+  if (r.code !== 0) return `не удалось сверить кластер инструмента (${where}): ${r.stderr.trim().slice(0, 300) || `код ${r.code}`}`;
+  if (r.stdout !== directId) return `инструмент подключится к другому кластеру PostgreSQL (${where}): идентификатор ${r.stdout || '—'}, у адреса из настроек — ${directId}`;
+  return null;
+};
+

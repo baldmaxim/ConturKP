@@ -11,7 +11,9 @@ export const MODEL_PROBE_PRIORITY = 95;
 
 export const modelProbeHandler: IJobHandlerSpec = {
   run: async (ctx: IJobContext) => {
-    await runSearchMaintenance({ pool: ctx.pool, config: ctx.config, embeddings: ctx.embeddings, log: () => undefined }, { checkModel: true });
+    // Сигнал задания — в пробу (R17-02): остановка worker и потеря аренды прерывают запрос к модели, а шлюз
+    // (guardGateway) превращает прерванный вызов в остановку, а не в «модель недоступна».
+    await runSearchMaintenance({ pool: ctx.pool, config: ctx.config, embeddings: ctx.embeddings, log: () => undefined, signal: ctx.signal }, { checkModel: true });
     await ctx.complete();
   },
 };

@@ -2,7 +2,7 @@
 // llama.cpp server. Адрес — только loopback или LAN (D-013); ключ, если задан, — только в заголовке.
 // Инструментов у модели нет; температура 0 — ответ как можно более воспроизводим.
 import { isLocalModelUrl } from '../embeddings/openaiCompatible.ts';
-import { describeNetworkError, readTextLimited } from '../netCause.ts';
+import { describeNetworkError, operationGuard, readTextLimited, type IOperationGuard } from '../netCause.ts';
 import { chatError, type ChatModelResult, type IChatCompleteInput, type IChatCompletion, type IModelGatewayChat } from './types.ts';
 
 export interface IOpenAiCompatibleChatOptions {
@@ -38,11 +38,26 @@ export class OpenAiCompatibleChat implements IModelGatewayChat {
     this.inferenceConfig = { temperature: 0, maxOutputTokens: o.maxOutputTokens, jsonMode: o.jsonMode, maxInputChars: o.maxInputChars };
   }
 
+  // Тайм-аут и отмена действуют до конца чтения и разбора тела (R17-01): сервер, отдавший заголовки и не
+  // дописавший JSON, иначе держал бы вызов, а с ним GPU-задание и остановку worker.
   async complete(input: IChatCompleteInput): Promise<ChatModelResult<IChatCompletion>> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.o.timeoutMs);
-    const onAbort = (): void => controller.abort();
-    input.signal?.addEventListener('abort', onAbort, { once: true });
+    const guard = operationGuard(this.o.timeoutMs, input.signal);
+    try {
+      return await this.request(input, guard);
+    } finally {
+      guard.dispose();
+    }
+  }
+
+  private interrupted(guard: IOperationGuard, err: unknown, phase: 'request' | 'body'): ChatModelResult<IChatCompletion> {
+    if (guard.timedOut()) return chatError('TIMEOUT_UNKNOWN_OUTCOME', `модель не ответила за ${this.o.timeoutMs} мс`, true);
+    if (guard.cancelled()) return chatError('UNAVAILABLE', 'запрос к модели отменён', true);
+    return phase === 'request'
+      ? chatError('UNAVAILABLE', `модель недоступна: ${describeNetworkError(err)}`, true)
+      : chatError('UNAVAILABLE', `модель оборвала ответ: ${describeNetworkError(err)}`, true);
+  }
+
+  private async request(input: IChatCompleteInput, guard: IOperationGuard): Promise<ChatModelResult<IChatCompletion>> {
     const startedAt = new Date();
     let res: Response;
     try {
@@ -60,16 +75,10 @@ export class OpenAiCompatibleChat implements IModelGatewayChat {
           stream: false,
           ...(this.o.jsonMode === 'json_object' ? { response_format: { type: 'json_object' } } : {}),
         }),
-        signal: controller.signal,
+        signal: guard.signal,
       });
     } catch (err) {
-      const timedOut = controller.signal.aborted && !input.signal?.aborted;
-      return timedOut
-        ? chatError('TIMEOUT_UNKNOWN_OUTCOME', `модель не ответила за ${this.o.timeoutMs} мс`, true)
-        : chatError('UNAVAILABLE', `модель недоступна: ${describeNetworkError(err)}`, true);
-    } finally {
-      clearTimeout(timer);
-      input.signal?.removeEventListener('abort', onAbort);
+      return this.interrupted(guard, err, 'request');
     }
     if (res.status === 401 || res.status === 403) return chatError('AUTH_FAILED', `модель отказала в доступе: HTTP ${res.status}`, false);
     if (res.status === 429) return chatError('RATE_LIMITED', 'модель перегружена: HTTP 429', true);
@@ -80,7 +89,7 @@ export class OpenAiCompatibleChat implements IModelGatewayChat {
     try {
       text = await readTextLimited(res, limit);
     } catch (err) {
-      return chatError('UNAVAILABLE', `модель оборвала ответ: ${describeNetworkError(err)}`, true);
+      return this.interrupted(guard, err, 'body');
     }
     if (text === null) return chatError('TRUNCATED', `ответ модели больше ${Math.round(limit / 1024 / 1024)} МиБ — не принят`, false);
     let body: unknown;

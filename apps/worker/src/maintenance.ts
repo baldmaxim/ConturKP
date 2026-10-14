@@ -30,6 +30,8 @@ export interface IMaintenanceDeps {
   config: IAppConfig;
   embeddings: IModelGatewayEmbeddings | null;
   log: (line: string) => void;
+  // Сигнал задания model.probe (R17-02): остановка worker прерывает уже выполняющуюся пробу модели.
+  signal?: AbortSignal;
 }
 
 export interface IMaintenanceReport {
@@ -67,7 +69,7 @@ export const runSearchMaintenance = async (d: IMaintenanceDeps, o: { checkModel:
     // Модель не настроена: смысловая ветка сразу честно недоступна, без заданий, обречённых на отказ.
     if (o.checkModel) await recordModelStatus(d.pool, { ok: false, errorCode: 'model_unavailable', verification, details: { kind: 'none' } });
   } else if (o.checkModel) {
-    const probe = await d.embeddings.probe();
+    const probe = await d.embeddings.probe(d.signal);
     if (!probe.ok) {
       report.model = probe.error.reason === 'dimension_mismatch' ? 'dimension_mismatch' : 'unavailable';
       await recordModelStatus(d.pool, { ok: false, errorCode: probe.error.reason, verification, details: { kind: d.embeddings.kind, model: d.embeddings.model, code: probe.error.code } });

@@ -1,8 +1,9 @@
 // Проверка восстановления на чистом окружении (этап 17, ADR-011 §11, проект §4.4). Общая для ops:restore-check и
 // тестов: только новая база kontur_restore_* и пустой каталог хранилища — никогда поверх рабочей системы, ключа
 // обхода нет. Каждый шаг — строка PASS/FAIL с фактом (команда без секретов, хэши, числа).
+import { randomBytes } from 'node:crypto';
 import pg from 'pg';
-import { blobReferences, checkSchema, createPool, restoreUnsafeFunctions, setupDatabase, type IRolePasswords, type Pool } from '../../packages/db/src/index.ts';
+import { blobReferences, checkSchema, createPool, dropDatabase, restoreUnsafeFunctions, setupDatabase, type IRolePasswords, type Pool } from '../../packages/db/src/index.ts';
 import {
   BackupError,
   blobListSha256,
@@ -15,7 +16,7 @@ import {
   type IBackupManifest,
 } from '../../packages/storage/src/index.ts';
 import { join } from 'node:path';
-import { runPgRestore, type IPgTool } from './pgTools.ts';
+import { CLUSTER_ID_SQL, clusterIdentityProblem, runPgRestore, runPsql, type IPgTool } from './pgTools.ts';
 
 export const RESTORE_DB_RE = /^kontur_restore_[a-z0-9_]{1,40}$/u;
 
@@ -92,6 +93,39 @@ export const restoreGuards = async (o: Pick<IRestoreOptions, 'adminUrl' | 'dbNam
   return problems;
 };
 
+const directQuery = async <T extends pg.QueryResultRow>(url: string, sql: string): Promise<T[]> => {
+  const c = new pg.Client({ connectionString: url });
+  c.on('error', () => undefined);
+  await c.connect();
+  try {
+    return (await c.query<T>(sql)).rows;
+  } finally {
+    await c.end().catch(() => undefined);
+  }
+};
+
+// Маршрут pg_restore (R17-03): инструмент подключится к тому же кластеру, что проверили охранники, и базы проверки
+// там тоже нет. Только чтение, до любой записи. Имя базы уже проверено охранниками (RESTORE_DB_RE).
+export const restoreRouteProblems = async (o: Pick<IRestoreOptions, 'tool' | 'adminUrl' | 'dbName' | 'env'>): Promise<string[]> => {
+  if (!o.tool.psql) return ['рядом с pg_restore нет psql: без него нельзя проверить, в какой кластер пойдёт восстановление'];
+  const direct = (await directQuery<{ system_identifier: string }>(o.adminUrl, CLUSTER_ID_SQL))[0]?.system_identifier ?? '';
+  const identity = await clusterIdentityProblem(o.tool, o.adminUrl, String(direct), o.env);
+  if (identity) return [identity];
+  const seen = await runPsql(o.tool, o.adminUrl, `SELECT count(*) FROM pg_database WHERE datname = '${o.dbName}'`, o.env);
+  if (seen.code !== 0 || seen.stdout !== '0') return [`база «${o.dbName}» видна инструменту восстановления как существующая или не проверена (${seen.stdout || seen.stderr.trim().slice(0, 200)})`];
+  return [];
+};
+
+// Метка новой базы (R17-03): после создания базы проверки инструмент должен увидеть именно её — по метке в
+// комментарии, поставленной прямым подключением. Метка снимается после сверки.
+const sameDatabaseProblem = async (o: Pick<IRestoreOptions, 'tool' | 'adminUrl' | 'dbName' | 'env'>): Promise<string | null> => {
+  const mark = `kontur-restore-check ${randomBytes(12).toString('hex')}`;
+  await directQuery(o.adminUrl, `COMMENT ON DATABASE "${o.dbName}" IS '${mark}'`);
+  const seen = await runPsql(o.tool, o.adminUrl, `SELECT shobj_description(oid, 'pg_database') FROM pg_database WHERE datname = '${o.dbName}'`, o.env);
+  await directQuery(o.adminUrl, `COMMENT ON DATABASE "${o.dbName}" IS NULL`);
+  return seen.code === 0 && seen.stdout === mark ? null : `инструмент восстановления не видит метку новой базы «${o.dbName}»: это другая база или другой кластер`;
+};
+
 export const runRestoreCheck = async (o: IRestoreOptions): Promise<IRestoreResult> => {
   const steps: IRestoreStep[] = [];
   const step = (name: string, ok: boolean, detail: string): boolean => {
@@ -119,8 +153,20 @@ export const runRestoreCheck = async (o: IRestoreOptions): Promise<IRestoreResul
     return result(manifest, null);
   }
 
+  // До любой записи: pg_restore пойдёт в тот же кластер, что проверили охранники (R17-03).
+  const route = await restoreRouteProblems(o);
+  if (!step('pg_restore — тот же кластер, что проверили охранники', route.length === 0, route.join('; ') || `${o.tool.mode === 'docker' ? `контейнер ${o.tool.container}` : 'клиент PostgreSQL'}: идентификатор кластера совпал, базы ${o.dbName} нет`)) {
+    return result(manifest, null);
+  }
+
   await setupDatabase(o.adminUrl, o.dbName, o.passwords ?? {});
   step('пустая база создана', true, `db:setup → ${o.dbName} (роли, локаль builtin, vector, pg_trgm)`);
+  const same = await sameDatabaseProblem(o);
+  if (!step('pg_restore видит именно новую базу (метка)', same === null, same ?? 'метка новой базы прочитана инструментом восстановления')) {
+    // База создана этим запуском и пуста — удаляется, чтобы не мешать следующей проверке.
+    await dropDatabase(o.adminUrl, o.dbName).catch(() => undefined);
+    return result(manifest, null);
+  }
   // Три секции дампа: после схемы (pre-data) функции ограничений и вычисляемых столбцов без search_path получают его —
   // иначе COPY дампа, снятого до миграции 0043, падает (S17-20). У дампа после 0043 исправлять нечего.
   const target = withDb(o.adminUrl, o.dbName);

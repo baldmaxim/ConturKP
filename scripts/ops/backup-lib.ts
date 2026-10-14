@@ -18,7 +18,7 @@ import {
   writeManifest,
   type IBackupManifest,
 } from '../../packages/storage/src/index.ts';
-import { runPgDump, versionProblem, type IPgTool } from './pgTools.ts';
+import { CLUSTER_ID_SQL, clusterIdentityProblem, runPgDump, versionProblem, type IPgTool } from './pgTools.ts';
 
 // Векторы и кеш эмбеддингов пересобираются (ADR-011 §7, ADR-012 §10); heartbeat процессов — не данные.
 export const EXCLUDED_TABLE_DATA = ['public.search_chunk_vector', 'public.embedding_cache', 'public.process_heartbeat'] as const;
@@ -82,6 +82,13 @@ export const runBackup = async (o: IBackupOptions): Promise<IBackupResult> => {
       if (problems.length > 0) throw new BackupError('backup_role', `права роли копии: ${problems.join('; ')}. Выполните npm run db:migrate`);
       const restorable = await restoreSafetyProblems(check);
       if (restorable.length > 0) throw new BackupError('dump_not_restorable', `${restorable.join('; ')}. Выполните npm run db:migrate`);
+    }
+    // pg_dump в режиме docker идёт в сервер своего контейнера (R17-03): тот ли это кластер, что у BACKUP_DATABASE_URL.
+    // Без psql сверку заменяет снимок: чужой кластер его не знает, и pg_dump откажет.
+    if (o.tool.psql) {
+      const direct = (await check.query<{ system_identifier: string }>(CLUSTER_ID_SQL)).rows[0]?.system_identifier ?? '';
+      const problem = await clusterIdentityProblem(o.tool, o.backupUrl, String(direct), o.env);
+      if (problem) throw new BackupError('pg_dump_route', problem);
     }
   } finally {
     await check.end().catch(() => undefined);

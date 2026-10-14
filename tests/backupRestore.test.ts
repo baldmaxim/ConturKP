@@ -71,7 +71,13 @@ describe('A40: копия БД и файлов', () => {
   });
 
   it('копия ролью kontur_backup: дамп со снимком, файлы по перечню, манифест; векторы исключены', async () => {
-    const r = await runBackup({ backupUrl: as('kontur_backup'), storageRoot: s.st.e.config.storageRoot, backupRoot, tool, host: 'test', build: null, log: (l) => log.push(l) });
+    // Пароль в адресе: настоящий, если он задан, иначе метка (тестовый кластер пускает без пароля). В команде и
+    // журнале не должно быть его значения, PGPASSWORD=<значение> и адреса с учётными данными. Имя переменной
+    // (`-e PGPASSWORD` у docker exec) значением не является (R17-04).
+    const url = new URL(as('kontur_backup'));
+    if (!url.password) url.password = `pw-marker-${randomBytes(6).toString('hex')}`;
+    const secret = decodeURIComponent(url.password);
+    const r = await runBackup({ backupUrl: url.toString(), storageRoot: s.st.e.config.storageRoot, backupRoot, tool, host: 'test', build: null, log: (l) => log.push(l) });
     backupDir = r.dir;
     const m = await readManifest(r.dir);
     const blobs = await s.st.db.pool.query<{ n: number }>('SELECT count(*)::int AS n FROM blob');
@@ -81,9 +87,11 @@ describe('A40: копия БД и файлов', () => {
     expect(m.dump.excludedTableData).toEqual([...EXCLUDED_TABLE_DATA]);
     expect(m.dump.sizeBytes).toBe(statSync(join(r.dir, 'db.dump')).size);
     expect(await verifyBackupFiles(r.dir, m)).toEqual([]);
-    expect(r.dumpCommand).not.toContain('PGPASSWORD');
-    expect(r.dumpCommand).not.toMatch(/postgres(ql)?:\/\//u);
-    expect(log.join('\n')).not.toMatch(/postgres(ql)?:\/\//u);
+    for (const text of [r.dumpCommand, log.join('\n')]) {
+      expect(text).not.toContain(secret);
+      expect(text).not.toMatch(/PGPASSWORD=/u);
+      expect(text).not.toMatch(/postgres(ql)?:\/\//u);
+    }
   });
 
   it('вторая копия связывает неизменные файлы с прошлой, не копируя заново', async () => {

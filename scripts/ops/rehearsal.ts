@@ -21,6 +21,9 @@ const ACCEPTED = '8964017';
 const ADMIN = process.env.KONTUR_TEST_ADMIN_URL ?? 'postgresql://postgres@127.0.0.1:55432/postgres';
 const DB = 'kontur_kp_rehearsal_test';
 const CONTAINER = 'kontur-restore-pg';
+// Второй одноразовый кластер — «неправильная сторона» в проверке маршрута восстановления (R17-03).
+const WRONG_CONTAINER = 'kontur-restore-pg-wrong';
+const ROUTE_DB = 'kontur_restore_route_probe';
 const IMAGE = 'pgvector/pgvector:pg18';
 const PASSWORD = `pw-${randomBytes(12).toString('hex')}`;
 const OWNER = 'reh.owner';
@@ -138,6 +141,7 @@ const main = async (): Promise<void> => {
   for (const k of ['TLS_CERT_FILE', 'TLS_KEY_FILE', 'TENDERHUB_URL', 'TENDERHUB_API_KEY', 'INTAKE_ROOTS', 'RESTORE_ADMIN_URL', 'RESTORE_STORAGE_ROOT']) delete env[k];
   const procs: IProc[] = [];
   let containerUp = false;
+  let wrongUp = false;
   try {
     await adminQuery(ADMIN, `DROP DATABASE IF EXISTS ${DB} WITH (FORCE)`);
 
@@ -266,7 +270,43 @@ const main = async (): Promise<void> => {
     const restoreAdmin = `postgresql://postgres@127.0.0.1:${restorePort}/postgres`;
     const pgUp = await waitFor(async () => ((await adminQuery(restoreAdmin, 'SELECT 1')).rowCount === 1 ? true : null), 60_000, 1000);
     record(`чистый кластер ${IMAGE} на отдельном порту`, Boolean(pgUp));
-    const restoreEnv: NodeJS.ProcessEnv = { ...env, RESTORE_ADMIN_URL: restoreAdmin, RESTORE_STORAGE_ROOT: restoreRoot };
+    // Инструмент восстановления — из контейнера чистого кластера (R17-03): унаследованный PG_DOCKER_CONTAINER указывал
+    // бы на исходный кластер, и pg_restore ушёл бы туда.
+    const restoreEnv: NodeJS.ProcessEnv = { ...env, RESTORE_ADMIN_URL: restoreAdmin, RESTORE_STORAGE_ROOT: restoreRoot, PG_DOCKER_CONTAINER: CONTAINER };
+    delete restoreEnv.PG_BIN_DIR;
+
+    // Маршрут восстановления (R17-03): охранники смотрят в чистый кластер, а инструмент — в контейнер другого кластера,
+    // где уже есть одноимённая база с контрольной таблицей. Отказ должен прийти до записи: на неправильной стороне
+    // таблиц не прибавилось, на правильной базы не появилось.
+    const wrongPort = await freePort();
+    const wrong = await exec('docker', ['run', '-d', '--rm', '--name', WRONG_CONTAINER, '-p', `127.0.0.1:${wrongPort}:5432`, '-e', 'POSTGRES_HOST_AUTH_METHOD=trust', IMAGE], { timeoutMs: 300_000 });
+    wrongUp = wrong.code === 0;
+    const wrongAdmin = `postgresql://postgres@127.0.0.1:${wrongPort}/postgres`;
+    const wrongDb = `postgresql://postgres@127.0.0.1:${wrongPort}/${ROUTE_DB}`;
+    const wrongReady = wrongUp ? await waitFor(async () => ((await adminQuery(wrongAdmin, 'SELECT 1')).rowCount === 1 ? true : null), 60_000, 1000) : null;
+    if (!wrongReady) {
+      record('маршрут восстановления: второй кластер', null, wrong.out.trim().slice(0, 200));
+    } else {
+      await adminQuery(wrongAdmin, `CREATE DATABASE ${ROUTE_DB}`);
+      await adminQuery(wrongDb, 'CREATE TABLE route_control (id int)');
+      const tablesOf = async (): Promise<number> => Number((await adminQuery(wrongDb, "SELECT count(*)::int AS n FROM pg_tables WHERE schemaname = 'public'")).rows[0].n);
+      const before = await tablesOf();
+      const routeRoot = mkdtempSync(join(tmpdir(), 'kontur-reh-route-'));
+      r = await exec(process.execPath, ['scripts/ops/restore-check.ts', '--db', ROUTE_DB], {
+        env: { ...restoreEnv, PG_DOCKER_CONTAINER: WRONG_CONTAINER, RESTORE_STORAGE_ROOT: routeRoot },
+        timeoutMs: 300_000,
+      });
+      const after = await tablesOf();
+      const created = (await adminQuery(restoreAdmin, 'SELECT 1 FROM pg_database WHERE datname = $1', [ROUTE_DB])).rowCount ?? 0;
+      const refused = r.out.split('\n').find((l) => l.includes('тот же кластер')) ?? '';
+      record(
+        'маршрут восстановления: инструмент смотрит в другой кластер — отказ до записи',
+        r.code === 1 && /FAIL/u.test(refused) && after === before && created === 0,
+        `код ${r.code}; таблиц на неправильной стороне ${before} → ${after}; база на правильной стороне ${created ? 'создана' : 'не создана'}; ${refused.replace(/^\s*FAIL\s+/u, '').slice(0, 220)}`,
+      );
+      rmSync(routeRoot, { recursive: true, force: true });
+    }
+
     r = await exec(process.execPath, ['scripts/ops/restore-check.ts', '--db', 'kontur_restore_rehearsal', '--login', 'demo.eng1', '--password-stdin', '--vectors-timeout', '300'], {
       env: restoreEnv,
       input: PASSWORD,
@@ -305,6 +345,7 @@ const main = async (): Promise<void> => {
   } finally {
     for (const p of procs) await stopNode(p, 15_000).catch(() => undefined);
     if (containerUp) await exec('docker', ['stop', CONTAINER], { timeoutMs: 120_000 });
+    if (wrongUp) await exec('docker', ['stop', WRONG_CONTAINER], { timeoutMs: 120_000 });
     await adminQuery(ADMIN, `DROP DATABASE IF EXISTS ${DB} WITH (FORCE)`).catch(() => undefined);
     for (const dir of [storage, backupRoot, restoreRoot, oldTree]) rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
   }

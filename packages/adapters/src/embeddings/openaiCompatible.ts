@@ -3,7 +3,7 @@
 // Locus (RAG_EMBEDDINGS_BASE_URL / RAG_EMBEDDINGS_MODEL). Адрес — только loopback или LAN:
 // облачного запасного пути нет (D-013). Ключ, если задан, уходит только в заголовок запроса.
 import { MAX_EMBEDDING_DIM, PROBE_TEXT } from '@kontur/core';
-import { describeNetworkError, readTextLimited } from '../netCause.ts';
+import { describeNetworkError, operationGuard, readTextLimited, type IOperationGuard } from '../netCause.ts';
 import { embeddingError, validateVectors, type EmbeddingResult, type IEmbedOutput, type IModelGatewayEmbeddings, type IModelProbe } from './types.ts';
 
 // Предел тела ответа эмбеддингов (этап 17): пачка из 32 векторов по 4000 чисел — около 2 МиБ JSON.
@@ -58,12 +58,27 @@ export class OpenAiCompatibleEmbeddings implements IModelGatewayEmbeddings {
     this.batchSize = o.batchSize;
   }
 
+  // Тайм-аут и отмена действуют до конца чтения и разбора тела (R17-01): сервер, отдавший заголовки и не
+  // дописавший JSON, иначе держал бы вызов, а с ним GPU-задание и остановку worker.
   async embed(input: { texts: string[]; purpose: 'index' | 'query'; signal?: AbortSignal }): Promise<EmbeddingResult<IEmbedOutput>> {
     if (input.texts.length === 0) return { ok: true, value: { vectors: [], dim: this.o.expectedDim ?? 0 } };
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.o.timeoutMs);
-    const onAbort = (): void => controller.abort();
-    input.signal?.addEventListener('abort', onAbort, { once: true });
+    const guard = operationGuard(this.o.timeoutMs, input.signal);
+    try {
+      return await this.request(input, guard);
+    } finally {
+      guard.dispose();
+    }
+  }
+
+  private interrupted(guard: IOperationGuard, err: unknown, phase: 'request' | 'body'): EmbeddingResult<IEmbedOutput> {
+    if (guard.timedOut()) return embeddingError('TIMEOUT_UNKNOWN_OUTCOME', 'model_unavailable', `модель не ответила за ${this.o.timeoutMs} мс`, true);
+    if (guard.cancelled()) return embeddingError('UNAVAILABLE', 'model_unavailable', 'запрос к модели эмбеддингов отменён', true);
+    return phase === 'request'
+      ? embeddingError('UNAVAILABLE', 'model_unavailable', `модель недоступна: ${describeNetworkError(err)}`, true)
+      : embeddingError('UNAVAILABLE', 'model_unavailable', `модель оборвала ответ: ${describeNetworkError(err)}`, true);
+  }
+
+  private async request(input: { texts: string[] }, guard: IOperationGuard): Promise<EmbeddingResult<IEmbedOutput>> {
     let res: Response;
     try {
       res = await (this.o.fetchImpl ?? fetch)(`${this.o.baseUrl.replace(/\/+$/u, '')}/embeddings`, {
@@ -73,16 +88,10 @@ export class OpenAiCompatibleEmbeddings implements IModelGatewayEmbeddings {
           ...(this.o.apiKey ? { Authorization: `Bearer ${this.o.apiKey}` } : {}),
         },
         body: JSON.stringify({ model: this.o.model, input: input.texts, encoding_format: 'float' }),
-        signal: controller.signal,
+        signal: guard.signal,
       });
     } catch (err) {
-      const timedOut = controller.signal.aborted && !input.signal?.aborted;
-      return timedOut
-        ? embeddingError('TIMEOUT_UNKNOWN_OUTCOME', 'model_unavailable', `модель не ответила за ${this.o.timeoutMs} мс`, true)
-        : embeddingError('UNAVAILABLE', 'model_unavailable', `модель недоступна: ${describeNetworkError(err)}`, true);
-    } finally {
-      clearTimeout(timer);
-      input.signal?.removeEventListener('abort', onAbort);
+      return this.interrupted(guard, err, 'request');
     }
     if (res.status === 401 || res.status === 403) return embeddingError('AUTH_FAILED', 'model_unavailable', `модель отказала в доступе: HTTP ${res.status}`, false);
     if (res.status === 429) return embeddingError('RATE_LIMITED', 'model_unavailable', 'модель перегружена: HTTP 429', true);
@@ -95,7 +104,7 @@ export class OpenAiCompatibleEmbeddings implements IModelGatewayEmbeddings {
       body = JSON.parse(text) as unknown;
     } catch (err) {
       if (err instanceof SyntaxError) return embeddingError('INVALID_DATA', 'semantic_failed', 'ответ модели — не JSON', false);
-      return embeddingError('UNAVAILABLE', 'model_unavailable', `модель оборвала ответ: ${describeNetworkError(err)}`, true);
+      return this.interrupted(guard, err, 'body');
     }
     const data = (body as { data?: unknown }).data;
     if (!Array.isArray(data)) return embeddingError('CONTRACT_MISMATCH', 'semantic_failed', 'в ответе модели нет data[]', false);

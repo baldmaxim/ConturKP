@@ -2,11 +2,11 @@
 
 Локальный портал подготовки, проверки, согласования и выпуска коммерческих предложений Генподрядчика.
 
-Разработка идёт по этапам пакета `docs/spec/`. Реализован каркас этапа 02: вход, роли и назначения, тендеры и этапы, журнал действий, health/readiness. Остальные модули — следующие этапы.
+Разработка идёт по этапам пакета `docs/spec/`; состояние этапов — [docs/project-state.md](docs/project-state.md). Этапы 00–16 приняты; этап 17 — эксплуатация: службы Windows, копии и восстановление, состояние установки.
 
 ## Запуск
 
-Чистый старт, тесты и доступ из LAN — [docs/runbooks/clean-start.md](docs/runbooks/clean-start.md). Кратко: `npm ci`, `npm run pg:init && npm run pg:start`, `.env` по образцу `.env.example`, `npm run db:setup && npm run db:migrate`, `npm run bootstrap -- --login … --name "…"`, `npm run build`, `npm run start:server` и `npm run start:worker`.
+Разработка, тесты и чистый старт — [docs/runbooks/clean-start.md](docs/runbooks/clean-start.md). Установка на целевой Windows-ПК, службы, обновление — [docs/runbooks/release.md](docs/runbooks/release.md); копии и восстановление — [docs/runbooks/backup-restore.md](docs/runbooks/backup-restore.md). Кратко: `npm ci`, `npm run pg:init && npm run pg:start`, `.env` по образцу `.env.example`, `npm run db:setup && npm run db:migrate`, `npm run bootstrap -- --login … --name "…"`, `npm run build`, `npm run start:server` и `npm run start:worker`.
 
 | Каталог | Содержимое |
 |---|---|
@@ -32,6 +32,6 @@
 
 ## Интеграции
 
-TenderHub — расчёт и коммерческая стоимость; RDWeb — основное распознавание; LocalAI — локальный поиск и вспомогательная обработка; MailHub — переписка; сервис переговоров — записи и транскрипции; Яндекс Диск и сетевой ресурс — размещение выпусков; Codex/Cursor — работа с данными через MCP.
+TenderHub — расчёт и коммерческая стоимость; RDWeb — основное распознавание; поиск, цитаты и локальное распознавание — внутри портала (Locus закрыт решением D-013); локальная модель — через OpenAI-совместимый сервер (LM Studio); MailHub — переписка; сервис переговоров — записи и транскрипции; Яндекс Диск и сетевой ресурс — размещение выпусков; Codex/Cursor — работа с данными через MCP.
 
 Реальные документы, письма, базы и секреты хранятся вне Git. Проверка на фикстурах не считается подтверждением работающей интеграции.

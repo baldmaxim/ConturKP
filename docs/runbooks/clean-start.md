@@ -1,6 +1,6 @@
 # Чистый старт (разработка, Windows)
 
-Этап 02. Службы Windows, резервные копии и целевой ПК — этап 17 (ADR-011).
+Этап 02 и дополнения этапов до 17. Установка на целевой ПК, службы Windows, обновление — `docs/runbooks/release.md`; копии и восстановление — `docs/runbooks/backup-restore.md`; репетиция эксплуатации у разработчика — `npm run ops:rehearsal` (этап 17).
 
 ## Требования
 
@@ -79,7 +79,7 @@ curl http://127.0.0.1:3200/api/v1/ready   # 200 и ready=true: БД, схема,
 
 ## Доступ из LAN/VPN
 
-Без TLS сервер отказывается слушать не-loopback адрес (`config:check` покажет ошибку). Для LAN задайте `HTTP_HOST`, `TLS_CERT_FILE`, `TLS_KEY_FILE` и `ALLOWED_ORIGINS=https://<имя>`. Выпуск сертификата и сетевое имя — U-02. LocalAI остаётся внутренним сервисом: портал не проксирует его наружу, адрес и токен — только в окружении worker/server.
+Без TLS сервер отказывается слушать не-loopback адрес (`config:check` покажет ошибку). Для LAN задайте `HTTP_HOST`, `TLS_CERT_FILE`, `TLS_KEY_FILE` и `ALLOWED_ORIGINS=https://<IP>:3200` (U-02: адрес по IP с сертификатом mkcert, `docs/runbooks/release.md` §7). Адреса и ключи модели и интеграций — только в окружении worker/server.
 
 ## Тесты
 

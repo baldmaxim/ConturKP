@@ -5,6 +5,7 @@ import { isAbsolute } from 'node:path';
 
 export * from './lifecycle.ts';
 export * from './build.ts';
+export * from './tls.ts';
 
 const MIB = 1024 * 1024;
 

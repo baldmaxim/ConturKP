@@ -9,6 +9,7 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import { requestIdOf } from './http/context.ts';
 import { fromStorageError, HttpError, sendProblem } from './http/errors.ts';
 import { csrfGuard, securityHeaders, sessionMiddleware } from './http/security.ts';
+import { operationsRouter } from './routes/operations.ts';
 import { adminRouter } from './routes/admin.ts';
 import { authRouter } from './routes/auth.ts';
 import { documentsRouter } from './routes/documents.ts';
@@ -81,6 +82,7 @@ export const createApp = (deps: IAppDeps): express.Express => {
   api.use(tendersRouter(pool));
   api.use(stagesRouter(pool));
   api.use(adminRouter(pool, clock));
+  api.use(operationsRouter(pool, config, store));
   api.use(importsRouter(pool, store, config));
   api.use(documentsRouter(pool, store));
   api.use(intakeRouter(pool, config, clock));

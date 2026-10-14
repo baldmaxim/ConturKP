@@ -12,6 +12,7 @@ import { importExpandHandler, importRegisterHandler } from './imports.ts';
 import { intakeScanHandler } from './intake.ts';
 import { localRecognitionHandler } from './localRecognition.ts';
 import { mailImportHandler } from './mail.ts';
+import { MODEL_PROBE_KIND, modelProbeHandler } from './modelProbe.ts';
 import { recognitionImportHandler } from './recognition.ts';
 import { reviewModelHandler, reviewRunHandler, stageInvalidateHandler } from './review.ts';
 import { indexBuildHandler, indexEmbedHandler, indexPurgeHandler, searchSemanticHandler } from './search.ts';
@@ -40,4 +41,5 @@ export const HANDLERS: Record<string, JobHandler> = {
   'candidate.assemble': candidateAssembleHandler,
   'delivery.place': deliveryPlaceHandler,
   'delivery.probe': deliveryProbeHandler,
+  [MODEL_PROBE_KIND]: modelProbeHandler,
 };

@@ -338,7 +338,7 @@ describe('циклы worker и живость', () => {
 });
 
 describe('проба модели эмбеддингов (S17-07)', () => {
-  it('не при занятом слоте GPU; пока модель отвечает — не чаще интервала', async () => {
+  it('проба — задание model.probe класса gpu: ждёт слот, как любое GPU-задание; пока модель отвечает — не чаще интервала', async () => {
     const fake = new FakeEmbeddings({ dim: 16, batchSize: 8 });
     let probes = 0;
     const embeddings = new Proxy(fake, {
@@ -348,19 +348,25 @@ describe('проба модели эмбеддингов (S17-07)', () => {
         return typeof v === 'function' ? v.bind(t) : v;
       },
     });
-    const w = worker({}, { embeddings });
+    const { HANDLERS } = await import('../apps/worker/src/handlers/index.ts');
+    const w = worker(HANDLERS, { embeddings });
+    // Слот занят чужим GPU-заданием: проба ставится в очередь, но к модели не идёт.
     const { id } = await enqueueJob(db.pool, { kind: 'test.gpuhold', dedupeKey: 'gpuhold', resourceClass: 'gpu' });
     const j = (await claimJob(db.pool, { workerId: 'holder', leaseMs: 60_000, gpuGraceMs: 0, kinds: ['test.gpuhold'] }))!;
     await w.maintainSearch();
     expect(probes).toBe(0);
+    const probeJob = await db.pool.query<{ id: string; resource_class: string }>("SELECT id, resource_class FROM job WHERE kind = 'model.probe' AND status = 'queued'");
+    expect(probeJob.rows).toHaveLength(1);
+    expect(probeJob.rows[0]!.resource_class).toBe('gpu');
+    expect(await w.runOnce(['model.probe'])).toBe(false);
     await releaseJob(db.pool, j, j.lease_token!, { code: 'x', message: 'x', delayMs: 0, refundAttempt: true });
     await db.pool.query("UPDATE job SET status = 'cancelled' WHERE id = $1", [id]);
-    const r = await w.maintainSearch();
+    expect(await w.runOnce(['model.probe'])).toBe(true);
     expect(probes).toBe(1);
-    expect(r.model).toBe('ok');
+    // Модель ответила — следующая проба только через интервал.
     await w.maintainSearch();
-    expect(probes).toBe(1);
-    // Явная проверка (тесты, команда) по-прежнему пробует сразу.
+    expect((await db.pool.query("SELECT 1 FROM job WHERE kind = 'model.probe' AND status = 'queued'")).rowCount).toBe(0);
+    // Явная проверка (тесты, команда) пробует сразу.
     await w.maintainSearch({ checkModel: true });
     expect(probes).toBe(2);
   });

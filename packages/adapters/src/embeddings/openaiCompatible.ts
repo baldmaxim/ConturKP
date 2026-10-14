@@ -3,7 +3,11 @@
 // Locus (RAG_EMBEDDINGS_BASE_URL / RAG_EMBEDDINGS_MODEL). Адрес — только loopback или LAN:
 // облачного запасного пути нет (D-013). Ключ, если задан, уходит только в заголовок запроса.
 import { MAX_EMBEDDING_DIM, PROBE_TEXT } from '@kontur/core';
+import { describeNetworkError, readTextLimited } from '../netCause.ts';
 import { embeddingError, validateVectors, type EmbeddingResult, type IEmbedOutput, type IModelGatewayEmbeddings, type IModelProbe } from './types.ts';
+
+// Предел тела ответа эмбеддингов (этап 17): пачка из 32 векторов по 4000 чисел — около 2 МиБ JSON.
+export const EMBEDDINGS_MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
 
 export interface IOpenAiCompatibleOptions {
   baseUrl: string;
@@ -75,7 +79,7 @@ export class OpenAiCompatibleEmbeddings implements IModelGatewayEmbeddings {
       const timedOut = controller.signal.aborted && !input.signal?.aborted;
       return timedOut
         ? embeddingError('TIMEOUT_UNKNOWN_OUTCOME', 'model_unavailable', `модель не ответила за ${this.o.timeoutMs} мс`, true)
-        : embeddingError('UNAVAILABLE', 'model_unavailable', `модель недоступна: ${(err as Error).name}`, true);
+        : embeddingError('UNAVAILABLE', 'model_unavailable', `модель недоступна: ${describeNetworkError(err)}`, true);
     } finally {
       clearTimeout(timer);
       input.signal?.removeEventListener('abort', onAbort);
@@ -86,9 +90,12 @@ export class OpenAiCompatibleEmbeddings implements IModelGatewayEmbeddings {
     if (!res.ok) return embeddingError('CONTRACT_MISMATCH', 'semantic_failed', `неожиданный ответ модели: HTTP ${res.status}`, false);
     let body: unknown;
     try {
-      body = await res.json();
-    } catch {
-      return embeddingError('INVALID_DATA', 'semantic_failed', 'ответ модели — не JSON', false);
+      const text = await readTextLimited(res, EMBEDDINGS_MAX_RESPONSE_BYTES);
+      if (text === null) return embeddingError('CONTRACT_MISMATCH', 'semantic_failed', `ответ модели эмбеддингов больше ${EMBEDDINGS_MAX_RESPONSE_BYTES / 1024 / 1024} МиБ — не принят`, false);
+      body = JSON.parse(text) as unknown;
+    } catch (err) {
+      if (err instanceof SyntaxError) return embeddingError('INVALID_DATA', 'semantic_failed', 'ответ модели — не JSON', false);
+      return embeddingError('UNAVAILABLE', 'model_unavailable', `модель оборвала ответ: ${describeNetworkError(err)}`, true);
     }
     const data = (body as { data?: unknown }).data;
     if (!Array.isArray(data)) return embeddingError('CONTRACT_MISMATCH', 'semantic_failed', 'в ответе модели нет data[]', false);

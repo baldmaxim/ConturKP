@@ -3,7 +3,8 @@
 // Ошибки — без секретов; повторяемость указывает сам провайдер.
 import type { AnalysisTask } from '@kontur/core';
 
-export type ChatModelErrorCode = 'UNAVAILABLE' | 'TIMEOUT_UNKNOWN_OUTCOME' | 'AUTH_FAILED' | 'RATE_LIMITED' | 'CONTRACT_MISMATCH';
+// TRUNCATED — ответ обрезан лимитом токенов или слишком велик (этап 17): не «невалидный JSON», а названная причина.
+export type ChatModelErrorCode = 'UNAVAILABLE' | 'TIMEOUT_UNKNOWN_OUTCOME' | 'AUTH_FAILED' | 'RATE_LIMITED' | 'CONTRACT_MISMATCH' | 'TRUNCATED';
 
 export interface IChatModelError {
   code: ChatModelErrorCode;

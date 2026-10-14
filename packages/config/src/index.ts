@@ -188,6 +188,8 @@ export interface IAppConfig {
   workerMode: 'normal' | 'restore_check';
   // Свободное место хранилища (ADR-011 §10): предупреждение и остановка записи; 0 — проверка выключена.
   storageSpace: { warnFreeBytes: number; stopFreeBytes: number };
+  // Каталог копий (ops:backup): экран состояния показывает последнюю завершённую копию.
+  backupRoot: string | null;
   recognition: IRecognitionLimits;
   embedding: IEmbeddingConfig;
   search: ISearchConfig;
@@ -539,6 +541,7 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
     gpuTakeoverGraceSeconds: intFrom(env, 'GPU_TAKEOVER_GRACE_SECONDS', 180, problems),
     shutdownGraceSeconds: intFrom(env, 'SHUTDOWN_GRACE_SECONDS', 20, problems),
     workerMode: env.WORKER_MODE === 'restore_check' ? 'restore_check' : 'normal',
+    backupRoot: env.BACKUP_ROOT?.trim() || null,
     storageSpace: {
       warnFreeBytes: nonNegativeIntFrom(env, 'STORAGE_WARN_FREE_MB', 10240, problems) * MIB,
       stopFreeBytes: nonNegativeIntFrom(env, 'STORAGE_STOP_FREE_MB', 2048, problems) * MIB,

@@ -2,6 +2,7 @@
 // заголовок X-API-Key и никогда не Authorization (ключ в Bearer уходит в JWT-ветку и даёт 401);
 // Accept-Encoding: gzip; лимит запросов в минуту на ключ (по умолчанию 120 у источника);
 // 429 без Retry-After — ждём следующее минутное окно. Только GET: побочных эффектов нет.
+import { describeNetworkError } from '../netCause.ts';
 import { thError, type IRawResponse, type TenderHubError } from './types.ts';
 
 export interface ITenderHubHttpOptions {
@@ -145,7 +146,7 @@ export class TenderHubHttpClient {
         if (controller.signal.aborted) {
           throw thError('TIMEOUT_UNKNOWN_OUTCOME', 'timeout', `TenderHub не ответил за ${this.o.timeoutMs} мс`, true, { route });
         }
-        throw thError('UNAVAILABLE', 'unavailable', `TenderHub недоступен: ${(err as Error).name}`, true, { route });
+        throw thError('UNAVAILABLE', 'unavailable', `TenderHub недоступен: ${describeNetworkError(err)}`, true, { route });
       }
       const body = await this.readBody(res, route, controller.signal, o.signal);
       return {

@@ -22,11 +22,12 @@ import {
   enqueueJob,
   enqueueLocalRecognition,
   failJob,
-  gpuSlotBusy,
+  getModelStatus,
   heartbeatJob,
   lockOwnedJob,
   markScanStarted,
   recognizerFingerprint,
+  recordChatModelStatus,
   recoverExpiredJobs,
   releaseJob,
   requestCapture,
@@ -42,6 +43,7 @@ import {
   type PoolClient,
 } from '@kontur/db';
 import { isStorageFull, localOcrFactory, nodeDeliveryFs, type BlobStore } from '@kontur/storage';
+import { MODEL_PROBE_KIND, MODEL_PROBE_PRIORITY } from './handlers/modelProbe.ts';
 import { runSearchMaintenance, type IMaintenanceReport } from './maintenance.ts';
 
 export class LeaseLostError extends Error {
@@ -134,7 +136,8 @@ export interface IWorkerOptions {
 // Интерактивная полоса (ADR-004 §7a): только смысловые запросы поиска. Worker выполняет задания
 // последовательно, поэтому без отдельной полосы запрос ждал бы окончания любого долгого задания.
 // Интерактивная полоса (ADR-004 §7a): смысловая ветка поиска и ответ ответного ядра (этап 08a).
-export const INTERACTIVE_KINDS: readonly string[] = ['search.semantic', 'answer.generate'];
+// Этап 17: проба модели эмбеддингов (model.probe) — короткое GPU-задание, ей не ждать долгих заданий фоновой полосы.
+export const INTERACTIVE_KINDS: readonly string[] = ['search.semantic', 'answer.generate', 'model.probe'];
 
 // Циклы процесса worker (этап 17, проект §3.3): полосы заданий и два прохода обслуживания идут независимо,
 // поэтому долгое задание фоновой полосы не останавливает recovery и планирование (S17-05).
@@ -166,7 +169,8 @@ interface IActiveJob {
 
 // Методы шлюзов модели, после которых проверяется остановка: прерванный вызов возвращает «недоступна»,
 // и без проверки обработчик записал бы ложную деградацию модели (S17-04).
-const guardGateway = <T extends object>(inner: T | null, methods: readonly string[], check: () => void): T | null =>
+// after — учёт результата вызова (статус модели в integration_status), только если задание не остановлено.
+const guardGateway = <T extends object>(inner: T | null, methods: readonly string[], check: () => void, after?: (out: unknown) => Promise<void>): T | null =>
   inner === null
     ? null
     : new Proxy(inner, {
@@ -177,6 +181,7 @@ const guardGateway = <T extends object>(inner: T | null, methods: readonly strin
           return async (...args: unknown[]) => {
             const out: unknown = await value.apply(target, args);
             check();
+            if (after) await after(out).catch(() => undefined);
             return out;
           };
         },
@@ -213,7 +218,6 @@ export class WorkerRuntime {
   }
 
   private lastModelCheck = 0;
-  private lastModelOk = false;
 
   // Проход обслуживания поиска: просроченные прогоны, модель, версии, задания индексации,
   // активация и удаление выведенных версий (state-machines §20–21, G05-02).
@@ -224,17 +228,25 @@ export class WorkerRuntime {
     return report;
   }
 
-  // Проба модели эмбеддингов — настоящий запрос: у LM Studio он загружает модель и продлевает её срок
-  // в памяти. Поэтому, пока модель отвечает, — редко; пока нет — раз в минуту (такой запрос модель не
-  // загружает); и никогда при занятом слоте GPU, чтобы не встать рядом с заданием портала (S17-07).
+  // Проба модели эмбеддингов — настоящий запрос: у LM Studio он загружает модель и продлевает её срок в памяти.
+  // Поэтому, пока модель отвечает, — редко; пока нет — раз в минуту (такой запрос модель не загружает). И не из
+  // прохода обслуживания, а заданием model.probe класса gpu: проба ждёт слот, как любое GPU-задание, — к модели
+  // портал одновременно обращается не больше одного раза (S17-07, проект §7.5). Явная проверка (checkModel: true —
+  // тесты и команды) выполняется сразу, как раньше.
   async maintainSearch(o: { checkModel?: boolean } = {}): Promise<IMaintenanceReport> {
-    const interval = this.lastModelOk ? this.o.config.search.modelCheckIntervalMs : this.o.config.search.modelRetryIntervalMs;
+    if (o.checkModel !== undefined) {
+      return runSearchMaintenance({ pool: this.o.pool, config: this.o.config, embeddings: this.o.embeddings ?? null, log: this.log }, { checkModel: o.checkModel });
+    }
+    const status = this.o.embeddings ? await getModelStatus(this.o.pool) : null;
+    const modelOk = Boolean(status?.last_success_at && !status.last_error_code);
+    const interval = modelOk ? this.o.config.search.modelCheckIntervalMs : this.o.config.search.modelRetryIntervalMs;
     const due = Date.now() - this.lastModelCheck >= interval;
-    const checkModel = o.checkModel ?? (due && !(this.o.embeddings && (await gpuSlotBusy(this.o.pool))));
-    if (checkModel) this.lastModelCheck = Date.now();
-    const report = await runSearchMaintenance({ pool: this.o.pool, config: this.o.config, embeddings: this.o.embeddings ?? null, log: this.log }, { checkModel });
-    if (checkModel) this.lastModelOk = report.model === 'ok';
-    return report;
+    if (due) this.lastModelCheck = Date.now();
+    if (due && this.o.embeddings) {
+      await enqueueJob(this.o.pool, { kind: MODEL_PROBE_KIND, dedupeKey: 'model-probe', resourceClass: 'gpu', priority: MODEL_PROBE_PRIORITY, maxAttempts: 1 });
+    }
+    // Без модели проверка — только запись «не настроена», внешних вызовов нет.
+    return runSearchMaintenance({ pool: this.o.pool, config: this.o.config, embeddings: this.o.embeddings ?? null, log: this.log }, { checkModel: due && !this.o.embeddings });
   }
 
   // Обслуживание очереди — только БД (проект §3.3): каждый шаг отдельно, сбой одного не останавливает остальные.
@@ -437,7 +449,7 @@ export class WorkerRuntime {
       config: this.o.config,
       embeddings: guardGateway(this.o.embeddings ?? null, ['embed', 'probe'], throwIfStopped),
       localOcr: this.localOcr,
-      chat: guardGateway(this.chat, ['complete'], throwIfStopped),
+      chat: guardGateway(this.chat, ['complete'], throwIfStopped, (out) => this.noteChatResult(out)),
       deliveryFs: this.o.deliveryFs ?? nodeDeliveryFs(),
       signal: controller.signal,
       withLease,
@@ -469,6 +481,16 @@ export class WorkerRuntime {
       this.active.delete(job.id);
       resolveDone();
     }
+  }
+
+  // Статус генеративной модели по результату вызова (S17-12): видно, отвечает ли модель и почему нет.
+  private async noteChatResult(out: unknown): Promise<void> {
+    const r = out as { ok: boolean; error?: { code: string } };
+    await recordChatModelStatus(this.o.pool, {
+      ok: r.ok,
+      errorCode: r.ok ? null : (r.error?.code ?? 'UNKNOWN'),
+      details: { provider: this.chat?.providerId ?? null, model: this.chat?.model ?? null },
+    });
   }
 
   private async releaseOnStop(job: IJobRow, token: string): Promise<void> {

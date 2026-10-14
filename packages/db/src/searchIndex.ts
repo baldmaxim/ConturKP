@@ -408,6 +408,17 @@ export const versionVectorCounts = async (db: Queryable, versionId: string): Pro
   return r.rows[0]!;
 };
 
+// Векторы в пределах области запроса (этап 17, S17-09): после восстановления из копии или при достройке
+// новой части индекса векторы есть не у всех чанков — смысловая ветка обязана это сообщить.
+export const scopeVectorCounts = async (db: Queryable, versionId: string, unitIds: readonly string[]): Promise<{ chunks: number; vectors: number }> => {
+  const r = await db.query<{ chunks: number; vectors: number }>(
+    `SELECT (SELECT count(*) FROM search_chunk WHERE index_version_id = $1 AND source_unit_id = ANY($2::uuid[])) AS chunks,
+            (SELECT count(*) FROM search_chunk_vector WHERE index_version_id = $1 AND source_unit_id = ANY($2::uuid[])) AS vectors`,
+    [versionId, unitIds],
+  );
+  return r.rows[0]!;
+};
+
 // ---------------------------------------------------------------- Состояние модели (integration_status)
 
 export const MODEL_STATUS_KEY = { system: 'embedding_model', component: 'ModelGatewayEmbeddings' } as const;

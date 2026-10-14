@@ -10,7 +10,7 @@ import { HANDLERS } from '../apps/worker/src/handlers/index.ts';
 import { WorkerRuntime } from '../apps/worker/src/runtime.ts';
 import type { IDeliveryFs, IFsIdentity, IFsStat } from '../packages/adapters/src/index.ts';
 import { BlobStore, nodeDeliveryFs } from '../packages/storage/src/index.ts';
-import { acceptAll, approve, assembled, buildStage13, closeStage13, notApplicable, release, view, type IStage13 } from './approvalFixtures.ts';
+import { acceptAll, approve, assembled, buildStage13, closeStage13, notApplicable, release, view, type IStage13, type IStage13Options } from './approvalFixtures.ts';
 import { idem, type TestClient } from './helpers.ts';
 
 export type FsOp = keyof IDeliveryFs;
@@ -399,8 +399,8 @@ export const releaseTestCandidate = async (st: IStage13): Promise<{ releaseId: s
   return { releaseId: r.body.release.id as string, candidateId: c.id };
 };
 
-export const buildStage14 = async (o: { destinations?: (f: IFolders, admin: TestClient) => Promise<void> } = {}): Promise<IStage14> => {
-  const st = await buildStage13();
+export const buildStage14 = async (o: { destinations?: (f: IFolders, admin: TestClient) => Promise<void>; stage13?: IStage13Options } = {}): Promise<IStage14> => {
+  const st = await buildStage13(o.stage13 ?? {});
   const folders = tempFolders();
   if (o.destinations) await o.destinations(folders, st.e.s.admin);
   const r = await releaseTestCandidate(st);

@@ -43,6 +43,9 @@ export const SearchRunView: FC<ISearchRunViewProps> = ({ run }) => {
       {scope.unitsNotIndexed > 0 ? (
         <Notice tone="warning">{`Ещё не проиндексировано единиц источника: ${scope.unitsNotIndexed}. Их текст в этот поиск не вошёл.`}</Notice>
       ) : null}
+      {scope.chunksWithoutVectors > 0 && run.semantic.status !== 'unavailable' ? (
+        <Notice tone="warning">{`Смысловой поиск неполный: фрагментов без векторов — ${scope.chunksWithoutVectors}. Векторы ещё достраиваются; эти фрагменты нашлись бы только точным и полнотекстовым поиском.`}</Notice>
+      ) : null}
       {scope.excludedByAcl > 0 ? (
         <Notice tone="info">{`Исключено по правам единиц источника: ${scope.excludedByAcl}. Их содержимое в поиск не вошло — например, документы договора без права чтения.`}</Notice>
       ) : null}

@@ -152,8 +152,9 @@ export const answerGenerateHandler: IJobHandlerSpec = {
     const candidates = [...factCandidates, ...found.filter((f) => !factCandidates.some((c) => c.fragmentId === f.fragmentId))];
     const readable = access ? await readableFragments(ctx.pool, access, candidates.map((c) => c.fragmentId)) : new Set<string>();
     const permitted = candidates.filter((c) => readable.has(c.fragmentId) && allowedUnits.includes(c.sourceUnitId));
-    const counts = scope.counts as { unitsNotIndexed?: number; revisionsWithoutRun?: number };
-    const scopeIncomplete = (counts.unitsNotIndexed ?? 0) > 0 || (counts.revisionsWithoutRun ?? 0) > 0;
+    const counts = scope.counts as { unitsNotIndexed?: number; revisionsWithoutRun?: number; chunksWithoutVectors?: number };
+    // Векторы области частичны (после восстановления или во время достройки) — «не найдено» не утверждается (S17-09).
+    const scopeIncomplete = (counts.unitsNotIndexed ?? 0) > 0 || (counts.revisionsWithoutRun ?? 0) > 0 || (counts.chunksWithoutVectors ?? 0) > 0;
     const coverage: Record<string, unknown> = {
       searchStatus: search.status,
       semanticStatus: search.semantic_status,

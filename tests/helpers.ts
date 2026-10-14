@@ -84,6 +84,7 @@ export const testConfig = (overrides: Partial<IAppConfig> = {}): IAppConfig => (
   jobLeaseSeconds: 60,
   gpuTakeoverGraceSeconds: 120,
   shutdownGraceSeconds: 20,
+  workerMode: 'normal',
   recognition: {
     maxMetadataBytes: 8 * 1024 * 1024,
     maxMetadataTotalBytes: 16 * 1024 * 1024,

@@ -16,7 +16,7 @@ import {
 } from '@kontur/core';
 import { enqueueJob, requestCancel } from './jobs.ts';
 import type { Queryable } from './pool.ts';
-import { cacheLookup, getModelStatus, getVersion, versionVectorCounts, type ISearchIndexVersionRow } from './searchIndex.ts';
+import { cacheLookup, getModelStatus, getVersion, scopeVectorCounts, versionVectorCounts, type ISearchIndexVersionRow } from './searchIndex.ts';
 import {
   createSearchRun,
   exactBranch,
@@ -52,9 +52,16 @@ export const queryEmbeddingKey = (v: ISearchIndexVersionRow, query: string) => {
 
 // Решение о смысловой ветке на сервере (ADR-012 §14, §17): честная недоступность с причиной,
 // вектор запроса из кеша (синхронно, без внешних вызовов) или задание класса gpu.
-export const planSemantic = async (db: Queryable, v: ISearchIndexVersionRow, query: string, now: Date): Promise<SemanticPlan> => {
+// counts — чанки и векторы в области запроса (этап 17, S17-09); без них — по всей версии.
+export const planSemantic = async (
+  db: Queryable,
+  v: ISearchIndexVersionRow,
+  query: string,
+  now: Date,
+  scopeCounts?: { chunks: number; vectors: number },
+): Promise<SemanticPlan> => {
   if (!v.embedding_model) return { kind: 'unavailable', reason: 'index_without_embeddings' };
-  const counts = await versionVectorCounts(db, v.id);
+  const counts = scopeCounts ?? (await versionVectorCounts(db, v.id));
   if (counts.chunks === 0) return { kind: 'empty' };
   if (counts.vectors === 0) return { kind: 'unavailable', reason: 'index_vectors_missing' };
   const status = await getModelStatus(db);
@@ -101,8 +108,10 @@ export interface ISearchStarted {
 export const startSearch = async (db: Queryable, s: ISearchStart): Promise<ISearchStarted> => {
   const query = normalizeQuery(s.rawQuery);
   const coverage = await scopeCoverage(db, s.version.id, s.scope.unitIds);
+  // Векторы области: частичные — смысловая ветка идёт, но прогон помечается неполным (S17-09).
+  const vectors = s.version.embedding_model ? await scopeVectorCounts(db, s.version.id, s.scope.unitIds) : null;
   // Пустая область: искать нечем ни одной ветке — прогон завершается сразу, без задания.
-  const plan: SemanticPlan = s.scope.unitIds.length === 0 ? { kind: 'empty' } : await planSemantic(db, s.version, query, s.now);
+  const plan: SemanticPlan = s.scope.unitIds.length === 0 ? { kind: 'empty' } : await planSemantic(db, s.version, query, s.now, vectors ?? undefined);
   const runId = await createSearchRun(db, {
     owner: s.owner,
     stageId: s.stageId,
@@ -116,7 +125,12 @@ export const startSearch = async (db: Queryable, s: ISearchStart): Promise<ISear
     resultLimit: s.limit,
     scopeHash: s.scopeHash,
     allowedUnitIds: s.scope.unitIds,
-    scopeCounts: { ...coverage, revisionsWithoutRun: s.scope.revisionsWithoutRun, excludedByAcl: s.excludedByAcl },
+    scopeCounts: {
+      ...coverage,
+      revisionsWithoutRun: s.scope.revisionsWithoutRun,
+      excludedByAcl: s.excludedByAcl,
+      chunksWithoutVectors: vectors ? Math.max(0, vectors.chunks - vectors.vectors) : 0,
+    },
     indexVersionId: s.version.id,
     rankingVersion: RANKING_VERSION,
     embeddingModel: s.version.embedding_model,

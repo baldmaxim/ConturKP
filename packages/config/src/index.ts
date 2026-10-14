@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 
 export * from './lifecycle.ts';
+export * from './build.ts';
 
 const MIB = 1024 * 1024;
 
@@ -182,6 +183,9 @@ export interface IAppConfig {
   gpuTakeoverGraceSeconds: number;
   // Срок штатной остановки процесса (этап 17, проект §3.4); stoptimeout службы — не меньше срока + 10 с.
   shutdownGraceSeconds: number;
+  // restore_check — worker на восстановленной копии (проект §4.4): без внешних действий — размещений, сканов
+  // наблюдаемых папок и выгрузок TenderHub; пути назначений в копии указывают на настоящие папки.
+  workerMode: 'normal' | 'restore_check';
   recognition: IRecognitionLimits;
   embedding: IEmbeddingConfig;
   search: ISearchConfig;
@@ -273,9 +277,18 @@ export const CONFIG_KEYS: IConfigKey[] = [
   { name: 'MAILHUB_TOKEN', secret: true, required: false, purpose: 'интеграция MailHub (этап 07)' },
   // Этап 14 (D-034): Яндекс Диск — локальная синхронизируемая папка, сетевая папка — права учётной записи службы worker;
   // токена и пароля нет (YANDEX_DISK_TOKEN, SMB_USERNAME, SMB_PASSWORD убраны). Пути назначений — в БД, задаёт администратор.
+  // Этап 17: сборка, копии и проверка восстановления (команды ops:backup и ops:restore-check, не процессы портала).
+  { name: 'KONTUR_BUILD', secret: false, required: false, purpose: 'коммит установленной сборки (на установке из ZIP — из комментария архива); в рабочей копии Git — из .git' },
+  { name: 'BACKUP_DATABASE_URL', secret: true, required: false, purpose: 'подключение роли kontur_backup для ops:backup' },
+  { name: 'BACKUP_ROOT', secret: false, required: false, purpose: 'каталог копий на другом диске или сетевом ресурсе (не внутри STORAGE_ROOT)' },
+  { name: 'PG_BIN_DIR', secret: false, required: false, purpose: 'каталог bin PostgreSQL с pg_dump и pg_restore (иначе — PATH)' },
+  { name: 'PG_DOCKER_CONTAINER', secret: false, required: false, purpose: 'контейнер с PostgreSQL, если кластер в Docker: pg_dump и pg_restore через docker exec' },
+  { name: 'RESTORE_ADMIN_URL', secret: true, required: false, purpose: 'суперпользователь кластера проверки восстановления (никогда не рабочая база)' },
+  { name: 'RESTORE_STORAGE_ROOT', secret: false, required: false, purpose: 'пустой каталог хранилища для проверки восстановления' },
   // Этап 17: остановка служб и очередь.
   { name: 'SHUTDOWN_GRACE_SECONDS', secret: false, required: false, purpose: 'срок штатной остановки server и worker, по умолчанию 20; stoptimeout службы — на 10 с больше' },
   { name: 'GPU_TAKEOVER_GRACE_SECONDS', secret: false, required: false, purpose: 'защитный интервал перехвата слота GPU после аренды, по умолчанию 180; не меньше таймаута модели + 30' },
+  { name: 'WORKER_MODE', secret: false, required: false, purpose: 'normal (по умолчанию) или restore_check — worker на восстановленной копии без внешних действий' },
   { name: 'EMBEDDING_PROBE_INTERVAL_SECONDS', secret: false, required: false, purpose: 'период пробы модели эмбеддингов, пока она отвечает, по умолчанию 3600 (проба загружает модель в LM Studio)' },
   { name: 'DELIVERY_OPERATION_TIMEOUT_SECONDS', secret: false, required: false, purpose: 'срок одной файловой операции размещения, по умолчанию 60' },
   // Этап 16 (ADR-010): точка /mcp для чат-клиентов. Токены выпускают пользователи в портале; в настройках их нет.
@@ -518,6 +531,7 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
     jobLeaseSeconds: intFrom(env, 'JOB_LEASE_SECONDS', 60, problems),
     gpuTakeoverGraceSeconds: intFrom(env, 'GPU_TAKEOVER_GRACE_SECONDS', 180, problems),
     shutdownGraceSeconds: intFrom(env, 'SHUTDOWN_GRACE_SECONDS', 20, problems),
+    workerMode: env.WORKER_MODE === 'restore_check' ? 'restore_check' : 'normal',
     recognition: {
       maxMetadataBytes: intFrom(env, 'RECOGNITION_MAX_METADATA_MB', 64, problems) * MIB,
       maxMetadataTotalBytes: intFrom(env, 'RECOGNITION_MAX_METADATA_TOTAL_MB', 128, problems) * MIB,
@@ -574,6 +588,7 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
     problems.push(`GPU_TAKEOVER_GRACE_SECONDS не меньше ${longestModelStepSeconds + 30}: наибольший таймаут модели (${longestModelStepSeconds} с) плюс 30 с`);
   }
   if (config.shutdownGraceSeconds < 5) problems.push('SHUTDOWN_GRACE_SECONDS не меньше 5');
+  if (env.WORKER_MODE && env.WORKER_MODE !== 'normal' && env.WORKER_MODE !== 'restore_check') problems.push('WORKER_MODE — normal или restore_check');
   if (problems.length > 0) throw new ConfigError(problems);
   return config;
 };

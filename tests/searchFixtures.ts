@@ -17,6 +17,8 @@ import {
   type Pool,
 } from '../packages/db/src/index.ts';
 import type { WorkerRuntime } from '../apps/worker/src/runtime.ts';
+import { Readable } from 'node:stream';
+import { BlobStore } from '../packages/storage/src/index.ts';
 import { drain, idem, makeWorker, type ITestDb, type TestClient } from './helpers.ts';
 import { fakePdf } from './zip.ts';
 
@@ -39,6 +41,9 @@ export interface IRunSpec {
   unpaged?: string[];
   // Страницы, которые распознавание не прочитало (A16): прогон завершается «частично».
   missingPages?: number;
+  // Хранилище для настоящего файла артефакта (этап 17: копия сверяет каждый файл по SHA-256). Без него строка
+  // blob ссылается на несуществующий файл — так устроены прежние тесты, которым файл не нужен.
+  storageRoot?: string;
 }
 
 // Загрузка файла штатным импортом (этап 03): редакция документа в тендере этапа.
@@ -61,8 +66,16 @@ export const seedEvidenceRun = async (pool: Pool, revisionId: string, spec: IRun
     revisionId,
   ]);
   const { tender_id: tenderId, contract_id: contractId } = rev.rows[0]!;
-  const artifact = randomBytes(32).toString('hex');
-  await pool.query("INSERT INTO blob (sha256, size_bytes, media_type, storage_key) VALUES ($1, 1, 'application/zip', $2)", [artifact, `seed/${artifact}`]);
+  let artifact = randomBytes(32).toString('hex');
+  if (spec.storageRoot) {
+    const store = new BlobStore(spec.storageRoot);
+    await store.ensureDirs();
+    const stored = await store.putStream(Readable.from([Buffer.from(`seed-artifact:${artifact}`)]), 1024);
+    artifact = stored.sha256;
+    await pool.query("INSERT INTO blob (sha256, size_bytes, media_type, storage_key) VALUES ($1, $2, 'application/zip', $3)", [artifact, stored.sizeBytes, stored.storageKey]);
+  } else {
+    await pool.query("INSERT INTO blob (sha256, size_bytes, media_type, storage_key) VALUES ($1, 1, 'application/zip', $2)", [artifact, `seed/${artifact}`]);
+  }
   const run = await pool.query<{ id: string }>(
     `INSERT INTO recognition_run (document_revision_id, tender_id, contract_id, engine, source_artifact_sha256, source_artifact_name, supersedes_run_id)
      VALUES ($1, $2, $4, 'rdweb_export', $3, 'seed.zip', (SELECT p.id FROM recognition_run p

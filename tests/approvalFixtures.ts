@@ -97,6 +97,8 @@ export interface IStage13Options {
   config?: Parameters<typeof testConfig>[0];
   // Готовая база (тест обновления схемы); по умолчанию — новая со всеми миграциями.
   db?: ITestDb;
+  // Этап 17: артефакт распознавания ТЗ — настоящий файл в хранилище (копия сверяет каждый файл по SHA-256).
+  realArtifacts?: boolean;
   // Этап 15: данные, с которыми боевой комплект проходит матрицу блокеров (поддельные: в установке их нет) — ревизия
   // расчёта verified по контрактной фикстуре X-01 с правилом итога КП фикстуры и шаблоны без отметки «демо».
   production?: boolean;
@@ -162,7 +164,7 @@ export const buildStageContent = async (db: ITestDb, e: IEcon, o: IStage13Option
   const tzRev = await uploadDocument(db, e.config, e.s.eng1, e.s.stageA, 'ТЗ.pdf');
   const tz = o.tz ?? TZ;
   const pages = [{ blocks: [tz.plaster, tz.paint] }];
-  const run1 = await seedEvidenceRun(db.pool, tzRev, o.missingPage ? { pages, missingPages: 1 } : { pages });
+  const run1 = await seedEvidenceRun(db.pool, tzRev, { pages, ...(o.missingPage ? { missingPages: 1 } : {}), ...(o.realArtifacts ? { storageRoot: e.config.storageRoot } : {}) });
   await setWorkingSet(e.s.manager, e.s.stageA, [tzRev], true);
   const scopeId = await fixScope(e.s.manager, e.s.stageA);
   const reg = await e.s.manager.post(`/stages/${e.s.stageA}/requirement-registries`, { evidenceScopeId: scopeId, reason: 'Реестр этапа 13' }, { headers: idem() });

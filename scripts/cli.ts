@@ -43,6 +43,13 @@ export const readPassword = async (label: string): Promise<string> => {
   return first;
 };
 
+// Пароль для входа (проверка восстановленной копии): одна строка из stdin или один скрытый ввод.
+export const readSecret = async (label: string): Promise<string> => {
+  if (hasFlag('password-stdin')) return readAllStdin();
+  if (!process.stdin.isTTY) throw new Error('нет терминала: используйте --password-stdin');
+  return promptHidden(`${label}: `);
+};
+
 export const fail = (message: string, code = 1): never => {
   console.error(message);
   process.exit(code);

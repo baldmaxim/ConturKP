@@ -140,6 +140,10 @@ export const INTERACTIVE_KINDS: readonly string[] = ['search.semantic', 'answer.
 // поэтому долгое задание фоновой полосы не останавливает recovery и планирование (S17-05).
 export type WorkerLoop = 'background' | 'interactive' | 'queue' | 'search';
 
+// Виды заданий с внешними действиями: на восстановленной копии (WORKER_MODE=restore_check) не выполняются и не
+// планируются — пути назначений, папки и TenderHub в копии настоящие (проект §4.4, толкование §16 п. 3).
+export const EXTERNAL_KINDS: readonly string[] = ['delivery.place', 'delivery.probe', 'calculation.capture', 'intake.scan'];
+
 const pause = (ms: number, signal: AbortSignal): Promise<void> =>
   new Promise((resolve) => {
     if (signal.aborted) return resolve();
@@ -240,8 +244,8 @@ export class WorkerRuntime {
           if (recovered.length > 0) this.log(`возвращено в очередь после истечения аренды: ${recovered.length}`);
         },
       ],
-      ['сканы', () => this.scheduleScans()],
-      ['выгрузки по сроку', () => this.scheduleCalculationCaptures()],
+      ['сканы', () => (this.restoreCheck ? Promise.resolve(0) : this.scheduleScans())],
+      ['выгрузки по сроку', () => (this.restoreCheck ? Promise.resolve(0) : this.scheduleCalculationCaptures())],
       ['локальное распознавание', () => this.scheduleLocalRecognition()],
       ['извлечение фактов', () => this.scheduleFactExtraction()],
       ['инвалидация', () => this.scheduleStageInvalidation()],
@@ -584,11 +588,16 @@ export class WorkerRuntime {
     this.log(`задание ${job.kind} ${job.id}: ошибка ${code} → ${r.ok ? r.status : 'аренда потеряна'}`);
   }
 
+  private get restoreCheck(): boolean {
+    return this.o.config.workerMode === 'restore_check';
+  }
+
   // Основной цикл процесса worker: две полосы заданий и два прохода обслуживания (проект §3.3).
   async loop(signal: AbortSignal, pollMs = 500): Promise<void> {
     const interval = this.o.config.search.maintenanceIntervalMs;
+    const background = this.restoreCheck ? Object.keys(this.o.handlers).filter((k) => !EXTERNAL_KINDS.includes(k)) : null;
     await Promise.all([
-      this.laneLoop(signal, null, pollMs, 'background'),
+      this.laneLoop(signal, background, pollMs, 'background'),
       this.laneLoop(signal, INTERACTIVE_KINDS, Math.min(pollMs, 200), 'interactive'),
       this.periodicLoop(signal, 'queue', interval, () => this.maintainQueue()),
       this.periodicLoop(signal, 'search', interval, () => this.maintainSearch()),

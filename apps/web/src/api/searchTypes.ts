@@ -60,6 +60,8 @@ export interface ISearchRun {
     localNeedsReview: number;
     mailUnits: number;
     transcriptUnits: number;
+    // Чанки области без векторов (этап 17): смысловая ветка неполна, пока векторы не достроены.
+    chunksWithoutVectors: number;
   };
   incomplete: boolean;
   semantic: { status: TSemanticStatus; reason: string | null };

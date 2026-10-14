@@ -72,6 +72,7 @@
 | S17-16 | Дата вопроса для проверки C10 режется по UTC | `packages/db/src/reviewInputs.ts:286,295` | вопрос, заданный после полуночи МСК до 03:00, получает вчерашнюю дату |
 | S17-17 | `ADR-004 §7a` обещает бюджет шага `index.embed` по времени; в коде пачка ограничена только числом текстов | `handlers/search.ts:110` | §16, поправка ADR |
 | S17-18 | Устаревшие документы: `README.md` (каркас этапа 02, LocalAI), `docs/runbooks/clean-start.md` (LocalAI), `docs/integrations/mcp-clients.md` (порт 3000) | — | runbook нельзя собрать из них; обновляются |
+| S17-20 | Найдено сквозным тестом A40 при реализации: дамп схемы не восстанавливается — `pg_restore` грузит данные с пустым `search_path`, а функции ограничений CHECK и вычисляемого столбца (`evidence_locator_valid`, `local_recognizer_valid`, `search_prepare`) вызывают функции схемы без её имени: COPY `evidence_fragment` падает | миграции 0005, 0009, 0014 | без исправления копия есть, а восстановить её нельзя; §4.1 |
 | S17-19 | `LibreOffice` запускается без `signal`: остановка worker ждёт конвертацию до 120 с, на Windows `soffice` остаётся сиротой | `apps/worker/src/office/libreoffice.ts:60–66` | §3 |
 
 ## 3. Жизненный цикл процессов и восстановление заданий
@@ -137,7 +138,7 @@ Server: `server.close()` → за 2 с до срока `closeAllConnections()` �
 
 ## 4. Резервная копия и восстановление (A40, F17)
 
-### 4.1. Права роли копии — миграция `0043_backup_grants.sql`
+### 4.1. Права роли копии и восстановимость дампа — миграция `0043_backup_restore.sql`
 
 ```sql
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO kontur_backup;
@@ -145,6 +146,8 @@ GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO kontur_backup;
 ALTER DEFAULT PRIVILEGES FOR ROLE kontur_migrator IN SCHEMA public GRANT SELECT ON TABLES TO kontur_backup;
 ALTER DEFAULT PRIVILEGES FOR ROLE kontur_migrator IN SCHEMA public GRANT SELECT ON SEQUENCES TO kontur_backup;
 ```
+
+Та же миграция фиксирует `search_path = pg_catalog, public` у функций, на которые прямо ссылаются ограничения, индексы и вычисляемые столбцы (S17-20): параметр действует и на вложенные вызовы, результаты не меняются. Предполётная проверка копии и сторож `restoreSafetyProblems` ловят новую такую функцию без `search_path`.
 
 Сторож (vitest): у роли нет таблицы или последовательности без `SELECT`; нет прав записи (`INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, `REFERENCES`, `TRIGGER`, `USAGE`/`UPDATE` последовательностей), `CREATE` на схеме и базе; нет функций `SECURITY DEFINER`; таблица, созданная мигратором после 0043, получает `SELECT` сама. Тот же запрос — предполётная проверка команды копии на рабочей базе.
 
@@ -183,6 +186,8 @@ ALTER DEFAULT PRIVILEGES FOR ROLE kontur_migrator IN SCHEMA public GRANT SELECT 
 
 Расписание (на целевом ПК) — задание планировщика Windows: ежедневно и перед каждым обновлением (ADR-011 §9); срок хранения — В-17-3. Удаления копий в этом этапе нет.
 
+Первое обновление установки этапов 14–16 на этап 17: у `kontur_backup` ещё нет прав (их выдаёт 0043), поэтому копия перед ним снимается `npm run ops:backup -- --pre-update` — владельцем схемы `kontur_migrator` по `DATABASE_MIGRATOR_URL`; проверяется, что он читает всё, роль записывается в манифест (`role`).
+
 ### 4.4. Проверка восстановления — `npm run ops:restore-check`
 
 Охранники «никогда поверх рабочей системы» (без ключа обхода):
@@ -195,7 +200,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE kontur_migrator IN SCHEMA public GRANT SELECT 
 
 Шаги (каждый — строка журнала `PASS`/`FAIL` с фактической командой без секретов и хэшами):
 1. Манифест: формат, SHA-256 дампа, перечень.
-2. `setupDatabase` для новой базы (роли, локаль `builtin`, расширения) → `pg_restore` → `checkSchema` совпадает с манифестом.
+2. `setupDatabase` для новой базы (роли, локаль `builtin`, расширения) → `pg_restore` тремя секциями (`pre-data`, `data`, `post-data`), каждая одной транзакцией; между схемой и данными функциям из S17-20 без `search_path` он выставляется — так восстанавливается и дамп, снятый до миграции 0043 → `checkSchema` совпадает с манифестом.
 3. Файлы: копирование в `RESTORE_STORAGE_ROOT/sha256/`, SHA-256 каждого файла = манифест; перечень `blob` восстановленной базы = перечень манифеста.
 4. Каждый `blob`, на который ссылаются выпуски, кандидаты и размещения, существует и совпадает по хэшу.
 5. Запуск `server` и `worker` на восстановленной базе в режиме `WORKER_MODE=restore_check`: обе полосы берут только внутренние виды (индекс, поиск, распознавание без сети); `delivery.place`, `delivery.probe`, `calculation.capture`, `intake.scan` не захватываются и не планируются — пути назначений в БД указывают на настоящие папки (§16).

@@ -102,9 +102,11 @@ export const searchRunView = async (db: Queryable, runId: string) => {
       localNeedsReview: counts.localNeedsReview ?? 0,
       mailUnits: counts.mailUnits ?? 0,
       transcriptUnits: counts.transcriptUnits ?? 0,
+      chunksWithoutVectors: counts.chunksWithoutVectors ?? 0,
     },
     incomplete:
       (counts.unitsNotIndexed ?? 0) > 0 ||
+      (counts.chunksWithoutVectors ?? 0) > 0 ||
       (counts.revisionsWithoutRun ?? 0) > 0 ||
       (counts.pagesRecognized ?? 0) < (counts.pagesTotal ?? 0) ||
       run.status === 'degraded',

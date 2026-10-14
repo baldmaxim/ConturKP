@@ -189,3 +189,4 @@ export class BlobStore {
 }
 export * from './ocrModels.ts';
 export * from './deliveryFs.ts';
+export * from './backup.ts';

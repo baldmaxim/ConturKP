@@ -32,7 +32,7 @@ export default async (): Promise<void> => {
   }
   try {
     await ensureRoles(client);
-    const stale = await client.query<{ datname: string }>("SELECT datname FROM pg_database WHERE datname LIKE 'kontur_kp_test_%'");
+    const stale = await client.query<{ datname: string }>("SELECT datname FROM pg_database WHERE datname LIKE 'kontur_kp_test_%' OR datname LIKE 'kontur_restore_test_%'");
     for (const row of stale.rows) await client.query(`DROP DATABASE IF EXISTS "${row.datname}" WITH (FORCE)`);
   } finally {
     await client.end();

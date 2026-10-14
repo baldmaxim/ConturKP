@@ -1,191 +1,52 @@
 // Цикл worker (ADR-004, state-machines §2): захват, heartbeat, условное по токену завершение,
-// повтор с задержкой, recovery истёкших аренд, планирование сканов наблюдаемых папок.
+// повтор с задержкой, recovery истёкших аренд, штатная остановка. Типы и ошибки заданий — jobTypes.ts,
+// планирование по состоянию БД — scheduling.ts (этап 17).
 import { hostname } from 'node:os';
+import { createChatModel, type ILocalOcrEngineFactory, type IModelGatewayChat } from '@kontur/adapters';
 import {
-  createChatModel,
-  describeLocalRecognizer,
-  localSettings,
-  type IDeliveryFs,
-  type ILocalOcrEngineFactory,
-  type IModelGatewayChat,
-  type IModelGatewayEmbeddings,
-  type LocalInputFormat,
-} from '@kontur/adapters';
-import type { IAppConfig } from '@kontur/config';
-import {
-  autoRecognitionCandidates,
   claimJob,
   confirmCancel,
-  dueChannels,
-  dueDeadlineCaptures,
-  enqueueFactExtraction,
   enqueueJob,
-  enqueueLocalRecognition,
   failJob,
   getModelStatus,
   heartbeatJob,
   lockOwnedJob,
-  markScanStarted,
-  recognizerFingerprint,
   recordChatModelStatus,
   recoverExpiredJobs,
   releaseJob,
-  requestCapture,
   requeueJob,
-  runsAwaitingExtraction,
-  eventsAwaitingInvalidation,
-  enqueueInvalidation,
   succeedJob,
   withTransaction,
-  type FingerprintByFormat,
   type IJobRow,
-  type Pool,
   type PoolClient,
 } from '@kontur/db';
-import { isStorageFull, localOcrFactory, nodeDeliveryFs, type BlobStore } from '@kontur/storage';
+import { isStorageFull, localOcrFactory, nodeDeliveryFs } from '@kontur/storage';
 import { MODEL_PROBE_KIND, MODEL_PROBE_PRIORITY } from './handlers/modelProbe.ts';
+import {
+  EXTERNAL_KINDS,
+  INTERACTIVE_KINDS,
+  JobCancelledError,
+  LeaseLostError,
+  PermanentJobError,
+  RetryableJobError,
+  specOf,
+  STORAGE_FULL_DELAY_MS,
+  WorkerStoppingError,
+  type IJobContext,
+  type IJobHandlerSpec,
+  type IWorkerOptions,
+  type WorkerLoop,
+} from './jobTypes.ts';
+import { guardGateway, pause } from './loopUtils.ts';
 import { runSearchMaintenance, type IMaintenanceReport } from './maintenance.ts';
+import { scheduleCalculationCaptures, scheduleFactExtraction, scheduleLocalRecognition, scheduleScans, scheduleStageInvalidation } from './scheduling.ts';
 
-export class LeaseLostError extends Error {
-  constructor() {
-    super('аренда задания потеряна');
-  }
-}
-export class JobCancelledError extends Error {}
-// Штатная остановка worker (этап 17, проект §3.1): доменные записи закрыты, задание вернёт сам владелец.
-export class WorkerStoppingError extends Error {
-  constructor() {
-    super('worker останавливается');
-  }
-}
-export class RetryableJobError extends Error {
-  readonly code: string;
-  constructor(code: string, message: string) {
-    super(message);
-    this.code = code;
-  }
-}
-export class PermanentJobError extends Error {
-  readonly code: string;
-  constructor(code: string, message: string) {
-    super(message);
-    this.code = code;
-  }
-}
-
-export interface IJobContext {
-  job: IJobRow;
-  token: string;
-  pool: Pool;
-  store: BlobStore;
-  config: IAppConfig;
-  // Шлюз модели эмбеддингов (ADR-012 §25); null — модель не настроена.
-  embeddings: IModelGatewayEmbeddings | null;
-  // Фабрика локального OCR (этап 05a); null — OCR не настроен (LOCAL_OCR_ENGINE=none).
-  localOcr: ILocalOcrEngineFactory | null;
-  // Генеративная модель этапа 08 (OD-08-2); null — модель не настроена (MODEL_PROVIDER=none).
-  chat: IModelGatewayChat | null;
-  // Файловые операции размещения (этап 14, D-034); в тестах — обёртка с внесением отказов.
-  deliveryFs: IDeliveryFs;
-  signal: AbortSignal;
-  // Короткая транзакция под действующей арендой: сначала блокировка задания с проверкой токена.
-  withLease: <T>(fn: (client: PoolClient) => Promise<T>) => Promise<T>;
-  // Доменный результат и перевод задания в succeeded — в одной транзакции (R01-06 п. 2).
-  // then выполняется в той же транзакции после перевода: следующая пачка того же вида
-  // встаёт в очередь без конфликта dedupe_key с самим завершающимся заданием (ADR-004 §7a).
-  complete: (fn?: (client: PoolClient) => Promise<void>, then?: (client: PoolClient) => Promise<void>) => Promise<void>;
-  throwIfStopped: () => void;
-}
-
-export interface IJobFailure {
-  code: string;
-  message: string;
-}
-
-// Обработчик задания. onTerminalFailure — доменная фиксация терминальной ошибки (попытки
-// исчерпаны или ошибка неповторяемая): выполняется в одной транзакции с переводом задания
-// в failed и под действующей арендой (R03-05). Потеря аренды означает, что не пишется ничего.
-export interface IJobHandlerSpec {
-  run: (ctx: IJobContext) => Promise<void>;
-  onTerminalFailure?: (client: PoolClient, ctx: IJobContext, failure: IJobFailure) => Promise<void>;
-  // Доменная отмена: выполняется в одной транзакции с переводом задания в cancelled и под
-  // действующей арендой (R04-02). Без неё доменный объект остаётся активным без задания.
-  onCancel?: (client: PoolClient, ctx: IJobContext) => Promise<void>;
-}
-
-export type JobHandler = IJobHandlerSpec | ((ctx: IJobContext) => Promise<void>);
-
-const specOf = (handler: JobHandler): IJobHandlerSpec => (typeof handler === 'function' ? { run: handler } : handler);
-
-export interface IWorkerOptions {
-  pool: Pool;
-  store: BlobStore;
-  config: IAppConfig;
-  handlers: Record<string, JobHandler>;
-  workerId?: string;
-  log?: (line: string) => void;
-  embeddings?: IModelGatewayEmbeddings | null;
-  // Фабрика OCR для тестов; по умолчанию — по конфигурации (LOCAL_OCR_ENGINE).
-  localOcr?: ILocalOcrEngineFactory | null;
-  // Генеративная модель для тестов (сценарии отказов); по умолчанию — по конфигурации (MODEL_PROVIDER).
-  chat?: IModelGatewayChat | null;
-  // Файловые операции размещения для тестов (отказы сети, прав, места, неизвестный исход); по умолчанию — node:fs.
-  deliveryFs?: IDeliveryFs;
-}
-
-// Интерактивная полоса (ADR-004 §7a): только смысловые запросы поиска. Worker выполняет задания
-// последовательно, поэтому без отдельной полосы запрос ждал бы окончания любого долгого задания.
-// Интерактивная полоса (ADR-004 §7a): смысловая ветка поиска и ответ ответного ядра (этап 08a).
-// Этап 17: проба модели эмбеддингов (model.probe) — короткое GPU-задание, ей не ждать долгих заданий фоновой полосы.
-export const INTERACTIVE_KINDS: readonly string[] = ['search.semantic', 'answer.generate', 'model.probe'];
-
-// Циклы процесса worker (этап 17, проект §3.3): полосы заданий и два прохода обслуживания идут независимо,
-// поэтому долгое задание фоновой полосы не останавливает recovery и планирование (S17-05).
-export type WorkerLoop = 'background' | 'interactive' | 'queue' | 'search';
-
-// Виды заданий с внешними действиями: на восстановленной копии (WORKER_MODE=restore_check) не выполняются и не
-// планируются — пути назначений, папки и TenderHub в копии настоящие (проект §4.4, толкование §16 п. 3).
-export const EXTERNAL_KINDS: readonly string[] = ['delivery.place', 'delivery.probe', 'calculation.capture', 'intake.scan'];
-
-// Задание, остановленное нехваткой места, повторяется не раньше чем через 5 минут.
-export const STORAGE_FULL_DELAY_MS = 300_000;
-
-const pause = (ms: number, signal: AbortSignal): Promise<void> =>
-  new Promise((resolve) => {
-    if (signal.aborted) return resolve();
-    const t = setTimeout(done, ms);
-    function done(): void {
-      clearTimeout(t);
-      signal.removeEventListener('abort', done);
-      resolve();
-    }
-    signal.addEventListener('abort', done, { once: true });
-  });
+export * from './jobTypes.ts';
 
 interface IActiveJob {
   stop: () => void;
   done: Promise<void>;
 }
-
-// Методы шлюзов модели, после которых проверяется остановка: прерванный вызов возвращает «недоступна»,
-// и без проверки обработчик записал бы ложную деградацию модели (S17-04).
-// after — учёт результата вызова (статус модели в integration_status), только если задание не остановлено.
-const guardGateway = <T extends object>(inner: T | null, methods: readonly string[], check: () => void, after?: (out: unknown) => Promise<void>): T | null =>
-  inner === null
-    ? null
-    : new Proxy(inner, {
-        get: (target, prop, receiver) => {
-          const value: unknown = Reflect.get(target, prop, receiver);
-          if (typeof value !== 'function') return value;
-          if (!methods.includes(String(prop))) return value.bind(target);
-          return async (...args: unknown[]) => {
-            const out: unknown = await value.apply(target, args);
-            check();
-            if (after) await after(out).catch(() => undefined);
-            return out;
-          };
-        },
-      });
 
 export class WorkerRuntime {
   readonly workerId: string;
@@ -213,8 +74,14 @@ export class WorkerRuntime {
   }
 
   // Задания, которые выполняет этот экземпляр, recovery не трогает (проект §3.3).
+  // Список читается после получения соединения: пока запрос ждал соединения, захват мог завершиться.
   async recover(): Promise<string[]> {
-    return recoverExpiredJobs(this.o.pool, [...this.active.keys()]);
+    const client = await this.o.pool.connect();
+    try {
+      return await recoverExpiredJobs(client, [...this.active.keys()]);
+    } finally {
+      client.release();
+    }
   }
 
   private lastModelCheck = 0;
@@ -275,88 +142,25 @@ export class WorkerRuntime {
     }
   }
 
-  // Инвалидация (этап 09, §5.4): каждое необработанное событие барьера получает задание `stage.invalidate` (dedupe —
-  // одно на событие). Барьер от задания не зависит: устаревание прогона видно сразу по версии входов.
-  async scheduleStageInvalidation(): Promise<number> {
-    const events = await eventsAwaitingInvalidation(this.o.pool);
-    for (const e of events) await enqueueInvalidation(this.o.pool, e.id, e.tender_id);
-    return events.length;
+  // Планирование заданий по состоянию БД (scheduling.ts): методы — для прохода обслуживания и тестов.
+  scheduleStageInvalidation(): Promise<number> {
+    return scheduleStageInvalidation(this.o.pool);
   }
 
-  // Извлечение фактов D-018 (D-028): предпочтительные завершённые прогоны распознавания документов тендера и договора
-  // без извлечения текущей версии правил получают задание `fact.extract` (dedupe — одно на прогон).
-  async scheduleFactExtraction(): Promise<number> {
-    const runs = await runsAwaitingExtraction(this.o.pool);
-    for (const r of runs) await enqueueFactExtraction(this.o.pool, r.id, r.tender_id);
-    return runs.length;
+  scheduleFactExtraction(): Promise<number> {
+    return scheduleFactExtraction(this.o.pool);
   }
 
-  // Каналы, которым пора сканировать, получают задание (dedupe — одно активное на канал).
-  async scheduleScans(): Promise<number> {
-    const due = await dueChannels(this.o.pool);
-    for (const ch of due) {
-      await withTransaction(this.o.pool, async (client) => {
-        await enqueueJob(client, { kind: 'intake.scan', dedupeKey: `scan:${ch.id}`, payload: { channelId: ch.id }, tenderId: ch.tender_id, resourceClass: 'network' });
-        await markScanStarted(client, ch.id);
-      });
-    }
-    return due.length;
+  scheduleScans(): Promise<number> {
+    return scheduleScans(this.o.pool);
   }
 
-  // Срок подачи из TenderHub наступил — выгрузка расчёта (ADR-007 §7): сигнал, а не закрытие. Ставится
-  // один раз на срок; ревизия остаётся provisional. Без настроенного TenderHub не планируется.
-  async scheduleCalculationCaptures(): Promise<number> {
-    const th = this.o.config.tenderhub;
-    if (!th.baseUrl || !th.apiKey) return 0;
-    let scheduled = 0;
-    for (const d of await dueDeadlineCaptures(this.o.pool)) {
-      try {
-        await withTransaction(this.o.pool, async (client) => {
-          await requestCapture(client, {
-            stageId: d.stage_id,
-            tenderId: d.tender_id,
-            source: { id: d.source_id, external_tender_id: d.external_tender_id },
-            trigger: 'deadline',
-            requestedBy: null,
-            deadlineBasis: d.deadline,
-            maxAttempts: th.captureAttempts,
-          });
-        });
-        scheduled += 1;
-      } catch (err) {
-        // Параллельная выгрузка того же этапа уже идёт (уникальность) — следующий проход решит сам.
-        this.log(`выгрузка по сроку для этапа ${d.stage_id} не поставлена: ${err instanceof Error ? err.message : 'unknown'}`);
-      }
-    }
-    return scheduled;
+  scheduleCalculationCaptures(): Promise<number> {
+    return scheduleCalculationCaptures(this.o.pool, this.o.config, this.log);
   }
 
-  // Автоматическая постановка локального распознавания (OD-2): DOCX, XLSX, CSV и PDF с политикой local
-  // без успешного локального прогона и без прогона текущей идентичности. PDF с политикой auto сюда
-  // не попадает никогда — его распознаёт только явная команда (OD-1).
-  async scheduleLocalRecognition(): Promise<number> {
-    const settings = localSettings(this.o.config, this.localOcr);
-    const formats: LocalInputFormat[] = ['pdf', 'docx', 'xlsx', 'csv'];
-    const descriptors = new Map<LocalInputFormat, Awaited<ReturnType<typeof describeLocalRecognizer>>>();
-    const fps: Partial<FingerprintByFormat> = {};
-    for (const f of formats) {
-      const d = await describeLocalRecognizer(f, settings);
-      descriptors.set(f, d);
-      fps[f] = await recognizerFingerprint(this.o.pool, d);
-    }
-    let created = 0;
-    for (const c of await autoRecognitionCandidates(this.o.pool, fps as FingerprintByFormat, this.o.config.localRecognition.autoBatch)) {
-      try {
-        const out = await withTransaction(this.o.pool, (client) =>
-          enqueueLocalRecognition(client, { revisionId: c.revision_id, descriptor: descriptors.get(c.input_format)!, createdBy: null }),
-        );
-        if (out.kind === 'created') created += 1;
-      } catch (err) {
-        // Гонка с приёмом RDWeb или командой пользователя: охранник БД отказал — следующий проход решит сам.
-        this.log(`локальное распознавание редакции ${c.revision_id} не поставлено: ${err instanceof Error ? err.message : 'unknown'}`);
-      }
-    }
-    return created;
+  scheduleLocalRecognition(): Promise<number> {
+    return scheduleLocalRecognition(this.o.pool, this.o.config, this.localOcr, this.log);
   }
 
   // Захватывает и выполняет одно задание. Возвращает false, если очередь пуста.
@@ -674,5 +478,3 @@ export class WorkerRuntime {
     }
   }
 }
-
-export const isStopped = (e: unknown): boolean => e instanceof LeaseLostError || e instanceof JobCancelledError || e instanceof WorkerStoppingError;

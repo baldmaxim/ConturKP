@@ -310,22 +310,36 @@ const main = async (): Promise<void> => {
     // ---- Поиск: p50 / p95 до итогового результата
     const queries = ['Стромынка', 'договор подряда', 'срок выполнения работ', 'гарантийный срок', 'стоимость работ', 'письмо заказчика', 'армирование монолитных конструкций', 'гидроизоляция кровли'];
     const times: number[] = [];
+    const perQuery = new Map<string, number[]>();
+    const runIds: string[] = [];
     let firstHits = -1;
     for (let i = 0; i < P.queries; i += 1) {
       const t0 = Date.now();
-      const r = (await (await api.call('/search', { method: 'POST', body: { context: { kind: 'tender', tenderId: demo.id, mode: 'working', stageId }, query: queries[i % queries.length], limit: 10 }, headers: key() })).json()) as { searchRunId: string; status: string };
+      const q = queries[i % queries.length]!;
+      const r = (await (await api.call('/search', { method: 'POST', body: { context: { kind: 'tender', tenderId: demo.id, mode: 'working', stageId }, query: q, limit: 10 }, headers: key() })).json()) as { searchRunId: string; status: string };
+      runIds.push(r.searchRunId);
       let status = r.status;
       while (status === 'pending' && Date.now() - t0 < 120_000) {
         await sleep(100);
         status = ((await (await api.call(`/search-runs/${r.searchRunId}`)).json()) as { status: string }).status;
       }
       times.push(Date.now() - t0);
+      perQuery.set(q, [...(perQuery.get(q) ?? []), Date.now() - t0]);
       if (firstHits < 0) {
         const view = (await (await api.call(`/search-runs/${r.searchRunId}`)).json()) as { fused?: { items: unknown[] } | null; lexical?: { items: unknown[] } | null };
         firstHits = (view.fused?.items ?? view.lexical?.items ?? []).length;
       }
     }
     info(`поиск до итога: p50 ${pct(times, 50)} мс, p95 ${pct(times, 95)} мс, максимум ${Math.max(...times)} мс (${P.queries} запросов, найдено в первом — ${firstHits})`);
+    // По веткам (search_run.timings) и по запросам: частое слово синтетического корпуса совпадает почти с каждым чанком,
+    // редкое — с единицами; без разбивки p50 смешивает оба случая.
+    const tm = await admin<{ exact: number | null; fts: number | null; vector: number | null }>(
+      "SELECT (timings ->> 'exactMs')::int AS exact, (timings ->> 'ftsMs')::int AS fts, (timings ->> 'vectorMs')::int AS vector FROM search_run WHERE id = ANY($1::uuid[])",
+      [runIds],
+    ).catch(() => ({ rows: [] as Array<{ exact: number | null; fts: number | null; vector: number | null }> }));
+    const col = (k: 'exact' | 'fts' | 'vector'): number[] => tm.rows.map((x) => x[k]).filter((x): x is number => typeof x === 'number');
+    if (tm.rows.length > 0) info(`ветки поиска, p50: точная ${pct(col('exact'), 50)} мс, полнотекстовая ${pct(col('fts'), 50)} мс, векторная ${col('vector').length ? `${pct(col('vector'), 50)} мс` : '—'}`);
+    info(`по запросам, p50 до итога: ${[...perQuery].map(([q, xs]) => `«${q}» ${pct(xs, 50)} мс`).join('; ')}`);
     record('поиск: все запросы завершены, текст документов находится', times.length === P.queries && firstHits > 0 ? times.reduce((a, b) => a + b, 0) : null, firstHits > 0 ? '' : 'первый запрос ничего не нашёл');
 
     // ---- Прогон проверки этапа

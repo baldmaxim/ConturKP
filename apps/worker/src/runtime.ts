@@ -8,6 +8,7 @@ import {
   confirmCancel,
   enqueueJob,
   failJob,
+  getActiveVersion,
   getModelStatus,
   heartbeatJob,
   lockOwnedJob,
@@ -106,7 +107,12 @@ export class WorkerRuntime {
     }
     const status = this.o.embeddings ? await getModelStatus(this.o.pool) : null;
     const modelOk = Boolean(status?.last_success_at && !status.last_error_code);
-    const interval = modelOk ? this.o.config.search.modelCheckIntervalMs : this.o.config.search.modelRetryIntervalMs;
+    // Активная версия построена не настроенной моделью (текстовая версия первого запуска, смена модели): проба,
+    // пришедшаяся на постройку другой версии, векторную не создаёт — до её появления проба идёт с интервалом
+    // повтора, а не раз в час (S17-26).
+    const active = this.o.embeddings ? await getActiveVersion(this.o.pool) : null;
+    const behind = Boolean(this.o.embeddings) && active?.embedding_model !== this.o.embeddings?.model;
+    const interval = modelOk && !behind ? this.o.config.search.modelCheckIntervalMs : this.o.config.search.modelRetryIntervalMs;
     const due = Date.now() - this.lastModelCheck >= interval;
     if (due) this.lastModelCheck = Date.now();
     if (due && this.o.embeddings) {

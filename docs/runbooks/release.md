@@ -175,13 +175,27 @@ npm run ops:service -- backup-task --env-file D:\Kontur\config\kontur.env --acco
 
 ## 15. Живые проверки и статусы в базе установки
 
-Обязательный набор — `docs/architecture/17-operations-design.md` §13.2 (уточняется D-040). Каждая проверка пишет журнал с отметкой «Режим: LIVE», коммитом сборки и «Итог: PASS». Статус в базе установки записывает администратор:
+Обязательный набор — D-040: TenderHub, импорт EML, Яндекс Диск и SMB, OCR, LibreOffice, LM Studio с эмбеддингами, Codex и Cursor по HTTPS, iPhone и Android. Каждая проверка пишет журнал с отметкой «Режим: LIVE», коммитом сборки и «Итог: PASS». Статус в базе установки записывает администратор:
 
 ```powershell
 npm run ops:integration-verify -- --system tenderhub --component TenderHubReader --journal artifacts\stage-17\target\tenderhub-live.log --admin <логин>
 ```
 
 Строки: `tenderhub/TenderHubReader`, `yandex_disk/FsDeliveryTarget`, `smb/FsDeliveryTarget`, `model/ModelGateway`, `embedding_model/ModelGatewayEmbeddings`, `mcp/PortalMcpServer`, `codex/McpClient`, `cursor/McpClient`; новая строка — с `--create`. Фикстурный журнал и журнал другой сборки не принимаются.
+
+## 15а. Замер профиля нагрузки (D-040)
+
+Замер идёт на отдельной базе `kontur_kp_measure_test` кластера `KONTUR_TEST_ADMIN_URL` с собственными процессами; рабочая установка и её база не используются. Нужен свободный диск: на 1 ГБ Markdown база занимает несколько гигабайт, корпус на время замера — около 1 ГБ во временном каталоге.
+
+```powershell
+$env:TEMP = "$env:LOCALAPPDATA\Temp\kontur-measure"; $env:TMP = $env:TEMP
+npm run ops:measure -- --profile target-d040 --positions 10000 --lines 3 --docs 20 --scans 3 --md-mb 1024 --real-model
+```
+
+- `--md-mb` — объём распознанного текста. Документы с экспортом RDWeb: настоящий PDF и `_results.md`, по 5 МБ на документ (`--md-doc-mb`) и 3 КБ на страницу (`--md-page-kb`). Корпус синтетический, данных заказчика нет.
+- `--real-model` — модель и эмбеддинги из файла окружения (LM Studio). Без флага модель поддельная, и замер индекса и смыслового поиска для SLO не годится.
+- Журнал — `artifacts\stage-17\measure-target-d040.log`: время каждого шага, размер индекса, p50 и p95 поиска, объём базы и файлов.
+- Предложение SLO составляется по этому журналу; утверждает владелец (В-17-5).
 
 ## 16. Неисправности
 

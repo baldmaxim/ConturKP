@@ -1,5 +1,5 @@
-# Репетиция эксплуатации этапа 17 — 2026-10-15T06:18:17.216Z, Node v24.14.1, linux
-PASS  дерево принятого этапа 16 (8964017) — /tmp/kontur-reh-16-NLXnaJ
+# Репетиция эксплуатации этапа 17 — 2026-10-15T10:28:25.508Z, Node v24.14.1, linux
+PASS  дерево принятого этапа 16 (8964017) — /tmp/kontur-reh-16-ZfVuf5
 PASS  этап 16: db:setup — база kontur_kp_rehearsal_test: создана; роли и права выставлены
 PASS  этап 16: db:migrate — 42 миграции — готово, применено миграций: 42
 PASS  этап 16: bootstrap
@@ -8,8 +8,8 @@ PASS  этап 16: server и worker — /ready
 PASS  этап 16: вход — HTTP 200
 PASS  этап 16: документ импортирован — HTTP 202
 # данные этапа 16: редакций 1, событий аудита 5
-PASS  копия перед обновлением (--pre-update, роль kontur_migrator) — 2026-10-15T06:19:02.132Z [backup] копия завершена: /tmp/kontur-reh-backup-yg1iaF/kontur-20261015T061901Z
-PASS  копия ролью kontur_backup до 0043 — отказ с понятной причиной — 2026-10-15T06:19:02.684Z [backup] копия не снята (backup_role): права роли копии: нет SELECT: answer_claim, answer_evidence, answer_run, api_token, application_draft, application_template, approval, audit_event_seq_seq, calculation_comparison, candidate_check, candidate_file, candidate_input, candidate_return, change_explanation, change_explanation_basis, change_reason_suggestion, change_reason_suggestion_evidence, comparison_effect, comparison_unit, compliance_incident, decision_requirement_revision, delivery, delivery_attempt, delivery_destination, delivery_destination_probe, delivery_destination_version, delivery_event, delivery_file_state, dialog, dialog_message, discrepancy, discrepancy_basis, discrepancy_status_event, draft_field, draft_field_basis, draft_field_version, evidence_dependency, evidence_fact, evidence_fact_fragment, evidence_fact_type, evidence_invalidation, fact_decision, fact_extraction_run, fact_graph, fact_remark, fact_state, field_suggestion, field_suggestion_evidence, field_suggestion_run, field_suggestion_run_input, finding, finding_event, finding_evidence, finding_occurrence, mcp_proposal, mcp_proposal_fragment, model_suggestion, model_suggestion_evidence, position_lineage_seq_seq, readiness_hold, reason_run, reason_run_input, release, release_candidate, release_comparison, release_comparison_item, release_comparison_reason, release_comparison_reason_basis, review_check, review_check_result, review_finding_kind, review_run, review_run_input, revision_economics, revision_line_check, risk_acceptance, send_event, send_event_decision, send_event_file, send_evidence_upload, source_priority_revision, stage_input_event_processing, standard_attachment, standard_attachment_revision, template_revision, wording, wording_version. Выполните npm run db:migrate
+PASS  копия перед обновлением (--pre-update, роль kontur_migrator) — 2026-10-15T10:29:10.551Z [backup] копия завершена: /tmp/kontur-reh-backup-XfDo3w/kontur-20261015T102910Z
+PASS  копия ролью kontur_backup до 0043 — отказ с понятной причиной — 2026-10-15T10:29:11.134Z [backup] копия не снята (backup_role): права роли копии: нет SELECT: answer_claim, answer_evidence, answer_run, api_token, application_draft, application_template, approval, audit_event_seq_seq, calculation_comparison, candidate_check, candidate_file, candidate_input, candidate_return, change_explanation, change_explanation_basis, change_reason_suggestion, change_reason_suggestion_evidence, comparison_effect, comparison_unit, compliance_incident, decision_requirement_revision, delivery, delivery_attempt, delivery_destination, delivery_destination_probe, delivery_destination_version, delivery_event, delivery_file_state, dialog, dialog_message, discrepancy, discrepancy_basis, discrepancy_status_event, draft_field, draft_field_basis, draft_field_version, evidence_dependency, evidence_fact, evidence_fact_fragment, evidence_fact_type, evidence_invalidation, fact_decision, fact_extraction_run, fact_graph, fact_remark, fact_state, field_suggestion, field_suggestion_evidence, field_suggestion_run, field_suggestion_run_input, finding, finding_event, finding_evidence, finding_occurrence, mcp_proposal, mcp_proposal_fragment, model_suggestion, model_suggestion_evidence, position_lineage_seq_seq, readiness_hold, reason_run, reason_run_input, release, release_candidate, release_comparison, release_comparison_item, release_comparison_reason, release_comparison_reason_basis, review_check, review_check_result, review_finding_kind, review_run, review_run_input, revision_economics, revision_line_check, risk_acceptance, send_event, send_event_decision, send_event_file, send_evidence_upload, source_priority_revision, stage_input_event_processing, standard_attachment, standard_attachment_revision, template_revision, wording, wording_version. Выполните npm run db:migrate
 PASS  обновление: db:migrate новым кодом — одна новая миграция (0043) — готово, применено миграций: 1
 PASS  после обновления: /ready — {"database":{"ok":true,"detail":"доступна"},"schema":{"ok":true,"detail":"версия 43"},"storage":{"ok":true,"detail":"доступно на запись"},"worker":{"ok":true,"detail":"heartbeat свежий"},"queue":{"ok":true,"detail":"аренды заданий продлеваются"}}
 PASS  после обновления: вход, тендеры и документы на месте
@@ -17,19 +17,19 @@ PASS  kill -9 worker посреди задания OCR — HTTP 202
 PASS  /ready замечает остановку worker
 PASS  задание восстановлено после аренды и выполнено один раз — итог complete, прогонов 1, фрагментов 5
 PASS  документ включён в рабочий состав этапа — HTTP 201, 200
-PASS  штатная остановка worker по IPC: код 0, своя строка heartbeat снята сразу — код 0, 40 мс
+PASS  штатная остановка worker по IPC: код 0, своя строка heartbeat снята сразу — код 0, 59 мс
 PASS  повторный запуск worker — /ready
-PASS  копия ролью kontur_backup после обновления — 2026-10-15T06:19:23.832Z [backup] дамп: 1518922 байт, SHA-256 cbd72ab64bc119522a6ebb51b9a87da0066b742996078e1be880357c353af421
+PASS  копия ролью kontur_backup после обновления — 2026-10-15T10:29:33.656Z [backup] дамп: 1518918 байт, SHA-256 29dc31bde9fa5f860a8afc34aa5ccedf08656057baa1090da40f426959b98041
 PASS  чистый кластер pgvector/pgvector:pg18 на отдельном порту
-PASS  маршрут восстановления: инструмент смотрит в другой кластер — отказ до записи — код 1; таблиц на неправильной стороне 1 → 1; база на правильной стороне не создана; pg_restore — тот же кластер, что проверили охранники — инструмент подключится к другому кластеру PostgreSQL (контейнер PG_DOCKER_CONTAINER=kontur-restore-pg-wrong): идентификатор 7696775379432026156, у адреса из настроек
-PASS  маршрут копии: инструмент другого кластера (psql есть) — отказ до pg_dump — код 1; каталогов копии 0; 2026-10-15T06:19:28.175Z [backup] копия не снята (pg_dump_route): инструмент подключится к другому кластеру PostgreSQL (контейнер PG_DOCKER_CONTAINER=kontur-restore-pg-wrong): идентификатор 7696775379432026156, у адреса 
-PASS  маршрут копии: инструмент без psql — отказ до pg_dump — код 1; каталогов копии 0; 2026-10-15T06:19:28.877Z [backup] копия не снята (pg_dump_route): рядом с pg_dump нет psql: без него нельзя проверить, из какого кластера снимется копия
-    # Проверка восстановления — 2026-10-15T06:19:29.496Z, adm3.hlab.kz, Node v24.14.1, linux
-    # Копия: /tmp/kontur-reh-backup-yg1iaF/kontur-20261015T061923Z; база проверки: kontur_restore_rehearsal; каталог: /tmp/kontur-reh-restore-cvXqTC
+PASS  маршрут восстановления: инструмент смотрит в другой кластер — отказ до записи — код 1; таблиц на неправильной стороне 1 → 1; база на правильной стороне не создана; pg_restore — тот же кластер, что проверили охранники — инструмент подключится к другому кластеру PostgreSQL (контейнер PG_DOCKER_CONTAINER=kontur-restore-pg-wrong): идентификатор 7696839850887811117, у адреса из настроек
+PASS  маршрут копии: инструмент другого кластера (psql есть) — отказ до pg_dump — код 1; каталогов копии 0; 2026-10-15T10:29:40.365Z [backup] копия не снята (pg_dump_route): инструмент подключится к другому кластеру PostgreSQL (контейнер PG_DOCKER_CONTAINER=kontur-restore-pg-wrong): идентификатор 7696839850887811117, у адреса 
+PASS  маршрут копии: инструмент без psql — отказ до pg_dump — код 1; каталогов копии 0; 2026-10-15T10:29:41.080Z [backup] копия не снята (pg_dump_route): рядом с pg_dump нет psql: без него нельзя проверить, из какого кластера снимется копия
+    # Проверка восстановления — 2026-10-15T10:29:41.698Z, adm3.hlab.kz, Node v24.14.1, linux
+    # Копия: /tmp/kontur-reh-backup-XfDo3w/kontur-20261015T102933Z; база проверки: kontur_restore_rehearsal; каталог: /tmp/kontur-reh-restore-U0AGOg
     # Инструмент: pg_dump (PostgreSQL) 18.6 (Debian 18.6-1.pgdg12+2) (контейнер kontur-restore-pg)
     PASS  охранники: новая база, пустой каталог, не рабочая система — база kontur_restore_rehearsal, каталог пуст
-    PASS  манифест копии — kontur.backup.v1, создан 2026-10-15T06:19:23.624Z, схема 43, файлов 1, перечень b008b123ced1d8fec0c8630023afdf487bacf071922531e30cdc6b62bd1c32e2
-    PASS  дамп совпадает с манифестом — SHA-256 cbd72ab64bc119522a6ebb51b9a87da0066b742996078e1be880357c353af421, 1518922 байт
+    PASS  манифест копии — kontur.backup.v1, создан 2026-10-15T10:29:33.364Z, схема 43, файлов 1, перечень 15b848b98d3d58ae9b65ccebcb868717a44ebda4e27dc4a4b2d5ec227ec7645e
+    PASS  дамп совпадает с манифестом — SHA-256 29dc31bde9fa5f860a8afc34aa5ccedf08656057baa1090da40f426959b98041, 1518918 байт
     PASS  pg_restore — тот же кластер, что проверили охранники — контейнер kontur-restore-pg: идентификатор кластера совпал, базы kontur_restore_rehearsal нет
     PASS  пустая база создана — db:setup → kontur_restore_rehearsal (роли, локаль builtin, vector, pg_trgm)
     PASS  pg_restore видит именно новую базу (метка) — метка новой базы прочитана инструментом восстановления
@@ -39,7 +39,7 @@ PASS  маршрут копии: инструмент без psql — отказ
     PASS  pg_restore post-data — docker exec -i -e PGUSER -e PGDATABASE -e PGHOST -e PGPORT -e PGPASSWORD -e PGAPPNAME kontur-restore-pg pg_restore --single-transaction --exit-on-error --no-password --section=post-data --dbname=kontur_restore_rehearsal → код 0
     PASS  версия схемы — в базе 43, в манифесте 43
     PASS  файлы хранилища: SHA-256 каждого = манифест — восстановлено 1 из 1
-    PASS  перечень blob базы = перечень манифеста — строк 1, SHA-256 перечня b008b123ced1d8fec0c8630023afdf487bacf071922531e30cdc6b62bd1c32e2
+    PASS  перечень blob базы = перечень манифеста — строк 1, SHA-256 перечня 15b848b98d3d58ae9b65ccebcb868717a44ebda4e27dc4a4b2d5ec227ec7645e
     PASS  ссылки на файлы — таблиц со ссылками 18; ссылок из выпусков, кандидатов, размещений и отправок — 0
     PASS  выпуски, согласования, фрагменты на месте; векторов нет (не копируются) — выпусков 0, согласований 0, фрагментов 5, чанков 1, векторов 0
     PASS  server на копии — /health — HTTP 200

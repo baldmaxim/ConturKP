@@ -1,4 +1,4 @@
-# npm run typecheck — 2026-10-14T18:27:56+05:00, коммит cd25ba6
+# npm run typecheck — 2026-10-15T11:34:38+05:00, коммит 7847399
 
 > typecheck
 > tsc -p tsconfig.json --noEmit && npm run typecheck -w @kontur/web

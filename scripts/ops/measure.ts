@@ -11,7 +11,10 @@
 // openai_compatible, иначе замер не выполняется (R17-06). Успех поиска — по итогу каждого запроса и всех веток (R17-07,
 // scripts/ops/measure-lib.ts). Журнал — artifacts/stage-17/measure-<профиль>.log с фактами среды. Прогон на машине
 // разработки — проверка сценария, для SLO не годится. --db <kontur_…> — имя временной базы замера.
-// Код выхода: 0 — все замеры выполнены, 1 — какой-то шаг не выполнен, 3 — живой замер невозможен при этой настройке.
+// База замера — только своя (R17-09): существующую базу с этим именем замер не трогает и не выполняется; удаляет
+// только базу, которую создал сам и пометил меткой запуска, — и после итога, и после отказа шага или Ctrl+C.
+// Код выхода: 0 — все замеры выполнены, 1 — какой-то шаг не выполнен или замер прерван, 3 — замер не выполнялся:
+// живой замер невозможен при этой настройке или база замера уже существует.
 import { execFile, spawnSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -21,6 +24,7 @@ import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import pg from 'pg';
 import { buildId } from '../../packages/config/src/index.ts';
+import { setupDatabase } from '../../packages/db/src/index.ts';
 import { fakeItem, fakePosition, fakeTender, n, TH_KEY } from '../tenderhub-fake-data.ts';
 import { startFakeTenderHub } from '../tenderhub-fake.ts';
 import { buildZip } from '../../tests/zip.ts';
@@ -46,6 +50,14 @@ const REAL_MODEL = hasFlag('real-model');
 const lines: string[] = [];
 let failed = false;
 let notRun = false;
+// Метка своей базы: комментарий базы, созданной этим запуском. Удаляется только база с этой меткой.
+const RUN_MARK = `kontur-measure:${randomUUID()}`;
+let ownDb = false;
+let interrupted = false;
+const procs: IProc[] = [];
+// Временные каталоги этого запуска (хранилище и копия): создал — удаляет.
+const tempDirs: string[] = [];
+let hubClose: (() => Promise<void>) | null = null;
 const record = (step: string, ms: number | null, note = ''): void => {
   if (ms === null) failed = true;
   const line = `${ms === null ? 'FAIL   ' : `${(ms / 1000).toFixed(1).padStart(7)} с`}  ${step}${note ? ` — ${note}` : ''}`;
@@ -116,12 +128,14 @@ const main = async (): Promise<void> => {
   info(`Среда: ${hostname()}, ${type()} ${release()}, CPU ${cpus()[0]?.model.trim()} × ${cpus().length}, ОЗУ ${(totalmem() / 1024 ** 3).toFixed(1)} ГБ, GPU ${gpu.status === 0 ? gpu.stdout.trim() : 'нет'}, Node ${process.version}, сборка ${buildId() ?? '—'}`);
   info(`Размер: позиций ${P.positions}, строк расчёта ${P.positions * P.lines}, текстовых документов ${P.docs}, сканов ${P.scans}, Markdown ${MD.mb} МБ, запросов поиска ${P.queries}`);
   const hub = await startFakeTenderHub({ apiKey: TH_KEY });
+  hubClose = () => hub.close();
   const tenderId = randomUUID();
   hub.tenders.set(tenderId, generatedTender(tenderId));
   const port = await freePort();
   const base = `http://127.0.0.1:${port}`;
   const storage = mkdtempSync(join(tmpdir(), 'kontur-measure-'));
   const backupRoot = mkdtempSync(join(tmpdir(), 'kontur-measure-backup-'));
+  tempDirs.push(storage, backupRoot);
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     KONTUR_ENV: 'test',
@@ -140,7 +154,6 @@ const main = async (): Promise<void> => {
     ...(REAL_MODEL ? {} : { MODEL_PROVIDER: 'fake', EMBEDDING_PROVIDER: 'fake', EMBEDDING_DIM: '16' }),
   };
   for (const k of ['TLS_CERT_FILE', 'TLS_KEY_FILE', 'INTAKE_ROOTS']) delete env[k];
-  const procs: IProc[] = [];
   const node = (args: string[], input?: string) => spawnSync(process.execPath, args, { cwd: ROOT, env, input, encoding: 'utf8' });
   // Модель — по той же конфигурации, что получат server и worker, а не по флагу (R17-06).
   const setup = modelSetup(env, REAL_MODEL);
@@ -152,8 +165,21 @@ const main = async (): Promise<void> => {
       return;
     }
     if (setup.live) info('генеративная модель в этих замерах отдельно не проверяется: её живая проверка — npm run model:live-smoke');
-    await admin(`DROP DATABASE IF EXISTS ${DB} WITH (FORCE)`, [], 'postgres');
-    if (node(['scripts/db-setup.ts']).status !== 0 || node(['scripts/db-migrate.ts']).status !== 0 || node(['scripts/seed-demo.ts', '--password-stdin'], PASSWORD).status !== 0) {
+    // Своя база (R17-09): существующую — чужую или оставшуюся от другого запуска — замер не трогает.
+    if ((await admin('SELECT 1 FROM pg_database WHERE datname = $1', [DB], 'postgres')).rowCount) {
+      notRun = true;
+      info(`НЕ ВЫПОЛНЕНО: база ${DB} уже существует — замер работает только в созданной им базе и чужую не удаляет; удалите её вручную или задайте другое --db`);
+      return;
+    }
+    const created = await setupDatabase(ADMIN, DB, {
+      appPassword: process.env.KONTUR_APP_DB_PASSWORD,
+      migratorPassword: process.env.KONTUR_MIGRATOR_DB_PASSWORD,
+      backupPassword: process.env.KONTUR_BACKUP_DB_PASSWORD,
+    });
+    if (created !== 'created') throw new Error(`база ${DB} появилась во время подготовки — замер её не трогает`);
+    await admin(`COMMENT ON DATABASE ${DB} IS '${RUN_MARK}'`, [], 'postgres');
+    ownDb = true;
+    if (node(['scripts/db-migrate.ts']).status !== 0 || node(['scripts/seed-demo.ts', '--password-stdin'], PASSWORD).status !== 0) {
       throw new Error('подготовка БД не удалась');
     }
     procs.push(startNode('worker', 'apps/worker/src/main.ts', { cwd: ROOT, env }), startNode('server', 'apps/server/src/main.ts', { cwd: ROOT, env }));
@@ -377,13 +403,30 @@ const main = async (): Promise<void> => {
     const size = await admin<{ db: string; files: string }>("SELECT pg_size_pretty(pg_database_size(current_database())) AS db, (SELECT pg_size_pretty(coalesce(sum(size_bytes), 0)) FROM blob) AS files");
     info(`объём: база ${size.rows[0]!.db}, файлы хранилища ${size.rows[0]!.files}`);
   } catch (err) {
-    record('замеры прерваны', null, err instanceof Error ? err.message : 'unknown');
+    if (!interrupted) record('замеры прерваны', null, err instanceof Error ? err.message : 'unknown');
   } finally {
-    for (const p of procs) await stopNode(p, 30_000);
-    await hub.close();
-    await admin(`DROP DATABASE IF EXISTS ${DB} WITH (FORCE)`, [], 'postgres').catch(() => undefined);
+    await cleanup();
   }
 };
+
+// Удаляется только база этого запуска: создана им и несёт его метку.
+const dropOwnDb = async (): Promise<void> => {
+  const mark = await admin<{ mark: string | null }>("SELECT shobj_description(oid, 'pg_database') AS mark FROM pg_database WHERE datname = $1", [DB], 'postgres');
+  if (mark.rowCount === 0) return;
+  if (mark.rows[0]!.mark !== RUN_MARK) {
+    info(`база ${DB} не удалена: метка запуска не совпала`);
+    return;
+  }
+  await admin(`DROP DATABASE ${DB} WITH (FORCE)`, [], 'postgres');
+};
+let cleaning: Promise<void> | null = null;
+const cleanup = (): Promise<void> =>
+  (cleaning ??= (async () => {
+    for (const p of procs) await stopNode(p, 30_000);
+    await hubClose?.();
+    if (ownDb) await dropOwnDb().catch((err: unknown) => info(`база ${DB} не удалена: ${err instanceof Error ? err.message : 'unknown'}`));
+    for (const d of tempDirs) rmSync(d, { recursive: true, force: true, maxRetries: 5 });
+  })());
 
 // Шаги smoke ждут fetch-подобный api(path, init) с телом-строкой.
 const fetchLike = async (client: ApiClient, path: string, init: { method?: string; headers?: Record<string, string>; body?: unknown }): Promise<Response> => {
@@ -395,7 +438,7 @@ const fetchLike = async (client: ApiClient, path: string, init: { method?: strin
   return client.call(path, { method: init.method ?? 'GET', headers, ...(body !== undefined ? { body } : {}) });
 };
 
-main().finally(() => {
+const finish = (): void => {
   const summary = `Итог: ${notRun ? 'NOT_RUN' : failed ? 'FAIL' : 'PASS'}`;
   lines.push(summary);
   console.log(summary);
@@ -403,4 +446,22 @@ main().finally(() => {
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, `${lines.join('\n')}\n`);
   process.exitCode = notRun ? 3 : failed ? 1 : 0;
+};
+
+// Ctrl+C и остановка: процессы и своя база убираются, журнал пишется (Windows доставляет SIGINT от консоли).
+for (const sig of ['SIGINT', 'SIGTERM'] as const) {
+  process.once(sig, () => {
+    interrupted = true;
+    record('замеры прерваны', null, `сигнал ${sig}`);
+    void cleanup()
+      .catch(() => undefined)
+      .finally(() => {
+        finish();
+        process.exit(1);
+      });
+  });
+}
+
+main().finally(() => {
+  if (!interrupted) finish();
 });

@@ -4,10 +4,10 @@
 //   R17-07 — отказ смысловой ветки после успешной индексации — неполный запрос: шаг поиска FAIL, причина и счётчик
 //            в журнале, время неполных отдельно от p50/p95 полных, код 1.
 // Интеграционные случаи запускают настоящий measure.ts (server, worker, временная база kontur_kp_test_measure_…).
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import pg from 'pg';
@@ -172,14 +172,22 @@ const dbExists = async (name: string): Promise<boolean> => {
 
 // Настоящий measure.ts отдельным процессом (асинхронно: сервер модели — в этом процессе). Временные каталоги замера —
 // в своём TMP, база — kontur_kp_test_measure_… (её убирает и сам замер, и globalSetup тестов).
-const runMeasure = async (env: Record<string, string>, args: string[] = [], queries = 2): Promise<{ code: number | null; log: string; db: string }> => {
+interface IRunOptions {
+  queries?: number;
+  docs?: number;
+  // Имя базы замера; по умолчанию — новое.
+  db?: string;
+  // Действие во время замера (например, сигнал), параллельно ожиданию его завершения.
+  during?: (child: ChildProcess, db: string) => Promise<void>;
+}
+const runMeasure = async (env: Record<string, string>, args: string[] = [], o: IRunOptions = {}): Promise<{ code: number | null; log: string; db: string; leftovers: string[] }> => {
   const tmp = mkdtempSync(join(tmpdir(), 'kontur-measure-it-'));
-  const db = `kontur_kp_test_measure_${randomBytes(4).toString('hex')}`;
+  const db = o.db ?? `kontur_kp_test_measure_${randomBytes(4).toString('hex')}`;
   const out = join(tmp, 'measure.log');
   try {
     const child = spawn(
       process.execPath,
-      ['scripts/ops/measure.ts', '--positions', '3', '--lines', '2', '--docs', '1', '--scans', '0', '--queries', String(queries), '--profile', 'it', '--db', db, '--out', out, ...args],
+      ['scripts/ops/measure.ts', '--positions', '3', '--lines', '2', '--docs', String(o.docs ?? 1), '--scans', '0', '--queries', String(o.queries ?? 2), '--profile', 'it', '--db', db, '--out', out, ...args],
       // Предохранитель: зависший замер не переживает тест.
       { cwd: ROOT, env: { ...process.env, TMPDIR: tmp, TEMP: tmp, TMP: tmp, KONTUR_TEST_ADMIN_URL: ADMIN_URL, ...env }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, signal: AbortSignal.timeout(240_000) },
     );
@@ -187,11 +195,15 @@ const runMeasure = async (env: Record<string, string>, args: string[] = [], quer
     let stdout = '';
     child.stdout.on('data', (c: Buffer) => (stdout += c.toString('utf8')));
     child.stderr.on('data', (c: Buffer) => (stdout += c.toString('utf8')));
-    const code = await new Promise<number | null>((done) => {
+    const exited = new Promise<number | null>((done) => {
       child.on('error', () => undefined);
       child.on('close', (c) => done(c));
     });
-    return { code, log: existsSync(out) ? readFileSync(out, 'utf8') : `журнал не записан; вывод:\n${stdout}`, db };
+    if (o.during) await o.during(child, db);
+    const code = await exited;
+    // Временные каталоги замера (хранилище, копия, корпус) он убирает сам.
+    const leftovers = readdirSync(tmp).filter((n) => n.startsWith('kontur-measure'));
+    return { code, log: existsSync(out) ? readFileSync(out, 'utf8') : `журнал не записан; вывод:\n${stdout}`, db, leftovers };
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
@@ -219,6 +231,7 @@ describe('журнал measure.ts', () => {
     expect(r.log).not.toContain('неполные запросы');
     expect(r.log).toMatch(/^Итог: PASS$/mu);
     expect(r.code).toBe(0);
+    expect(r.leftovers).toEqual([]);
     const calls = embedInputs.slice(before);
     expect(calls.some((x) => x.length === 1 && x[0] === 'Стромынка'), 'эмбеддинг запроса — HTTP').toBe(true);
     expect(calls.some((x) => x.some((t) => t !== 'Стромынка' && t !== 'договор подряда')), 'векторы индекса — HTTP').toBe(true);
@@ -228,7 +241,7 @@ describe('журнал measure.ts', () => {
   it('R17-07 (сценарий ревью): эмбеддинг единственного запроса отказывает после успешной индексации — FAIL с причиной, код 1', async () => {
     failQuery = 'Стромынка';
     try {
-      const r = await runMeasure(HTTP_MODEL(), ['--real-model'], 1);
+      const r = await runMeasure(HTTP_MODEL(), ['--real-model'], { queries: 1 });
       // Индексация успешна: шаг индекса с временем, не FAIL.
       expect(r.log).toMatch(/^\s+\d+\.\d с {2}индекс поиска и векторы активной версии полны$/mu);
       expect(r.log).toContain('модель эмбеддингов активной версии «emb-fixture», размерность 8');
@@ -247,7 +260,7 @@ describe('журнал measure.ts', () => {
   it('R17-07: полный и неполный запрос — p50/p95 только по полному, неполный отдельно со своей причиной; код 1', async () => {
     failQuery = 'договор подряда';
     try {
-      const r = await runMeasure(HTTP_MODEL(), ['--real-model'], 2);
+      const r = await runMeasure(HTTP_MODEL(), ['--real-model'], { queries: 2 });
       expect(r.log).toMatch(/поиск, полные запросы: 1 из 2; до итога p50 (\d+) мс, p95 \1 мс, максимум \1 мс \(найдено в первом — [1-9]\d*\)/u);
       expect(r.log).toMatch(/поиск, неполные запросы: 1 из 2 — «итог degraded, смысловая ветка failed \(semantic_failed\)» × 1;/u);
       expect(r.log).toMatch(/по запросам, p50 до итога \(полные\): «Стромынка» \d+ мс; «договор подряда» — \(неполных 1 из 1\)/u);
@@ -256,5 +269,88 @@ describe('журнал measure.ts', () => {
     } finally {
       failQuery = null;
     }
+  });
+});
+
+// R17-09 (Review 17-5): замер удаляет только базу, которую создал и пометил сам. Существующая база с маркером —
+// в тестовом кластере, имя kontur_kp_test_… (её убирает и globalSetup тестов).
+const adminOn = async <T>(db: string, fn: (c: pg.Client) => Promise<T>): Promise<T> => {
+  const u = new URL(ADMIN_URL);
+  u.pathname = `/${db}`;
+  const c = new pg.Client({ connectionString: u.toString() });
+  await c.connect();
+  try {
+    return await fn(c);
+  } finally {
+    await c.end();
+  }
+};
+const markerDb = async (): Promise<string> => {
+  const name = `kontur_kp_test_measure_guard_${randomBytes(4).toString('hex')}`;
+  await adminOn('postgres', (c) => c.query(`CREATE DATABASE ${name}`));
+  await adminOn(name, async (c) => {
+    await c.query('CREATE TABLE review_marker (id int PRIMARY KEY)');
+    await c.query('INSERT INTO review_marker VALUES (1)');
+  });
+  return name;
+};
+const markerRows = (name: string): Promise<number> => adminOn(name, async (c) => (await c.query<{ n: number }>('SELECT count(*)::int AS n FROM review_marker')).rows[0]!.n);
+const dropDb = (name: string): Promise<unknown> => adminOn('postgres', (c) => c.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`));
+
+describe('R17-09: база замера — только своя', () => {
+  it('отказ по настройке модели — до действий с базой: существующая база и маркер целы', async () => {
+    const name = await markerDb();
+    try {
+      const r = await runMeasure({ MODEL_PROVIDER: 'fake', EMBEDDING_PROVIDER: 'fake', EMBEDDING_DIM: '16' }, ['--real-model'], { db: name });
+      expect(r.code).toBe(3);
+      expect(r.log).toMatch(/^Итог: NOT_RUN$/mu);
+      expect(await dbExists(name)).toBe(true);
+      expect(await markerRows(name)).toBe(1);
+    } finally {
+      await dropDb(name);
+    }
+  });
+
+  it('годная настройка, но база уже существует — замер не выполняется, база и маркер целы', async () => {
+    const name = await markerDb();
+    try {
+      const r = await runMeasure({}, [], { db: name });
+      expect(r.code).toBe(3);
+      expect(r.log).toContain(`НЕ ВЫПОЛНЕНО: база ${name} уже существует`);
+      expect(r.log).toMatch(/^Итог: NOT_RUN$/mu);
+      expect(r.log).not.toMatch(/выгрузка расчёта/u);
+      expect(await markerRows(name)).toBe(1);
+    } finally {
+      await dropDb(name);
+    }
+  });
+
+  it('отказ шага после создания своей базы — замер прерван, своя база удалена', async () => {
+    // Без документов состав этапа пуст, заморозку сервер отклоняет — шаг падает уже после подготовки своей базы.
+    const r = await runMeasure({}, [], { docs: 0 });
+    expect(r.log).toMatch(/^FAIL +замеры прерваны — заморозка состава: HTTP 409/mu);
+    expect(r.code).toBe(1);
+    expect(await dbExists(r.db)).toBe(false);
+    expect(r.leftovers).toEqual([]);
+  });
+
+  // На Windows сигнал дочернему процессу из Node — принудительное завершение без обработчика: проверяется на POSIX.
+  it.skipIf(process.platform === 'win32')('Ctrl+C (SIGINT) во время замера — своя база удалена, журнал записан, код 1', async () => {
+    const r = await runMeasure({}, [], {
+      during: async (child, db) => {
+        // Сигнал — когда своя база уже создана и помечена.
+        for (let i = 0; i < 600; i += 1) {
+          const mark = await adminOn('postgres', (c) => c.query<{ mark: string | null }>("SELECT shobj_description(oid, 'pg_database') AS mark FROM pg_database WHERE datname = $1", [db]));
+          if (mark.rows[0]?.mark?.startsWith('kontur-measure:')) break;
+          await new Promise((res) => setTimeout(res, 100));
+        }
+        child.kill('SIGINT');
+      },
+    });
+    expect(r.log).toMatch(/^FAIL +замеры прерваны — сигнал SIGINT$/mu);
+    expect(r.log).toMatch(/^Итог: FAIL$/mu);
+    expect(r.code).toBe(1);
+    expect(await dbExists(r.db)).toBe(false);
+    expect(r.leftovers).toEqual([]);
   });
 });

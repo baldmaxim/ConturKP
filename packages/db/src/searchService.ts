@@ -209,8 +209,15 @@ export const JOB_PRIORITY = { searchSemantic: 100, indexBuild: 10, indexEmbed: 1
 export const enqueueIndexBuild = (db: Queryable, versionId: string) =>
   enqueueJob(db, { kind: 'index.build', dedupeKey: `index-build:${versionId}`, payload: { versionId }, priority: JOB_PRIORITY.indexBuild });
 
-export const enqueueIndexEmbed = (db: Queryable, versionId: string) =>
-  enqueueJob(db, { kind: 'index.embed', dedupeKey: `index-embed:${versionId}`, payload: { versionId }, resourceClass: 'gpu', priority: JOB_PRIORITY.indexEmbed });
+// afterChunkId — курсор прохода по чанкам версии (S17-23): следующая пачка продолжает с места остановки.
+export const enqueueIndexEmbed = (db: Queryable, versionId: string, afterChunkId: string | null = null) =>
+  enqueueJob(db, {
+    kind: 'index.embed',
+    dedupeKey: `index-embed:${versionId}`,
+    payload: { versionId, ...(afterChunkId ? { afterChunkId } : {}) },
+    resourceClass: 'gpu',
+    priority: JOB_PRIORITY.indexEmbed,
+  });
 
 export const enqueueIndexPurge = (db: Queryable, versionId: string) =>
   enqueueJob(db, { kind: 'index.purge', dedupeKey: `index-purge:${versionId}`, payload: { versionId }, priority: JOB_PRIORITY.indexPurge });

@@ -345,13 +345,17 @@ export interface IChunkForVector {
   body_text: string;
 }
 
-export const chunksWithoutVectors = async (db: Queryable, versionId: string, limit: number): Promise<IChunkForVector[]> => {
+// Чанки без векторов по возрастанию id, после курсора afterId (этап 17, S17-23). Без курсора запрос каждый раз
+// пропускает все уже векторизованные чанки с начала: стоимость пачки росла с объёмом сделанного, и достройка 1 ГБ
+// текста шла часами даже на мгновенной модели. С курсором — диапазон первичного ключа от места остановки.
+export const chunksWithoutVectors = async (db: Queryable, versionId: string, limit: number, afterId: string | null = null): Promise<IChunkForVector[]> => {
   const r = await db.query<IChunkForVector>(
     `SELECT c.id, c.source_unit_id, c.tender_id, c.contract_id, c.header_text, c.body_text FROM search_chunk c
-      WHERE c.index_version_id = $1 AND NOT EXISTS (SELECT 1 FROM search_chunk_vector v WHERE v.chunk_id = c.id)
+      WHERE c.index_version_id = $1 AND ($3::uuid IS NULL OR c.id > $3::uuid)
+        AND NOT EXISTS (SELECT 1 FROM search_chunk_vector v WHERE v.chunk_id = c.id)
       ORDER BY c.id
       LIMIT $2`,
-    [versionId, limit],
+    [versionId, limit, afterId],
   );
   return r.rows;
 };

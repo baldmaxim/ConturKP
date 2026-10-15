@@ -107,7 +107,11 @@ export const indexEmbedHandler: IJobHandlerSpec = {
       await recordModelStatus(ctx.pool, { ok: false, errorCode: 'model_fingerprint_mismatch', verification: 'VERIFIED_FIXTURE', details: { model: e.model } });
       throw new PermanentJobError('model_fingerprint_mismatch', 'модель провайдера не совпадает с моделью версии индекса');
     }
-    const chunks = await chunksWithoutVectors(ctx.pool, versionId, e.batchSize);
+    // Курсор прохода (S17-23): пачка продолжает с последнего обработанного чанка. Проход дошёл до конца — один раз
+    // с начала: добрать отставшие (новые единицы, пачки, прерванные остановкой).
+    const after = typeof ctx.job.payload.afterChunkId === 'string' ? ctx.job.payload.afterChunkId : null;
+    let chunks = await chunksWithoutVectors(ctx.pool, versionId, e.batchSize, after);
+    if (chunks.length === 0 && after !== null) chunks = await chunksWithoutVectors(ctx.pool, versionId, e.batchSize);
     const template = templateOfInputVersion(v.embedding_input_version!);
     const key = { purpose: 'index' as const, model: v.embedding_model, fingerprint: v.embedding_model_fingerprint!, inputVersion: v.embedding_input_version!, dim: v.embedding_dim! };
     const inputs = chunks.map((c) => embeddingInput(template, 'index', chunkText({ headerText: c.header_text, bodyText: c.body_text })));
@@ -145,7 +149,9 @@ export const indexEmbedHandler: IJobHandlerSpec = {
         // Следующая пачка — если остались чанки без векторов. Пустая пачка при незавершённом
         // текстовом фронте ничего «навсегда» не закрывает: активация всё равно пересчитывает
         // полноту, а build поставит векторную пачку, когда появятся чанки (G05-01).
-        if ((await chunksWithoutVectors(client, versionId, 1)).length > 0) await enqueueIndexEmbed(client, versionId);
+        const last = chunks.at(-1)?.id ?? null;
+        if (last && (await chunksWithoutVectors(client, versionId, 1, last)).length > 0) await enqueueIndexEmbed(client, versionId, last);
+        else if ((await chunksWithoutVectors(client, versionId, 1)).length > 0) await enqueueIndexEmbed(client, versionId);
       },
     );
     await tryActivate(ctx, versionId);

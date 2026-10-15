@@ -11,6 +11,7 @@ import {
   degradeIfExpired,
   enqueueIndexBuild,
   enqueueIndexEmbed,
+  hasActiveJob,
   enqueueIndexPurge,
   expiredPendingRuns,
   getActiveVersion,
@@ -120,7 +121,8 @@ export const runSearchMaintenance = async (d: IMaintenanceDeps, o: { checkModel:
       const j = await enqueueIndexBuild(d.pool, v.id);
       if (j.created) report.enqueued.push(`index.build:${v.seq}`);
     }
-    if (v.embedding_model && d.embeddings && (await chunksWithoutVectors(d.pool, v.id, 1)).length > 0) {
+    // Пока пачка векторов версии в очереди или идёт, проход чанков не нужен: она сама поставит следующую (S17-23).
+    if (v.embedding_model && d.embeddings && !(await hasActiveJob(d.pool, `index-embed:${v.id}`)) && (await chunksWithoutVectors(d.pool, v.id, 1)).length > 0) {
       const j = await enqueueIndexEmbed(d.pool, v.id);
       if (j.created) report.enqueued.push(`index.embed:${v.seq}`);
     }

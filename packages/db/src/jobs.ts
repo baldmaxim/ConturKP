@@ -332,6 +332,10 @@ export const recoverExpiredJobs = async (db: Queryable, exceptIds: readonly stri
   return r.rows.map((x) => x.id);
 };
 
+// Есть ли незавершённое задание с этим ключом дедупликации (частичный уникальный индекс — дёшево).
+export const hasActiveJob = async (db: Queryable, dedupeKey: string): Promise<boolean> =>
+  ((await db.query("SELECT 1 FROM job WHERE dedupe_key = $1 AND status IN ('queued', 'running') LIMIT 1", [dedupeKey])).rowCount ?? 0) > 0;
+
 // Признак для /ready: задания running, чья аренда просрочена дольше порога, — recovery не идёт.
 export const staleRunningJobs = async (db: Queryable, overdueSeconds: number): Promise<number> => {
   const r = await db.query<{ n: number }>(

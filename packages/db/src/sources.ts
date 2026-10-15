@@ -127,8 +127,10 @@ export interface IRegistration {
   newDocument: boolean;
 }
 
-// Регистрация элемента (state-machines §3): блокировки этапов тендера и строки тендера,
-// редакция по (tender_id, blob_sha256) — существующая даёт duplicate (A14); иначе новая
+// Регистрация элемента (state-machines §3): блокировки этапов тендера, затем регистрация в тендере
+// сериализуется advisory-блокировкой. Строка тендера FOR UPDATE здесь была причиной взаимоблокировки
+// (S17-22): приём загрузки держит её внешним ключом (KEY SHARE) и ждёт этап, который держит регистрация.
+// Редакция по (tender_id, blob_sha256) — существующая даёт duplicate (A14); иначе новая
 // редакция документа с тем же именем (A13) или новый документ. Происхождение — всегда.
 // Событие document_revision_registered — только для новой редакции.
 export const registerItem = async (
@@ -138,7 +140,7 @@ export const registerItem = async (
 ): Promise<IRegistration> => {
   if (!item.blob_sha256) throw new Error('элемент без содержимого');
   await lockTenderStages(db, item.tender_id, null);
-  await db.query('SELECT 1 FROM tender WHERE id = $1 FOR UPDATE', [item.tender_id]);
+  await db.query("SELECT pg_advisory_xact_lock(hashtext('document_registration'), hashtext($1::text))", [item.tender_id]);
   const existing = await db.query<{ id: string; document_id: string }>(
     'SELECT id, document_id FROM document_revision WHERE tender_id = $1 AND blob_sha256 = $2',
     [item.tender_id, item.blob_sha256],

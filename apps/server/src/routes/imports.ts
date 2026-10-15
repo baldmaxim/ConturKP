@@ -78,6 +78,9 @@ export const importsRouter = (pool: Pool, store: BlobStore, config: IAppConfig):
         if (!stored) throw new HttpError(400, 'VALIDATION_FAILED', 'файл не получен');
         const name = uploadName(req);
         const stage = await loadStage(client, ctx, uuidParam(req, 'id', 'tender_stage'));
+        // Сначала строка этапа (state-machines §1.2, S17-22): иначе внешние ключи партии берут тендер и этап (KEY SHARE)
+        // раньше блокировки этапа событием — две загрузки в один этап и регистрация редакции взаимно блокировались.
+        await lockTenderStages(client, stage.tender_id, [stage.id]);
         const verdict = classifyFile(name, stored.head, stored.sizeBytes);
         await insertBlob(client, {
           sha256: stored.sha256,

@@ -17,6 +17,7 @@ import {
   listQaThreads,
   listTranscriptRevisions,
   listTranscriptSegments,
+  lockTenderStages,
   type IAccessContext,
   type Pool,
   type Queryable,
@@ -82,8 +83,11 @@ export const communicationsRouter = (pool: Pool, store: BlobStore, config: IAppC
         const stored = uploadedBlob(req);
         if (!stored) throw new HttpError(400, 'VALIDATION_FAILED', 'файл не получен');
         uploadName(req);
-        await client.query('SELECT 1 FROM tender WHERE id = $1 FOR UPDATE', [tenderId]);
         const stageId = await requireStageOf(client, ctx, q.stageId, tenderId);
+        // Сначала строки этапов (state-machines §1.2), затем импорт манифестов тендера — advisory-блокировкой, а не
+        // строкой тендера FOR UPDATE: она встречно блокировалась с регистрацией редакций (S17-22).
+        await lockTenderStages(client, tenderId, stageId ? [stageId] : null);
+        await client.query("SELECT pg_advisory_xact_lock(hashtext('communication_import'), hashtext($1::text))", [tenderId]);
         const target = { tenderId, entityType: 'tender', entityId: tenderId };
         if (stored.sizeBytes > MANIFEST_MAX_BYTES) throw new HttpError(413, 'VALIDATION_FAILED', 'manifest больше 20 МиБ', {}, target);
         const bytes = await readStored(store, stored.sha256);

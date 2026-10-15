@@ -6,10 +6,12 @@
 // Замеры этапа 17 (проект §13.3) на настоящих server и worker и синтетическом тендере заданного размера: выгрузка
 // расчёта (поддельный TenderHub, N позиций × строки), импорт архива документов, локальное распознавание (текстовый
 // слой и OCR сканов), сборка индекса и векторов, поиск p50/p95, прогон проверки этапа, сборка комплекта с превью
-// LibreOffice, копия ops:backup. Числа владельца — В-17-1. Модель и эмбеддинги — поддельные; --real-model берёт
-// настроенный сервер модели из окружения (LM Studio на целевом ПК). Журнал — artifacts/stage-17/measure-<host>.log
-// с фактами среды. Прогон на машине разработки — проверка сценария, для SLO не годится.
-// Код выхода: 0 — все замеры выполнены, 1 — какой-то шаг не выполнен.
+// LibreOffice, копия ops:backup. Числа владельца — В-17-1. Модель и эмбеддинги — поддельные (синтетический замер);
+// --real-model берёт настроенный сервер модели из окружения (LM Studio на целевом ПК): оба провайдера обязаны быть
+// openai_compatible, иначе замер не выполняется (R17-06). Успех поиска — по итогу каждого запроса и всех веток (R17-07,
+// scripts/ops/measure-lib.ts). Журнал — artifacts/stage-17/measure-<профиль>.log с фактами среды. Прогон на машине
+// разработки — проверка сценария, для SLO не годится. --db <kontur_…> — имя временной базы замера.
+// Код выхода: 0 — все замеры выполнены, 1 — какой-то шаг не выполнен, 3 — живой замер невозможен при этой настройке.
 import { execFile, spawnSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -24,6 +26,7 @@ import { startFakeTenderHub } from '../tenderhub-fake.ts';
 import { buildZip } from '../../tests/zip.ts';
 import { mdCorpusPlan, mdExport, mdPdf, type IMdDoc } from './measure-corpus.ts';
 import { argValue, hasFlag } from '../cli.ts';
+import { indexModelProblem, modelSetup, searchOutcome, summarizeSearch, type ISearchOutcome, type ISearchRunView } from './measure-lib.ts';
 import { ApiClient, freePort, sleep, startNode, stopNode, waitReady, type IProc } from './procs.ts';
 
 const ROOT = resolve(import.meta.dirname, '..', '..');
@@ -31,7 +34,8 @@ const ROOT = resolve(import.meta.dirname, '..', '..');
 type SmokeStep = (o: Record<string, unknown>) => Promise<{ candidateId?: string } | undefined>;
 const smokeStep = async (file: string, name: string): Promise<SmokeStep> => ((await import(pathToFileURL(join(ROOT, 'scripts', file)).href)) as Record<string, SmokeStep>)[name]!;
 const ADMIN = process.env.KONTUR_TEST_ADMIN_URL ?? 'postgresql://postgres@127.0.0.1:55432/postgres';
-const DB = 'kontur_kp_measure_test';
+const DB = argValue('db') ?? 'kontur_kp_measure_test';
+if (!/^kontur_[a-z0-9_]{1,50}$/u.test(DB)) throw new Error('--db: имя вида kontur_<строчные латинские, цифры, _>');
 const PASSWORD = `pw-${randomBytes(12).toString('hex')}`;
 const num = (name: string, def: number): number => Number(argValue(name) ?? def);
 const P = { positions: num('positions', 93), lines: num('lines', 25), docs: num('docs', 20), scans: num('scans', 3), queries: num('queries', 20) };
@@ -41,6 +45,7 @@ const REAL_MODEL = hasFlag('real-model');
 
 const lines: string[] = [];
 let failed = false;
+let notRun = false;
 const record = (step: string, ms: number | null, note = ''): void => {
   if (ms === null) failed = true;
   const line = `${ms === null ? 'FAIL   ' : `${(ms / 1000).toFixed(1).padStart(7)} с`}  ${step}${note ? ` — ${note}` : ''}`;
@@ -85,10 +90,6 @@ const timed = async <T>(fn: () => Promise<T | null>): Promise<{ ms: number | nul
   const value = await fn();
   return { ms: value === null ? null : Date.now() - t0, value };
 };
-const pct = (xs: number[], p: number): number => {
-  const s = [...xs].sort((a, b) => a - b);
-  return s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))] ?? 0;
-};
 // Ответ команды с ожидаемым кодом — иначе замер прерывается сразу и с причиной, а не ждёт до тайм-аута.
 const expectStatus = async (r: Response, ok: number[], what: string): Promise<Response> => {
   if (!ok.includes(r.status)) throw new Error(`${what}: HTTP ${r.status} ${(await r.text()).slice(0, 300)}`);
@@ -113,7 +114,7 @@ const main = async (): Promise<void> => {
   const gpu = spawnSync('nvidia-smi', ['--query-gpu=name,memory.total', '--format=csv,noheader'], { encoding: 'utf8', windowsHide: true });
   info(`Замеры этапа 17 — ${new Date().toISOString()}, профиль «${PROFILE}»${PROFILE === 'dev' ? ' (машина разработки: для SLO не годится)' : ''}`);
   info(`Среда: ${hostname()}, ${type()} ${release()}, CPU ${cpus()[0]?.model.trim()} × ${cpus().length}, ОЗУ ${(totalmem() / 1024 ** 3).toFixed(1)} ГБ, GPU ${gpu.status === 0 ? gpu.stdout.trim() : 'нет'}, Node ${process.version}, сборка ${buildId() ?? '—'}`);
-  info(`Размер: позиций ${P.positions}, строк расчёта ${P.positions * P.lines}, текстовых документов ${P.docs}, сканов ${P.scans}, Markdown ${MD.mb} МБ, запросов поиска ${P.queries}; модель ${REAL_MODEL ? 'настроенная (живая)' : 'поддельная'}`);
+  info(`Размер: позиций ${P.positions}, строк расчёта ${P.positions * P.lines}, текстовых документов ${P.docs}, сканов ${P.scans}, Markdown ${MD.mb} МБ, запросов поиска ${P.queries}`);
   const hub = await startFakeTenderHub({ apiKey: TH_KEY });
   const tenderId = randomUUID();
   hub.tenders.set(tenderId, generatedTender(tenderId));
@@ -141,7 +142,16 @@ const main = async (): Promise<void> => {
   for (const k of ['TLS_CERT_FILE', 'TLS_KEY_FILE', 'INTAKE_ROOTS']) delete env[k];
   const procs: IProc[] = [];
   const node = (args: string[], input?: string) => spawnSync(process.execPath, args, { cwd: ROOT, env, input, encoding: 'utf8' });
+  // Модель — по той же конфигурации, что получат server и worker, а не по флагу (R17-06).
+  const setup = modelSetup(env, REAL_MODEL);
+  info(`Модель: ${setup.identity}`);
   try {
+    if (setup.refusal.length > 0) {
+      notRun = true;
+      for (const r of setup.refusal) info(`НЕ ВЫПОЛНЕНО: ${r}`);
+      return;
+    }
+    if (setup.live) info('генеративная модель в этих замерах отдельно не проверяется: её живая проверка — npm run model:live-smoke');
     await admin(`DROP DATABASE IF EXISTS ${DB} WITH (FORCE)`, [], 'postgres');
     if (node(['scripts/db-setup.ts']).status !== 0 || node(['scripts/db-migrate.ts']).status !== 0 || node(['scripts/seed-demo.ts', '--password-stdin'], PASSWORD).status !== 0) {
       throw new Error('подготовка БД не удалась');
@@ -290,57 +300,48 @@ const main = async (): Promise<void> => {
     await expectStatus(await api.call(`/source-set-revisions/${draftId}/freeze`, { method: 'POST', headers: { 'If-Match': items.headers.get('etag') ?? '', ...key() }, body: {} }), [200], 'заморозка состава');
     await expectStatus(await api.call(`/stages/${stageId}/evidence-scopes`, { method: 'POST', body: {}, headers: key() }), [200, 201], 'снимок области');
 
-    // ---- Индекс поиска (и векторы)
+    // ---- Индекс поиска и векторы: активная версия построена заявленной моделью и полна (R17-06). Пока модель не
+    // проверена, worker строит текстовую версию; векторная заменит её позже — текстовая итогом индексации не считается.
+    type IIndexState = { missing_units: number; missing_vectors: number; chunks: number; vectors: number; fragments: number; model: string | null; dim: number | null };
+    let last: IIndexState | null = null;
     const idx = await timed(() =>
       waitFor(async () => {
-        const q = await admin<{ missing_units: number; missing_vectors: number }>(
-          `SELECT (SELECT count(*)::int FROM recognition_run r WHERE r.status IN ('complete', 'partial') AND NOT EXISTS (SELECT 1 FROM search_index_unit u JOIN search_index_version v ON v.id = u.index_version_id AND v.status = 'active' WHERE u.source_unit_id = r.id)) AS missing_units,
-                  (SELECT count(*)::int FROM search_chunk c JOIN search_index_version v ON v.id = c.index_version_id AND v.status = 'active' WHERE v.embedding_model IS NOT NULL AND NOT EXISTS (SELECT 1 FROM search_chunk_vector x WHERE x.chunk_id = c.id)) AS missing_vectors`,
-        );
-        return q.rows[0]!.missing_units === 0 && q.rows[0]!.missing_vectors === 0 ? true : null;
+        last = (
+          await admin<IIndexState>(
+            `SELECT (SELECT count(*)::int FROM recognition_run r WHERE r.status IN ('complete', 'partial') AND NOT EXISTS (SELECT 1 FROM search_index_unit u WHERE u.index_version_id = v.id AND u.source_unit_id = r.id)) AS missing_units,
+                    (SELECT count(*)::int FROM search_chunk c WHERE c.index_version_id = v.id AND v.embedding_model IS NOT NULL AND NOT EXISTS (SELECT 1 FROM search_chunk_vector x WHERE x.chunk_id = c.id)) AS missing_vectors,
+                    (SELECT count(*)::int FROM search_chunk c WHERE c.index_version_id = v.id) AS chunks,
+                    (SELECT count(*)::int FROM search_chunk_vector) AS vectors, (SELECT count(*)::int FROM evidence_fragment) AS fragments,
+                    v.embedding_model AS model, v.embedding_dim AS dim
+               FROM search_index_version v WHERE v.status = 'active'`,
+          )
+        ).rows[0] ?? null;
+        return last && last.missing_units === 0 && last.missing_vectors === 0 && indexModelProblem(setup, last) === null ? last : null;
       }, 6 * 60 * 60_000, 2000),
     );
-    record('индекс поиска и векторы активной версии полны', idx.ms);
-    const ix = await admin<{ chunks: number; vectors: number; fragments: number }>(
-      `SELECT (SELECT count(*)::int FROM search_chunk c JOIN search_index_version v ON v.id = c.index_version_id AND v.status = 'active') AS chunks,
-              (SELECT count(*)::int FROM search_chunk_vector) AS vectors, (SELECT count(*)::int FROM evidence_fragment) AS fragments`,
-    );
-    info(`индекс: фрагментов ${ix.rows[0]!.fragments}, чанков ${ix.rows[0]!.chunks}, векторов ${ix.rows[0]!.vectors}`);
+    const state = last as IIndexState | null;
+    record('индекс поиска и векторы активной версии полны', idx.ms, idx.ms === null ? (indexModelProblem(setup, state) ?? `активная версия неполна: единиц вне индекса ${state?.missing_units ?? '—'}, чанков без векторов ${state?.missing_vectors ?? '—'}`) : '');
+    info(`индекс: фрагментов ${state?.fragments ?? 0}, чанков ${state?.chunks ?? 0}, векторов ${state?.vectors ?? 0}; модель эмбеддингов активной версии «${state?.model ?? '—'}», размерность ${state?.dim ?? '—'}`);
 
-    // ---- Поиск: p50 / p95 до итогового результата
+    // ---- Поиск: p50 / p95 до итогового результата — только по полным запросам (R17-07)
     const queries = ['Стромынка', 'договор подряда', 'срок выполнения работ', 'гарантийный срок', 'стоимость работ', 'письмо заказчика', 'армирование монолитных конструкций', 'гидроизоляция кровли'];
-    const times: number[] = [];
-    const perQuery = new Map<string, number[]>();
-    const runIds: string[] = [];
-    let firstHits = -1;
+    const outcomes: ISearchOutcome[] = [];
     for (let i = 0; i < P.queries; i += 1) {
       const t0 = Date.now();
       const q = queries[i % queries.length]!;
-      const r = (await (await api.call('/search', { method: 'POST', body: { context: { kind: 'tender', tenderId: demo.id, mode: 'working', stageId }, query: q, limit: 10 }, headers: key() })).json()) as { searchRunId: string; status: string };
-      runIds.push(r.searchRunId);
-      let status = r.status;
-      while (status === 'pending' && Date.now() - t0 < 120_000) {
+      const r = await expectStatus(await api.call('/search', { method: 'POST', body: { context: { kind: 'tender', tenderId: demo.id, mode: 'working', stageId }, query: q, limit: 10 }, headers: key() }), [200], 'поиск');
+      let view = (await r.json()) as ISearchRunView & { searchRunId: string };
+      while (view.status === 'pending' && Date.now() - t0 < 120_000) {
         await sleep(100);
-        status = ((await (await api.call(`/search-runs/${r.searchRunId}`)).json()) as { status: string }).status;
+        view = (await (await expectStatus(await api.call(`/search-runs/${view.searchRunId}`), [200], 'итог поиска')).json()) as ISearchRunView & { searchRunId: string };
       }
-      times.push(Date.now() - t0);
-      perQuery.set(q, [...(perQuery.get(q) ?? []), Date.now() - t0]);
-      if (firstHits < 0) {
-        const view = (await (await api.call(`/search-runs/${r.searchRunId}`)).json()) as { fused?: { items: unknown[] } | null; lexical?: { items: unknown[] } | null };
-        firstHits = (view.fused?.items ?? view.lexical?.items ?? []).length;
-      }
+      outcomes.push(searchOutcome(q, Date.now() - t0, view));
     }
-    info(`поиск до итога: p50 ${pct(times, 50)} мс, p95 ${pct(times, 95)} мс, максимум ${Math.max(...times)} мс (${P.queries} запросов, найдено в первом — ${firstHits})`);
-    // По веткам (search_run.timings) и по запросам: частое слово синтетического корпуса совпадает почти с каждым чанком,
+    // По веткам (timings прогона) и по запросам: частое слово синтетического корпуса совпадает почти с каждым чанком,
     // редкое — с единицами; без разбивки p50 смешивает оба случая.
-    const tm = await admin<{ exact: number | null; fts: number | null; vector: number | null }>(
-      "SELECT (timings ->> 'exactMs')::int AS exact, (timings ->> 'ftsMs')::int AS fts, (timings ->> 'vectorMs')::int AS vector FROM search_run WHERE id = ANY($1::uuid[])",
-      [runIds],
-    ).catch(() => ({ rows: [] as Array<{ exact: number | null; fts: number | null; vector: number | null }> }));
-    const col = (k: 'exact' | 'fts' | 'vector'): number[] => tm.rows.map((x) => x[k]).filter((x): x is number => typeof x === 'number');
-    if (tm.rows.length > 0) info(`ветки поиска, p50: точная ${pct(col('exact'), 50)} мс, полнотекстовая ${pct(col('fts'), 50)} мс, векторная ${col('vector').length ? `${pct(col('vector'), 50)} мс` : '—'}`);
-    info(`по запросам, p50 до итога: ${[...perQuery].map(([q, xs]) => `«${q}» ${pct(xs, 50)} мс`).join('; ')}`);
-    record('поиск: все запросы завершены, текст документов находится', times.length === P.queries && firstHits > 0 ? times.reduce((a, b) => a + b, 0) : null, firstHits > 0 ? '' : 'первый запрос ничего не нашёл');
+    const search = summarizeSearch(outcomes, P.queries);
+    for (const l of search.lines) info(l);
+    record('поиск: все запросы полные (точная, полнотекстовая и смысловая ветки), текст документов находится', search.passed ? search.totalMs : null, search.note);
 
     // ---- Прогон проверки этапа
     const review = await timed(async () => {
@@ -395,11 +396,11 @@ const fetchLike = async (client: ApiClient, path: string, init: { method?: strin
 };
 
 main().finally(() => {
-  const summary = `Итог: ${failed ? 'FAIL' : 'PASS'}`;
+  const summary = `Итог: ${notRun ? 'NOT_RUN' : failed ? 'FAIL' : 'PASS'}`;
   lines.push(summary);
   console.log(summary);
   const out = resolve(argValue('out') ?? join(ROOT, 'artifacts', 'stage-17', `measure-${PROFILE}.log`));
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, `${lines.join('\n')}\n`);
-  process.exitCode = failed ? 1 : 0;
+  process.exitCode = notRun ? 3 : failed ? 1 : 0;
 });

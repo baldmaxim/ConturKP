@@ -1,5 +1,8 @@
 // npm run ops:measure -- --positions <N> --lines <на позицию> --docs <текстовых PDF> --scans <сканов> [--queries 20]
-//                        [--profile <имя>] [--real-model] [--out <журнал>]
+//                        [--md-mb <МБ> [--md-doc-mb 5] [--md-page-kb 3]] [--profile <имя>] [--real-model] [--out <журнал>]
+// Профиль D-040: --positions 10000 --lines 3 --md-mb 1024 — 10 000 позиций, ~30 000 строк, до 1 ГБ Markdown:
+// документы с экспортом RDWeb (настоящий PDF + `_results.md`, scripts/ops/measure-corpus.ts). Корпус готовится на
+// диске до замеров; время подготовки в замеры не входит.
 // Замеры этапа 17 (проект §13.3) на настоящих server и worker и синтетическом тендере заданного размера: выгрузка
 // расчёта (поддельный TenderHub, N позиций × строки), импорт архива документов, локальное распознавание (текстовый
 // слой и OCR сканов), сборка индекса и векторов, поиск p50/p95, прогон проверки этапа, сборка комплекта с превью
@@ -9,7 +12,7 @@
 // Код выхода: 0 — все замеры выполнены, 1 — какой-то шаг не выполнен.
 import { execFile, spawnSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { cpus, hostname, release, totalmem, type } from 'node:os';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -19,6 +22,7 @@ import { buildId } from '../../packages/config/src/index.ts';
 import { fakeItem, fakePosition, fakeTender, n, TH_KEY } from '../tenderhub-fake-data.ts';
 import { startFakeTenderHub } from '../tenderhub-fake.ts';
 import { buildZip } from '../../tests/zip.ts';
+import { mdCorpusPlan, mdExport, mdPdf, type IMdDoc } from './measure-corpus.ts';
 import { argValue, hasFlag } from '../cli.ts';
 import { ApiClient, freePort, sleep, startNode, stopNode, waitReady, type IProc } from './procs.ts';
 
@@ -31,6 +35,7 @@ const DB = 'kontur_kp_measure_test';
 const PASSWORD = `pw-${randomBytes(12).toString('hex')}`;
 const num = (name: string, def: number): number => Number(argValue(name) ?? def);
 const P = { positions: num('positions', 93), lines: num('lines', 25), docs: num('docs', 20), scans: num('scans', 3), queries: num('queries', 20) };
+const MD = { mb: num('md-mb', 0), docMb: num('md-doc-mb', 5), pageKb: num('md-page-kb', 3) };
 const PROFILE = argValue('profile') ?? 'dev';
 const REAL_MODEL = hasFlag('real-model');
 
@@ -108,7 +113,7 @@ const main = async (): Promise<void> => {
   const gpu = spawnSync('nvidia-smi', ['--query-gpu=name,memory.total', '--format=csv,noheader'], { encoding: 'utf8', windowsHide: true });
   info(`Замеры этапа 17 — ${new Date().toISOString()}, профиль «${PROFILE}»${PROFILE === 'dev' ? ' (машина разработки: для SLO не годится)' : ''}`);
   info(`Среда: ${hostname()}, ${type()} ${release()}, CPU ${cpus()[0]?.model.trim()} × ${cpus().length}, ОЗУ ${(totalmem() / 1024 ** 3).toFixed(1)} ГБ, GPU ${gpu.status === 0 ? gpu.stdout.trim() : 'нет'}, Node ${process.version}, сборка ${buildId() ?? '—'}`);
-  info(`Размер: позиций ${P.positions}, строк расчёта ${P.positions * P.lines}, текстовых документов ${P.docs}, сканов ${P.scans}, запросов поиска ${P.queries}; модель ${REAL_MODEL ? 'настроенная (живая)' : 'поддельная'}`);
+  info(`Размер: позиций ${P.positions}, строк расчёта ${P.positions * P.lines}, текстовых документов ${P.docs}, сканов ${P.scans}, Markdown ${MD.mb} МБ, запросов поиска ${P.queries}; модель ${REAL_MODEL ? 'настроенная (живая)' : 'поддельная'}`);
   const hub = await startFakeTenderHub({ apiKey: TH_KEY });
   const tenderId = randomUUID();
   hub.tenders.set(tenderId, generatedTender(tenderId));
@@ -212,6 +217,68 @@ const main = async (): Promise<void> => {
     ).catch(() => ({ rows: [{ ms: null }] }));
     if (ocr.rows[0]?.ms) info(`OCR одного скана (страница letter-scan, 300 dpi): в среднем ${(ocr.rows[0].ms / 1000).toFixed(1)} с`);
 
+    // ---- Профиль D-040: распознанный текст в Markdown — оригиналы PDF и экспорт RDWeb
+    if (MD.mb > 0) {
+      const plan = mdCorpusPlan({ totalMb: MD.mb, docMb: MD.docMb, pageKb: MD.pageKb });
+      const pagesTotal = plan.reduce((a, d) => a + d.pages, 0);
+      // Подготовка на диске до замеров: генерация текста не входит во время импорта.
+      const corpusDir = mkdtempSync(join(tmpdir(), 'kontur-measure-md-'));
+      let mdBytes = 0;
+      const prep = Date.now();
+      for (const d of plan) {
+        writeFileSync(join(corpusDir, `${d.index}.pdf`), mdPdf(d));
+        const exp = mdExport(d, MD.pageKb);
+        mdBytes += exp.mdBytes;
+        writeFileSync(join(corpusDir, `${d.index}.zip`), exp.zip);
+      }
+      info(`профиль md: ${plan.length} документов, ${pagesTotal} страниц, Markdown ${(mdBytes / 1024 ** 2).toFixed(0)} МБ; подготовка корпуса ${((Date.now() - prep) / 1000).toFixed(0)} с (в замеры не входит)`);
+      try {
+        const originals = await timed(async () => {
+          const batches: Array<{ doc: IMdDoc; batch: string }> = [];
+          for (const d of plan) {
+            const up = await expectStatus(await api.call(`/stages/${stageId}/imports?name=${encodeURIComponent(`${d.name}.pdf`)}`, { method: 'POST', raw: readFileSync(join(corpusDir, `${d.index}.pdf`)), headers: key() }), [202], 'импорт оригинала');
+            batches.push({ doc: d, batch: ((await up.json()) as { id: string }).id });
+          }
+          const revs: Array<{ doc: IMdDoc; revision: string }> = [];
+          for (const b of batches) {
+            const done = await waitFor(async () => {
+              const v = (await (await api.call(`/imports/${b.batch}`)).json()) as { status: string; items: Array<{ documentRevisionId: string | null }> };
+              return v.status === 'completed' ? v : null;
+            }, 6 * 60 * 60_000, 200);
+            const rev = done?.items[0]?.documentRevisionId;
+            if (!rev) return null;
+            revs.push({ doc: b.doc, revision: rev });
+          }
+          return revs;
+        });
+        record(`импорт оригиналов профиля md: ${plan.length} PDF, ${pagesTotal} страниц`, originals.ms);
+        const rdweb = await timed(async () => {
+          const runs: string[] = [];
+          for (const { doc, revision } of originals.value ?? []) {
+            const r = await expectStatus(
+              await api.call(`/document-revisions/${revision}/recognition-imports?name=${encodeURIComponent(`${doc.name}.zip`)}`, { method: 'POST', raw: readFileSync(join(corpusDir, `${doc.index}.zip`)), headers: key() }),
+              [202],
+              'импорт распознавания RDWeb',
+            );
+            runs.push(((await r.json()) as { id: string }).id);
+          }
+          return waitFor(async () => {
+            const q = await admin<{ done: number; failed: number }>(
+              "SELECT count(*) FILTER (WHERE status IN ('complete', 'partial', 'failed'))::int AS done, count(*) FILTER (WHERE status = 'failed')::int AS failed FROM recognition_run WHERE id = ANY($1::uuid[])",
+              [runs],
+            );
+            const row = q.rows[0]!;
+            if (row.done < runs.length) return null;
+            return row.failed === 0 ? runs : Promise.reject(new Error(`импорт распознавания RDWeb: отказов ${row.failed}`));
+          }, 12 * 60 * 60_000, 2000);
+        });
+        record(`импорт распознавания RDWeb: ${plan.length} документов, ${pagesTotal} страниц, Markdown ${(mdBytes / 1024 ** 2).toFixed(0)} МБ`, rdweb.ms);
+        revisions.push(...(originals.value ?? []).map((x) => x.revision));
+      } finally {
+        rmSync(corpusDir, { recursive: true, force: true });
+      }
+    }
+
     // ---- Состав этапа и снимок области — входы поиска и проверки (как в smoke этапа 05)
     const draft = await expectStatus(await api.call(`/stages/${stageId}/source-set-revisions`, { method: 'POST', body: {}, headers: key() }), [200, 201], 'черновик состава');
     const draftId = ((await draft.json()) as { id: string }).id;
@@ -234,9 +301,14 @@ const main = async (): Promise<void> => {
       }, 6 * 60 * 60_000, 2000),
     );
     record('индекс поиска и векторы активной версии полны', idx.ms);
+    const ix = await admin<{ chunks: number; vectors: number; fragments: number }>(
+      `SELECT (SELECT count(*)::int FROM search_chunk c JOIN search_index_version v ON v.id = c.index_version_id AND v.status = 'active') AS chunks,
+              (SELECT count(*)::int FROM search_chunk_vector) AS vectors, (SELECT count(*)::int FROM evidence_fragment) AS fragments`,
+    );
+    info(`индекс: фрагментов ${ix.rows[0]!.fragments}, чанков ${ix.rows[0]!.chunks}, векторов ${ix.rows[0]!.vectors}`);
 
     // ---- Поиск: p50 / p95 до итогового результата
-    const queries = ['Стромынка', 'договор подряда', 'срок выполнения работ', 'гарантийный срок', 'стоимость работ', 'письмо заказчика'];
+    const queries = ['Стромынка', 'договор подряда', 'срок выполнения работ', 'гарантийный срок', 'стоимость работ', 'письмо заказчика', 'армирование монолитных конструкций', 'гидроизоляция кровли'];
     const times: number[] = [];
     let firstHits = -1;
     for (let i = 0; i < P.queries; i += 1) {

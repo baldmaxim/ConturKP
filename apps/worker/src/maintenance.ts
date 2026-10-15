@@ -54,6 +54,15 @@ const desiredEmbedding = (e: IModelGatewayEmbeddings, templateVersion: string, p
 
 const isUniqueViolation = (err: unknown): boolean => (err as { code?: string }).code === '23505';
 
+// Версия построена не той нарезкой, моделью (отпечаток: имя, ревизия, размерность) или версией входа, что нужны
+// сейчас (ADR-012 §25). desired === null — модель не проверена: сравнивается только нарезка.
+export const versionOutdated = (
+  v: Pick<ISearchIndexVersionRow, 'chunker_version' | 'embedding_model_fingerprint' | 'embedding_input_version'>,
+  desired: Pick<IVersionEmbedding, 'fingerprint' | 'inputVersion'> | null,
+): boolean =>
+  v.chunker_version !== CHUNKER_VERSION ||
+  (desired !== null && (v.embedding_model_fingerprint !== desired.fingerprint || v.embedding_input_version !== desired.inputVersion));
+
 export const runSearchMaintenance = async (d: IMaintenanceDeps, o: { checkModel: boolean }): Promise<IMaintenanceReport> => {
   const report: IMaintenanceReport = { expiredRuns: 0, model: 'skipped', createdVersion: null, activated: null, enqueued: [] };
 
@@ -97,9 +106,7 @@ export const runSearchMaintenance = async (d: IMaintenanceDeps, o: { checkModel:
   // 3. Версии: первая версия; новая версия при появлении или смене модели и при смене нарезки.
   let active = await getActiveVersion(d.pool);
   let building = await getBuildingVersion(d.pool);
-  const needsRebuild = (v: ISearchIndexVersionRow): boolean =>
-    v.chunker_version !== CHUNKER_VERSION ||
-    (desired !== null && (v.embedding_model_fingerprint !== desired.fingerprint || v.embedding_input_version !== desired.inputVersion));
+  const needsRebuild = (v: ISearchIndexVersionRow): boolean => versionOutdated(v, desired);
   if (!building && (!active || needsRebuild(active)) && (d.embeddings === null || o.checkModel || !active)) {
     // Без свежей проверки модели версия с моделью не создаётся: строится текстовая, а векторную
     // версию проход создаст, когда модель ответит.

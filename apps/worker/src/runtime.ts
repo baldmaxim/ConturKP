@@ -3,6 +3,7 @@
 // планирование по состоянию БД — scheduling.ts (этап 17).
 import { hostname } from 'node:os';
 import { createChatModel, type ILocalOcrEngineFactory, type IModelGatewayChat } from '@kontur/adapters';
+import { embeddingInputVersion } from '@kontur/core';
 import {
   claimJob,
   confirmCancel,
@@ -39,7 +40,7 @@ import {
   type WorkerLoop,
 } from './jobTypes.ts';
 import { guardGateway, pause } from './loopUtils.ts';
-import { runSearchMaintenance, type IMaintenanceReport } from './maintenance.ts';
+import { runSearchMaintenance, versionOutdated, type IMaintenanceReport } from './maintenance.ts';
 import { scheduleCalculationCaptures, scheduleFactExtraction, scheduleLocalRecognition, scheduleScans, scheduleStageInvalidation } from './scheduling.ts';
 
 export * from './jobTypes.ts';
@@ -107,11 +108,15 @@ export class WorkerRuntime {
     }
     const status = this.o.embeddings ? await getModelStatus(this.o.pool) : null;
     const modelOk = Boolean(status?.last_success_at && !status.last_error_code);
-    // Активная версия построена не настроенной моделью (текстовая версия первого запуска, смена модели): проба,
-    // пришедшаяся на постройку другой версии, векторную не создаёт — до её появления проба идёт с интервалом
-    // повтора, а не раз в час (S17-26).
+    // Активная версия построена не настроенной моделью — текстовая версия первого запуска, другое имя или ревизия,
+    // другая версия входа (S17-26, R17-08). Проба, пришедшая на постройку другой версии, новую не создаёт: пока
+    // отпечаток активной версии не совпал с отпечатком последней успешной пробы, проба идёт с интервалом повтора,
+    // а не раз в час. Нет отпечатка пробы — модель ещё не проверена этой конфигурацией: тоже повтор.
     const active = this.o.embeddings ? await getActiveVersion(this.o.pool) : null;
-    const behind = Boolean(this.o.embeddings) && active?.embedding_model !== this.o.embeddings?.model;
+    const fingerprint = typeof status?.details.fingerprint === 'string' ? status.details.fingerprint : null;
+    const behind =
+      Boolean(this.o.embeddings) &&
+      (!active || fingerprint === null || versionOutdated(active, { fingerprint, inputVersion: embeddingInputVersion(this.o.config.embedding.template) }));
     const interval = modelOk && !behind ? this.o.config.search.modelCheckIntervalMs : this.o.config.search.modelRetryIntervalMs;
     const due = Date.now() - this.lastModelCheck >= interval;
     if (due) this.lastModelCheck = Date.now();

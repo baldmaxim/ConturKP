@@ -5,7 +5,7 @@
 import type { CoverageMatch, CoverageObjectType, CoverageState, IEvidenceRef } from '@kontur/core';
 import { insertEvidenceLinks } from './requirementAccess.ts';
 import type { Queryable } from './pool.ts';
-import { emitStageEvents } from './stageEvents.ts';
+import { emitStageEvents, lockTenderStages } from './stageEvents.ts';
 
 export interface ICoverageObjectInput {
   type: CoverageObjectType;
@@ -103,6 +103,8 @@ export const recordCoverage = async (
     userId: string;
   },
 ): Promise<string> => {
+  // Сначала строка этапа (state-machines §1.2, S17-22): внешний ключ покрытия иначе берёт её раньше события.
+  await lockTenderStages(db, r.tenderId, [r.stageId]);
   const last = await db.query<{ id: string; seq: number }>(
     'SELECT id, seq FROM requirement_coverage WHERE requirement_revision_id = $1 ORDER BY seq DESC LIMIT 1',
     [r.revisionId],

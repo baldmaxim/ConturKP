@@ -5,18 +5,19 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createBatch, getItem, insertBlob, insertItem, lockTenderStages, registerItem } from '../packages/db/src/index.ts';
-import { buildScenario, createTestDb, idem, makeApp, type IScenario, type ITestDb } from './helpers.ts';
-import { postManifest, qaManifest } from './mailFixtures.ts';
+import { buildScenario, createTestDb, idem, makeApp, makeWorker, testConfig, type IScenario, type ITestDb } from './helpers.ts';
+import { createMailbox, eml, importEml, postManifest, qaManifest, setMailAccess } from './mailFixtures.ts';
 import { fakePdf } from './zip.ts';
 
 let db: ITestDb;
 let s: IScenario;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const octet = { 'Content-Type': 'application/octet-stream' };
+const config = testConfig();
 
 beforeAll(async () => {
   db = await createTestDb();
-  s = await buildScenario(db, makeApp(db));
+  s = await buildScenario(db, makeApp(db, undefined, config));
 });
 afterAll(async () => {
   await db.drop();
@@ -73,6 +74,27 @@ describe('S17-22: порядок блокировок массового имп�
       await c0.query('COMMIT');
       const [ra, rb] = await Promise.all([a, b]);
       expect([ra.status, rb.status], `${ra.text} ${rb.text}`).toEqual([202, 202]);
+    } finally {
+      c0.release();
+    }
+  });
+
+  it('две связи писем с одним этапом одновременно — обе выполнены, без взаимоблокировки на строке этапа', async () => {
+    const box = await createMailbox(s.admin, `lock-order-${randomBytes(3).toString('hex')}`);
+    await setMailAccess(s.admin, box, s.ids.eng1, ['mail.read', 'mail.import', 'mail.link']);
+    const worker = makeWorker(db, config, 'w-lock-mail');
+    const m1 = await importEml(s.eng1, worker, box, eml({ messageId: `<lock-1-${randomBytes(3).toString('hex')}@test>`, subject: 'Письмо 1', text: 'Первое письмо по этапу.' }));
+    const m2 = await importEml(s.eng1, worker, box, eml({ messageId: `<lock-2-${randomBytes(3).toString('hex')}@test>`, subject: 'Письмо 2', text: 'Второе письмо по этапу.' }));
+    const c0 = await db.pool.connect();
+    try {
+      await c0.query('BEGIN');
+      await c0.query('SELECT 1 FROM tender_stage WHERE id = $1 FOR NO KEY UPDATE', [s.stageA]);
+      const a = s.eng1.post(`/mail-messages/${m1.messageId}/tender-links`, { tenderId: s.tenderA, stageId: s.stageA }, { headers: idem() });
+      const b = s.eng1.post(`/mail-messages/${m2.messageId}/tender-links`, { tenderId: s.tenderA, stageId: s.stageA }, { headers: idem() });
+      await sleep(500);
+      await c0.query('COMMIT');
+      const [ra, rb] = await Promise.all([a, b]);
+      expect([ra.status, rb.status], `${ra.text} ${rb.text}`).toEqual([201, 201]);
     } finally {
       c0.release();
     }

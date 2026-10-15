@@ -4,7 +4,7 @@
 // письмо, ревизии и исторические снимки не трогает.
 import { contentTenderIds, type IAccessContext } from './access.ts';
 import type { Queryable } from './pool.ts';
-import { emitStageEvents } from './stageEvents.ts';
+import { emitStageEvents, lockTenderStages } from './stageEvents.ts';
 
 export interface IMailLinkRow {
   id: string;
@@ -52,6 +52,9 @@ export const linkMessage = async (
   db: Queryable,
   l: { messageId: string; tenderId: string; stageId: string | null; userId: string },
 ): Promise<{ outcome: LinkOutcome; link: IMailLinkRow }> => {
+  // Сначала строки этапов (state-machines §1.2, S17-22): иначе внешний ключ связи берёт строку этапа (KEY SHARE)
+  // раньше блокировки событием, и две связи с одним этапом встречно блокировались.
+  await lockTenderStages(db, l.tenderId, l.stageId ? [l.stageId] : null);
   const prev = await getMessageLink(db, l.messageId, l.tenderId, true);
   let outcome: LinkOutcome;
   if (!prev) {

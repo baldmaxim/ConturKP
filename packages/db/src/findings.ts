@@ -11,7 +11,7 @@ import {
 } from '@kontur/core';
 import type { Queryable } from './pool.ts';
 import { dependenciesOf, insertDependencies, insertFindingEvidence } from './reviewRuns.ts';
-import { emitStageEvents } from './stageEvents.ts';
+import { emitStageEvents, lockTenderStages } from './stageEvents.ts';
 
 export interface IFindingRow {
   id: string;
@@ -235,6 +235,8 @@ export const insertReviewDecision = async (
   db: Queryable,
   d: { tenderId: string; stageId: string; type: 'finding_resolution' | 'finding_risk_acceptance' | 'discrepancy_decision'; subjectType: 'finding' | 'discrepancy'; subjectId: string; statement: string; rationale: string; userId: string },
 ): Promise<string> => {
+  // Сначала строка этапа (state-machines §1.2, S17-22): внешний ключ решения иначе берёт её раньше события.
+  await lockTenderStages(db, d.tenderId, [d.stageId]);
   const prev = (
     await db.query<{ id: string }>(
       `SELECT id FROM decision d WHERE d.decision_type = $1 AND d.subject_id = $2

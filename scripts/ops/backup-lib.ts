@@ -83,13 +83,14 @@ export const runBackup = async (o: IBackupOptions): Promise<IBackupResult> => {
       const restorable = await restoreSafetyProblems(check);
       if (restorable.length > 0) throw new BackupError('dump_not_restorable', `${restorable.join('; ')}. Выполните npm run db:migrate`);
     }
-    // pg_dump в режиме docker идёт в сервер своего контейнера (R17-03): тот ли это кластер, что у BACKUP_DATABASE_URL.
-    // Без psql сверку заменяет снимок: чужой кластер его не знает, и pg_dump откажет.
-    if (o.tool.psql) {
-      const direct = (await check.query<{ system_identifier: string }>(CLUSTER_ID_SQL)).rows[0]?.system_identifier ?? '';
-      const problem = await clusterIdentityProblem(o.tool, o.backupUrl, String(direct), o.env);
-      if (problem) throw new BackupError('pg_dump_route', problem);
-    }
+    // pg_dump в режиме docker идёт в сервер своего контейнера (R17-03): тот ли это кластер, что у BACKUP_DATABASE_URL,
+    // сверяется до снимка и до pg_dump через psql того же маршрута. Сверка обязательна (R17-05): имя экспортированного
+    // снимка — счётчик сеанса, а не идентификатор кластера; чужой кластер с совпавшим именем снимка pg_dump примет и
+    // снимет свою базу. Без psql копия не снимается.
+    if (!o.tool.psql) throw new BackupError('pg_dump_route', 'рядом с pg_dump нет psql: без него нельзя проверить, из какого кластера снимется копия');
+    const direct = (await check.query<{ system_identifier: string }>(CLUSTER_ID_SQL)).rows[0]?.system_identifier ?? '';
+    const problem = await clusterIdentityProblem(o.tool, o.backupUrl, String(direct), o.env);
+    if (problem) throw new BackupError('pg_dump_route', problem);
   } finally {
     await check.end().catch(() => undefined);
   }

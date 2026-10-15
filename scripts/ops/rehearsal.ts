@@ -305,6 +305,25 @@ const main = async (): Promise<void> => {
         `код ${r.code}; таблиц на неправильной стороне ${before} → ${after}; база на правильной стороне ${created ? 'создана' : 'не создана'}; ${refused.replace(/^\s*FAIL\s+/u, '').slice(0, 220)}`,
       );
       rmSync(routeRoot, { recursive: true, force: true });
+
+      // Маршрут копии (R17-03, R17-05): BACKUP_DATABASE_URL — база репетиции в рабочем кластере, инструмент — контейнер
+      // второго кластера, где есть та же роль и одноимённая база. Отказ — до снимка и pg_dump: с psql — по
+      // идентификатору кластера, без psql — потому что сверить нечем (совпавшее имя снимка pg_dump чужого кластера
+      // принял бы и снял свою базу).
+      await adminQuery(wrongAdmin, 'CREATE ROLE kontur_backup LOGIN').catch(() => undefined);
+      await adminQuery(wrongAdmin, `CREATE DATABASE ${DB}`);
+      const backupProbe = async (label: string, expected: RegExp): Promise<void> => {
+        const probeRoot = mkdtempSync(join(tmpdir(), 'kontur-reh-backup-route-'));
+        const rr = await exec(process.execPath, ['scripts/ops/backup.ts'], { env: { ...env, PG_DOCKER_CONTAINER: WRONG_CONTAINER, PG_BIN_DIR: '', BACKUP_ROOT: probeRoot } });
+        const dirs = readdirSync(probeRoot);
+        const last = rr.out.trim().split('\n').at(-1) ?? '';
+        record(`маршрут копии: ${label} — отказ до pg_dump`, rr.code === 1 && expected.test(rr.out) && dirs.length === 0, `код ${rr.code}; каталогов копии ${dirs.length}; ${last.slice(0, 220)}`);
+        rmSync(probeRoot, { recursive: true, force: true });
+      };
+      await backupProbe('инструмент другого кластера (psql есть)', /другому кластеру/u);
+      const hide = await exec('docker', ['exec', WRONG_CONTAINER, 'sh', '-c', 'mv /usr/bin/psql /usr/bin/psql.hidden && mv /usr/lib/postgresql/18/bin/psql /usr/lib/postgresql/18/bin/psql.hidden']);
+      if (hide.code !== 0) record('маршрут копии: инструмент без psql', null, `psql во втором контейнере не скрыт: ${hide.out.trim().slice(0, 160)}`);
+      else await backupProbe('инструмент без psql', /нет psql/u);
     }
 
     r = await exec(process.execPath, ['scripts/ops/restore-check.ts', '--db', 'kontur_restore_rehearsal', '--login', 'demo.eng1', '--password-stdin', '--vectors-timeout', '300'], {

@@ -3,7 +3,8 @@
 // клиента — не ниже сервера. Пароль — только в окружении дочернего процесса (PGPASSWORD), не в аргументах и не в
 // журнале; shell: false, windowsHide: true. У docker exec нет -t: псевдотерминал испортил бы двоичный поток дампа.
 // В режиме docker инструмент подключается к серверу внутри своего контейнера, а не к адресу из URL: какой это
-// кластер, сверяет clusterIdentityProblem через psql того же маршрута (R17-03).
+// кластер, сверяет clusterIdentityProblem через psql того же маршрута (R17-03). Без psql ни копия, ни проверка
+// восстановления не выполняются (R17-05): имя экспортированного снимка кластер не идентифицирует.
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
@@ -17,7 +18,8 @@ export interface IPgTool {
   prefix: string[];
   dump: string;
   restore: string;
-  // psql того же маршрута — сверка кластера и базы, к которым подключатся pg_dump и pg_restore; null — не найден.
+  // psql того же маршрута — сверка кластера и базы, к которым подключатся pg_dump и pg_restore; null — не найден,
+  // и тогда копия и восстановление отказывают до записи (R17-03, R17-05).
   psql: string | null;
   version: string;
   major: number;

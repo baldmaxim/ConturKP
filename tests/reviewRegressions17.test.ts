@@ -3,9 +3,11 @@
 //   R17-01 — тайм-аут и отмена запроса модели действуют и после HTTP-заголовков, пока тело не дописано;
 //   R17-02 — остановка worker прерывает уже выполняющуюся пробу модели (задание model.probe);
 //   R17-03 — pg_restore идёт в тот же кластер, что проверили охранники: иначе отказ до записи.
+// Review 17-2: R17-05 — копия без сверки кластера (нет psql или psql другого кластера) отказывает до pg_dump, даже если
+//   pg_dump чужого кластера принял бы снимок с совпавшим именем.
 import { randomBytes } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -59,6 +61,30 @@ const chatOf = (url: string, timeoutMs: number) =>
   new OpenAiCompatibleChat({ baseUrl: url, model: 'm', revision: 'r', apiKey: null, timeoutMs, maxInputChars: 10_000, maxOutputTokens: 100, jsonMode: 'none' });
 const embOf = (url: string, timeoutMs: number) => new OpenAiCompatibleEmbeddings({ baseUrl: url, model: 'e', revision: 'r', apiKey: null, timeoutMs, batchSize: 4, expectedDim: 3 });
 const chatInput = { task: 'answer_draft' as const, system: 's', user: 'u' };
+
+// Подставной инструмент PostgreSQL «другого кластера»: psql отвечает чужим идентификатором (или его нет вовсе),
+// pg_dump и pg_restore оставляют отметку запуска; pg_dump ещё и «снимает» свою базу — принимает любой снимок,
+// как чужой кластер с совпавшим именем снимка (R17-05).
+const fakeOtherCluster = (o: { psql: boolean }): { tool: IPgTool; marker: string } => {
+  const dir = mkdtempSync(join(tmpdir(), 'kontur-r17-tool-'));
+  const script = join(dir, 'fake-pg.mjs');
+  const marker = join(dir, 'called.txt');
+  writeFileSync(
+    script,
+    [
+      "import { appendFileSync } from 'node:fs';",
+      'const [, , program] = process.argv;',
+      "if (program === 'psql') { process.stdout.write('1\\n'); process.exit(0); }",
+      "appendFileSync(process.env.KONTUR_FAKE_PG_MARKER, program + '\\n');",
+      "if (program === 'pg_dump') process.stdout.write('PGDMP WRONG_CLUSTER_ONLY');",
+      'process.exit(0);',
+    ].join('\n'),
+  );
+  return {
+    tool: { mode: 'docker', prefix: [process.execPath, script], dump: 'pg_dump', restore: 'pg_restore', psql: o.psql ? 'psql' : null, version: 'fake 18', major: 18, container: 'другой-кластер' },
+    marker,
+  };
+};
 
 describe('R17-01: тайм-аут и отмена модели после заголовков', () => {
   it('генеративная модель: тело не дописано — тайм-аут 150 мс срабатывает (TIMEOUT_UNKNOWN_OUTCOME)', async () => {
@@ -195,22 +221,7 @@ describe('R17-02 и R17-03: worker и восстановление', () => {
     const backupRoot = mkdtempSync(join(tmpdir(), 'kontur-r1703-backup-'));
     const backup = await runBackup({ backupUrl, storageRoot, backupRoot, tool: real, host: 'test', build: null, log: () => undefined });
 
-    // Подставной инструмент: psql «другого кластера» отвечает чужим идентификатором; pg_restore и pg_dump только
-    // оставляют отметку, что их запустили.
-    const dir = mkdtempSync(join(tmpdir(), 'kontur-r1703-tool-'));
-    const script = join(dir, 'fake-pg.mjs');
-    const marker = join(dir, 'called.txt');
-    writeFileSync(
-      script,
-      [
-        "import { appendFileSync } from 'node:fs';",
-        'const [, , program] = process.argv;',
-        "if (program === 'psql') { process.stdout.write('1\\n'); process.exit(0); }",
-        "appendFileSync(process.env.KONTUR_FAKE_PG_MARKER, program + '\\n');",
-        'process.exit(0);',
-      ].join('\n'),
-    );
-    const wrong: IPgTool = { mode: 'docker', prefix: [process.execPath, script], dump: 'pg_dump', restore: 'pg_restore', psql: 'psql', version: 'fake 18', major: 18, container: 'другой-кластер' };
+    const { tool: wrong, marker } = fakeOtherCluster({ psql: true });
     const dbName = `kontur_restore_test_${randomBytes(4).toString('hex')}`;
     process.env.KONTUR_FAKE_PG_MARKER = marker;
     try {
@@ -239,4 +250,31 @@ describe('R17-02 и R17-03: worker и восстановление', () => {
       await dropDatabase(ADMIN_URL, dbName).catch(() => undefined);
     }
   });
+
+  for (const variant of [
+    { psql: false, title: 'нет psql', expect: /нет psql/u },
+    { psql: true, title: 'psql другого кластера', expect: /другому кластеру/u },
+  ]) {
+    it(`R17-05: копия при неподтверждённом маршруте (${variant.title}) — отказ до снимка и pg_dump, хотя чужой pg_dump принял бы снимок`, async () => {
+      const backupUrl = (() => {
+        const u = new URL(db.appUrl);
+        u.username = 'kontur_backup';
+        return u.toString();
+      })();
+      const { tool, marker } = fakeOtherCluster({ psql: variant.psql });
+      const backupRoot = mkdtempSync(join(tmpdir(), 'kontur-r1705-backup-'));
+      const trace: string[] = [];
+      process.env.KONTUR_FAKE_PG_MARKER = marker;
+      try {
+        await expect(
+          runBackup({ backupUrl, storageRoot: mkdtempSync(join(tmpdir(), 'kontur-r1705-store-')), backupRoot, tool, host: 'test', build: null, log: (l) => trace.push(l) }),
+        ).rejects.toMatchObject({ code: 'pg_dump_route', message: expect.stringMatching(variant.expect) });
+      } finally {
+        delete process.env.KONTUR_FAKE_PG_MARKER;
+      }
+      expect(existsSync(marker), 'pg_dump не запускался').toBe(false);
+      expect(trace.some((l) => l.startsWith('копия ')), 'до снимка и каталога копии не дошло').toBe(false);
+      expect(readdirSync(backupRoot), 'каталога копии нет').toEqual([]);
+    });
+  }
 });

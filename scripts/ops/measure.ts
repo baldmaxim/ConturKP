@@ -55,7 +55,7 @@ const RUN_MARK = `kontur-measure:${randomUUID()}`;
 let ownDb = false;
 let interrupted = false;
 const procs: IProc[] = [];
-// Временные каталоги этого запуска (хранилище и копия): создал — удаляет.
+// Временные каталоги этого запуска (хранилище, копия, корпус профиля md): создал — удаляет.
 const tempDirs: string[] = [];
 let hubClose: (() => Promise<void>) | null = null;
 const record = (step: string, ms: number | null, note = ''): void => {
@@ -259,9 +259,13 @@ const main = async (): Promise<void> => {
       const pagesTotal = plan.reduce((a, d) => a + d.pages, 0);
       // Подготовка на диске до замеров: генерация текста не входит во время импорта.
       const corpusDir = mkdtempSync(join(tmpdir(), 'kontur-measure-md-'));
+      tempDirs.push(corpusDir);
       let mdBytes = 0;
       const prep = Date.now();
       for (const d of plan) {
+        // Подготовка 1 ГБ идёт минуты: между документами остановка успевает сработать (R17-10).
+        await new Promise((r) => setImmediate(r));
+        if (interrupted) throw new Error('замер остановлен');
         writeFileSync(join(corpusDir, `${d.index}.pdf`), mdPdf(d));
         const exp = mdExport(d, MD.pageKb);
         mdBytes += exp.mdBytes;
@@ -448,19 +452,27 @@ const finish = (): void => {
   process.exitCode = notRun ? 3 : failed ? 1 : 0;
 };
 
-// Ctrl+C и остановка: процессы и своя база убираются, журнал пишется (Windows доставляет SIGINT от консоли).
-for (const sig of ['SIGINT', 'SIGTERM'] as const) {
-  process.once(sig, () => {
-    interrupted = true;
-    record('замеры прерваны', null, `сигнал ${sig}`);
-    void cleanup()
-      .catch(() => undefined)
-      .finally(() => {
-        finish();
-        process.exit(1);
-      });
-  });
-}
+// Ctrl+C и остановка: процессы, своя база и временные каталоги (в том числе корпус) убираются, журнал пишется.
+// Windows доставляет Ctrl+C консоли как SIGINT. Процессные тесты на Windows шлют IPC { type: 'shutdown' }: child.kill()
+// там всегда завершает процесс принудительно (как у server и worker, packages/config/src/lifecycle.ts).
+// process.exit — после записи журнала: основной сценарий может ждать часами.
+const stop = (reason: string): void => {
+  if (interrupted) return;
+  interrupted = true;
+  record('замеры прерваны', null, reason);
+  void cleanup()
+    .catch(() => undefined)
+    .finally(() => {
+      finish();
+      process.exit(1);
+    });
+};
+for (const sig of ['SIGINT', 'SIGTERM'] as const) process.once(sig, () => stop(`сигнал ${sig}`));
+process.on('message', (msg: unknown) => {
+  if ((msg as { type?: unknown } | null)?.type === 'shutdown') stop('команда остановки по IPC');
+});
+// Канал IPC (если замер запущен с ним) не держит процесс после итога.
+process.channel?.unref();
 
 main().finally(() => {
   if (!interrupted) finish();

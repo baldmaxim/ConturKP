@@ -178,7 +178,7 @@ interface IRunOptions {
   // Имя базы замера; по умолчанию — новое.
   db?: string;
   // Действие во время замера (например, сигнал), параллельно ожиданию его завершения.
-  during?: (child: ChildProcess, db: string) => Promise<void>;
+  during?: (child: ChildProcess, db: string, tmp: string) => Promise<void>;
 }
 const runMeasure = async (env: Record<string, string>, args: string[] = [], o: IRunOptions = {}): Promise<{ code: number | null; log: string; db: string; leftovers: string[] }> => {
   const tmp = mkdtempSync(join(tmpdir(), 'kontur-measure-it-'));
@@ -189,17 +189,17 @@ const runMeasure = async (env: Record<string, string>, args: string[] = [], o: I
       process.execPath,
       ['scripts/ops/measure.ts', '--positions', '3', '--lines', '2', '--docs', String(o.docs ?? 1), '--scans', '0', '--queries', String(o.queries ?? 2), '--profile', 'it', '--db', db, '--out', out, ...args],
       // Предохранитель: зависший замер не переживает тест.
-      { cwd: ROOT, env: { ...process.env, TMPDIR: tmp, TEMP: tmp, TMP: tmp, KONTUR_TEST_ADMIN_URL: ADMIN_URL, ...env }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, signal: AbortSignal.timeout(240_000) },
+      { cwd: ROOT, env: { ...process.env, TMPDIR: tmp, TEMP: tmp, TMP: tmp, KONTUR_TEST_ADMIN_URL: ADMIN_URL, ...env }, stdio: ['ignore', 'pipe', 'pipe', 'ipc'], windowsHide: true, signal: AbortSignal.timeout(240_000) },
     );
     // Вывод процесса — на случай, если журнал не записан (замер прерван предохранителем).
     let stdout = '';
-    child.stdout.on('data', (c: Buffer) => (stdout += c.toString('utf8')));
-    child.stderr.on('data', (c: Buffer) => (stdout += c.toString('utf8')));
+    child.stdout!.on('data', (c: Buffer) => (stdout += c.toString('utf8')));
+    child.stderr!.on('data', (c: Buffer) => (stdout += c.toString('utf8')));
     const exited = new Promise<number | null>((done) => {
       child.on('error', () => undefined);
       child.on('close', (c) => done(c));
     });
-    if (o.during) await o.during(child, db);
+    if (o.during) await o.during(child, db, tmp);
     const code = await exited;
     // Временные каталоги замера (хранилище, копия, корпус) он убирает сам.
     const leftovers = readdirSync(tmp).filter((n) => n.startsWith('kontur-measure'));
@@ -297,6 +297,26 @@ const markerDb = async (): Promise<string> => {
 const markerRows = (name: string): Promise<number> => adminOn(name, async (c) => (await c.query<{ n: number }>('SELECT count(*)::int AS n FROM review_marker')).rows[0]!.n);
 const dropDb = (name: string): Promise<unknown> => adminOn('postgres', (c) => c.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`));
 
+const sleep = (ms: number): Promise<void> => new Promise((res) => setTimeout(res, ms));
+// Остановка замера, как Ctrl+C: SIGINT на POSIX; на Windows — IPC (сигнал из Node там — принудительное завершение).
+const interrupt = (child: ChildProcess): void => {
+  if (process.platform === 'win32') child.send({ type: 'shutdown' });
+  else child.kill('SIGINT');
+};
+const STOPPED = process.platform === 'win32' ? /^FAIL +замеры прерваны — команда остановки по IPC$/mu : /^FAIL +замеры прерваны — сигнал SIGINT$/mu;
+const waitOutput = (child: ChildProcess, text: string): Promise<void> =>
+  new Promise((done) => {
+    let out = '';
+    const on = (c: Buffer): void => {
+      out += c.toString('utf8');
+      if (out.includes(text)) {
+        child.stdout!.off('data', on);
+        done();
+      }
+    };
+    child.stdout!.on('data', on);
+  });
+
 describe('R17-09: база замера — только своя', () => {
   it('отказ по настройке модели — до действий с базой: существующая база и маркер целы', async () => {
     const name = await markerDb();
@@ -334,21 +354,70 @@ describe('R17-09: база замера — только своя', () => {
     expect(r.leftovers).toEqual([]);
   });
 
-  // На Windows сигнал дочернему процессу из Node — принудительное завершение без обработчика: проверяется на POSIX.
-  it.skipIf(process.platform === 'win32')('Ctrl+C (SIGINT) во время замера — своя база удалена, журнал записан, код 1', async () => {
+  it('остановка во время замера — своя база удалена, журнал записан, код 1', async () => {
     const r = await runMeasure({}, [], {
       during: async (child, db) => {
-        // Сигнал — когда своя база уже создана и помечена.
+        // Остановка — когда своя база уже создана и помечена.
         for (let i = 0; i < 600; i += 1) {
           const mark = await adminOn('postgres', (c) => c.query<{ mark: string | null }>("SELECT shobj_description(oid, 'pg_database') AS mark FROM pg_database WHERE datname = $1", [db]));
           if (mark.rows[0]?.mark?.startsWith('kontur-measure:')) break;
-          await new Promise((res) => setTimeout(res, 100));
+          await sleep(100);
         }
-        child.kill('SIGINT');
+        interrupt(child);
       },
     });
-    expect(r.log).toMatch(/^FAIL +замеры прерваны — сигнал SIGINT$/mu);
+    expect(r.log).toMatch(STOPPED);
     expect(r.log).toMatch(/^Итог: FAIL$/mu);
+    expect(r.code).toBe(1);
+    expect(await dbExists(r.db)).toBe(false);
+    expect(r.leftovers).toEqual([]);
+  });
+});
+
+// R17-10 (Review 17-6): каталог корпуса Markdown — в общей очистке с момента создания; остановка срабатывает и во
+// время подготовки корпуса, и во время его импорта. Остановка — как у Ctrl+C: SIGINT на POSIX, на Windows — IPC
+// { type: 'shutdown' } (child.kill() там завершает процесс принудительно, без обработчика).
+describe('R17-10: остановка в профиле Markdown — корпус не остаётся', () => {
+  it('во время подготовки корпуса — каталог корпуса удалён, подготовка не закончена', async () => {
+    const r = await runMeasure({}, ['--md-mb', '40'], {
+      queries: 1,
+      during: async (child, _db, tmp) => {
+        // Первый документ корпуса записан — подготовка идёт.
+        for (let i = 0; i < 3000; i += 1) {
+          const md = readdirSync(tmp).find((n) => n.startsWith('kontur-measure-md-'));
+          if (md && existsSync(join(tmp, md, '1.zip'))) break;
+          await sleep(20);
+        }
+        interrupt(child);
+      },
+    });
+    expect(r.log).toMatch(STOPPED);
+    expect(r.log).not.toContain('# профиль md:');
+    expect(r.code).toBe(1);
+    expect(await dbExists(r.db)).toBe(false);
+    expect(r.leftovers).toEqual([]);
+  });
+
+  it('во время импорта Markdown — каталог корпуса удалён, своя база удалена, код 1', async () => {
+    const r = await runMeasure({}, ['--md-mb', '20'], {
+      queries: 1,
+      during: async (child, db) => {
+        // Оригиналы загружены, все четыре импорта RDWeb приняты (плюс локальное распознавание документа) — замер
+        // ждёт их итога в цикле опроса, где ошибки остановленного сервера не прерывают ожидание (так у Review 17-6).
+        await waitOutput(child, 'импорт оригиналов профиля md');
+        for (let i = 0; i < 600; i += 1) {
+          const n = await adminOn(db, (c) => c.query<{ n: number }>('SELECT count(*)::int AS n FROM recognition_run')).catch(() => ({ rows: [{ n: 0 }] }));
+          if (n.rows[0]!.n >= 5) break;
+          await sleep(100);
+        }
+        await sleep(200);
+        interrupt(child);
+      },
+    });
+    expect(r.log).toContain('# профиль md: 4 документов');
+    expect(r.log).toMatch(/^\s+\d+\.\d с {2}импорт оригиналов профиля md/mu);
+    expect(r.log).toMatch(STOPPED);
+    expect(r.log).not.toMatch(/^\s+\d+\.\d с {2}импорт распознавания RDWeb/mu);
     expect(r.code).toBe(1);
     expect(await dbExists(r.db)).toBe(false);
     expect(r.leftovers).toEqual([]);

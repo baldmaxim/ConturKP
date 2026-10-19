@@ -6,7 +6,7 @@
 
 ## 0. Порядок
 
-1. Осмотр ПК (§2) → решение по PostgreSQL, диску копий и учётным записям служб (D-040).
+1. Осмотр ПК (§2) → решение по PostgreSQL, диску копий и учётным записям служб (D-040, D-041: PostgreSQL — нативная служба 18, §5А). Переход с тестовой установки — §14а.
 2. Каталоги, код, PostgreSQL, файл окружения, TLS, брандмауэр (§3–§8).
 3. База, первый администратор (§9).
 4. Службы (§10), проверка `/ready` и вкладки «Состояние».
@@ -55,11 +55,16 @@ npm run ops:preflight -- --out D:\Kontur\preflight.json
 
 ## 5. PostgreSQL
 
-Способ выбирается по осмотру (D-040).
+Целевой ПК — **вариант А** (решение владельца D-041, 2026-10-19). Вариант Б — только для тестовых кластеров: замер (§15а), учебное восстановление (`docs/runbooks/backup-restore.md` §3).
 
-**А. Нативная служба (предпочтительно, ADR-011).** Установщик PostgreSQL 18 для Windows (служба `postgresql-x64-18`). pgvector под Windows собирается из исходников: «x64 Native Tools Command Prompt» Visual Studio Build Tools, `set "PGROOT=C:\Program Files\PostgreSQL\18"`, `nmake /F Makefile.win`, `nmake /F Makefile.win install` (по README pgvector). `pg_trgm` входит в поставку. В файл окружения — `PG_BIN_DIR=C:\Program Files\PostgreSQL\18\bin` (для копий).
+**А. Нативная служба (D-041, ADR-011).**
+1. Установщик PostgreSQL 18 для Windows: служба `postgresql-x64-18`, тип запуска «Автоматически», **порт 5433**. Порт 5432 занят существующей службой PostgreSQL 16: её не останавливать, не обновлять и не удалять. Пароль суперпользователя `postgres` задаёт и хранит администратор — в файлы и журналы не пишется.
+2. pgvector ≥ 0.8 под Windows собирается из исходников (по README pgvector): «x64 Native Tools Command Prompt» Visual Studio Build Tools, `set "PGROOT=C:\Program Files\PostgreSQL\18"`, `nmake /F Makefile.win`, `nmake /F Makefile.win install`. `pg_trgm` входит в поставку. Расширения в базе создаёт `db:setup` (§9).
+3. Проверка: `"C:\Program Files\PostgreSQL\18\bin\psql.exe" -p 5433 -U postgres -c "SELECT version()" -c "SELECT name, default_version FROM pg_available_extensions WHERE name IN ('vector', 'pg_trgm')"` — версия 18, `vector` ≥ 0.8.
+4. В файл окружения: адреса баз — `127.0.0.1:5433`; `PG_BIN_DIR=C:\Program Files\PostgreSQL\18\bin` (копии: `pg_dump`, `pg_restore` и `psql` той же версии). Службы портала — с зависимостью `--pg-service postgresql-x64-18` (§10).
+5. Порт 5433 наружу не открывается (§8).
 
-**Б. Контейнер Docker.** `docker run -d --name kontur-pg --restart unless-stopped -p 127.0.0.1:5432:5432 -e POSTGRES_PASSWORD=… -v kontur-pg-data:/var/lib/postgresql pgvector/pgvector:pg18`. Docker должен запускаться без входа пользователя; лицензия Docker Desktop для крупных компаний платная. В файл окружения — `PG_DOCKER_CONTAINER=kontur-pg`. Зависимости служб от PostgreSQL в этом случае нет (`--pg-service` не задаётся).
+**Б. Контейнер Docker (только тестовые кластеры).** `docker run -d --name kontur-pg --restart unless-stopped -p 127.0.0.1:5432:5432 -e POSTGRES_PASSWORD=… -v kontur-pg-data:/var/lib/postgresql pgvector/pgvector:pg18`. Docker должен запускаться без входа пользователя; лицензия Docker Desktop для крупных компаний платная. В файл окружения — `PG_DOCKER_CONTAINER=kontur-pg`. Зависимости служб от PostgreSQL в этом случае нет (`--pg-service` не задаётся).
 
 ## 6. Файл окружения
 
@@ -173,6 +178,16 @@ npm run ops:service -- backup-task --env-file D:\Kontur\config\kontur.env --acco
 
 Отката схемы нет. При неудаче — восстановление из копии шага 2 (`docs/runbooks/backup-restore.md` §4).
 
+## 14а. Переход с тестовой установки на окончательную (D-041)
+
+Тестовая установка `D:\ConturKP-review-17-1` (сборка `aa390ae`, PostgreSQL 18 в Docker) заменяется чистой установкой новой сборки на нативной службе PostgreSQL 18. Данные тестовой установки не переносятся.
+
+1. Копия тестовой установки — её же кодом и файлом окружения: `npm run ops:backup` (миграция 0043 там уже есть). Каталог копии — в `C:\Users\odintsov.a.a\Desktop\ConturKP` (D-040), не удалять.
+2. Остановить и удалить службы тестовой установки: `npm run ops:service -- stop`, затем `npm run ops:service -- uninstall` из её каталога. Контейнер PostgreSQL тестовой установки остановить; том с данными не удалять до приёмки этапа.
+3. Окончательная установка — §3–§10 с вариантом А §5: новые каталоги, ZIP сборки `509857a`, новый файл окружения, `db:setup`, `db:migrate`, `bootstrap`, службы с `--pg-service postgresql-x64-18`.
+4. Сертификат TLS (§7) и правило брандмауэра (§8) — прежние, если IP ПК не менялся; ключ и сертификат копируются в каталог новой установки с теми же правами.
+5. Проверка — §10: `/ready` 200, вкладка «Состояние»: сборка `509857a`, схема 43.
+
 ## 15. Живые проверки и статусы в базе установки
 
 Обязательный набор — D-040: TenderHub, импорт EML, Яндекс Диск и SMB, OCR, LibreOffice, LM Studio с эмбеддингами, Codex и Cursor по HTTPS, iPhone и Android. Каждая проверка пишет журнал с отметкой «Режим: LIVE», коммитом сборки и «Итог: PASS». Статус в базе установки записывает администратор:
@@ -185,7 +200,7 @@ npm run ops:integration-verify -- --system tenderhub --component TenderHubReader
 
 ## 15а. Замер профиля нагрузки (D-040)
 
-Замер идёт на отдельной базе `kontur_kp_measure_test` кластера `KONTUR_TEST_ADMIN_URL` с собственными процессами; рабочая установка и её база не используются. Нужен свободный диск: на 1 ГБ Markdown база занимает несколько гигабайт, корпус на время замера — около 1 ГБ во временном каталоге.
+Замер идёт на отдельной базе `kontur_kp_measure_test` кластера `KONTUR_TEST_ADMIN_URL` с собственными процессами; рабочая установка и её база не используются. Кластер — **тестовый, не рабочий** (D-041): замер создаёт в нём роли `kontur_*` и базу без паролей, а роли общие на весь кластер. На целевом ПК — отдельный контейнер `pgvector/pgvector:pg18` (вариант Б §5) на свободном порту loopback; `KONTUR_TEST_ADMIN_URL` — суперпользователь этого контейнера. Нужен свободный диск: на 1 ГБ Markdown база занимает несколько гигабайт, корпус на время замера — около 1 ГБ во временном каталоге.
 
 ```powershell
 $env:TEMP = "$env:LOCALAPPDATA\Temp\kontur-measure"; $env:TMP = $env:TEMP

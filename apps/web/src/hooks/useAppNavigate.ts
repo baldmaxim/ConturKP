@@ -4,7 +4,7 @@ import { useNavigate, type NavigateOptions, type To } from 'react-router-dom';
 
 type TStartViewTransition = (callback: () => void) => unknown;
 
-const reducedMotion = (): boolean => {
+export const reducedMotion = (): boolean => {
   try {
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   } catch {

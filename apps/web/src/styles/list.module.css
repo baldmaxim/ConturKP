@@ -45,6 +45,13 @@
   background: var(--surface-2);
 }
 
+/* Строка, по которой открыто контекстное меню: рамка акцентом, как у Finder. */
+.table tbody tr.menuTarget {
+  background: var(--surface-2);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 .num {
   font-variant-numeric: tabular-nums;
 }

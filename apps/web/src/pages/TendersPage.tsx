@@ -1,11 +1,13 @@
-import { useState, type FC, type ReactNode } from 'react';
+import { useState, type FC, type MouseEvent, type ReactNode } from 'react';
 import { listTenders } from '../api/endpoints';
 import type { ITender } from '../api/types';
 import { AppLink } from '../components/AppLink';
 import { Button } from '../components/Button';
+import { ContextMenu } from '../components/ContextMenu';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
+import type { TMenuEntry } from '../components/menuTypes';
 import { PageHeader } from '../components/PageHeader';
 import { StatusBadge } from '../components/StatusBadge';
 import { useApiResource } from '../hooks/useApiResource';
@@ -13,6 +15,7 @@ import { useAppNavigate } from '../hooks/useAppNavigate';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { formatDateTime } from '../utils/datetime';
+import type { IPoint } from '../utils/menuAim';
 import { MEMBER_ROLE_LABELS } from '../utils/labels';
 import list from '../styles/list.module.css';
 import { CreateTenderDialog } from './CreateTenderDialog';
@@ -25,6 +28,7 @@ export const TendersPage: FC = () => {
   const toast = useToast();
   const navigate = useAppNavigate();
   const [creating, setCreating] = useState(false);
+  const [menu, setMenu] = useState<{ point: IPoint; tender: ITender } | null>(null);
   const { data, error, loading, reload } = useApiResource((signal) => listTenders(signal), 'tenders');
   const canCreate = can('admin.tender');
   const absent = <span className={list.muted}>не указан</span>;
@@ -33,6 +37,48 @@ export const TendersPage: FC = () => {
     setCreating(false);
     toast.push({ kind: 'success', text: `Тендер ${tender.code} создан.` });
     navigate(`/tenders/${tender.id}`);
+  };
+
+  const openMenu = (event: MouseEvent<HTMLElement>, tender: ITender): void => {
+    event.preventDefault();
+    setMenu({ point: { x: event.clientX, y: event.clientY }, tender });
+  };
+
+  const copyText = (text: string, done: string): void => {
+    if (!navigator.clipboard) {
+      toast.push({ kind: 'error', text: 'Буфер обмена недоступен в этом браузере.' });
+      return;
+    }
+    void navigator.clipboard.writeText(text).then(
+      () => toast.push({ kind: 'success', text: done }),
+      () => toast.push({ kind: 'error', text: 'Не удалось скопировать в буфер обмена.' }),
+    );
+  };
+
+  const tenderMenu = (tender: ITender): TMenuEntry[] => {
+    const path = `/tenders/${tender.id}`;
+    return [
+      { kind: 'action', id: 'open', label: 'Открыть', onSelect: () => navigate(path) },
+      { kind: 'action', id: 'open-tab', label: 'Открыть в новой вкладке', onSelect: () => void window.open(path, '_blank', 'noopener') },
+      { kind: 'separator', id: 'sep-copy' },
+      {
+        kind: 'submenu',
+        id: 'copy',
+        label: 'Копировать',
+        entries: [
+          { kind: 'action', id: 'copy-code', label: 'Код', onSelect: () => copyText(tender.code, 'Код тендера скопирован.') },
+          { kind: 'action', id: 'copy-title', label: 'Название', onSelect: () => copyText(tender.title, 'Название тендера скопировано.') },
+          {
+            kind: 'action',
+            id: 'copy-link',
+            label: 'Ссылку',
+            onSelect: () => copyText(new URL(path, window.location.origin).href, 'Ссылка на тендер скопирована.'),
+          },
+        ],
+      },
+      { kind: 'separator', id: 'sep-reload' },
+      { kind: 'action', id: 'reload', label: 'Обновить список', onSelect: reload },
+    ];
   };
 
   const createButton = canCreate ? (
@@ -82,7 +128,11 @@ export const TendersPage: FC = () => {
             </thead>
             <tbody>
               {items.map((tender) => (
-                <tr key={tender.id}>
+                <tr
+                  key={tender.id}
+                  className={menu?.tender.id === tender.id ? list.menuTarget : undefined}
+                  onContextMenu={(event) => openMenu(event, tender)}
+                >
                   <td className={list.mono}>{tender.code}</td>
                   <td>
                     <AppLink className={list.rowLink} to={`/tenders/${tender.id}`}>
@@ -133,6 +183,14 @@ export const TendersPage: FC = () => {
     <>
       <PageHeader title="Тендеры" actions={data && data.items.length > 0 ? createButton : null} />
       {renderBody()}
+      {menu ? (
+        <ContextMenu
+          key={`${menu.point.x}:${menu.point.y}`}
+          point={menu.point}
+          entries={tenderMenu(menu.tender)}
+          onClose={() => setMenu(null)}
+        />
+      ) : null}
       {creating ? <CreateTenderDialog onClose={() => setCreating(false)} onCreated={onCreated} /> : null}
     </>
   );

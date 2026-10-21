@@ -2,7 +2,7 @@ import type { FC, MouseEvent } from 'react';
 import { Link, type LinkProps } from 'react-router-dom';
 import { useAppNavigate } from '../hooks/useAppNavigate';
 
-/** Ссылка внутри портала: переход с кросс-фейдом View Transitions, где браузер поддерживает. */
+/** Ссылка внутри портала: переход через View Transitions (шапка неподвижна), где браузер поддерживает. */
 export const AppLink: FC<LinkProps> = ({ onClick, to, replace, state, target, ...rest }) => {
   const navigate = useAppNavigate();
 

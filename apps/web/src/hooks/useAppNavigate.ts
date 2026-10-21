@@ -22,7 +22,7 @@ export const withViewTransition = (update: () => void): void => {
   start.call(document, () => flushSync(update));
 };
 
-/** navigate() с кросс-фейдом страниц через View Transitions API. */
+/** navigate() со сменой страниц через View Transitions API (шапка неподвижна, см. index.css). */
 export const useAppNavigate = (): ((to: To, options?: NavigateOptions) => void) => {
   const navigate = useNavigate();
   return useCallback(

@@ -147,6 +147,8 @@
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  /* Место под полосу прокрутки всегда занято: страницы разной длины не сдвигаются по горизонтали. */
+  scrollbar-gutter: stable;
 }
 
 body {
@@ -235,15 +237,35 @@ p {
   border: 0;
 }
 
-/* Смена страниц: кросс-фейд 200 мс через View Transitions API (BRAND.md §10). */
-::view-transition-old(root) {
-  animation-duration: var(--duration-base);
-  animation-timing-function: var(--ease-in);
+/* Смена страниц (View Transitions API): шапка неподвижна, старая страница
+   исчезает сразу, новая проявляется на месте — без сдвига и двойного изображения. */
+::view-transition-old(root),
+::view-transition-new(root),
+::view-transition-group(app-header),
+::view-transition-old(app-header),
+::view-transition-new(app-header),
+::view-transition-group(app-main),
+::view-transition-old(app-main) {
+  animation: none;
 }
 
-::view-transition-new(root) {
-  animation-duration: var(--duration-base);
-  animation-timing-function: var(--ease-out);
+/* Шапка поверх контента, даже если страница прокручена под неё. */
+::view-transition-group(app-header) {
+  z-index: 1;
+}
+
+::view-transition-old(app-main) {
+  display: none;
+}
+
+::view-transition-new(app-main) {
+  animation: page-enter var(--duration-fast) var(--ease-out);
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -257,7 +279,8 @@ p {
   }
 
   ::view-transition-old(root),
-  ::view-transition-new(root) {
+  ::view-transition-new(root),
+  ::view-transition-new(app-main) {
     animation: none;
   }
 }

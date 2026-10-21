@@ -20,6 +20,9 @@ describe('службы WinSW', () => {
     expect(x).toContain('<arguments>--env-file=&quot;D:\\Kontur &amp; Co\\config\\kontur.env&quot; apps\\server\\src\\main.ts</arguments>');
     expect(x).toContain('<workingdirectory>D:\\Kontur &amp; Co\\app</workingdirectory>');
     expect(x).toContain('<startmode>Automatic</startmode>');
+    // S17-27: отложенный автозапуск держал службы до входа пользователя в Windows.
+    expect(x).toContain('<delayedAutoStart>false</delayedAutoStart>');
+    expect(x).not.toContain('<delayedAutoStart>true');
     expect(x).toContain('<depend>postgresql-x64-18</depend>');
     expect(x).toContain('<stoptimeout>30sec</stoptimeout>');
     expect(x.match(/<onfailure action="restart"/gu)).toHaveLength(3);

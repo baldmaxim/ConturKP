@@ -39,7 +39,7 @@ export const OUTCOME_LABEL: Record<string, IBadgeMeta> = {
 };
 
 export const BLOCKER_LABELS: Record<string, string> = {
-  CALCULATION_PROVISIONAL: 'Расчёт предварительный (X-01): боевой выпуск запрещён до решения владельца',
+  CALCULATION_PROVISIONAL: 'Расчёт предварительный (X-01): боевой выпуск запрещён, пока руководитель не зафиксировал расчёт как закрытый',
   TEMPLATE_DEMO: 'Демонстрационная форма (Q-08): боевой выпуск запрещён до проверки реальных форм',
 };
 
@@ -59,6 +59,7 @@ export const BLOCKER_TITLES: Record<string, string> = {
   CALCULATION_PROVISIONAL: 'Расчёт предварительный (Q-01, X-01)',
   TEMPLATE_DEMO: 'Демонстрационная форма (Q-08)',
   KP_TOTAL_NOT_APPROVED: 'Правило итога КП не утверждено (Q-05)',
+  KP_TOTAL_UNRECONCILED: 'Сверка экономики не сведена: итог КП может отставать от строк расчёта (D-044)',
   REVIEW_UNCERTAIN: 'Покрытие требований не оценено',
   CRITICAL_FINDINGS_OPEN: 'Открыты критические замечания',
   QUESTIONS_UNANSWERED: 'Вопросы заказчику без ответа',

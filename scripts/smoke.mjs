@@ -393,7 +393,11 @@ try {
     'этап 06: X-01 — боевой выпуск заблокирован CALCULATION_PROVISIONAL, закрытия у источника нет',
     revs.items?.length === 1 && rev.kind === 'provisional' && rev.productionGate.allowed === false && rev.productionGate.blockers.includes('CALCULATION_PROVISIONAL') && rev.closureAvailable === false,
   );
-  record('этап 06: Q-05 — итог КП не заполнен, правило не задано', rev?.kpTotal?.value === null && rev.kpTotal.rule === null && rev.kpTotal.semantics?.status === 'rule_not_set');
+  // D-044 (Q-05): итог КП = итог расчёта TenderHub, в т.ч. НДС; правило ставит выгрузка, если итог источника есть.
+  record(
+    'этап 06: Q-05 — итог КП = итог источника, в т.ч. НДС (D-044)',
+    rev?.kpTotal?.rule === 'th_grand_total_vat_included' && rev.kpTotal.value?.vat === 'included' && rev.kpTotal.value?.amount === rev.source?.grandTotal?.amount,
+  );
   const lines = await (await api(`/calculation-revisions/${rev?.id}/lines?positionId=${TH.p1}`)).json();
   record('этап 06: цена 21 знака дошла до API без потери точности', lines.items?.some((l) => l.unitRate?.amount === PRECISE_RATE), `строк: ${lines.items?.length}`);
   record(

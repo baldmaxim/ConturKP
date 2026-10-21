@@ -191,7 +191,7 @@ const main = async (): Promise<void> => {
     r = await exec(process.execPath, ['scripts/ops/backup.ts'], { env });
     record('копия ролью kontur_backup до 0043 — отказ с понятной причиной', r.code === 1 && /права роли копии|kontur_backup/u.test(r.out), r.out.trim().split('\n').at(-1));
     r = await exec(process.execPath, ['scripts/db-migrate.ts'], { env });
-    record('обновление: db:migrate новым кодом — одна новая миграция (0043)', r.code === 0 && /применено миграций: 1/u.test(r.out), r.out.trim().split('\n').at(-1));
+    record('обновление: db:migrate новым кодом — две новые миграции (0043, 0044)', r.code === 0 && /применено миграций: 2/u.test(r.out), r.out.trim().split('\n').at(-1));
     worker = startNode('worker', 'apps/worker/src/main.ts', { cwd: ROOT, env });
     server = startNode('server', 'apps/server/src/main.ts', { cwd: ROOT, env });
     procs.push(worker, server);

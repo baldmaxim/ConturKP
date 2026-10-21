@@ -406,19 +406,19 @@ describe('принятый риск не скрывает вопрос и зам
 });
 
 describe('боевой режим: ограничения Q-01/X-01, Q-08, Q-05 (RT-05, D-033 В-13-2)', () => {
-  it('боевой комплект: CALCULATION_PROVISIONAL, TEMPLATE_DEMO, KP_TOTAL_NOT_APPROVED не снимаются ни риском, ни «не влияет»; БД отвергает согласование', async () => {
+  it('боевой комплект: CALCULATION_PROVISIONAL, TEMPLATE_DEMO, KP_TOTAL_UNRECONCILED (захват ставит правило итога, D-044) не снимаются ни риском, ни «не влияет»; БД отвергает согласование', async () => {
     let p = await assembled(st, { mode: 'production' });
     await notApplicable(st, p.id);
     p = await view(st, p.id);
     await acceptAll(st, p);
     p = await view(st, p.id);
-    expect(codes(p.gate.approve)).toEqual(['CALCULATION_PROVISIONAL', 'TEMPLATE_DEMO', 'KP_TOTAL_NOT_APPROVED']);
+    expect(codes(p.gate.approve)).toEqual(['CALCULATION_PROVISIONAL', 'TEMPLATE_DEMO', 'KP_TOTAL_UNRECONCILED']);
     expect(p.gate.approve!.blockers.filter((b) => b.open > 0).every((b) => !b.acceptable && b.class === 'integrity')).toBe(true);
-    const risk = await acceptRisk(st, p, { blockerCode: 'KP_TOTAL_NOT_APPROVED', subjectType: 'candidate', subjectId: p.id, reason: 'Итог КП примем на себя' });
+    const risk = await acceptRisk(st, p, { blockerCode: 'KP_TOTAL_UNRECONCILED', subjectType: 'candidate', subjectId: p.id, reason: 'Итог КП примем на себя' });
     expect(risk.body.current.reason).toBe('risk_not_acceptable');
     const r = await approve(st, p);
     expect(r.status).toBe(409);
-    expect(codes(r.body as never)).toEqual(['CALCULATION_PROVISIONAL', 'TEMPLATE_DEMO', 'KP_TOTAL_NOT_APPROVED']);
+    expect(codes(r.body as never)).toEqual(['CALCULATION_PROVISIONAL', 'TEMPLATE_DEMO', 'KP_TOTAL_UNRECONCILED']);
     expect(await pgCode('INSERT INTO approval (candidate_id, tender_id, stage_id, candidate_content_hash, input_version, gate, approved_by) VALUES ($1, $2, $3, $4, 0, \'{}\', $5)', [
       p.id, st.e.s.tenderA, st.e.s.stageA, p.contentHash, st.e.s.ids.manager,
     ])).toBe('23514');

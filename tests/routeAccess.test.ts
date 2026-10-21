@@ -69,6 +69,8 @@ const MANAGER_ONLY = [
   'POST /api/v1/release-candidates/:id/holds/resolve',
   'POST /api/v1/approvals/:id/revoke',
   'POST /api/v1/holds/:id/resolve',
+  'POST /api/v1/calculation-revisions/:id/closure',
+  'POST /api/v1/calculation-revisions/:id/closure/revoke',
 ];
 
 const enumerate = (app: unknown): string[] => {

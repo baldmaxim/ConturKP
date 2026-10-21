@@ -1,7 +1,7 @@
 // Согласование и выпуск кандидата (этап 13; D-033; state-machines §11, §13–§15): факты матрицы блокеров, принятие риска,
 // согласование, возврат, отзыв, выпуск и удержания по событиям входов. Команды вызываются под блокировкой этапа
 // (порядок «этап → кандидат → согласование и выпуск», §1.2); правила покрытия и вторая линия — миграция 0034.
-import type { BlockerCode, IGateItem, IRiskAcceptanceFact, RiskSubjectType } from '@kontur/core';
+import { isCalculationProvisional, type BlockerCode, type CalculationRevisionKind, type IGateItem, type IRiskAcceptanceFact, type RiskSubjectType } from '@kontur/core';
 import type { Queryable } from './pool.ts';
 import type { CandidateStatus, IReleaseCandidateRow } from './releaseCandidates.ts';
 
@@ -196,6 +196,7 @@ export interface ICandidateGateDbFacts {
   calculationProvisional: boolean;
   templateDemo: boolean;
   kpTotalMissing: boolean;
+  kpTotalUnreconciled: boolean;
   criticalFindings: IGateItem[];
   questions: IGateItem[];
   draftQuestions: IGateItem[];
@@ -282,9 +283,10 @@ export const candidateGateDbFacts = async (db: Queryable, c: IReleaseCandidateRo
     [c.id, c.stage_id],
   );
   const calc = (
-    await q<{ kind: string; kp_total_rule: string | null }>(
-      'SELECT r.kind, cc.kp_total_rule FROM calculation_revision r JOIN calculation_content cc ON cc.id = r.content_id WHERE r.id = $1',
-      [c.calculation_revision_id],
+    await q<{ kind: CalculationRevisionKind; kp_total_rule: string | null; closed: boolean; reconciled: boolean }>(
+      `SELECT r.kind, cc.kp_total_rule, calculation_closed_by_decision($2) AS closed, revision_economics_reconciled(r.id) AS reconciled
+         FROM calculation_revision r JOIN calculation_content cc ON cc.id = r.content_id WHERE r.id = $1`,
+      [c.calculation_revision_id, c.id],
     )
   )[0]!;
   const demo = await q<{ x: number }>(
@@ -339,9 +341,11 @@ export const candidateGateDbFacts = async (db: Queryable, c: IReleaseCandidateRo
       subjectId: v.id,
       title: `«${v.draft_title}», поле ${v.field_key}: ${v.invalidated ? 'основание изменилось' : `основание заменено (${v.problem})`}`,
     })),
-    calculationProvisional: calc.kind === 'provisional',
+    // Предварительная ревизия и нет действующего решения руководителя, закреплённого во входе кандидата (D-044, Q-01).
+    calculationProvisional: isCalculationProvisional(calc.kind, calc.closed),
     templateDemo: demo.length > 0,
     kpTotalMissing: calc.kp_total_rule === null,
+    kpTotalUnreconciled: !calc.reconciled,
     criticalFindings: findings.map((f) => ({ subjectType: 'finding', subjectId: f.id, subjectVersion: Number(f.row_version), title: `${qTitle(f.title)}${f.status === 'stale' ? ' (основание изменилось)' : ''}` })),
     questions: questions.filter((x) => x.status === 'sent').map((x) => ({ subjectType: 'customer_question', subjectId: x.id, subjectVersion: Number(x.row_version), title: qTitle(x.text) })),
     draftQuestions: questions.filter((x) => x.status === 'draft').map((x) => ({ subjectType: 'customer_question', subjectId: x.id, title: qTitle(x.text) })),

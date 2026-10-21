@@ -47,6 +47,7 @@ export const ReasonDialog: FC<IReasonDialogProps> = ({ title, children, label, c
         label={label}
         value={reason}
         onValueChange={setReason}
+        onClear={() => setReason('')}
         required
         rows={3}
         maxLength={2000}

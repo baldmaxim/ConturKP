@@ -6,7 +6,7 @@ export type TCurrency = 'RUB' | 'USD' | 'EUR' | 'CNY' | 'UNKNOWN';
 export interface IMoney {
   amount: string;
   currency: TCurrency;
-  vat: 'unknown';
+  vat: 'unknown' | 'included';
   priceKind: 'cost' | 'commercial';
   unit: string | null;
   asOf: null;
@@ -160,4 +160,23 @@ export interface IPage<T> {
   items: T[];
   hasMore: boolean;
   nextCursor: string | null;
+}
+
+// Закрытый расчёт решением руководителя (этап 18; D-044, Q-01).
+export interface IClosureDecisionView {
+  id: string;
+  decidedBy: { id: string; name: string };
+  reason: string;
+  decidedAt: string;
+  revocation: { id: string; revokedBy: { id: string | null; name: string | null }; reason: string | null; revokedAt: string | null } | null;
+}
+
+export interface IClosureState {
+  revisionId: string;
+  kind: 'provisional' | 'verified';
+  closed: boolean;
+  active: IClosureDecisionView | null;
+  canDecide: boolean;
+  canRevoke: boolean;
+  history: IClosureDecisionView[];
 }

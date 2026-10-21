@@ -35,3 +35,7 @@ export interface IOperationsView {
   };
   integrations: IIntegrationView[];
 }
+
+// «Офис» (вкладка администрирования): типы ответа объявлены рядом с моделью офиса, которая не имеет импортов
+// (её читают и тесты под корневым tsconfig).
+export type { IOfficeItemView, IOfficeView, TOfficeJobStatus } from '../pages/admin/office/officeModel';

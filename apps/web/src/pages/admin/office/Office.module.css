@@ -1,0 +1,362 @@
+/* Вкладка «Офис»: сводка, столы ролей и комната отдыха на общем «полу». Mobile-first: от 360 px — один стол в строке;
+   от 600 px — два; от 1100 px — три; от 1500 px — четыре. Цвета — только токены темы (`--office-*` в index.css).
+   Рисунки человечков и их движение — в Sprite.module.css; здесь — раскладка и «заморозка» несвежих данных. */
+
+.office {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+/* --- сводка --------------------------------------------------------------------- */
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  flex: 1 1 280px;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.summary > div {
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.summary dt {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+.summary dd {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: var(--leading-xl);
+}
+
+.summaryDanger {
+  color: var(--danger);
+}
+
+/* --- общий пол ------------------------------------------------------------------ */
+
+/* Один непрерывный пол: плитка из линий токена. */
+.floor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background-color: var(--office-floor);
+  background-image:
+    linear-gradient(var(--office-floor-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--office-floor-line) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.quiet {
+  margin: 0;
+  color: var(--muted);
+}
+
+.desks {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* --- стол ----------------------------------------------------------------------- */
+
+.shirt0 { --office-shirt: var(--office-shirt-0); }
+.shirt1 { --office-shirt: var(--office-shirt-1); }
+.shirt2 { --office-shirt: var(--office-shirt-2); }
+.shirt3 { --office-shirt: var(--office-shirt-3); }
+.shirt4 { --office-shirt: var(--office-shirt-4); }
+.shirt5 { --office-shirt: var(--office-shirt-5); }
+
+.desk {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-content: start;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+/* Просит помощи — рамка цвета «внимание» (плюс поднятая рука и «!» над головой). */
+.deskAlarm {
+  border-color: var(--warning);
+}
+
+.deskDozing {
+  border-style: dashed;
+}
+
+.deskSprite {
+  grid-row: 1 / span 2;
+  width: 88px;
+}
+
+.deskHead {
+  min-width: 0;
+}
+
+.role {
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+  overflow-wrap: anywhere;
+}
+
+.status {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  overflow-wrap: anywhere;
+}
+
+.counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+}
+
+.counts > div {
+  display: flex;
+  gap: var(--space-1);
+  align-items: baseline;
+}
+
+.counts dt {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.counts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.deskBadge,
+.folders {
+  grid-column: 1 / -1;
+}
+
+.deskBadge {
+  min-width: 0;
+}
+
+/* --- папки по тендерам ------------------------------------------------------------ */
+
+.folders {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.folderItem {
+  min-width: 0;
+}
+
+.folder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-2);
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  text-decoration: none;
+}
+
+.folderLink {
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .folderLink:hover {
+    border-color: var(--accent);
+    color: var(--text);
+  }
+}
+
+.folderHidden {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.folderIcon {
+  flex: none;
+  color: var(--muted);
+}
+
+.folderTitle {
+  flex: 1 1 8ch;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.folderCounts {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.folderMore {
+  padding: 0 var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+/* --- комната отдыха --------------------------------------------------------------- */
+
+.lounge {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+
+.loungeTitle {
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+}
+
+.loungeEmpty {
+  margin: 0;
+  color: var(--muted);
+}
+
+.residents {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.resident {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.residentSprite {
+  width: 64px;
+}
+
+.residentName {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: var(--leading-sm);
+  overflow-wrap: anywhere;
+}
+
+.residentWord {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+.residentError {
+  color: var(--danger);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  overflow-wrap: anywhere;
+}
+
+/* --- несвежее: застыло и посерело ------------------------------------------------- */
+
+.frozen .floor svg {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+
+/* `!important` — чтобы никакая поза не оживила застывшее. */
+.frozen * {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .office *,
+  .office *::before,
+  .office *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* --- ширины ----------------------------------------------------------------------- */
+
+@media (min-width: 600px) {
+  .summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .desks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .residents {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 900px) {
+  .residents {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1100px) {
+  .desks {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1500px) {
+  .desks {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

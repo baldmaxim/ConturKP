@@ -3,7 +3,7 @@
 // путей и данных тендеров.
 import { buildId, type IAppConfig } from '@kontur/config';
 import { globalCapabilities } from '@kontur/core';
-import { checkSchema, listIntegrationStatuses, operationsSnapshot, type IIntegrationRow, type Pool } from '@kontur/db';
+import { checkSchema, contentTenderIds, listIntegrationStatuses, officeSnapshot, operationsSnapshot, type IIntegrationRow, type Pool } from '@kontur/db';
 import { latestCompleteBackup, readManifest, type BlobStore } from '@kontur/storage';
 import { Router } from 'express';
 import { basename } from 'node:path';
@@ -99,6 +99,22 @@ export const operationsRouter = (pool: Pool, config: IAppConfig, store: BlobStor
         },
         backup,
         integrations: integrations.map(integrationView),
+      });
+    }),
+  );
+
+  // «Офис» (вкладка администрирования): задания worker'а без полезной нагрузки и текстов ошибок; тендеры, к которым
+  // у смотрящего нет содержимого, не раскрываются ни идентификатором, ни названием.
+  router.get(
+    '/admin/office',
+    query(pool, 'admin.office', 'operations', async (ctx, _req, res) => {
+      if (!globalCapabilities(ctx.roles).includes('admin.audit')) throw forbidden('admin.audit', { entityType: 'operations' });
+      const snapshot = await officeSnapshot(pool, contentTenderIds(ctx));
+      res.json({
+        at: snapshot.at.toISOString(),
+        items: snapshot.items.map((i) => ({ ...i, lastFailedAt: iso(i.lastFailedAt) })),
+        tenders: snapshot.tenders,
+        workersAlive: snapshot.workersAlive,
       });
     }),
   );

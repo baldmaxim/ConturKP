@@ -32,6 +32,27 @@
   --scrim: rgba(12, 17, 22, 0.48);
   --shadow-1: 0 1px 2px rgba(16, 24, 32, 0.08);
   --shadow-2: 0 6px 16px rgba(16, 24, 32, 0.12);
+  /* «Офис» в администрировании: человечки, мебель, облачка и рубашки по ролям. */
+  --office-skin: #F1C9A5;
+  --office-hair: #4A3426;
+  --office-desk: #B98B5E;
+  --office-monitor: #3A3F4B;
+  --office-screen: #1D2733;
+  --office-screen-glow: #7EE0A8;
+  --office-chair: #7B8190;
+  --office-bubble: #DDE2EA;
+  --office-bubble-ink: #1C1C1E;
+  --office-pants: #46527A;
+  --office-cup: #F4EFE6;
+  --office-sofa: #9A7B9A;
+  --office-floor: color-mix(in srgb, var(--office-desk) 14%, var(--surface));
+  --office-floor-line: color-mix(in srgb, var(--office-desk) 22%, transparent);
+  --office-shirt-0: #E5484D;
+  --office-shirt-1: #F08C2E;
+  --office-shirt-2: #3FA34D;
+  --office-shirt-3: #2F9BD6;
+  --office-shirt-4: #7A5AF8;
+  --office-shirt-5: #D6559F;
 }
 
 :root[data-theme='dark'] {
@@ -65,6 +86,26 @@
   --scrim: rgba(0, 0, 0, 0.6);
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
   --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.55);
+  --office-skin: #E0B48F;
+  --office-hair: #8A6A52;
+  --office-desk: #8A6643;
+  --office-monitor: #646B7A;
+  --office-screen: #0B121A;
+  --office-screen-glow: #7EE0A8;
+  --office-chair: #6A7080;
+  --office-bubble: #3A3A3C;
+  --office-bubble-ink: #FFFFFF;
+  --office-pants: #6A79A6;
+  --office-cup: #D9D3C8;
+  --office-sofa: #76597A;
+  --office-floor: color-mix(in srgb, var(--office-desk) 14%, var(--surface));
+  --office-floor-line: color-mix(in srgb, var(--office-desk) 22%, transparent);
+  --office-shirt-0: #FF6369;
+  --office-shirt-1: #FF9F4A;
+  --office-shirt-2: #55C065;
+  --office-shirt-3: #4CB4EE;
+  --office-shirt-4: #9B82FF;
+  --office-shirt-5: #F070B8;
 }
 
 :root {

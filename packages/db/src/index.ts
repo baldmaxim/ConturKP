@@ -10,6 +10,7 @@ export * from './idempotency.ts';
 export * from './heartbeat.ts';
 export * from './backup.ts';
 export * from './integrations.ts';
+export * from './office.ts';
 export * from './stageEvents.ts';
 export * from './jobs.ts';
 export * from './sources.ts';

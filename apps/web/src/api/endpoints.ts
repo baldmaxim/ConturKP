@@ -15,6 +15,7 @@ import type {
   IUserPatch,
   TMemberRole,
 } from './types';
+import type { IOfficeView } from './operationsTypes';
 
 const enc = encodeURIComponent;
 
@@ -93,6 +94,9 @@ export const listTenderAudit = (
 
 export const listAdminAudit = (cursor: string | null, limit: number, signal?: AbortSignal): Promise<IAuditPage> =>
   apiGet<IAuditPage>(`/admin/audit-events?${pageQuery(cursor, limit)}`, { signal });
+
+// «Офис»: фоновые задания worker'а
+export const getAdminOffice = (signal?: AbortSignal): Promise<IOfficeView> => apiGet<IOfficeView>('/admin/office', { signal });
 
 // Пользователи
 export const listUsers = (signal?: AbortSignal): Promise<IListResponse<IUser>> =>

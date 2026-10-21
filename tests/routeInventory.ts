@@ -5,6 +5,7 @@ export const ROUTE_INVENTORY: readonly string[] = [
   'GET /api/v1/admin/contract-creators',
   'DELETE /api/v1/admin/contract-creators/:userId',
   'PUT /api/v1/admin/contract-creators/:userId',
+  'GET /api/v1/admin/office',
   'GET /api/v1/admin/operations',
   'GET /api/v1/admin/users',
   'POST /api/v1/admin/users',

@@ -146,7 +146,7 @@
     display: none;
   }
 
-  /* 768–1023 px: в навигации только иконки, подпись остаётся для скринридера. */
+  /* 768–1279 px: в навигации только иконки, подпись остаётся для скринридера. */
   .nav .navLink span {
     position: absolute;
     width: 1px;
@@ -162,16 +162,20 @@
 }
 
 @media (min-width: 1024px) {
+  .user {
+    max-width: 240px;
+  }
+}
+
+/* Подписи разделов — с 1280 px: у администратора пять разделов с подписями плюс блок действий занимают ~1240 px,
+   на 1024–1279 px шапка (с полосой прокрутки) шире экрана и страница прокручивалась по горизонтали (S17-28). */
+@media (min-width: 1280px) {
   .nav .navLink span {
     position: static;
     width: auto;
     height: auto;
     overflow: visible;
     clip: auto;
-  }
-
-  .user {
-    max-width: 240px;
   }
 }
 

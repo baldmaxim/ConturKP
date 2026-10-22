@@ -14,6 +14,7 @@ import { argValue } from '../cli.ts';
 import { compareActivity, parseTimelog, type ITimelogRow } from './pilot-activity.ts';
 import { evaluateCandidate, renderCandidate } from './pilot-candidate.ts';
 import {
+  checkLinks,
   evaluateG1,
   evaluateG2,
   evaluateG3,
@@ -28,6 +29,7 @@ import {
   evaluateM5,
   parseDefects,
   type IDefectsSummary,
+  type ILinkCheck,
   type ReasonStatus,
 } from './pilot-gates.ts';
 import { PilotError, type IResult } from './pilot-lib.ts';
@@ -40,6 +42,7 @@ import {
   collectG3,
   collectG4,
   collectG5,
+  collectPortalObjects,
   collectReasonStatuses,
   portalFindingIds,
   section,
@@ -175,6 +178,8 @@ const report = async (): Promise<number> => {
   const mat = matching.value;
   const reasonIds = [...new Set(mat.items.filter((i) => ref.items.find((r) => r.id === i.id)?.kind === 'price_reason').flatMap((i) => i.found))];
 
+  const linkIds = [...new Set([...mat.items.flatMap((i) => i.found), ...mat.citations.map((c) => c.ref)].map((i) => i.toLowerCase()))];
+
   const data = await withReadOnly(url, async (db) => {
     if (!(await tenderExists(db, tenderId))) throw new PilotError('тендер с таким идентификатором в портале не найден');
     return {
@@ -185,6 +190,7 @@ const report = async (): Promise<number> => {
       g5: await section(db, () => collectG5(db, tenderId)),
       reasons: await section(db, () => collectReasonStatuses(db, tenderId, reasonIds)),
       activity: await section(db, () => collectActivity(db, tenderId)),
+      links: await section(db, () => collectPortalObjects(db, linkIds)),
     };
   });
 
@@ -195,8 +201,11 @@ const report = async (): Promise<number> => {
     return unavailable(id, title, s.error);
   };
 
+  // Одна сверка идентификаторов сопоставления на G1, М1 и М3: раздел не выполнен — три показателя NOT_AVAILABLE.
+  const linkCheck = (id: string, title: string, make: (l: ILinkCheck) => IResult): IResult => via(data.links, id, title, (objects) => make(checkLinks(ref, mat, tenderId, objects)));
+
   const gates: IResult[] = [
-    evaluateG1(ref, mat),
+    linkCheck('G1', 'все критические пункты эталона выявлены', (l) => evaluateG1(ref, mat, l)),
     via(data.g2, 'G2', 'нет выдуманных источников в принятых выводах', (v) => evaluateG2(v.checks, v.conclusions, false)),
     via(data.g3, 'G3', 'нет утечек между тендерами и этапами', (v) => evaluateG3(v.violations, v.checked)),
     via(data.g4, 'G4', 'денежная сверка проходит', (v) => evaluateG4(v)),
@@ -214,9 +223,9 @@ const report = async (): Promise<number> => {
   if (!data.activity.ok) notAvailable.push(`M5: журнал аудита не прочитан (${data.activity.error})`);
 
   const metrics: IResult[] = [
-    evaluateM1(ref, mat),
+    linkCheck('M1', 'найдено некритических пунктов эталона', (l) => evaluateM1(ref, mat, l)),
     evaluateM2(mat, portalFindings),
-    evaluateM3(mat),
+    linkCheck('M3', 'точность цитат принятых выводов (выборка)', (l) => evaluateM3(mat, l)),
     data.reasons.ok ? evaluateM4(ref, mat, reasonStatuses) : unavailable('M4', 'причины изменения цены', data.reasons.error),
     evaluateM5(activity, timelog !== null),
   ];
@@ -224,7 +233,8 @@ const report = async (): Promise<number> => {
   notAvailable.push('G2: дословность цитаты не проверялась — цитата отдельно от фрагмента в БД не хранится для замечаний и ответов (finding_evidence, answer_evidence); проверены принадлежность фрагмента источнику тендера и вход этапа или прогона поиска');
   const limitations = [
     'G2: принятое замечание — status resolved или accepted_risk; принятый ответ — завершённый прогон со статусом confirmed_by_citations',
-    'G2/G3: источником тендера считается фрагмент тендера или договора, активно связанного с тендером (contract_tender)',
+    'G2/G3: источником тендера считается фрагмент тендера, договора с активной связью (contract_tender), письма, связанного с тендером (mail_message_tender), или распознанного вложения такого письма; вход этапа или прогона поиска проверяется отдельно',
+    'G1/M1/M3: идентификаторы сопоставления сверяются с БД: found — замечание (кроме rejected и stale), разногласие или завершённый прогон ответа этого тендера, для price_reason — версия причины этого тендера; цитата — принятое замечание (resolved, accepted_risk) или прогон ответа confirmed_by_citations этого тендера; неизвестный, чужой, другого вида или статуса идентификатор не засчитывается и даёт FAIL показателя',
     'G4: берётся последняя по времени ревизия расчёта тендера и последний отчёт revision_economics по ней',
     'G5: размещения со статусом superseded не учитываются; проверяется remote_state каждого файла набора (в том числе манифесты и признак готовности)',
     'M2: показанные замечания — все замечания тендера со статусом, отличным от stale; замечание без разметки даёт FAIL',

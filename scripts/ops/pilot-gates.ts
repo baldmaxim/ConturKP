@@ -7,35 +7,108 @@ const percent = (num: number, den: number): number => (den === 0 ? 0 : Math.roun
 
 const isFound = (m: IMatchingItem | undefined): boolean => m !== undefined && m.result === 'found' && m.found.length > 0;
 
-export const evaluateG1 = (reference: IReference, matching: IMatching): IResult => {
+// Сверка идентификаторов сопоставления с объектами портала (R18-01). status: у finding — статус замечания; у discrepancy —
+// статус его замечания; у answer — answer_run.status; у reason — reason_status.
+export type PortalObjectKind = 'finding' | 'discrepancy' | 'answer' | 'reason';
+export interface IPortalObject {
+  kind: PortalObjectKind;
+  tenderId: string | null;
+  status: string;
+  answerStatus: string | null;
+}
+export type LinkProblem = 'not_in_portal' | 'other_tender' | 'wrong_kind' | 'not_accepted';
+// item — идентификатор пункта эталона; null — строка выборки цитат.
+export interface ILinkError {
+  item: string | null;
+  id: string;
+  why: LinkProblem;
+}
+export interface ILinkCheck {
+  items: ILinkError[];
+  citations: ILinkError[];
+}
+
+const FOUND_EXCLUDED_STATUSES: readonly string[] = ['rejected', 'stale'];
+const CITED_FINDING_STATUSES: readonly string[] = ['resolved', 'accepted_risk'];
+
+// Одна ошибка на идентификатор — первая сработавшая: нет в портале, другой тендер, недопустимый вид, недопустимый статус.
+const linkProblem = (id: string, tenderId: string, objects: ReadonlyMap<string, IPortalObject>, accepts: (o: IPortalObject) => 'ok' | 'wrong_kind' | 'not_accepted'): LinkProblem | null => {
+  const o = objects.get(id);
+  if (o === undefined) return 'not_in_portal';
+  if (o.tenderId === null || o.tenderId.toLowerCase() !== tenderId.toLowerCase()) return 'other_tender';
+  const r = accepts(o);
+  return r === 'ok' ? null : r;
+};
+
+// found: для price_reason — версия причины (статус — дело М4); иначе замечание, разногласие (статус его замечания) не из
+// rejected и stale, либо завершённый прогон ответа. Цитата: принятое замечание или прогон ответа confirmed_by_citations.
+export const checkLinks = (reference: IReference, matching: IMatching, tenderId: string, objects: ReadonlyMap<string, IPortalObject>): ILinkCheck => {
+  const kindOf = new Map(reference.items.map((i) => [i.id, i.kind]));
+  const items: ILinkError[] = [];
+  for (const m of matching.items) {
+    if (m.result !== 'found') continue;
+    const isReason = kindOf.get(m.id) === 'price_reason';
+    for (const raw of m.found) {
+      const id = raw.toLowerCase();
+      const why = linkProblem(id, tenderId, objects, (o) => {
+        if (isReason) return o.kind === 'reason' ? 'ok' : 'wrong_kind';
+        if (o.kind === 'finding' || o.kind === 'discrepancy') return FOUND_EXCLUDED_STATUSES.includes(o.status) ? 'not_accepted' : 'ok';
+        if (o.kind === 'answer') return o.status === 'completed' ? 'ok' : 'not_accepted';
+        return 'wrong_kind';
+      });
+      if (why !== null) items.push({ item: m.id, id, why });
+    }
+  }
+  const citations: ILinkError[] = [];
+  for (const c of matching.citations) {
+    const id = c.ref.toLowerCase();
+    const why = linkProblem(id, tenderId, objects, (o) => {
+      if (o.kind === 'finding') return CITED_FINDING_STATUSES.includes(o.status) ? 'ok' : 'not_accepted';
+      if (o.kind === 'answer') return o.status === 'completed' && o.answerStatus === 'confirmed_by_citations' ? 'ok' : 'not_accepted';
+      return 'wrong_kind';
+    });
+    if (why !== null) citations.push({ item: null, id, why });
+  }
+  return { items, citations };
+};
+
+const linkErrorsOf = (links: ILinkCheck, itemIds: readonly string[]): ILinkError[] => links.items.filter((e) => e.item !== null && itemIds.includes(e.item));
+// Пункт выявлен, если по нему есть идентификаторы портала и ни один не отвергнут сверкой.
+const isConfirmed = (m: IMatchingItem | undefined, links: ILinkCheck): boolean => isFound(m) && !links.items.some((e) => e.item === m!.id);
+
+export const evaluateG1 = (reference: IReference, matching: IMatching, links: ILinkCheck): IResult => {
   const byId = new Map(matching.items.map((i) => [i.id, i]));
   const critical = reference.items.filter((i) => i.critical);
-  const missed = critical.filter((i) => !isFound(byId.get(i.id))).map((i) => i.id);
+  const missed = critical.filter((i) => !isConfirmed(byId.get(i.id), links)).map((i) => i.id);
+  const linkErrors = linkErrorsOf(links, critical.map((i) => i.id));
   const status: GateStatus = critical.length === 0 ? 'NOT_RUN' : missed.length === 0 ? 'PASS' : 'FAIL';
+  const tail = linkErrors.length > 0 ? `; ошибок идентификаторов ${linkErrors.length}` : '';
   return {
     id: 'G1',
     title: 'все критические пункты эталона выявлены',
     status,
     value: null,
     threshold: null,
-    detail: critical.length === 0 ? 'в эталоне нет критических пунктов' : `критических ${critical.length}, выявлено ${critical.length - missed.length}`,
-    data: { critical: critical.length, found: critical.length - missed.length, missedIds: missed },
+    detail: critical.length === 0 ? 'в эталоне нет критических пунктов' : `критических ${critical.length}, выявлено ${critical.length - missed.length}${tail}`,
+    data: { critical: critical.length, found: critical.length - missed.length, missedIds: missed, linkErrors },
   };
 };
 
-export const evaluateM1 = (reference: IReference, matching: IMatching): IResult => {
+export const evaluateM1 = (reference: IReference, matching: IMatching, links: ILinkCheck): IResult => {
   const byId = new Map(matching.items.map((i) => [i.id, i]));
   const rest = reference.items.filter((i) => !i.critical);
-  const found = rest.filter((i) => isFound(byId.get(i.id))).length;
+  const found = rest.filter((i) => isConfirmed(byId.get(i.id), links)).length;
+  const linkErrors = linkErrorsOf(links, rest.map((i) => i.id));
   const value = percent(found, rest.length);
+  const tail = linkErrors.length > 0 ? `; ошибок идентификаторов ${linkErrors.length}` : '';
   return {
     id: 'M1',
     title: 'найдено некритических пунктов эталона',
-    status: rest.length === 0 ? 'NOT_RUN' : value >= THRESHOLDS.m1Min ? 'PASS' : 'FAIL',
+    status: rest.length === 0 ? 'NOT_RUN' : linkErrors.length > 0 ? 'FAIL' : value >= THRESHOLDS.m1Min ? 'PASS' : 'FAIL',
     value: rest.length === 0 ? null : value,
     threshold: `≥ ${THRESHOLDS.m1Min} %`,
-    detail: rest.length === 0 ? 'в эталоне нет некритических пунктов' : `найдено ${found} из ${rest.length}`,
-    data: { total: rest.length, found },
+    detail: rest.length === 0 ? 'в эталоне нет некритических пунктов' : `найдено ${found} из ${rest.length}${tail}`,
+    data: { total: rest.length, found, linkErrors },
   };
 };
 
@@ -60,18 +133,20 @@ export const evaluateM2 = (matching: IMatching, portalFindingIds: readonly strin
   return { id: 'M2', title: 'доля ложных замечаний среди показанных', status, value: shown === 0 ? null : value, threshold: `≤ ${THRESHOLDS.m2Max} %`, detail, data: { shown, verdicts, unmarkedIds: unmarked, unknownIds: unknown } };
 };
 
-export const evaluateM3 = (matching: IMatching): IResult => {
+export const evaluateM3 = (matching: IMatching, links: ILinkCheck): IResult => {
   const total = matching.citations.length;
-  const supports = matching.citations.filter((c) => c.verdict === 'supports').length;
+  const bad = new Set(links.citations.map((e) => e.id));
+  const supports = matching.citations.filter((c) => c.verdict === 'supports' && !bad.has(c.ref.toLowerCase())).length;
   const value = percent(supports, total);
+  const tail = links.citations.length > 0 ? `; ошибок идентификаторов ${links.citations.length}` : '';
   return {
     id: 'M3',
     title: 'точность цитат принятых выводов (выборка)',
-    status: total === 0 ? 'NOT_RUN' : value >= THRESHOLDS.m3Min ? 'PASS' : 'FAIL',
+    status: total === 0 ? 'NOT_RUN' : links.citations.length > 0 ? 'FAIL' : value >= THRESHOLDS.m3Min ? 'PASS' : 'FAIL',
     value: total === 0 ? null : value,
     threshold: `≥ ${THRESHOLDS.m3Min} %`,
-    detail: total === 0 ? 'выборка цитат пуста' : `подтверждено ${supports} из ${total}`,
-    data: { sample: total, supports },
+    detail: total === 0 ? 'выборка цитат пуста' : `подтверждено ${supports} из ${total}${tail}`,
+    data: { sample: total, supports, linkErrors: links.citations },
   };
 };
 

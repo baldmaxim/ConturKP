@@ -6,7 +6,7 @@ import pg from 'pg';
 import { PilotError } from './pilot-lib.ts';
 import type { IUserActivity } from './pilot-activity.ts';
 import type { ICandidateData } from './pilot-candidate.ts';
-import type { IDeliveryFiles, IEconomicsView, IEvidenceCheck, IViolation, ReasonStatus } from './pilot-gates.ts';
+import type { IDeliveryFiles, IEconomicsView, IEvidenceCheck, IPortalObject, IViolation, PortalObjectKind, ReasonStatus } from './pilot-gates.ts';
 
 export type Db = pg.Client;
 
@@ -88,10 +88,16 @@ export const collectCandidate = async (db: Db, tenderId: string): Promise<ICandi
 
 // ---------------------------------------------------------------- report
 
-// Фрагмент — источник этого тендера: его владелец тендер, либо договор, связанный с тендером (D-022).
+// Фрагмент — источник этого тендера: его владелец тендер; договор с активной связью (D-022); письмо, связанное с тендером
+// (mail_message_tender), — фрагмент тела письма и фрагмент прогона документа его вложения (владельца в строке нет, 0018).
 const owned = (a: string): string =>
   `(coalesce(${a}.tender_id = $1, false) OR (${a}.tender_id IS NULL AND EXISTS (
-      SELECT 1 FROM contract_tender ct WHERE ct.contract_id = ${a}.contract_id AND ct.tender_id = $1 AND ct.status = 'active')))`;
+      SELECT 1 FROM contract_tender ct WHERE ct.contract_id = ${a}.contract_id AND ct.tender_id = $1 AND ct.status = 'active'))
+    OR (${a}.source_unit_type = 'recognition_run' AND ${a}.tender_id IS NULL AND ${a}.contract_id IS NULL AND EXISTS (
+      SELECT 1 FROM mail_message_tender l WHERE l.message_id = document_revision_mail_message(${a}.document_revision_id) AND l.tender_id = $1))
+    OR (${a}.source_unit_type = 'mail_message_revision' AND EXISTS (
+      SELECT 1 FROM mail_message_revision mr JOIN mail_message_tender l ON l.message_id = mr.message_id
+       WHERE mr.id = ${a}.mail_message_revision_id AND l.tender_id = $1)))`;
 
 // Замечания тендера, которые обязаны быть размечены (кроме устаревших, status = stale).
 export const portalFindingIds = async (db: Db, tenderId: string): Promise<string[]> =>
@@ -165,7 +171,9 @@ export const collectG3 = async (db: Db, tenderId: string): Promise<{ violations:
       `SELECT fe.id::text AS id FROM finding f JOIN finding_evidence fe ON fe.finding_id = f.id AND fe.document_revision_id IS NOT NULL
          JOIN document_revision dr ON dr.id = fe.document_revision_id
         WHERE f.tender_id = $1 AND NOT (coalesce(dr.tender_id = $1, false) OR (dr.tender_id IS NULL AND EXISTS (
-          SELECT 1 FROM contract_tender ct WHERE ct.contract_id = dr.contract_id AND ct.tender_id = $1 AND ct.status = 'active')))`, tenderId),
+          SELECT 1 FROM contract_tender ct WHERE ct.contract_id = dr.contract_id AND ct.tender_id = $1 AND ct.status = 'active'))
+          OR (dr.tender_id IS NULL AND dr.contract_id IS NULL AND EXISTS (
+          SELECT 1 FROM mail_message_tender l WHERE l.message_id = document_revision_mail_message(dr.id) AND l.tender_id = $1)))`, tenderId),
     await violation(db, 'основание ответа не из источников тендера',
       `SELECT ae.run_id::text || ':' || ae.label AS id FROM dialog d JOIN answer_run ar ON ar.dialog_id = d.id
          JOIN answer_evidence ae ON ae.run_id = ar.id JOIN evidence_fragment ef ON ef.id = ae.fragment_id
@@ -235,6 +243,20 @@ export const collectG5 = async (db: Db, tenderId: string): Promise<IDeliveryFile
 export const collectReasonStatuses = async (db: Db, tenderId: string, ids: readonly string[]): Promise<Map<string, ReasonStatus>> => {
   const r = await db.query<{ id: string; reason_status: ReasonStatus }>('SELECT id, reason_status FROM change_explanation WHERE tender_id = $1 AND id = ANY ($2::uuid[])', [tenderId, [...ids]]);
   return new Map(r.rows.map((x) => [x.id.toLowerCase(), x.reason_status]));
+};
+
+// R18-01: объекты портала по идентификаторам из сопоставления — без фильтра по тендеру (чужой отличается от
+// несуществующего). Только идентификаторы и статусы. Ключи — id в нижнем регистре.
+export const collectPortalObjects = async (db: Db, ids: readonly string[]): Promise<Map<string, IPortalObject>> => {
+  if (ids.length === 0) return new Map();
+  const r = await db.query<{ id: string; kind: PortalObjectKind; tender_id: string | null; status: string; answer_status: string | null }>(
+    `SELECT id, 'finding' AS kind, tender_id, status, NULL::text AS answer_status FROM finding WHERE id = ANY ($1::uuid[])
+     UNION ALL SELECT d.id, 'discrepancy', d.tender_id, f.status, NULL FROM discrepancy d JOIN finding f ON f.id = d.finding_id WHERE d.id = ANY ($1::uuid[])
+     UNION ALL SELECT ar.id, 'answer', dl.tender_id, ar.status, ar.answer_status FROM answer_run ar JOIN dialog dl ON dl.id = ar.dialog_id WHERE ar.id = ANY ($1::uuid[])
+     UNION ALL SELECT id, 'reason', tender_id, reason_status, NULL FROM change_explanation WHERE id = ANY ($1::uuid[])`,
+    [[...ids]],
+  );
+  return new Map(r.rows.map((x) => [x.id.toLowerCase(), { kind: x.kind, tenderId: x.tender_id, status: x.status, answerStatus: x.answer_status }]));
 };
 
 // М5: действия участников тендера (назначения, в том числе снятые) по audit_event: человек, разрешённые действия.

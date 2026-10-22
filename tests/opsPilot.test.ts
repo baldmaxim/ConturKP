@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { activityIntervals, compareActivity, parseTimelog } from '../scripts/ops/pilot-activity.ts';
 import { evaluateCandidate } from '../scripts/ops/pilot-candidate.ts';
 import {
+  checkLinks,
   evaluateG1,
   evaluateG2,
   evaluateG3,
@@ -23,6 +24,8 @@ import {
   evaluateM3,
   evaluateM4,
   parseDefects,
+  type ILinkCheck,
+  type IPortalObject,
   type ReasonStatus,
 } from '../scripts/ops/pilot-gates.ts';
 import { PilotError } from '../scripts/ops/pilot-lib.ts';
@@ -38,7 +41,7 @@ import {
   type IMatching,
   type IReference,
 } from '../scripts/ops/pilot-schema.ts';
-import { collectActivity, collectCandidate, collectG2, collectG3, collectG4, collectG5, collectReasonStatuses, openReadOnly, portalFindingIds, withReadOnly } from '../scripts/ops/pilot-db.ts';
+import { collectActivity, collectCandidate, collectG2, collectG3, collectG4, collectG5, collectPortalObjects, collectReasonStatuses, openReadOnly, portalFindingIds, withReadOnly } from '../scripts/ops/pilot-db.ts';
 import { ADMIN_URL, createTestDb, type ITestDb } from './helpers.ts';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -74,6 +77,7 @@ const matching = (raw: Record<string, unknown>): IMatching => {
 };
 const uid = (n: number): string => `33333333-3333-4333-8333-${String(n).padStart(12, '0')}`;
 const found = (id: string, n = 1): Record<string, unknown> => ({ id, result: 'found', found: [uid(n)] });
+const NO_LINKS: ILinkCheck = { items: [], citations: [] };
 const missed = (id: string): Record<string, unknown> => ({ id, result: 'missed' });
 
 describe('схема эталона', () => {
@@ -213,19 +217,19 @@ describe('ворота G1–G7 и метрики М1–М4 из входных �
 
   it('G1: все критические найдены — PASS, пропущенный критический — FAIL с id', () => {
     const all = matching({ items: items.map((i, n) => found(i.id as string, n + 1)) });
-    expect(evaluateG1(ref, all).status).toBe('PASS');
+    expect(evaluateG1(ref, all, NO_LINKS).status).toBe('PASS');
     const lost = matching({ items: [missed('REF-001'), ...items.slice(1).map((i, n) => found(i.id as string, n + 2))] });
-    const g1 = evaluateG1(ref, lost);
+    const g1 = evaluateG1(ref, lost, NO_LINKS);
     expect(g1.status).toBe('FAIL');
     expect(g1.data.missedIds).toEqual(['REF-001']);
-    expect(evaluateG1(reference([item({ critical: false })]), matching({ items: [found('REF-001')] })).status).toBe('NOT_RUN');
+    expect(evaluateG1(reference([item({ critical: false })]), matching({ items: [found('REF-001')] }), NO_LINKS).status).toBe('NOT_RUN');
   });
 
   it('М1: порог 80 % по некритическим пунктам', () => {
     const four = matching({ items: [found('REF-001'), found('REF-002'), found('REF-003'), found('REF-004'), found('REF-005'), missed('REF-006')] });
-    expect(evaluateM1(ref, four)).toMatchObject({ status: 'PASS', value: 80 });
+    expect(evaluateM1(ref, four, NO_LINKS)).toMatchObject({ status: 'PASS', value: 80 });
     const three = matching({ items: [found('REF-001'), found('REF-002'), found('REF-003'), found('REF-004'), missed('REF-005'), missed('REF-006')] });
-    expect(evaluateM1(ref, three)).toMatchObject({ status: 'FAIL', value: 60 });
+    expect(evaluateM1(ref, three, NO_LINKS)).toMatchObject({ status: 'FAIL', value: 60 });
   });
 
   it('М2: порог 25 % ложных среди показанных; сопоставление должно покрывать замечания портала', () => {
@@ -243,8 +247,76 @@ describe('ворота G1–G7 и метрики М1–М4 из входных �
 
   it('М3: порог 95 % подтверждённых цитат', () => {
     const sample = (bad: number) => matching({ citations: Array.from({ length: 20 }, (_, n) => ({ ref: uid(200 + n), verdict: n < bad ? 'does_not_support' : 'supports' })) });
-    expect(evaluateM3(sample(1))).toMatchObject({ status: 'PASS', value: 95 });
-    expect(evaluateM3(sample(2))).toMatchObject({ status: 'FAIL', value: 90 });
+    expect(evaluateM3(sample(1), NO_LINKS)).toMatchObject({ status: 'PASS', value: 95 });
+    expect(evaluateM3(sample(2), NO_LINKS)).toMatchObject({ status: 'FAIL', value: 90 });
+  });
+
+  it('checkLinks: неизвестный, чужой, другого вида или статуса идентификатор не засчитывается (G1, М1, М3 — FAIL)', () => {
+    const OTHER = '44444444-4444-4444-8444-444444444444';
+    const obj = (kind: IPortalObject['kind'], status: string, over: Partial<IPortalObject> = {}): IPortalObject => ({ kind, tenderId: TENDER, status, answerStatus: null, ...over });
+    const objects = new Map<string, IPortalObject>([
+      [uid(1), obj('finding', 'resolved')],
+      [uid(2), obj('discrepancy', 'open')],
+      [uid(3), obj('reason', 'confirmed')],
+      [uid(4), obj('finding', 'resolved', { tenderId: OTHER.toUpperCase() })],
+      [uid(5), obj('finding', 'rejected')],
+      [uid(6), obj('finding', 'stale')],
+      [uid(7), obj('finding', 'open')],
+      [uid(8), obj('answer', 'completed', { answerStatus: 'confirmed_by_citations' })],
+      [uid(9), obj('answer', 'completed', { answerStatus: 'citations_disagree' })],
+      [uid(10), obj('discrepancy', 'stale')],
+    ]);
+    const r3 = reference([item({ id: 'C-1' }), item({ id: 'N-1', kind: 'change', critical: false }), item({ id: 'P-1', kind: 'price_reason', critical: false })]);
+    const run = (c1: string, n1: string, p1: string, cites: { ref: string; verdict?: string }[] = []) => {
+      const m = matching({
+        items: [{ id: 'C-1', result: 'found', found: [c1] }, { id: 'N-1', result: 'found', found: [n1] }, { id: 'P-1', result: 'found', found: [p1] }],
+        citations: cites.map((c) => ({ ref: c.ref, verdict: c.verdict ?? 'supports' })),
+      });
+      const links = checkLinks(r3, m, TENDER, objects);
+      return { links, g1: evaluateG1(r3, m, links), m1: evaluateM1(r3, m, links), m3: evaluateM3(m, links) };
+    };
+
+    // Положительный контроль: допустимые объекты; регистр идентификаторов не важен, статус причины — дело М4.
+    const ok = run(uid(1), uid(2), uid(3), [{ ref: uid(1) }, { ref: uid(8).toUpperCase() }]);
+    expect(ok.links).toEqual({ items: [], citations: [] });
+    expect([ok.g1.status, ok.m1.status, ok.m3.status]).toEqual(['PASS', 'PASS', 'PASS']);
+    expect(run(uid(8), uid(1), uid(3)).g1.status).toBe('PASS');
+
+    // not_in_portal.
+    const missing = run(uid(99), uid(2), uid(3), [{ ref: uid(98) }]);
+    expect(missing.links.items).toEqual([{ item: 'C-1', id: uid(99), why: 'not_in_portal' }]);
+    expect(missing.links.citations).toEqual([{ item: null, id: uid(98), why: 'not_in_portal' }]);
+    expect(missing.g1).toMatchObject({ status: 'FAIL', data: { missedIds: ['C-1'], linkErrors: [{ item: 'C-1', id: uid(99), why: 'not_in_portal' }] } });
+    expect(missing.g1.detail).toContain('ошибок идентификаторов 1');
+    expect(missing.m3).toMatchObject({ status: 'FAIL', value: 0, data: { sample: 1, supports: 0, linkErrors: [{ why: 'not_in_portal' }] } });
+
+    // other_tender: у некритического пункта процент найденных не спасает.
+    const foreign = run(uid(1), uid(4), uid(3), [{ ref: uid(4) }]);
+    expect(foreign.links.items).toEqual([{ item: 'N-1', id: uid(4), why: 'other_tender' }]);
+    expect(foreign.links.citations[0]?.why).toBe('other_tender');
+    expect(foreign.g1.status).toBe('PASS');
+    expect(foreign.m1).toMatchObject({ status: 'FAIL', value: 50, data: { total: 2, found: 1, linkErrors: [{ why: 'other_tender' }] } });
+    expect(foreign.m3.status).toBe('FAIL');
+
+    // wrong_kind: причина в пункте conflict, замечание в price_reason, разногласие и причина в цитатах.
+    const kind = run(uid(3), uid(2), uid(1), [{ ref: uid(2) }, { ref: uid(3) }]);
+    expect(kind.links.items.map((e) => [e.item, e.why])).toEqual([['C-1', 'wrong_kind'], ['P-1', 'wrong_kind']]);
+    expect(kind.links.citations.map((e) => e.why)).toEqual(['wrong_kind', 'wrong_kind']);
+    expect([kind.g1.status, kind.m1.status, kind.m3.status]).toEqual(['FAIL', 'FAIL', 'FAIL']);
+
+    // not_accepted: rejected и stale замечание и разногласие в found; открытое замечание и несогласованный ответ в цитатах.
+    const stale = run(uid(5), uid(6), uid(3), [{ ref: uid(7) }, { ref: uid(9) }]);
+    expect(stale.links.items.map((e) => [e.item, e.why])).toEqual([['C-1', 'not_accepted'], ['N-1', 'not_accepted']]);
+    expect(stale.links.citations.map((e) => e.why)).toEqual(['not_accepted', 'not_accepted']);
+    expect([stale.g1.status, stale.m1.status, stale.m3.status]).toEqual(['FAIL', 'FAIL', 'FAIL']);
+    expect(run(uid(1), uid(10), uid(3)).links.items).toEqual([{ item: 'N-1', id: uid(10), why: 'not_accepted' }]);
+
+    // Одна из нескольких ссылок пункта неверна — пункт не выявлен; supports без ошибок ссылок не нулевой.
+    const m = matching({ items: [{ id: 'C-1', result: 'found', found: [uid(1), uid(99)] }, missed('N-1'), missed('P-1')], citations: [{ ref: uid(1), verdict: 'supports' }, { ref: uid(7), verdict: 'supports' }] });
+    const links = checkLinks(r3, m, TENDER, objects);
+    expect(evaluateG1(r3, m, links).status).toBe('FAIL');
+    expect(evaluateM3(m, links)).toMatchObject({ status: 'FAIL', value: 50 });
+    expect(evaluateM3(matching({}), NO_LINKS).status).toBe('NOT_RUN');
   });
 
   it('М4: confirmed и unknown — в порядке, hypothesis, пропуск и неизвестный идентификатор — нет', () => {
@@ -529,6 +601,103 @@ describe('G2 и G3 по настоящей БД', () => {
   });
 });
 
+describe('R18-01: объекты портала для сверки идентификаторов', () => {
+  it('collectPortalObjects: замечание, разногласие (статус замечания), ответ, причина; чужой тендер — с его tenderId; неизвестный отсутствует', async () => {
+    const fa = await finding(A, STAGE_A, 'accepted_risk', FRAG_A);
+    const fd = await finding(A, STAGE_A, 'rejected', FRAG_A);
+    const disc = randomUUID();
+    await ins('discrepancy', { id: disc, tender_id: A, stage_id: STAGE_A, finding_id: fd, topic: 'T', created_by: ENG });
+    const run = await answer(FRAG_A);
+    const reason = randomUUID();
+    await ins('change_explanation', { id: reason, tender_id: A, comparison_id: randomUUID(), unit_id: randomUUID(), version: 1, reason_kind: 'document', reason_status: 'hypothesis', rationale: 'основание', actor_user_id: ENG });
+    const foreign = await finding(B, STAGE_B, 'open', FRAG_B);
+    const unknown = randomUUID();
+    const map = await withReadOnly(db.appUrl, (c) => collectPortalObjects(c, [fa, disc.toUpperCase(), run, reason, foreign, unknown]));
+    expect(map.get(fa)).toEqual({ kind: 'finding', tenderId: A, status: 'accepted_risk', answerStatus: null });
+    expect(map.get(disc)).toEqual({ kind: 'discrepancy', tenderId: A, status: 'rejected', answerStatus: null });
+    expect(map.get(run)).toEqual({ kind: 'answer', tenderId: A, status: 'completed', answerStatus: 'confirmed_by_citations' });
+    expect(map.get(reason)).toEqual({ kind: 'reason', tenderId: A, status: 'hypothesis', answerStatus: null });
+    expect(map.get(foreign)).toEqual({ kind: 'finding', tenderId: B, status: 'open', answerStatus: null });
+    expect(map.has(unknown)).toBe(false);
+    expect(map.size).toBe(5);
+    expect((await withReadOnly(db.appUrl, (c) => collectPortalObjects(c, []))).size).toBe(0);
+  });
+});
+
+describe('R18-02: письмо и вложение письма — источники тендера', () => {
+  // Письмо с тендерами links; kind = body: фрагмент тела (mail_message_revision), attachment: фрагмент прогона документа вложения.
+  // Единица входит в снимок области этапа A, чтобы владение проверялось отдельно от входа этапа.
+  const mailFragment = async (kind: 'body' | 'attachment', links: string[]): Promise<string> => {
+    const message = randomUUID();
+    const revision = randomUUID();
+    const fragment = randomUUID();
+    const scope = (await su.query<{ id: string }>('SELECT id FROM evidence_scope WHERE stage_id = $1 LIMIT 1', [STAGE_A])).rows[0]!.id;
+    await ins('mail_message', { id: message, mailbox_id: randomUUID(), communication_id: randomUUID(), identity_kind: 'source_id', identity_value: `id-${message}`, created_by: MGR });
+    await ins('mail_message_revision', { id: revision, message_id: message, seq: 1, raw_blob_sha256: hex(), direction: 'inbound', source: 'eml_import', imported_by: MGR });
+    for (const tender of links) await ins('mail_message_tender', { message_id: message, tender_id: tender, linked_by: MGR, updated_by: MGR });
+    const base = { id: fragment, origin: 'email_body', fragment_kind: 'text_block', fragment_key: `k-${fragment}`, text: SECRET_TEXT, text_sha256: hex() };
+    if (kind === 'body') {
+      await ins('evidence_fragment', { ...base, source_unit_type: 'mail_message_revision', source_unit_id: revision, mail_message_revision_id: revision });
+      await ins('evidence_scope_item', { scope_id: scope, tender_id: A, unit_type: 'mail_message', mail_message_revision_id: revision, mail_message_id: message, inclusion_reason: 'x' });
+      return fragment;
+    }
+    const attachment = randomUUID();
+    const doc = randomUUID();
+    const docRevision = randomUUID();
+    const recognition = randomUUID();
+    const sha = hex();
+    await ins('mail_attachment', { id: attachment, revision_id: revision, ordinal: 1, filename: 'a.pdf', mime_type: 'application/pdf', size_bytes: 1, sha256: sha, disposition: 'attachment', status: 'registered', blob_sha256: sha });
+    await ins('document', { id: doc, mail_attachment_id: attachment, title: 'Вложение', name_key: 'a.pdf', doc_type: 'letter' });
+    await ins('document_revision', { id: docRevision, document_id: doc, blob_sha256: sha, revision_seq: 1 });
+    await ins('evidence_fragment', { ...base, origin: 'recognized_text', source_unit_type: 'recognition_run', source_unit_id: recognition, run_id: recognition, document_revision_id: docRevision });
+    await ins('evidence_scope_item', { scope_id: scope, tender_id: A, unit_type: 'document_recognition', document_revision_id: docRevision, recognition_run_id: recognition, mail_message_id: message, inclusion_reason: 'x' });
+    return fragment;
+  };
+  const g3Ids = async (category: string): Promise<string[]> => (await withReadOnly(db.appUrl, (c) => collectG3(c, A))).violations.find((v) => v.category === category)?.ids ?? [];
+  const evidenceId = async (f: string): Promise<string> => (await su.query<{ id: string }>('SELECT id FROM finding_evidence WHERE finding_id = $1', [f])).rows[0]!.id;
+  const CATEGORY = 'фрагмент основания замечания не из источников тендера';
+
+  for (const kind of ['attachment', 'body'] as const) {
+    it(`${kind === 'body' ? 'фрагмент тела письма' : 'фрагмент вложения письма'}, связанного с тендером: G2 owned, в G3 нарушения нет`, async () => {
+      const f = await finding(A, STAGE_A, 'resolved', await mailFragment(kind, [A, B]));
+      const g2 = await withReadOnly(db.appUrl, (c) => collectG2(c, A));
+      expect(g2.checks.filter((x) => x.objectId === f)).toEqual([expect.objectContaining({ owned: true, inScope: true })]);
+      expect(await g3Ids(CATEGORY)).not.toContain(await evidenceId(f));
+      expect(await g3Ids('фрагмент основания замечания вне входа его этапа')).not.toContain(await evidenceId(f));
+    });
+
+    it(`${kind === 'body' ? 'фрагмент тела письма' : 'фрагмент вложения письма'}, связанного только с другим тендером или ни с каким: нарушение G2 и G3`, async () => {
+      for (const links of [[B], []]) {
+        const f = await finding(A, STAGE_A, 'accepted_risk', await mailFragment(kind, links));
+        const g2 = await withReadOnly(db.appUrl, (c) => collectG2(c, A));
+        expect(g2.checks.filter((x) => x.objectId === f)).toEqual([expect.objectContaining({ owned: false })]);
+        const r = evaluateG2(g2.checks, g2.conclusions, false);
+        expect(r.status).toBe('FAIL');
+        expect((r.data.foreignOrOutOfScope as { objectId: string }[]).map((x) => x.objectId)).toContain(f);
+        expect(await g3Ids(CATEGORY)).toContain(await evidenceId(f));
+      }
+    });
+  }
+
+  it('G3: редакция документа вложения письма тендера в основании — не нарушение; письма только другого тендера — нарушение', async () => {
+    const docRevisionOf = async (links: string[]): Promise<string> => {
+      const fragment = await mailFragment('attachment', links);
+      return (await su.query<{ document_revision_id: string }>('SELECT document_revision_id FROM evidence_fragment WHERE id = $1', [fragment])).rows[0]!.document_revision_id;
+    };
+    const mk = async (docRevision: string): Promise<string> => {
+      const f = await finding(A, STAGE_A, 'open', FRAG_A);
+      await ins('finding_evidence', { finding_id: f, tender_id: A, side: 'right', object_type: 'document_revision', document_revision_id: docRevision });
+      return f;
+    };
+    const good = await mk(await docRevisionOf([A]));
+    const bad = await mk(await docRevisionOf([B]));
+    const ids = await g3Ids('редакция документа основания замечания не из источников тендера');
+    const evId = async (f: string): Promise<string> => (await su.query<{ id: string }>('SELECT id FROM finding_evidence WHERE finding_id = $1 AND document_revision_id IS NOT NULL', [f])).rows[0]!.id;
+    expect(ids).toContain(await evId(bad));
+    expect(ids).not.toContain(await evId(good));
+  });
+});
+
 describe('G4, G5, М4, М5 по настоящей БД', () => {
   it('G4: последняя ревизия — reconciled PASS; позже появилась нерассверенная — FAIL со статусом', async () => {
     expect(await withReadOnly(db.appUrl, (c) => collectG4(c, B))).toBeNull();
@@ -660,13 +829,15 @@ describe('команды CLI', () => {
     const out = join(work, 'out-ok');
     const refPath = write('ref-ok.json', refFor(A));
     const findingIds = (await su.query<{ id: string }>("SELECT id FROM finding WHERE tender_id = $1 AND status <> 'stale' ORDER BY id", [A])).rows.map((r) => r.id);
+    // Найденное и цитируемое — принятое замечание тендера (resolved, accepted_risk): иначе сверка идентификаторов даёт FAIL.
+    const acceptedId = (await su.query<{ id: string }>("SELECT id FROM finding WHERE tender_id = $1 AND status IN ('resolved', 'accepted_risk') ORDER BY id", [A])).rows[0]!.id;
     const reasonId = (await su.query<{ id: string }>("SELECT id FROM change_explanation WHERE tender_id = $1 AND reason_status = 'confirmed'", [A])).rows[0]!.id;
     const matchPath = write('match-ok.json', {
       schema: 'kontur.pilot-matching.v1',
       tenderId: A,
-      items: [{ id: 'REF-001', result: 'found', found: [findingIds[0]] }, { id: 'REF-002', result: 'missed' }, { id: 'REF-003', result: 'found', found: [reasonId] }],
+      items: [{ id: 'REF-001', result: 'found', found: [acceptedId] }, { id: 'REF-002', result: 'missed' }, { id: 'REF-003', result: 'found', found: [reasonId] }],
       findings: findingIds.map((id, n) => ({ id, verdict: n === 0 ? 'false' : 'true' })),
-      citations: [{ ref: findingIds[0], verdict: 'supports' }],
+      citations: [{ ref: acceptedId, verdict: 'supports' }],
     });
     const log = write('timelog.csv', `user,date,start,end,step\n${ENG},2026-10-21,09:00,09:20,Проверки\n`);
     const defects = write('defects.md', '| ID | Этап | Приоритет | Влияние | Инвариант | Статус |\n|---|---|---|---|---|---|\n| X-01 | 18 | P1 | x | — | CLOSED_BY_REVIEW |\n');

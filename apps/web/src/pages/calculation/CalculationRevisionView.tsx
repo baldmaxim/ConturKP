@@ -5,6 +5,7 @@ import { Notice } from '../../components/Notice';
 import { formatDateTime } from '../../utils/datetime';
 import { formatDecimal, formatMoney, REVISION_KIND } from '../../utils/calculationLabels';
 import form from '../../styles/form.module.css';
+import { CalculationClosurePanel } from './CalculationClosurePanel';
 import { CalculationPositions } from './CalculationPositions';
 import styles from './Calculation.module.css';
 
@@ -21,8 +22,9 @@ const GRAND_TOTAL_STATUS: Record<string, string> = {
 
 /**
  * Неизменяемая ревизия расчёта. Пока TenderHub не отдаёт закрытую ревизию (X-01), ревизии —
- * предварительные, и боевой выпуск с ними заблокирован (CALCULATION_PROVISIONAL). Итог КП портал
- * не выводит, пока владелец не задал правило (Q-05): показываются значения источника.
+ * предварительные, и боевой выпуск с ними заблокирован (CALCULATION_PROVISIONAL), если руководитель тендера не
+ * зафиксировал расчёт как закрытый (D-044, Q-01). Итог КП — по правилу итога (D-044, Q-05): итог расчёта TenderHub,
+ * в т.ч. НДС; «итог источника» (cached_grand_total) остаётся значением источника.
  */
 export const CalculationRevisionView: FC<ICalculationRevisionViewProps> = ({ revision }) => {
   const kind = REVISION_KIND[revision.kind];
@@ -39,12 +41,13 @@ export const CalculationRevisionView: FC<ICalculationRevisionViewProps> = ({ rev
       {!revision.productionGate.allowed ? (
         <Notice tone="warning" icon="shield-x">
           TenderHub не отдаёт закрытую неизменяемую ревизию (X-01): это собственная выгрузка портала. Боевой выпуск с ней заблокирован
-          (CALCULATION_PROVISIONAL); тестовый выпуск возможен.
+          (CALCULATION_PROVISIONAL), пока руководитель тендера не зафиксирует расчёт как закрытый; тестовый выпуск возможен.
         </Notice>
       ) : null}
+      <CalculationClosurePanel revisionId={revision.id} kind={revision.kind} />
       {revision.kpTotal.value === null ? (
         <Notice tone="info">
-          Портал итог КП не выводит (Q-05). Ниже — значения TenderHub как есть: себестоимость — в рублях, коммерческие суммы — в рублях как
+          Правило итога КП для этой ревизии не задано: итог источника не было (Q-05). Ниже — значения TenderHub как есть: себестоимость — в рублях, коммерческие суммы — в рублях как
           вывод из формулы «себестоимость × коэффициент»; НДС неизвестен. Сверка и сравнение — на вкладке «Экономика».
         </Notice>
       ) : null}
@@ -57,8 +60,14 @@ export const CalculationRevisionView: FC<ICalculationRevisionViewProps> = ({ rev
         </dd>
         <dt>Выгружено</dt>
         <dd>{`${formatDateTime(revision.createdAt)} · позиций ${revision.counts.positions}, строк ${revision.counts.lines}`}</dd>
-        {/* Значение источника; итогом КП портала не объявлено (Q-05). */}
-        <dt>Итог тендера в TenderHub (cached_grand_total)</dt>
+        {revision.kpTotal.value !== null ? (
+          <>
+            <dt>{`Итог КП${revision.kpTotal.value.vat === 'included' ? ' (в т.ч. НДС)' : ''}`}</dt>
+            <dd className={form.num}>{formatMoney(revision.kpTotal.value)}</dd>
+          </>
+        ) : null}
+        {/* Итог источника — значение TenderHub; итогом КП служит только по правилу итога (D-044). */}
+        <dt>Итог источника в TenderHub (cached_grand_total)</dt>
         <dd className={form.num}>
           {formatMoney(revision.source.grandTotal)}
           {aggregates ? <span className={styles.muted}>{` — ${GRAND_TOTAL_STATUS[aggregates.grandTotal.status] ?? ''}`}</span> : null}

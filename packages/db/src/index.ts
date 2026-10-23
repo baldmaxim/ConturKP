@@ -25,6 +25,7 @@ export * from './searchService.ts';
 export * from './calculationCaptures.ts';
 export * from './calculationContent.ts';
 export * from './calculationRevisions.ts';
+export * from './calculationClosure.ts';
 export * from './contracts.ts';
 export * from './contractDocuments.ts';
 export * from './localRecognition.ts';

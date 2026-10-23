@@ -1,8 +1,9 @@
 // Представление расчёта TenderHub для API (portal-api §2.5, ADR-005 §4). Суммы — объект денег с
 // десятичной строкой. Семантика — D-030 (таблица семантики TenderHub §3, §3.1): себестоимость и её суммы — RUB;
 // коммерческие колонки и суммы — RUB как вывод из принятой формулы; цена единицы — в валюте строки; НДС —
-// неизвестен (Т-10-1); дата — дата наблюдения при выгрузке. Итог КП не выводится (Q-05, D-030 В-10-1).
-import { calculationProductionBlockers, formatEtag } from '@kontur/core';
+// неизвестен (Т-10-1); дата — дата наблюдения при выгрузке. Итог КП — только по правилу итога (D-044, Q-05): итог расчёта
+// TenderHub «как есть», НДС включён; без правила не выводится.
+import { calculationProductionBlockers, formatEtag, KP_TOTAL_RULE_TH_GRAND_TOTAL } from '@kontur/core';
 import type { ICalcRevisionView, ICalculationSourceRow, ICaptureRow, IIntegrationStatusRow, ILineRow, ILineageRow, IPositionRow } from '@kontur/db';
 
 type PriceKind = 'cost' | 'commercial';
@@ -11,7 +12,7 @@ type Currency = 'RUB' | 'USD' | 'EUR' | 'CNY' | 'UNKNOWN';
 export interface IMoney {
   amount: string;
   currency: Currency;
-  vat: 'unknown';
+  vat: 'unknown' | 'included';
   priceKind: PriceKind;
   unit: string | null;
   asOf: string | null;
@@ -22,9 +23,9 @@ const money = (
   amount: string | null,
   priceKind: PriceKind,
   source: IMoney['source'],
-  o: { currency?: Currency; unit?: string | null; asOf?: string | null } = {},
+  o: { currency?: Currency; unit?: string | null; asOf?: string | null; vat?: IMoney['vat'] } = {},
 ): IMoney | null =>
-  amount === null ? null : { amount, currency: o.currency ?? 'UNKNOWN', vat: 'unknown', priceKind, unit: o.unit ?? null, asOf: o.asOf ?? null, source };
+  amount === null ? null : { amount, currency: o.currency ?? 'UNKNOWN', vat: o.vat ?? 'unknown', priceKind, unit: o.unit ?? null, asOf: o.asOf ?? null, source };
 
 // Коммерческие суммы — RUB как вывод из принятой формулы «total_amount в RUB × безразмерный коэффициент» (D-030).
 const derived = (src: IMoney['source']): IMoney['source'] => ({ ...src, derivation: 'derived_from_formula' });
@@ -111,7 +112,13 @@ export const toRevision = (r: ICalcRevisionView) => {
       instanceId: r.source_instance_id,
     },
     kpTotal: {
-      value: r.kp_total === null ? null : money(r.kp_total, 'commercial', src('kp_total'), { currency: (r.kp_total_currency as Currency | null) ?? 'UNKNOWN' }),
+      value:
+        r.kp_total === null
+          ? null
+          : money(r.kp_total, 'commercial', src('kp_total'), {
+              currency: (r.kp_total_currency as Currency | null) ?? 'UNKNOWN',
+              ...(r.kp_total_rule === KP_TOTAL_RULE_TH_GRAND_TOTAL ? { vat: 'included' as const } : {}),
+            }),
       rule: r.kp_total_rule,
       semantics: r.kp_total_semantics,
     },

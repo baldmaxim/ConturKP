@@ -4,6 +4,7 @@
 // между собой. Любое расхождение — попытка «inconsistent», ревизия из неё не создаётся.
 import {
   CALCULATION_NORMALIZATION_VERSION,
+  kpTotalHeaderFor,
   tenderHubApiComponents,
   type ICalcContent,
   type ICommercialComponent,
@@ -368,9 +369,8 @@ export const runPortalCapture = async (source: ITenderHubSource, tenderId: strin
       usdRate: ma.usdRate,
       eurRate: ma.eurRate,
       cnyRate: ma.cnyRate,
-      kpTotal: null,
-      kpTotalCurrency: null,
-      kpTotalRule: null,
+      // Правило итога КП (D-044, Q-05): итог источника есть — он и есть итог КП (в т.ч. НДС); нет — правило не ставится.
+      ...kpTotalHeaderFor(ma.cachedGrandTotal),
     },
     positions: withCosts.value.map((c) => toPosition(paged.get(c.id)!, c)),
     lines: boq.value.map(toLine),

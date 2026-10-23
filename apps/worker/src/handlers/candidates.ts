@@ -47,6 +47,7 @@ import {
   finishCandidate,
   getCandidate,
   getDraft,
+  getRevisionEconomics,
   getStandardAttachmentRevision,
   getTemplateRevision,
   insertBlob,
@@ -187,14 +188,19 @@ const build = async (ctx: IJobContext, c: IReleaseCandidateRow, converter: IOffi
     )
   ).rows;
   const calc = (
-    await ctx.pool.query<{ source_grand_total: string | null; kp_total_rule: string | null }>(
-      'SELECT cc.source_grand_total, cc.kp_total_rule FROM calculation_revision r JOIN calculation_content cc ON cc.id = r.content_id WHERE r.id = $1',
+    await ctx.pool.query<{ source_grand_total: string | null; kp_total: string | null; kp_total_rule: string | null }>(
+      'SELECT cc.source_grand_total, cc.kp_total, cc.kp_total_rule FROM calculation_revision r JOIN calculation_content cc ON cc.id = r.content_id WHERE r.id = $1',
       [c.calculation_revision_id],
     )
   ).rows[0]!;
   // Отчёт ревизии пишется один раз и целиком в одной транзакции (этап 10): под арендой задания.
   const economics = await ctx.withLease((client) => ensureRevisionEconomics(client, c.calculation_revision_id, null));
-  const calcValues: Record<string, string | null> = { source_grand_total: calc.source_grand_total, commercial_total: economics?.report.totals.commercial ?? null };
+  // Итог КП — только при правиле итога (D-044, Q-05); подпись величины говорит «в т.ч. НДС».
+  const calcValues: Record<string, string | null> = {
+    source_grand_total: calc.source_grand_total,
+    commercial_total: economics?.report.totals.commercial ?? null,
+    kp_total: calc.kp_total_rule ? calc.kp_total : null,
+  };
   const files: IFinishFile[] = [];
   const manifestFiles: IManifestFile[] = [];
   const checks: Check[] = [];
@@ -312,10 +318,16 @@ const manifestOf = async (ctx: IJobContext, c: IReleaseCandidateRow, converterVe
     [ids('attachment_revision')],
   );
   const demo = templates.some((t) => t.is_demo);
+  const closureIds = ids('calculation_closure');
+  const economics = await getRevisionEconomics(ctx.pool, c.calculation_revision_id);
   const notes = [
-    ...(calc.kind === 'provisional' ? ['CALCULATION_PROVISIONAL: ревизия расчёта предварительная (блокер production этапа 13; X-01, Q-01)'] : []),
+    ...(calc.kind === 'provisional' && closureIds.length === 0 ? ['CALCULATION_PROVISIONAL: ревизия расчёта предварительная (блокер production этапа 13; X-01, Q-01)'] : []),
+    ...(calc.kind === 'provisional' && closureIds.length > 0
+      ? [`CALCULATION_CLOSED_BY_DECISION: ревизия закреплена решением руководителя ${closureIds[0]} (D-044, Q-01); у источника закрытие не подтверждено (X-01); отзыв до выпуска блокирует согласование и выпуск`]
+      : []),
     ...(demo ? ['TEMPLATE_DEMO: в комплекте демонстрационные формы (блокер production этапа 13; Q-08)'] : []),
     ...(calc.kp_total_rule ? [] : ['KP_TOTAL_NOT_APPROVED: правило итога КП не утверждено (Q-05); сверка с итогом источника его не утверждает']),
+    ...(economics?.report.reconciliation.status === 'reconciled' ? [] : ['KP_TOTAL_UNRECONCILED: сверка экономики ревизии не «сведена» (D-044): итог КП может отставать от строк расчёта']),
     ...(built.checks.some((k) => k.outcome === 'unverified') ? ['NUMBERS_UNVERIFIED: часть чисел не сверена с расчётом'] : []),
   ];
   return {

@@ -180,3 +180,24 @@
     transition: none;
   }
 }
+
+/* Решение руководителя о закрытом расчёте: отметка и кнопки; на смартфоне кнопки в колонку, от 768 px — в ряд. */
+.closure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.closureActions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+@media (min-width: 768px) {
+  .closureActions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}

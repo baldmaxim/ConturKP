@@ -2,7 +2,8 @@
 // (`calc.quantity`), а ревизия — закреплённая в кандидате; единица и валюта — поля. Перевод — точный сдвиг запятой
 // внутри одной валюты (`forms/quantity.ts`), затем округление до `scale` поля именованной политикой «от нуля».
 // Неизвестная величина, другая валюта или неизвестная единица — «не сверено», а не совпадение. Сверка с
-// `source_grand_total` (cached_grand_total TenderHub, D-030 В-10-1) — только «итог источника»: Q-05 не закрывает.
+// `source_grand_total` (cached_grand_total TenderHub, D-030 В-10-1) — «итог источника». Итог КП `kp_total` (D-044, Q-05) —
+// отдельная величина: есть только у ревизии с правилом итога, «в т.ч. НДС»; без правила — «не сверено».
 import { fieldUnitClass } from '../forms/quantity.ts';
 import type { CalcQuantity } from '../forms/schema.ts';
 import { normalizeNumber } from '../forms/values.ts';
@@ -12,6 +13,7 @@ import { D, dec, mul, str } from '../money/decimal.ts';
 export const CALC_QUANTITIES: Record<CalcQuantity, { title: string; currency: 'RUB' }> = {
   source_grand_total: { title: 'итог источника (cached_grand_total TenderHub)', currency: 'RUB' },
   commercial_total: { title: 'Σ коммерческих стоимостей строк ревизии', currency: 'RUB' },
+  kp_total: { title: 'итог КП (итог расчёта TenderHub, в т.ч. НДС; D-044)', currency: 'RUB' },
 };
 
 export type CalcMatch =

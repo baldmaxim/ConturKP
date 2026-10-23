@@ -9,6 +9,7 @@ import path, { dirname, join, relative, resolve, sep, type PlatformPath } from '
 import { classifyFile, safeRelativePath } from '@kontur/core';
 import {
   createBatch,
+  enqueueJob,
   emitStageEvents,
   finalizeBatchIfDone,
   getChannel,
@@ -144,7 +145,7 @@ export const handleIntakeScan = async (ctx: IJobContext): Promise<void> => {
   const states = await loadFileStates(ctx.pool, channelId);
   const stableMs = ctx.config.intakeStabilitySeconds * 1000;
   // blob — метаданные записанного содержимого; строка в БД появится под арендой (R03-09).
-  const items: { item: Omit<INewItem, 'batchId'>; found: IFound; sha: string | null; blob: (IStoredBlob & { mediaType: string }) | null }[] = [];
+  const items: { item: Omit<INewItem, 'batchId'>; found: IFound; sha: string | null; blob: (IStoredBlob & { mediaType: string }) | null; archive?: boolean }[] = [];
   let pendingUnstable = 0;
 
   for (const f of files) {
@@ -189,19 +190,19 @@ export const handleIntakeScan = async (ctx: IJobContext): Promise<void> => {
       await assertUnchanged(verified, stored.sizeBytes);
       const verdict = classifyFile(f.rel, stored.head, stored.sizeBytes);
       const item: Omit<INewItem, 'batchId'> =
-        verdict.kind === 'document'
+        verdict.kind === 'document' || verdict.kind === 'archive'
           ? { ...base, status: 'pending', blobSha: stored.sha256, sizeBytes: stored.sizeBytes }
           : {
               ...base,
               status: 'rejected',
-              rejectReason: verdict.kind === 'archive' ? 'type_not_allowed' : verdict.reason,
-              rejectDetail: verdict.kind === 'archive' ? 'архивы в наблюдаемой папке не распаковываются; загрузите архив через портал' : verdict.detail,
+              rejectReason: verdict.reason,
+              rejectDetail: verdict.detail,
               blobSha: stored.sha256,
               sizeBytes: stored.sizeBytes,
             };
       const mediaType = verdict.kind === 'rejected' ? 'application/octet-stream' : verdict.mediaType;
       // Строка blob пишется только под действующей арендой, вместе с партией (R03-09).
-      items.push({ item, found: f, sha: stored.sha256, blob: { ...stored, mediaType } });
+      items.push({ item, found: f, sha: stored.sha256, blob: { ...stored, mediaType }, archive: verdict.kind === 'archive' });
     } catch (err) {
       const code = (sourceError as NodeJS.ErrnoException | null)?.code;
       if (err instanceof BlobLimitError) {
@@ -220,7 +221,17 @@ export const handleIntakeScan = async (ctx: IJobContext): Promise<void> => {
   await ctx.complete(async (client) => {
     // Состояние файлов пишется только под действующей арендой, вместе с результатом скана.
     for (const f of files) await observeFile(client, channelId, f.rel, f.size, f.mtimeMs);
-    if (items.length > 0) {
+    // Каждый ZIP — собственная партия штатного import.expand. Ограничения ZIP, аренда,
+    // идемпотентность и отказы вложенных архивов совпадают с загрузкой через портал.
+    const regular = items.filter((x) => !x.archive);
+    for (const x of items.filter((x) => x.archive)) {
+      await insertBlob(client, { sha256: x.blob!.sha256, sizeBytes: x.blob!.sizeBytes, mediaType: x.blob!.mediaType, storageKey: x.blob!.storageKey });
+      const batchId = await createBatch(client, { tenderId: channel.tender_id, stageId: null, sourceKind: 'watched_folder', channelId, uploadName: x.found.rel, uploadSha: x.sha, createdBy: null });
+      await emitStageEvents(client, { tenderId: channel.tender_id, stageIds: null, eventType: 'import_accepted', refType: 'import_batch', refId: batchId, actorUserId: null });
+      await enqueueJob(client, { kind: 'import.expand', dedupeKey: `expand:${batchId}`, payload: { batchId }, tenderId: channel.tender_id });
+      await markImported(client, channelId, x.found.rel, x.found.size, x.found.mtimeMs, x.sha);
+    }
+    if (regular.length > 0) {
       const batchId = await createBatch(client, {
         tenderId: channel.tender_id,
         stageId: null,
@@ -232,7 +243,7 @@ export const handleIntakeScan = async (ctx: IJobContext): Promise<void> => {
       });
       // Момент «поступил» для папки — регистрация сканом: событие партии до регистрации элементов.
       await emitStageEvents(client, { tenderId: channel.tender_id, stageIds: null, eventType: 'import_accepted', refType: 'import_batch', refId: batchId, actorUserId: null });
-      for (const x of items) {
+      for (const x of regular) {
         if (x.blob) {
           await insertBlob(client, { sha256: x.blob.sha256, sizeBytes: x.blob.sizeBytes, mediaType: x.blob.mediaType, storageKey: x.blob.storageKey });
         }

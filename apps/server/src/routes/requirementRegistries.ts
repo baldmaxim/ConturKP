@@ -228,7 +228,7 @@ export const requirementRegistriesRouter = (pool: Pool, config: IAppConfig): Rou
         const inputs = all.filter((f) => readable.has(f.id));
         const kinds = body.task === 'fact_extraction' ? await factKindCodes(client) : [];
         const system = rules ? `rules:${FACT_RULES_VERSION}:requirement_candidate` : systemPrompt(body.task, kinds);
-        const inference = chat ? chat.inferenceConfig : { rulesVersion: FACT_RULES_VERSION };
+        const inference = chat ? { ...chat.inferenceConfig, batchingVersion: 2 } : { rulesVersion: FACT_RULES_VERSION };
         const { run, created } = await createAnalysisRun(client, {
           registryId: registry.id,
           tenderId: registry.tender_id,

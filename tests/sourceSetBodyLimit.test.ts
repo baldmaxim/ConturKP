@@ -26,7 +26,7 @@ beforeAll(async () => {
   const draft = await scenario.eng1.post(`/stages/${scenario.stageA}/source-set-revisions`, {}, { headers: idem() });
   expect(draft.status).toBe(201);
   revisionId = draft.body.id;
-  etag = draft.headers.etag;
+  etag = draft.headers.etag!;
 });
 afterAll(async () => { if (db) await db.drop(); });
 

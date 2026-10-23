@@ -4,7 +4,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { splitBatches } from '../apps/worker/src/handlers/analysis.ts';
+import { splitBatches, splitTruncatedBatch } from '../apps/worker/src/handlers/analysis.ts';
 import { createChatModel, FakeChat, OpenAiCompatibleChat } from '../packages/adapters/src/index.ts';
 import { loadConfig } from '../packages/config/src/index.ts';
 import { analysisInputHash, canonicalJson, configHash, modelUserContent, parseFactOutput, parseRequirementOutput, systemPrompt } from '../packages/core/src/index.ts';
@@ -148,16 +148,27 @@ describe('ключ повтора и пачки', () => {
     expect(canonicalJson({ b: [1, { d: 1, c: 2 }], a: null })).toBe('{"a":null,"b":[1,{"c":2,"d":1}]}');
   });
 
-  it('пачки по пределу символов; фрагмент длиннее предела — отдельной пачкой, усечённым и учтённым', () => {
+  it('бюджет включает JSON и идентификаторы; длинный фрагмент целиком сохраняется в частях', () => {
     const f = (id: string, n: number) => ({ id, origin: 'document_text', text: 'х'.repeat(n) });
-    const b = splitBatches([f('1', 40), f('2', 50), f('3', 30), f('4', 250), f('5', 10)], 100);
-    expect(b.map((x) => [x.fragments.map((y) => y.id), x.truncated])).toEqual([
-      [['1', '2'], 0],
-      [['3'], 0],
-      [['4'], 1],
-      [['5'], 0],
-    ]);
-    expect(b[2]!.fragments[0]!.text).toHaveLength(100);
+    const inputs = [f('1', 40), f('2', 50), f('3', 30), f('4', 1200), f('5', 10)];
+    const b = splitBatches(inputs, 500);
+    expect(b.every((x) => modelUserContent(x.fragments).length <= 500 && x.truncated === 0)).toBe(true);
+    for (const input of inputs) expect(b.flatMap((x) => x.fragments).filter((x) => x.id === input.id).map((x) => x.text).join('')).toBe(input.text);
+    expect(b.flatMap((x) => x.fragments).filter((x) => x.id === '4').length).toBeGreaterThan(1);
+  });
+
+  it('повтор обрезанного ответа делит вход до конечного минимума, не теряя текст или исходный ID', () => {
+    const text = '😀\\\"\n'.repeat(120);
+    const queue = splitBatches([{ id: 'source-id', origin: 'document_text', text }], 500);
+    expect(queue.every((x) => modelUserContent(x.fragments).length <= 500)).toBe(true);
+    let splits = 0;
+    for (let i = 0; i < queue.length;) {
+      const smaller = splitTruncatedBatch(queue[i]!);
+      if (smaller) { queue.splice(i, 1, ...smaller); splits += 1; } else i += 1;
+      expect(splits).toBeLessThan(50);
+    }
+    expect(queue.flatMap((x) => x.fragments).map((x) => x.text).join('')).toBe(text);
+    expect(queue.flatMap((x) => x.fragments).every((x) => x.id === 'source-id')).toBe(true);
   });
 
   it('поддельная модель детерминирована: тот же вход — тот же ответ', async () => {

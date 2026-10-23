@@ -131,6 +131,52 @@ describe('прогон и кандидаты модели', () => {
 });
 
 describe('отказы модели', () => {
+  it('обрезанный ответ делится; новый worker продолжает части без дублей и обрабатывает остаток', async () => {
+    const registry = await freshRegistry('Требуется специальное покрытие. '.repeat(40));
+    const small = testConfig({ chatModel: { ...config.chatModel, maxInputChars: 500 } });
+    const mgr = new TestClient(makeApp(db, undefined, small));
+    await mgr.login('manager');
+    const requests: IChatCompleteInput[] = [];
+    const model = new FakeChat({ maxInputChars: 500, revision: config.chatModel.revision, model: 'fake-chat', script: (input) => {
+      requests.push(input);
+      if (requests.length === 1) return { ok: false, error: { code: 'TRUNCATED', message: 'length', retryable: false } };
+      return null;
+    } });
+    const run = await startRun(registry, 'requirement_extraction', mgr);
+    await workerWithChat(db, small, model, 'before-restart').runOnce();
+    expect(await runOf(run.id)).toMatchObject({ status: 'running', progress: { pending: expect.any(Array) } });
+    await drain(workerWithChat(db, small, model, 'after-restart'));
+    const done = await runOf(run.id);
+    expect(done.status).toBe('completed');
+    expect(done.coverage).toMatchObject({ batchesFailed: 0, truncatedFragments: 0 });
+    expect(done.coverage.batchesProcessed).toBe(done.coverage.batchesTotal);
+    expect(requests.every((r) => r.user.length <= 500)).toBe(true);
+    expect((done.result as { batches: { outcome: string }[] }).batches.some((b) => b.outcome === 'model_truncated_split')).toBe(true);
+    const duplicates = await db.pool.query('SELECT candidate_key FROM requirement_candidate WHERE analysis_run_id=$1 GROUP BY candidate_key HAVING count(*)>1', [run.id]);
+    expect(duplicates.rows).toEqual([]);
+  });
+
+  it('постоянно обрезаемый минимальный вход — явный пробел, остальные пачки выполняются', async () => {
+    const registry = await freshRegistry('Требуется конечная обработка. '.repeat(20));
+    script = () => ({ ok: false, error: { code: 'TRUNCATED', message: 'length', retryable: false } });
+    const run = await startRun(registry);
+    await drainAll();
+    const done = await runOf(run.id);
+    expect(done.status).toBe('completed_with_gaps');
+    expect(done.coverage.batchesFailed).toBeGreaterThan(1);
+    expect(done.coverage.batchesProcessed).toBe(done.coverage.batchesTotal);
+    expect(done.coverage.candidatesSaved).toBe(0);
+  });
+
+  it('изменение параметров при выполнении — явный отказ вместо перепрыгивания входа', async () => {
+    script = null;
+    const run = await startRun(await freshRegistry('Требуется согласовать оборудование.'));
+    const changed = new FakeChat({ model: 'fake-chat', revision: config.chatModel.revision, maxInputChars: 500 });
+    await drain(workerWithChat(db, config, changed));
+    expect(await runOf(run.id)).toMatchObject({ status: 'failed', failure_code: 'model_config_changed' });
+    expect(changed.calls).toBe(0);
+  });
+
   it('провайдер недоступен: повтор задания, после 3 попыток прогон failed (model_unavailable)', async () => {
     script = () => ({ ok: false, error: { code: 'UNAVAILABLE', message: 'нет соединения', retryable: true } });
     const registryId = await freshRegistry('Работы должны вестись в две смены.');
@@ -222,11 +268,11 @@ describe('ложная цитата, инструкция в документе,
   });
 
   it('несколько пачек: прогон продолжает с сохранённого места новым worker', async () => {
-    const small = testConfig({ chatModel: { ...config.chatModel, maxInputChars: 100 } });
+    const small = testConfig({ chatModel: { ...config.chatModel, maxInputChars: 500 } });
     const app = makeApp(db, undefined, small);
     const mgr = new TestClient(app);
     expect((await mgr.login('manager')).status).toBe(200);
-    const smallChat = new FakeChat({ maxInputChars: 100, revision: config.chatModel.revision, model: 'fake-chat' });
+    const smallChat = new FakeChat({ maxInputChars: 500, revision: config.chatModel.revision, model: 'fake-chat' });
     const r = await mgr.post(`/requirement-registries/${st.registryId}/analysis-runs`, { task: 'requirement_extraction' }, { headers: idem() });
     expect(r.status, r.text).toBe(201);
     await workerWithChat(db, small, smallChat, 'w1').runOnce();

@@ -64,6 +64,7 @@ export interface IMailImport {
 }
 
 export interface IMailMessage {
+  receivedIn?: string[];
   id: string;
   mailboxId: string;
   mailboxName: string;

@@ -12,6 +12,7 @@ import { importExpandHandler, importRegisterHandler } from './imports.ts';
 import { intakeScanHandler } from './intake.ts';
 import { localRecognitionHandler } from './localRecognition.ts';
 import { mailImportHandler } from './mail.ts';
+import { mailhubFetchHandler,mailhubSyncHandler } from './mailhub.ts';
 import { MODEL_PROBE_KIND, modelProbeHandler } from './modelProbe.ts';
 import { recognitionImportHandler } from './recognition.ts';
 import { reviewModelHandler, reviewRunHandler, stageInvalidateHandler } from './review.ts';
@@ -29,6 +30,8 @@ export const HANDLERS: Record<string, JobHandler> = {
   'search.semantic': searchSemanticHandler,
   'calculation.capture': calculationCaptureHandler,
   'mail.import': mailImportHandler,
+  'mailhub.sync': mailhubSyncHandler,
+  'mailhub.fetch': mailhubFetchHandler,
   'analysis.extract': analysisExtractHandler,
   'analysis.rules': analysisRulesHandler,
   'answer.generate': answerGenerateHandler,

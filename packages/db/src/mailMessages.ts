@@ -213,6 +213,7 @@ export const persistMailRevision = async (db: Queryable, m: IMailRevisionInput):
 // ---------------------------------------------------------------- Чтение
 
 export interface IMailMessageRow {
+  received_in: string[];
   id: string;
   mailbox_id: string;
   mailbox_name: string;
@@ -236,7 +237,9 @@ const SELECT_MESSAGE = `
          lr.id AS revision_id, lr.seq AS revision_seq, (SELECT count(*)::int FROM mail_message_revision x WHERE x.message_id = m.id) AS revisions,
          lr.subject, lr.sent_at, lr.from_address, lr.direction, lr.folder,
          (SELECT count(*)::int FROM mail_attachment a WHERE a.revision_id = lr.id) AS attachments,
-         (SELECT count(*)::int FROM mail_message_tender l WHERE l.message_id = m.id AND l.status = 'linked') AS links
+         (SELECT count(*)::int FROM mail_message_tender l WHERE l.message_id = m.id AND l.status = 'linked') AS links,
+         ARRAY(SELECT DISTINCT copy->>'mailbox' FROM mailhub_message hm JOIN mail_import hi ON hi.id=hm.import_id,
+               jsonb_array_elements(hm.copies) copy WHERE hi.message_id=m.id ORDER BY 1) AS received_in
     FROM mail_message m
     JOIN mailbox b ON b.id = m.mailbox_id
     JOIN LATERAL (SELECT r.* FROM mail_message_revision r WHERE r.message_id = m.id ORDER BY r.seq DESC LIMIT 1) lr ON true`;

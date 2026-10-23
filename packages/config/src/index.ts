@@ -197,6 +197,7 @@ export interface IAppConfig {
   tenderhub: ITenderHubConfig;
   localRecognition: ILocalRecognitionConfig;
   mail: IMailConfig;
+  mailhub?: { baseUrl: string; token: string };
   chatModel: IChatModelConfig;
   answer: IAnswerConfig;
   office: IOfficeConfig;
@@ -568,6 +569,7 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
       maxEmlBytes: intFrom(env, 'MAIL_MAX_EML_MB', 50, problems) * MIB,
       maxAttachmentBytes: intFrom(env, 'MAIL_MAX_ATTACHMENT_MB', 25, problems) * MIB,
     },
+    ...(env.MAILHUB_URL && env.MAILHUB_TOKEN ? { mailhub: { baseUrl: env.MAILHUB_URL, token: env.MAILHUB_TOKEN } } : {}),
     chatModel: chatModelFrom(env, problems),
     answer: answerFrom(env, problems),
     office: { sofficePath: env.SOFFICE_PATH?.trim() || null, convertTimeoutMs: intFrom(env, 'OFFICE_CONVERT_TIMEOUT_SECONDS', 120, problems) * 1000 },
@@ -582,6 +584,14 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
     if (!isAbsolute(root)) problems.push(`INTAKE_ROOTS: «${root}» должен быть абсолютным путём`);
   }
   const e = config.embedding;
+  if (Boolean(env.MAILHUB_URL) !== Boolean(env.MAILHUB_TOKEN)) problems.push('MAILHUB_URL и MAILHUB_TOKEN задаются вместе');
+  if (config.mailhub) {
+    try {
+      const u = new URL(config.mailhub.baseUrl);
+      if (u.username || u.password || u.search || u.hash || u.pathname !== '/' ||
+          !(u.protocol === 'https:' || (u.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname)))) throw new Error();
+    } catch { problems.push('MAILHUB_URL: нужен HTTPS origin, HTTP допустим только на loopback'); }
+  }
   if (e.provider === 'openai_compatible') {
     if (!e.baseUrl) problems.push('EMBEDDING_BASE_URL обязателен для EMBEDDING_PROVIDER=openai_compatible');
     else if (!isLocalUrl(e.baseUrl)) problems.push('EMBEDDING_BASE_URL: только loopback или LAN, облачного пути нет (D-013)');

@@ -73,6 +73,7 @@ export const toMailMessage = (m: IMailMessageRow & { stage_id?: string | null })
   id: m.id,
   mailboxId: m.mailbox_id,
   mailboxName: m.mailbox_name,
+  receivedIn: m.received_in,
   communicationId: m.communication_id,
   identityKind: m.identity_kind,
   revisionId: m.revision_id,

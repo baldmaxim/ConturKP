@@ -2,6 +2,7 @@
 // повтор с задержкой, recovery истёкших аренд, штатная остановка. Типы и ошибки заданий — jobTypes.ts,
 // планирование по состоянию БД — scheduling.ts (этап 17).
 import { hostname } from 'node:os';
+import { createHash } from 'node:crypto';
 import { createChatModel, type ILocalOcrEngineFactory, type IModelGatewayChat } from '@kontur/adapters';
 import { embeddingInputVersion } from '@kontur/core';
 import {
@@ -14,6 +15,7 @@ import {
   heartbeatJob,
   lockOwnedJob,
   recordChatModelStatus,
+  scheduleMailHub,
   recoverExpiredJobs,
   releaseJob,
   requeueJob,
@@ -140,6 +142,11 @@ export class WorkerRuntime {
       // При остановке записи хранилища новые сканы не ставятся: файлы всё равно не запишутся (ADR-011 §10).
       ['сканы', async () => (this.restoreCheck || (await this.o.store.space.level()).level === 'stop' ? 0 : this.scheduleScans())],
       ['выгрузки по сроку', () => (this.restoreCheck ? Promise.resolve(0) : this.scheduleCalculationCaptures())],
+      ['почта MailHub', async () => {
+        if(this.restoreCheck||!this.o.config.mailhub||(await this.o.store.space.level()).level==='stop')return;
+        const key=createHash('sha256').update(new URL(this.o.config.mailhub.baseUrl).origin).digest('hex');
+        await scheduleMailHub(this.o.pool,key);
+      }],
       ['локальное распознавание', () => this.scheduleLocalRecognition()],
       ['извлечение фактов', () => this.scheduleFactExtraction()],
       ['инвалидация', () => this.scheduleStageInvalidation()],

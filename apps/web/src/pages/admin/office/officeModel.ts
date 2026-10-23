@@ -59,7 +59,7 @@ export const ROLE_TITLE: Record<TOfficeRole, string> = {
 
 /** Виды заданий worker'а по ролям (apps/worker/src/handlers/index.ts). */
 export const ROLE_KINDS: Record<Exclude<TOfficeRole, 'other'>, readonly string[]> = {
-  intake: ['import.expand', 'import.register', 'intake.scan', 'mail.import'],
+  intake: ['import.expand', 'import.register', 'intake.scan', 'mail.import', 'mailhub.sync', 'mailhub.fetch'],
   recognition: ['recognition.import', 'recognition.local'],
   archive: ['index.build', 'index.embed', 'index.purge', 'search.semantic'],
   analyst: ['analysis.rules', 'fact.extract'],

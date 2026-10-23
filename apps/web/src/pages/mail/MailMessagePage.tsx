@@ -54,6 +54,9 @@ export const MailMessagePage: FC = () => {
         }
       />
       <div className={form.stack}>
+        {m.receivedIn && m.receivedIn.length > 0 ? (
+          <p className={list.muted}>Получено в ящиках: {m.receivedIn.join(', ')}.</p>
+        ) : null}
         {m.revisionList.length > 1 ? (
           <section className={form.section} aria-label="Ревизии письма">
             <SelectField

@@ -103,7 +103,7 @@ export type WorkerLoop = 'background' | 'interactive' | 'queue' | 'search';
 
 // Виды заданий с внешними действиями: на восстановленной копии (WORKER_MODE=restore_check) не выполняются и не
 // планируются — пути назначений, папки и TenderHub в копии настоящие (проект §4.4, толкование §16 п. 3).
-export const EXTERNAL_KINDS: readonly string[] = ['delivery.place', 'delivery.probe', 'calculation.capture', 'intake.scan'];
+export const EXTERNAL_KINDS: readonly string[] = ['delivery.place', 'delivery.probe', 'calculation.capture', 'intake.scan', 'mailhub.sync', 'mailhub.fetch'];
 
 // Задание, остановленное нехваткой места, повторяется не раньше чем через 5 минут.
 export const STORAGE_FULL_DELAY_MS = 300_000;

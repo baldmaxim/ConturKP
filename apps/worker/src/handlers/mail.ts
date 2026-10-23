@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { communicationGroupKey, DEFAULT_MAIL_LIMITS, MailParseError, mailIdentity, parseEml } from '@kontur/adapters';
+import { getMailHubImportSource } from '@kontur/db';
 import { classifyFile } from '@kontur/core';
 import {
   enqueueLiveIndexBuilds,
@@ -69,7 +70,8 @@ export const mailImportHandler: IJobHandlerSpec = {
       blobs.push({ sha256: stored.sha256, sizeBytes: stored.sizeBytes, mediaType: verdict.mediaType, storageKey: stored.storageKey });
       attachments.push({ ...base, status: 'registered', rejectReason: null });
     }
-    const identity = mailIdentity({ messageId: parsed.messageId, rawSha256: imp.raw_blob_sha256 });
+    const hubSource = await getMailHubImportSource(ctx.pool,importId);
+    const identity = mailIdentity({ sourceItemId:hubSource?.external_id,messageId: parsed.messageId, rawSha256: imp.raw_blob_sha256 });
     await ctx.complete(async (client) => {
       const fresh = await getMailImport(client, importId, true);
       if (!fresh || fresh.status !== 'queued') return;
@@ -77,7 +79,7 @@ export const mailImportHandler: IJobHandlerSpec = {
       const r = await persistMailRevision(client, {
         mailboxId: imp.mailbox_id,
         identity,
-        groupKey: communicationGroupKey(parsed.messageId),
+        groupKey: communicationGroupKey(parsed.messageId) ?? (hubSource ? `mailhub:${hubSource.external_id}` : null),
         rawSha256: imp.raw_blob_sha256,
         messageIdHeader: parsed.messageId,
         subject: parsed.subject,
@@ -88,8 +90,8 @@ export const mailImportHandler: IJobHandlerSpec = {
         folder: imp.folder,
         inReplyTo: parsed.inReplyTo,
         references: parsed.references,
-        source: 'eml_import',
-        sourceItemId: null,
+        source: hubSource ? 'mailhub_api' : 'eml_import',
+        sourceItemId: hubSource?.external_id ?? null,
         warnings: parsed.warnings,
         blocks: parsed.blocks,
         attachments,

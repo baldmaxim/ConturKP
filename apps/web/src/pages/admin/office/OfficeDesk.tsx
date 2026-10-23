@@ -4,7 +4,7 @@ import { Badge } from '../../../components/Badge';
 import { Icon } from '../../../components/Icon';
 import { cx } from '../../../utils/cx';
 import { plural } from '../../../utils/sourceLabels';
-import { OfficeSprite } from './OfficeSprite';
+import { VoxelAgent } from './VoxelAgent';
 import { FOLDERS_SHOWN, type IOfficeDesk, type IOfficeFolder } from './officeModel';
 import { shirtClassOf } from './shirtClass';
 import styles from './Office.module.css';
@@ -37,13 +37,13 @@ const Folder: FC<{ folder: IOfficeFolder }> = ({ folder }) => {
 };
 
 /** Стол роли: человечек, имя, счётчики, папки по тендерам и бейдж ошибок. Рисунок декоративный, состояние — в тексте. */
-export const OfficeDesk: FC<{ desk: IOfficeDesk }> = ({ desk }) => {
+export const OfficeDesk: FC<{ desk: IOfficeDesk; frozen?: boolean }> = ({ desk, frozen }) => {
   const shown = desk.folders.slice(0, FOLDERS_SHOWN);
   const more = desk.folders.length - shown.length;
   return (
     <li className={cx(styles.desk, shirtClassOf(desk.role), desk.mood === 'alarm' && styles.deskAlarm, desk.mood === 'dozing' && styles.deskDozing)}>
       <div className={styles.deskSprite}>
-        <OfficeSprite pose={desk.pose} />
+        <VoxelAgent status={desk.mood === 'alarm' ? 'error' : desk.mood === 'working' ? 'working' : 'queued'} pose={desk.pose} frozen={frozen} />
       </div>
       <div className={styles.deskHead}>
         <h3 className={styles.role}>{desk.title}</h3>

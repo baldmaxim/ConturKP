@@ -150,7 +150,7 @@
   /* Текущая высота элементов управления: 44 px при сенсорном указателе (см. ниже). */
   --control-h: var(--control-height);
 
-  --header-height: 56px;
+  --header-height: 64px;
   --page-gutter: var(--space-4);
 
   --duration-fast: 150ms;

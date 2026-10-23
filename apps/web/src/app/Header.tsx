@@ -11,6 +11,7 @@ import { ApiTokensDialog } from '../pages/mcp/ApiTokensDialog';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { cx } from '../utils/cx';
+import { OfficeButton } from '../pages/admin/office/OfficeButton';
 import styles from './Header.module.css';
 
 const MENU_ID = 'app-mobile-menu';
@@ -35,6 +36,8 @@ export const Header: FC = () => {
   const adminActive = path.startsWith('/admin');
   const mailActive = path.startsWith('/mail') || path.startsWith('/mailboxes');
   const formsActive = path.startsWith('/forms');
+  const showOffice = can('admin.audit');
+  const officeActive = path === '/office';
 
   useEffect(() => {
     setMenuOpen(false);
@@ -115,6 +118,7 @@ export const Header: FC = () => {
         <nav className={styles.nav} aria-label="Разделы портала">
           {navLinks}
         </nav>
+        {showOffice ? <div className={styles.office}><OfficeButton active={officeActive} /></div> : null}
         <div className={styles.actions}>
           <span className={styles.user} title={me?.login}>
             {me?.displayName}

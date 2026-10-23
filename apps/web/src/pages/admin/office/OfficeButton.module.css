@@ -1,0 +1,12 @@
+.button { display: inline-flex; align-items: center; flex: 0 0 144px; gap: 7px; min-height: 52px; width: 144px; padding: 2px 9px 2px 3px; border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); color: var(--text); background: var(--surface-2); text-decoration: none; white-space: nowrap; }
+.button:hover, .active { border-color: color-mix(in srgb, var(--accent) 45%, var(--border-subtle)); background: var(--accent-soft); color: var(--text); }
+.copy { display: flex; flex-direction: column; min-width: 0; }
+.name { font-size: var(--text-md); line-height: var(--leading-md); font-weight: 600; }
+.status { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: var(--text-xs); line-height: var(--leading-xs); }
+.label { overflow: hidden; text-overflow: ellipsis; }
+.dot { flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--success); }
+.button[data-status='error'] { border-color: var(--warning); }
+.button[data-status='error'] .dot { border-radius: 0; background: var(--warning); }
+.button[data-status='down'] .dot { border-radius: 0; background: var(--danger); }
+.button[data-status='loading'] .dot, .button[data-status='stale'] .dot, .button[data-status='idle'] .dot { background: var(--muted); }
+@media (max-width: 389px) { .button { width: 136px; flex-basis: 136px; gap: 4px; padding-right: 6px; } }

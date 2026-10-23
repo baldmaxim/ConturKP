@@ -14,6 +14,8 @@ export default defineConfig({
       manifest: false,
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        // Объёмная сцена загружается только при открытии офиса, включая первую установку PWA.
+        globIgnores: ['**/officeSceneRenderer-*.js'],
         cleanupOutdatedCaches: true,
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],

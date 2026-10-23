@@ -15,6 +15,7 @@ import { MailMessagePage } from '../pages/mail/MailMessagePage';
 import { MailPage } from '../pages/mail/MailPage';
 import { NegotiationSessionPage } from '../pages/communications/NegotiationSessionPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
+import { OfficePage } from '../pages/OfficePage';
 import { StagePage } from '../pages/StagePage';
 import { RequirementPage } from '../pages/requirements/RequirementPage';
 import { TenderPage } from '../pages/TenderPage';
@@ -57,6 +58,7 @@ export const App: FC = () => {
             <Route path="negotiation-sessions/:sessionId" element={<NegotiationSessionPage />} />
             <Route path="forms" element={<FormsLibraryPage />} />
             <Route path="admin" element={<AdminPage />} />
+            <Route path="office" element={<OfficePage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>

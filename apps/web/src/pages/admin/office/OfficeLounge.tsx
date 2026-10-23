@@ -1,12 +1,12 @@
 import type { FC } from 'react';
 import { cx } from '../../../utils/cx';
-import { LoungeSprite } from './LoungeSprite';
+import { VoxelAgent } from './VoxelAgent';
 import type { IOfficeResident } from './officeModel';
 import { shirtClassOf } from './shirtClass';
 import styles from './Office.module.css';
 
 /** Комната отдыха: роли без заданий занимаются своим делом; ошибки за 24 ч остаются видны и здесь. */
-export const OfficeLounge: FC<{ residents: IOfficeResident[] }> = ({ residents }) => (
+export const OfficeLounge: FC<{ residents: IOfficeResident[]; frozen?: boolean }> = ({ residents, frozen }) => (
   <section className={styles.lounge} aria-labelledby="office-lounge-title">
     <h3 className={styles.loungeTitle} id="office-lounge-title">
       Комната отдыха
@@ -18,7 +18,7 @@ export const OfficeLounge: FC<{ residents: IOfficeResident[] }> = ({ residents }
         {residents.map((r) => (
           <li key={r.role} className={cx(styles.resident, shirtClassOf(r.role))}>
             <div className={styles.residentSprite}>
-              <LoungeSprite activity={r.activity} />
+              <VoxelAgent status="idle" frozen={frozen} />
             </div>
             <p className={styles.residentName}>{r.title}</p>
             <p className={styles.residentWord} aria-hidden="true">

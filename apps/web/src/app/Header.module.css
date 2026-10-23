@@ -14,12 +14,13 @@
   align-items: center;
   gap: var(--space-3);
   height: var(--header-height);
-  max-width: 1440px;
+  max-width: 1600px;
   margin: 0 auto;
   padding-inline: max(var(--page-gutter), env(safe-area-inset-left)) max(var(--page-gutter), env(safe-area-inset-right));
 }
 
 .brand {
+  flex: none;
   display: inline-flex;
   align-items: center;
   min-height: 44px;
@@ -33,7 +34,11 @@
 
 .menuButton {
   margin-left: auto;
+  flex: none;
 }
+
+.office { margin-left: auto; flex: none; }
+.office + .actions + .menuButton { margin-left: 0; }
 
 .navLink {
   display: inline-flex;
@@ -117,6 +122,7 @@
 }
 
 @media (min-width: 768px) {
+  .office { margin-left: 0; }
   .nav {
     display: flex;
     gap: var(--space-1);
@@ -146,7 +152,7 @@
     display: none;
   }
 
-  /* 768–1279 px: в навигации только иконки, подпись остаётся для скринридера. */
+  /* 768–1359 px: в навигации только иконки, подпись остаётся для скринридера. */
   .nav .navLink span {
     position: absolute;
     width: 1px;
@@ -161,15 +167,7 @@
   }
 }
 
-@media (min-width: 1024px) {
-  .user {
-    max-width: 240px;
-  }
-}
-
-/* Подписи разделов — с 1280 px: у администратора пять разделов с подписями плюс блок действий занимают ~1240 px,
-   на 1024–1279 px шапка (с полосой прокрутки) шире экрана и страница прокручивалась по горизонтали (S17-28). */
-@media (min-width: 1280px) {
+@media (min-width: 1360px) {
   .nav .navLink span {
     position: static;
     width: auto;
@@ -177,6 +175,18 @@
     overflow: visible;
     clip: auto;
   }
+
+  .user {
+    max-width: 240px;
+  }
+}
+
+/* Кнопка офиса видна всегда; действия пользователя на планшете доступны через меню. */
+@media (min-width: 768px) and (max-width: 1099px) {
+  .office { margin-left: auto; }
+  .actions { display: none; }
+  .menuButton { display: inline-flex; margin-left: auto; }
+  .menuPanel { display: flex; }
 }
 
 @keyframes menu-in {

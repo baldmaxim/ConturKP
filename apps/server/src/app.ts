@@ -75,6 +75,9 @@ export const createApp = (deps: IAppDeps): express.Express => {
   app.use(securityHeaders(config));
 
   const api = express.Router();
+  // Состав допускает до 5000 редакций: общий предел 100 КиБ отсекает большие
+  // допустимые наборы ещё до проверки схемы/прав. Расширение ограничено этой PUT-командой.
+  api.put('/source-set-revisions/:id/items', express.json({ limit: '1mb' }));
   api.use(express.json({ limit: '100kb' }));
   api.use(healthRouter(config, pool, store));
   api.use(sessionMiddleware(config, pool, clock));

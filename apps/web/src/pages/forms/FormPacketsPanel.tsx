@@ -1,33 +1,43 @@
-import { useEffect, useState, type FC } from 'react';
+import { useEffect, useId, useState, type FC, type KeyboardEvent } from 'react';
 import { apiGet, apiPost, apiPut, newUuid } from '../../api/client';
 import { describeError } from '../../api/errors';
+import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
+import { Icon, type TIconName } from '../../components/Icon';
+import { SelectField } from '../../components/SelectField';
+import { TextAreaField } from '../../components/TextAreaField';
+import { TextField } from '../../components/TextField';
 import { useApiResource } from '../../hooks/useApiResource';
-import form from '../../styles/form.module.css';
-import styles from './Forms.module.css';
+import styles from './FormPacketsPanel.module.css';
 
 interface Field {key:string;label:string;type:string;multiline?:boolean;options?:{value:string;label:string}[]}
 interface Input {
-  definition:{schema:{sections:{key:string;title:string;fields:Field[]}[]};recipes:Record<string,string>;recipeVariants?:Record<string,Record<string,string>>;outputs:{revisionId:string;name:string;mechanism?:string}[]};
-  values:Record<string,string>;notes:string;
-  calculationRevisionId:string|null;
-  performanceBond:{coveragePercent:string;annualRatePercent:string;months:string;addVat:boolean}|null;
-  nominations:{key:string;title:string;amount:string;vatIncluded:boolean|null;vatRate:string;gpPercent:string}[];
-  positions:{key:string;text:string;sourceId:string|null;confirmed:boolean}[];
-  attachments:{sourceId:string;blankUnitPriceRows?:number[]}[];
+ definition:{schema:{sections:{key:string;title:string;fields:Field[]}[]};recipes:Record<string,string>;recipeVariants?:Record<string,Record<string,string>>;outputs:{revisionId:string;name:string;mechanism?:string}[]};
+ values:Record<string,string>;notes:string;calculationRevisionId:string|null;
+ performanceBond:{coveragePercent:string;annualRatePercent:string;months:string;addVat:boolean}|null;
+ nominations:{key:string;title:string;amount:string;vatIncluded:boolean|null;vatRate:string;gpPercent:string}[];
+ positions:{key:string;text:string;sourceId:string|null;confirmed:boolean}[];
+ attachments:{sourceId:string;blankUnitPriceRows?:number[]}[];
 }
 interface Packet {
  id:string;title:string;etag:string;current_version_id:string|null;seq:number|null;based_on_id:string|null;input:Input|null;
- summary:Record<string,string>|null;
- calculationCheck:{reconciled:boolean;differenceDisplay:string}|null;
+ summary:Record<string,string>|null;calculationCheck:{reconciled:boolean;differenceDisplay:string}|null;
  sources:{id:string;name:string;blob_sha256:string;role:string;origin:string}[];
  history:{id:string;seq:number;changes:string[];created_at:string}[];
  builds:{id:string;version_id:string;issues:string[];created_at:string;files:{id:string;name:string;sha256:string}[]}[];
 }
 interface List {items:Packet[];canFill:boolean}
+const TABS:{key:string;label:string;icon:TIconName}[]=[
+ {key:'parameters',label:'Параметры',icon:'list-checks'},{key:'price',label:'Стоимость',icon:'calculator'},
+ {key:'conditions',label:'Условия',icon:'scroll-text'},{key:'documents',label:'Документы',icon:'files'},
+];
+const HISTORY_LABELS:Record<string,string>={definition:'формулировки и шаблоны',positions:'позиция заказчика',attachments:'приложения',notes:'внутренние пометки',nominations:'номинированные стоимости',performanceBond:'банковская гарантия'};
+const dateLabel=(value:string):string=>new Date(value).toLocaleString('ru-RU',{day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'});
 export const FormPacketsPanel:FC<{stageId:string}>=({stageId})=>{
  const resource=useApiResource(signal=>apiGet<List>(`/stages/${stageId}/form-packets`,{signal}),stageId);
+ const uid=useId();
  const [selected,setSelected]=useState('');
+ const [tab,setTab]=useState('parameters');
  const [input,setInput]=useState<Input|null>(null);
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState('');
@@ -47,105 +57,132 @@ export const FormPacketsPanel:FC<{stageId:string}>=({stageId})=>{
  const save=async():Promise<Packet>=>{
   if(!input)throw new Error('Нет параметров');
   if(!dirty)return packet;
-  const p=await apiPut<Packet>(`/form-packets/${packet.id}`,{body:input,ifMatch:packet.etag});
-  setDirty(false);return p;
+  const p=await apiPut<Packet>(`/form-packets/${packet.id}`,{body:input,ifMatch:packet.etag});setDirty(false);return p;
  };
  const latest=packet.builds[0];
- const humanRecipe=(text:string)=>text.replace(/\[\[([a-z][a-z0-9_]{0,63})\]\]/gu,(_match,k:string)=>`«${labels.get(k)??k}»`);
- const storedRecipe=(text:string)=>{
-  let result=text;for(const [k,label]of labels)result=result.split(`«${label}»`).join(`[[${k}]]`);return result;
+ const stale=Boolean(latest&&(latest.version_id!==packet.current_version_id||dirty));
+ const humanRecipe=(text:string):string=>text.replace(/\[\[([a-z][a-z0-9_]{0,63})\]\]/gu,(_match,k:string)=>`«${labels.get(k)??k}»`);
+ const storedRecipe=(text:string):string=>{let result=text;for(const[k,label]of labels)result=result.split(`«${label}»`).join(`[[${k}]]`);return result;};
+ const fieldControl=(f:Field)=>{
+  if(!input)return null;
+  const update=(value:string):void=>change({...input,values:{...input.values,[f.key]:value}});
+  return <div key={f.key} className={f.multiline?styles.fullWidth:undefined}>
+   {f.type==='choice'?<SelectField label={f.label} value={input.values[f.key]??''} disabled={!editable} options={[{value:'',label:'Не выбрано'},...f.options??[]]} onValueChange={update}/>
+    :f.multiline?<TextAreaField label={f.label} rows={3} value={input.values[f.key]??''} disabled={!editable} onValueChange={update}/>
+     :<TextField label={f.label} type={f.type==='date'?'date':'text'} inputMode={f.type==='number'?'decimal':undefined} disabled={!editable} readOnly={f.key==='th_total'&&Boolean(input.calculationRevisionId)} hint={f.key==='th_total'&&input.calculationRevisionId?'Из закреплённого расчёта TenderHub':undefined} value={input.values[f.key]??''} onValueChange={update}/>}
+  </div>;
  };
- return <section className={form.section} aria-labelledby="form-packet-title">
-  <h3 id="form-packet-title">Комплект КП — проверка владельцем</h3>
-  <p className={styles.muted}>Условия, письмо и методика используют одни параметры подачи. Черновик ожидает проверки и согласования.</p>
-  {packet.calculationCheck&&!packet.calculationCheck.reconciled?<p role="alert">Цена требует проверки: шапка TenderHub расходится с суммой позиций на {packet.calculationCheck.differenceDisplay} ₽. Итог комплекта пока проверочный.</p>:null}
-  <label className={form.stack}>Подача<select value={packet.id} onChange={e=>setSelected(e.target.value)} disabled={busy||dirty}>
-   {resource.data?.items.map(p=><option key={p.id} value={p.id}>{p.title} · версия {p.seq??'—'}</option>)}
-  </select></label>
-  {input?<div className={form.stack}>
-   {input.definition.schema.sections.map(section=><details key={section.key} open={section.key==='parameters'||section.key==='identity'}>
-    <summary>{section.title}</summary><div className={form.stack}>
-     {section.fields.map(f=><label className={form.stack} key={f.key}>{f.label}
-      {f.type==='choice'?<select disabled={!editable} value={input.values[f.key]??''} onChange={e=>change({...input,values:{...input.values,[f.key]:e.target.value}})}>
-       <option value="">Не выбрано</option>{f.options?.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>:f.multiline?<textarea rows={3} disabled={!editable} value={input.values[f.key]??''} onChange={e=>change({...input,values:{...input.values,[f.key]:e.target.value}})}/>
-       :<input type={f.type==='date'?'date':'text'} inputMode={f.type==='number'?'decimal':undefined} disabled={!editable||(f.key==='th_total'&&Boolean(input.calculationRevisionId))} value={input.values[f.key]??''} onChange={e=>change({...input,values:{...input.values,[f.key]:e.target.value}})}/>}
-     </label>)}
+ const navigateTabs=(event:KeyboardEvent<HTMLButtonElement>,index:number):void=>{
+  let next:number;
+  if(event.key==='ArrowRight')next=(index+1)%TABS.length;
+  else if(event.key==='ArrowLeft')next=(index+TABS.length-1)%TABS.length;
+  else if(event.key==='Home')next=0;
+  else if(event.key==='End')next=TABS.length-1;
+  else return;
+  event.preventDefault();setTab(TABS[next]!.key);event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+ };
+ const files=latest?.files??[];
+ const previewFiles=files.filter(f=>/\.pdf$/iu.test(f.name)).slice(0,3);
+ const attachments=packet.sources.filter(s=>s.role==='attachment');
+ const referenceSources=packet.sources.filter(s=>s.role!=='attachment');
+ return <section className={styles.panel} aria-labelledby={`${uid}-title`}>
+  <header className={styles.header}>
+   <div><div className={styles.eyebrow}>Проверка владельцем</div><div className={styles.titleRow}><h3 id={`${uid}-title`}>Комплект КП</h3><Badge label="Черновик" icon="pencil" tone="muted"/></div><p className={styles.description}>Одна подача — согласованные параметры, условия и документы.</p></div>
+   <div className={styles.submission}><SelectField label="Подача" value={packet.id} disabled={busy||dirty} onValueChange={setSelected} options={resource.data?.items.map(p=>({value:p.id,label:p.title}))??[]}/><span className={styles.caption}>Версия {packet.seq??'—'}{latest?` · сборка ${dateLabel(latest.created_at)}`:''}</span></div>
+  </header>
+  {input?<>
+   <div className={styles.workspace}>
+    <div className={styles.editor}>
+     <div className={styles.tabs} role="tablist" aria-label="Разделы комплекта КП">{TABS.map((item,index)=><button key={item.key} type="button" role="tab" id={`${uid}-${item.key}`} aria-selected={tab===item.key} aria-controls={`${uid}-content`} tabIndex={tab===item.key?0:-1} onKeyDown={event=>navigateTabs(event,index)} onClick={()=>setTab(item.key)} className={styles.tab}><Icon name={item.icon} size={16}/><span>{item.label}</span></button>)}</div>
+     <div className={styles.content} role="tabpanel" id={`${uid}-content`} aria-labelledby={`${uid}-${tab}`} tabIndex={0}>
+      {tab==='parameters'?<>
+       <div className={styles.sectionHeading}><h4>Параметры подачи</h4><p>Значения автоматически подставляются в условия, письмо и методику.</p></div>
+       {input.definition.schema.sections.map((section,index)=><details className={styles.accordion} key={section.key} open={section.key==='identity'||section.key==='parameters'||index===0}><summary><span>{section.title}</span><span className={styles.summaryEnd}>{section.fields.length}<Icon name="chevron-down" size={16}/></span></summary><div className={styles.accordionBody}><div className={styles.fieldGrid}>{section.fields.map(fieldControl)}</div></div></details>)}
+      </>:null}
+      {tab==='price'?<>
+       <div className={styles.sectionHeading}><h4>Стоимость и обеспечение</h4><p>Номинированные разделы дополняют расчёт TenderHub. Итог обновляется после сохранения.</p></div>
+       <div className={styles.subheading}><h5>Номинированные разделы</h5><span className={styles.count}>{input.nominations.length}</span></div>
+       <div className={styles.cardList}>{input.nominations.map((row,index)=>{
+        const edit=(patch:Partial<typeof row>):void=>{const nominations=[...input.nominations];nominations[index]={...row,...patch};change({...input,nominations});};
+        return <section key={row.key} className={styles.nomination} aria-label={`Номинированный раздел ${index+1}`}><span className={styles.itemNumber}>Раздел {String(index+1).padStart(2,'0')}</span>
+         <TextAreaField label="Название раздела" rows={2} disabled={!editable} value={row.title} onValueChange={value=>edit({title:value})}/>
+         <div className={styles.fieldGrid}>
+          <TextField label="Стоимость, ₽" inputMode="decimal" disabled={!editable} value={row.amount} onValueChange={value=>edit({amount:value})}/>
+          <SelectField label="База НДС" disabled={!editable} value={row.vatIncluded===null?'unknown':row.vatIncluded?'included':'excluded'} options={[{value:'unknown',label:'Не определена'},{value:'included',label:'Сумма с НДС'},{value:'excluded',label:'Сумма без НДС'}]} onValueChange={value=>edit({vatIncluded:value==='unknown'?null:value==='included'})}/>
+          <TextField label="НДС, %" inputMode="decimal" disabled={!editable} value={row.vatRate} onValueChange={value=>edit({vatRate:value})}/>
+          <TextField label="Генподряд, %" inputMode="decimal" disabled={!editable} value={row.gpPercent} onValueChange={value=>edit({gpPercent:value})}/>
+         </div>
+        </section>;
+       })}</div>
+       <Button className={styles.addButton} icon="plus" variant="ghost" disabled={!editable} onClick={()=>change({...input,nominations:[...input.nominations,{key:`n${newUuid().replace(/-/gu,'').slice(0,12)}`,title:'Новый раздел',amount:'',vatIncluded:null,vatRate:input.values.vat_rate??'',gpPercent:''}]})}>Добавить раздел</Button>
+       <section className={styles.bond}><div className={styles.subheading}><h5>Банковская гарантия</h5><Icon name="file-signature" size={20}/></div>
+        <label className={styles.check}><input type="checkbox" disabled={!editable} checked={Boolean(input.performanceBond)} onChange={e=>change({...input,performanceBond:e.target.checked?{coveragePercent:'3',annualRatePercent:'3',months:input.values.c09_months_to_zos??'30',addVat:true}:null})}/><span>БГ на исполнение контракта</span></label>
+        {input.performanceBond?<><div className={styles.fieldGrid}>
+         <TextField label="Обеспечение от цены договора, %" inputMode="decimal" disabled={!editable} value={input.performanceBond.coveragePercent} onValueChange={value=>change({...input,performanceBond:{...input.performanceBond!,coveragePercent:value}})}/>
+         <TextField label="Комиссия банка, % годовых" inputMode="decimal" disabled={!editable} value={input.performanceBond.annualRatePercent} onValueChange={value=>change({...input,performanceBond:{...input.performanceBond!,annualRatePercent:value}})}/>
+         <TextField label="Срок, мес." inputMode="decimal" disabled={!editable} readOnly={Boolean(input.values.c09_months_to_zos)} hint={input.values.c09_months_to_zos?'Из срока строительства в параметрах':undefined} value={input.values.c09_months_to_zos??input.performanceBond.months} onValueChange={value=>change({...input,performanceBond:{...input.performanceBond!,months:value}})}/>
+        </div><label className={styles.check}><input type="checkbox" disabled={!editable} checked={input.performanceBond.addVat} onChange={e=>change({...input,performanceBond:{...input.performanceBond!,addVat:e.target.checked}})}/><span>Прибавка к цене с НДС КП, без генподрядной надбавки</span></label><p className={styles.caption}>БГ рассчитывается от полной цены с её стоимостью. Расчёт предварительный до подтверждения банка.</p></>:null}
+       </section>
+      </>:null}
+      {tab==='conditions'?<>
+       <div className={styles.sectionHeading}><h4>Условия и формулировки</h4><p>Значения в «кавычках» связаны с параметрами подачи. Сохраняйте нужные подстановки при редактировании текста.</p></div>
+       {Object.entries({...input.definition.recipes,...input.definition.recipeVariants?.[input.values.c08_mechanism??'']}).map(([key,text])=>{
+        const title=/^c\d{2}_proposal$/u.test(key)?`Пункт ${key.slice(1,3)}`:key==='letter_extras'?'Дополнительные условия письма':key;
+        return <details key={key} className={styles.clause}><summary><div><span className={styles.clauseTitle}>{title}</span><span className={styles.preview}>{humanRecipe(text)||'Формулировка не заполнена'}</span></div><Icon name="chevron-down" size={16}/></summary><div className={styles.accordionBody}>
+         <TextAreaField label={title} rows={6} disabled={!editable} value={humanRecipe(text)} onValueChange={value=>{
+          const mechanism=input.values.c08_mechanism??'',variants=input.definition.recipeVariants??{};
+          if(variants[mechanism]&&key in variants[mechanism])change({...input,definition:{...input.definition,recipeVariants:{...variants,[mechanism]:{...variants[mechanism],[key]:storedRecipe(value)}}}});
+          else change({...input,definition:{...input.definition,recipes:{...input.definition.recipes,[key]:storedRecipe(value)}}});
+         }}/>
+        </div></details>;
+       })}
+       <details className={styles.accordion}><summary><span>Позиция заказчика</span><span className={styles.summaryEnd}>{input.positions.filter(p=>p.confirmed).length} из {input.positions.length}<Icon name="chevron-down" size={16}/></span></summary><div className={styles.accordionBody}>
+        <p className={styles.caption}>В документы попадает только подтверждённый ответ с источником. Внутренние пометки ведутся отдельно.</p>
+        {input.positions.map((p,index)=>{
+         const edit=(patch:Partial<typeof p>):void=>{const positions=[...input.positions];positions[index]={...p,...patch};change({...input,positions});};
+         return <details key={p.key} className={styles.clause}><summary><span>Пункт {Number(p.key.slice(1,3))}</span><span className={styles.summaryEnd}>{p.confirmed?'Подтверждён':p.text?'Черновик':'Нет ответа'}<Icon name="chevron-down" size={16}/></span></summary><div className={styles.accordionBody}>
+          <TextAreaField label="Ответ заказчика" rows={3} disabled={!editable} value={p.text} onValueChange={value=>edit({text:value})}/>
+          <SelectField label="Источник ответа" disabled={!editable} value={p.sourceId??''} options={[{value:'',label:'Не выбран'},...packet.sources.map(s=>({value:s.id,label:s.name}))]} onValueChange={value=>edit({sourceId:value||null,confirmed:false})}/>
+          <label className={styles.check}><input type="checkbox" disabled={!editable||!p.sourceId} checked={p.confirmed} onChange={e=>edit({confirmed:e.target.checked})}/><span>Подтверждено ответом заказчика</span></label>
+         </div></details>;
+        })}
+       </div></details>
+       <section className={styles.notes}><TextAreaField label="Внутренние пометки команды" hint="Сохраняются в истории подачи и не входят в документы." rows={4} disabled={!editable} value={input.notes} onValueChange={value=>change({...input,notes:value})}/></section>
+      </>:null}
+      {tab==='documents'?<>
+       <div className={styles.sectionHeading}><h4>Документы комплекта</h4><p>Собранные формы и закреплённые версии приложений этой подачи.</p></div>
+       {stale?<p className={styles.notice} role="status"><Icon name="info" size={16}/><span>Условия изменились. Соберите черновик заново, чтобы обновить документы.</span></p>:null}
+       {latest?<div className={styles.fileList}>{files.map(f=><a className={styles.file} key={f.id} href={`/api/v1/form-packet-files/${f.id}`} target="_blank" rel="noreferrer"><Icon name="files" size={20}/><span>{f.name}<small>{/\.pdf$/iu.test(f.name)?'PDF · для просмотра':'Файл комплекта'}</small></span><Icon name="download" size={16}/></a>)}</div>:<p className={styles.caption}>Документы появятся после первой сборки черновика.</p>}
+       <div className={styles.subheading}><h5>Приложения подачи</h5><span className={styles.count}>{input.attachments.length}</span></div><p className={styles.caption}>Отметьте файлы, которые должны войти в комплект.</p>
+       <div className={styles.attachmentList}>{attachments.map(s=><label className={styles.check} key={s.id}><input type="checkbox" disabled={!editable} checked={input.attachments.some(a=>a.sourceId===s.id)} onChange={e=>change({...input,attachments:e.target.checked?[...input.attachments,{sourceId:s.id}]:input.attachments.filter(a=>a.sourceId!==s.id)})}/><span>{s.name}</span></label>)}</div>
+       <details className={styles.accordion}><summary><span>Исходники для сверки</span><span className={styles.summaryEnd}>{referenceSources.length}<Icon name="chevron-down" size={16}/></span></summary><div className={styles.accordionBody}>{referenceSources.map(s=><div key={s.id} className={styles.source}><a href={`/api/v1/form-packet-sources/${s.id}`} target="_blank" rel="noreferrer">{s.name}<Icon name="external-link" size={16}/></a><span className={styles.caption}>{s.role==='internal'?'Внутренний документ':'Источник'}</span>{s.origin?<details className={styles.origin}><summary>Расположение источника</summary><p>{s.origin}</p></details>:null}</div>)}</div></details>
+      </>:null}
+     </div>
     </div>
-   </details>)}
-   <details><summary>БГ на исполнение контракта</summary><div className={form.stack}>
-    <label><input type="checkbox" disabled={!editable} checked={Boolean(input.performanceBond)} onChange={e=>change({...input,performanceBond:e.target.checked?{coveragePercent:'3',annualRatePercent:'3',months:input.values.c09_months_to_zos??'30',addVat:true}:null})}/> Требуется БГ на исполнение</label>
-    {input.performanceBond?<>
-     <label>Размер обеспечения от полной цены договора, %<input disabled={!editable} inputMode="decimal" value={input.performanceBond.coveragePercent} onChange={e=>change({...input,performanceBond:{...input.performanceBond!,coveragePercent:e.target.value}})}/></label>
-     <label>Комиссия банка, % годовых<input disabled={!editable} inputMode="decimal" value={input.performanceBond.annualRatePercent} onChange={e=>change({...input,performanceBond:{...input.performanceBond!,annualRatePercent:e.target.value}})}/></label>
-     <label>Срок, мес.<input disabled={!editable||Boolean(input.values.c09_months_to_zos)} inputMode="decimal" value={input.values.c09_months_to_zos??input.performanceBond.months} onChange={e=>change({...input,performanceBond:{...input.performanceBond!,months:e.target.value}})}/></label>
-     <label><input type="checkbox" disabled={!editable} checked={input.performanceBond.addVat} onChange={e=>change({...input,performanceBond:{...input.performanceBond!,addVat:e.target.checked}})}/> Прибавка к цене: комиссия с НДС КП, без генподрядной надбавки</label>
-     <p className={styles.muted}>БГ рассчитывается от полной цены с её стоимостью. Срок связан со сроком строительства; итог предварительный до подтверждения банка.</p>
-    </>:null}
-   </div></details>
-   <details open><summary>Номинированные стоимости</summary><div className={form.stack}>
-    <p className={styles.muted}>Эти стоимости добавляются к расчёту TenderHub. Укажите базу НДС и вознаграждение генподрядчика для каждой строки.</p>
-    {input.nominations.map((row,i)=>{
-     const edit=(patch:Partial<typeof row>):void=>{const nominations=[...input.nominations];nominations[i]={...row,...patch};change({...input,nominations});};
-     return <div key={row.key} className={form.stack}>
-      <label>Раздел<input disabled={!editable} value={row.title} onChange={e=>edit({title:e.target.value})}/></label>
-      <label>Стоимость, руб.<input inputMode="decimal" disabled={!editable} value={row.amount} onChange={e=>edit({amount:e.target.value})}/></label>
-      <label>База НДС<select disabled={!editable} value={row.vatIncluded===null?'unknown':row.vatIncluded?'included':'excluded'} onChange={e=>edit({vatIncluded:e.target.value==='unknown'?null:e.target.value==='included'})}><option value="unknown">Не определена</option><option value="included">Сумма включает НДС</option><option value="excluded">Сумма без НДС</option></select></label>
-      <label>Ставка НДС, %<input inputMode="decimal" disabled={!editable} value={row.vatRate} onChange={e=>edit({vatRate:e.target.value})}/></label>
-      <label>Генподрядный процент, %<input inputMode="decimal" disabled={!editable} value={row.gpPercent} onChange={e=>edit({gpPercent:e.target.value})}/></label>
-     </div>;
-    })}
-    <Button disabled={!editable} onClick={()=>change({...input,nominations:[...input.nominations,{key:`n${newUuid().replace(/-/gu,'').slice(0,12)}`,title:'Новый раздел',amount:'',vatIncluded:null,vatRate:input.values.vat_rate??'',gpPercent:''}]})}>Добавить номинированный раздел</Button>
-    {packet.summary?<dl>{Object.entries(packet.summary).map(([k,v])=><div key={k}><dt>{{th_total:'Расчёт TenderHub',nomination_total:'Номинированные разделы с генподрядом',kp_total_before_bond:'Цена до стоимости БГ',performance_bond_amount:'Размер обеспечения БГ (не прибавка к цене)',performance_bond_bank_fee:'Расход на комиссию банка',performance_bond_price_addition:'Прибавка к цене за БГ',kp_total:'Итог КП',vat_amount:'В том числе НДС'}[k]??k}</dt><dd>{v} ₽</dd></div>)}</dl>:null}
-    {dirty?<p className={styles.muted}>Состав итога обновится после сохранения изменений.</p>:null}
-   </div></details>
-   <details><summary>Формулировки условий и письма</summary>
-    <p className={styles.muted}>Значения в угловых кавычках подставляются из параметров подачи. Меняйте окружающий текст, сохраняя нужные подстановки.</p>
-    <div className={form.stack}>{Object.entries({...input.definition.recipes,...input.definition.recipeVariants?.[input.values.c08_mechanism??'']}).map(([key,text])=><label className={form.stack} key={key}>
-      {/^c\d{2}_proposal$/u.test(key)?`Условие ${Number(key.slice(1,3))}`:key==='letter_extras'?'Дополнительные условия письма':key}
-      <textarea rows={5} disabled={!editable} value={humanRecipe(text)} onChange={e=>{
-       const mechanism=input.values.c08_mechanism??'';
-       const variants=input.definition.recipeVariants??{};
-       if(variants[mechanism]&&key in variants[mechanism]) change({...input,definition:{...input.definition,recipeVariants:{...variants,[mechanism]:{...variants[mechanism],[key]:storedRecipe(e.target.value)}}}});
-       else change({...input,definition:{...input.definition,recipes:{...input.definition.recipes,[key]:storedRecipe(e.target.value)}}});
-      }}/>
-    </label>)}</div>
-   </details>
-   <details><summary>Позиция заказчика и её источники</summary><div className={form.stack}>
-    <p className={styles.muted}>В документы попадает только подтверждённый ответ с указанным источником. Пометки команды ведутся отдельно ниже.</p>
-    {input.positions.map((p,i)=><div key={p.key} className={form.stack}>
-     <label>Пункт {Number(p.key.slice(1,3))}<textarea rows={2} disabled={!editable} value={p.text} onChange={e=>{const positions=[...input.positions];positions[i]={...p,text:e.target.value};change({...input,positions});}}/></label>
-     <label>Источник<select disabled={!editable} value={p.sourceId??''} onChange={e=>{const positions=[...input.positions];positions[i]={...p,sourceId:e.target.value||null,confirmed:false};change({...input,positions});}}>
-      <option value="">Не выбран</option>{packet.sources.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
-     </select></label>
-     <label><input type="checkbox" disabled={!editable||!p.sourceId} checked={p.confirmed} onChange={e=>{const positions=[...input.positions];positions[i]={...p,confirmed:e.target.checked};change({...input,positions});}}/> Подтверждено ответом заказчика</label>
-    </div>)}
-   </div></details>
-   <details><summary>Приложения текущей подачи</summary><div className={form.stack}>
-    {packet.sources.filter(s=>s.role==='attachment').map(s=><label key={s.id}><input type="checkbox" disabled={!editable} checked={input.attachments.some(a=>a.sourceId===s.id)} onChange={e=>change({...input,attachments:e.target.checked?[...input.attachments,{sourceId:s.id}]:input.attachments.filter(a=>a.sourceId!==s.id)})}/> {s.name}</label>)}
-    <h4>Исходники для сверки</h4><ul>{packet.sources.filter(s=>s.role!=='attachment').map(s=><li key={s.id}><a href={`/api/v1/form-packet-sources/${s.id}`} target="_blank" rel="noreferrer">{s.name}</a> · {s.role==='internal'?'внутренний':'источник'}{s.origin?<p className={styles.muted}>{s.origin}</p>:null}</li>)}</ul>
-   </div></details>
-   <label className={form.stack}>Внутренние пометки команды — не входят в документы<textarea rows={4} disabled={!editable} value={input.notes} onChange={e=>change({...input,notes:e.target.value})}/></label>
-   <div className={styles.row}>
-    <Button disabled={!editable||!dirty} onClick={()=>void run(async()=>{await save();})}>Сохранить изменения</Button>
-    <Button variant="primary" loading={busy} disabled={!editable} onClick={()=>void run(async()=>{
-     const p=await save();await apiPost(`/form-packets/${p.id}/build`,{body:{previewPdf:true},ifMatch:p.etag,idempotencyKey:newUuid()});
-    })}>Собрать черновик для проверки</Button>
-    <Button disabled={!editable||dirty} onClick={()=>void run(async()=>{
-     const p=await apiPost<Packet>(`/stages/${stageId}/form-packets`,{body:{title:`${packet.title} — новая подача`,basedOnId:packet.id},idempotencyKey:newUuid()});setSelected(p.id);
-    })}>Новая подача из этих условий</Button>
+    <aside className={styles.sidebar} aria-label="Итоги и проверка комплекта">
+     {packet.summary?<section className={styles.totalCard}><span className={styles.eyebrow}>Итог КП{dirty?' · до изменений':''}</span><div className={styles.total}>{packet.summary.kp_total}<span>₽</span></div><span className={styles.caption}>Включая номинированные разделы и стоимость БГ</span>
+      <dl className={styles.breakdown}>{[['th_total','Расчёт TenderHub'],['nomination_total','Номинации с генподрядом'],['performance_bond_price_addition','Стоимость БГ с НДС']].map(([key,label])=>packet.summary?.[key!]?<div key={key}><dt>{label}</dt><dd>{packet.summary[key!]} ₽</dd></div>:null)}<div className={styles.vat}><dt>В том числе НДС</dt><dd>{packet.summary.vat_amount} ₽</dd></div></dl>
+      {packet.summary.performance_bond_amount?<details className={styles.bondDetails}><summary>Расчёт банковской гарантии<Icon name="chevron-down" size={16}/></summary><dl className={styles.breakdown}><div><dt>Сумма обеспечения</dt><dd>{packet.summary.performance_bond_amount} ₽</dd></div><div><dt>Комиссия банка</dt><dd>{packet.summary.performance_bond_bank_fee} ₽</dd></div></dl><p className={styles.caption}>Обеспечение не прибавляется к цене КП.</p></details>:null}
+      {dirty?<p className={styles.dirtyHint} role="status">Сохраните изменения, чтобы пересчитать итог.</p>:null}
+     </section>:null}
+     {packet.calculationCheck&&!packet.calculationCheck.reconciled?<div className={styles.notice}><Icon name="info" size={16}/><div><strong>Требуется сверка цены</strong><p>Разница между шапкой TenderHub и суммой позиций: {packet.calculationCheck.differenceDisplay} ₽. Нужна расшифровка дополнительных начислений; итог пока проверочный.</p></div></div>:null}
+     {latest?<section className={styles.sideSection}><div className={styles.subheading}><h5>Готовый черновик</h5><span className={styles.count}>{files.length}</span></div><p className={styles.caption}>{stale?'Требуется новая сборка':`Собран ${dateLabel(latest.created_at)}`}</p>
+      {previewFiles.map(f=><a key={f.id} className={styles.previewFile} href={`/api/v1/form-packet-files/${f.id}`} target="_blank" rel="noreferrer"><span className={styles.fileType}>PDF</span><span>{f.name.replace(/\.pdf$/iu,'')}</span><Icon name="external-link" size={16}/></a>)}
+      <Button variant="ghost" className={styles.allFiles} icon="folder" onClick={()=>setTab('documents')}>Все файлы комплекта</Button>
+     </section>:null}
+     {latest?.issues.length?<details className={styles.reviewIssues}><summary><Icon name="list-checks" size={16}/><span>Что требует проверки</span><span className={styles.count}>{latest.issues.length}</span><Icon name="chevron-down" size={16}/></summary><ul>{latest.issues.map((issue,index)=><li key={index}>{issue}</li>)}</ul></details>:null}
+    </aside>
    </div>
-  </div>:<p>Шаблоны комплекта готовятся.</p>}
-  {error?<p role="alert">{error}</p>:null}
-  {latest?<div className={form.stack}>
-   <h4>Собранный черновик</h4>
-   {latest.version_id!==packet.current_version_id||dirty?<p role="status">Параметры изменились после сборки. Для просмотра текущих условий соберите новый черновик.</p>:null}
-   <ul>{latest.files.map(f=><li key={f.id}><a href={`/api/v1/form-packet-files/${f.id}`} target="_blank" rel="noreferrer">{f.name}</a></li>)}</ul>
-   <details><summary>Что требует проверки</summary><ul>{latest.issues.map((issue,i)=><li key={i}>{issue}</li>)}</ul></details>
-  </div>:null}
-  <details><summary>История условий и собранных версий</summary>
-   <ul>{packet.history.map(v=><li key={v.id}>Версия {v.seq} · {new Date(v.created_at).toLocaleString('ru-RU')} · изменено: {v.changes.map(k=>labels.get(k)??({definition:'формулировки и шаблоны',positions:'позиция заказчика',attachments:'приложения',notes:'внутренние пометки',nominations:'номинированные стоимости'}[k]??k)).join(', ')}</li>)}</ul>
-   {packet.builds.slice(1).map(b=><details key={b.id}><summary>Черновик от {new Date(b.created_at).toLocaleString('ru-RU')}</summary><ul>{b.files.map(f=><li key={f.id}><a href={`/api/v1/form-packet-files/${f.id}`} target="_blank" rel="noreferrer">{f.name}</a></li>)}</ul></details>)}
-  </details>
+   {error?<p className={styles.error} role="alert"><Icon name="circle-x" size={16}/>{error}</p>:null}
+   <footer className={styles.actions}><span className={styles.saveStatus} role="status"><Icon name={dirty?'pencil':'check'} size={16}/>{busy?'Выполняется…':dirty?'Есть изменения':`Версия ${packet.seq??'—'} сохранена`}</span><div className={styles.actionButtons}>
+    <Button variant="ghost" icon="copy" disabled={!editable||dirty} onClick={()=>void run(async()=>{const p=await apiPost<Packet>(`/stages/${stageId}/form-packets`,{body:{title:`${packet.title} — новая подача`,basedOnId:packet.id},idempotencyKey:newUuid()});setSelected(p.id);})}>Новая подача</Button>
+    <Button disabled={!editable||!dirty} onClick={()=>void run(async()=>{await save();})}>Сохранить</Button>
+    <Button className={styles.buildButton} variant="primary" icon="files" loading={busy} disabled={!editable} onClick={()=>void run(async()=>{const p=await save();await apiPost(`/form-packets/${p.id}/build`,{body:{previewPdf:true},ifMatch:p.etag,idempotencyKey:newUuid()});})}>Собрать черновик</Button>
+   </div></footer>
+  </>:<p className={styles.empty}>Шаблоны комплекта готовятся.</p>}
+  <details className={styles.history}><summary><Icon name="layers" size={16}/><span>История подачи</span><Icon name="chevron-down" size={16}/></summary><div className={styles.historyBody}>
+   {packet.history.map(v=><div key={v.id} className={styles.historyItem}><strong>Версия {v.seq}</strong><span className={styles.caption}>{dateLabel(v.created_at)}</span><p>{v.changes.map(k=>labels.get(k)??HISTORY_LABELS[k]??k).join(', ')}</p></div>)}
+   {packet.builds.slice(1).map(b=><details className={styles.accordion} key={b.id}><summary><span>Черновик от {dateLabel(b.created_at)}</span><Icon name="chevron-down" size={16}/></summary><div className={styles.accordionBody}>{b.files.map(f=><a key={f.id} href={`/api/v1/form-packet-files/${f.id}`} target="_blank" rel="noreferrer">{f.name}</a>)}</div></details>)}
+  </div></details>
  </section>;
 };

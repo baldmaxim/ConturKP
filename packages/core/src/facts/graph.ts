@@ -95,6 +95,21 @@ export interface IFactGraph {
 const sha = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
 const pairKey = (a: string, b: string): string => (a < b ? `${a}|${b}` : `${b}|${a}`);
 
+// Область — часть извлечённого факта, значение сравнивается отдельно от неё.
+const comparisonOf = (fact: IGraphFact): { scope: string; value: string } => {
+  const entries = JSON.parse(fact.normalizedKey) as [string, string | number][];
+  return { scope: String(entries.find(([k]) => k === 'comparisonScope')?.[1] ?? ''), value: JSON.stringify(entries.filter(([k]) => k !== 'comparisonScope')) };
+};
+const sameValue = (a: IGraphFact, b: IGraphFact): boolean => {
+  const left = JSON.parse(comparisonOf(a).value) as [string, string | number][];
+  const right = JSON.parse(comparisonOf(b).value) as [string, string | number][];
+  // Неуказанная валюта не является доказательством другой валюты.
+  if (left.some(([k, v]) => k === 'currency' && !v) || right.some(([k, v]) => k === 'currency' && !v)) {
+    return JSON.stringify(left.filter(([k]) => k !== 'currency')) === JSON.stringify(right.filter(([k]) => k !== 'currency'));
+  }
+  return JSON.stringify(left) === JSON.stringify(right);
+};
+
 const remark = (kind: RemarkKind, factIds: string[], documentIds: string[], message: string): IGraphRemark => {
   const f = [...new Set(factIds)].sort();
   const d = [...new Set(documentIds)].sort();
@@ -276,7 +291,7 @@ export const computeFactGraph = (input: { documents: readonly IGraphDocument[]; 
       for (let j = i + 1; j < members.length; j += 1) {
         const a = members[i]!;
         const b = members[j]!;
-        if (a.normalizedKey !== b.normalizedKey && !distinct.has(pairKey(a.factId, b.factId))) {
+        if (!sameValue(a, b) && !distinct.has(pairKey(a.factId, b.factId))) {
           conflicting.add(a.factId);
           conflicting.add(b.factId);
         }
@@ -291,7 +306,7 @@ export const computeFactGraph = (input: { documents: readonly IGraphDocument[]; 
   const families = new Map<string, IGraphFact[]>();
   for (const f of active()) {
     if (CROSS_DOCUMENT_GROUPS[f.factType]) continue;
-    const key = `${rootOf(f.documentId)}|${f.factType}`;
+    const key = `${rootOf(f.documentId)}|${f.factType}|${comparisonOf(f).scope}`;
     families.set(key, [...(families.get(key) ?? []), f]);
   }
   for (const members of families.values()) markConflict(members, `«${FACT_TYPE_META[members[0]!.factType]?.title ?? members[0]!.factType}» в одной семье договора`);
@@ -299,7 +314,10 @@ export const computeFactGraph = (input: { documents: readonly IGraphDocument[]; 
   for (const f of active()) {
     const group = CROSS_DOCUMENT_GROUPS[f.factType];
     if (!group) continue;
-    const key = `${docById.get(f.documentId)!.ownerKey}|${group}`;
+    // Денежные итоги сопоставляются в семье договора, а не во всём тендере.
+    // Несвязанная смета остаётся самостоятельной областью; её итоги по разделам — отдельные величины.
+    const scope = comparisonOf(f).scope;
+    const key = `${rootOf(f.documentId)}|${group}|${scope === 'document_total' ? '' : scope}`;
     cross.set(key, [...(cross.get(key) ?? []), f]);
   }
   for (const members of cross.values()) markConflict(members, 'Цена договора и итог сметы');

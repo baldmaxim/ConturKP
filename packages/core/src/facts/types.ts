@@ -1,7 +1,7 @@
 // Перечень типов фактов D-018 (D-028: 13 типов донора Locus `fact-extractor.js`, правила `rules/1`) и их судьбы:
 // стороны — в карточку договора, цена договора и итог сметы — в экономику (этап 10), остальные девять — кандидаты
 // требований. Справочник БД `evidence_fact_type` повторяет этот список (миграция 0023).
-export const FACT_RULES_VERSION = 'rules/1-kontur';
+export const FACT_RULES_VERSION = 'rules/2-kontur';
 
 export const FACT_TYPES = [
   'party_customer',
@@ -62,6 +62,7 @@ export interface IFactSpan {
   fragmentId: string;
   text: string;
   tableRow: boolean;
+  tableScope?: string;
 }
 
 export type FactNormalized = Record<string, string | number>;

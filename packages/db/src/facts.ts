@@ -33,6 +33,16 @@ export interface IFactOwner {
 export const ownerKeyOf = (o: IFactOwner): string => (o.contractId ? `contract:${o.contractId}` : `tender:${o.tenderId}`);
 const ownerColumn = (o: IFactOwner): { col: 'tender_id' | 'contract_id'; id: string } => (o.contractId ? { col: 'contract_id', id: o.contractId } : { col: 'tender_id', id: o.tenderId! });
 
+// Новая версия фактов получает новые идентификаторы. Решения по прежним фактам не переносим молча.
+export const assertFactRulesUpgrade = async (db: Queryable, owner: IFactOwner): Promise<void> => {
+  const { col, id } = ownerColumn(owner);
+  const old = await db.query(`SELECT 1 FROM fact_decision d
+    JOIN evidence_fact f ON f.id = d.fact_id OR f.id = d.other_fact_id
+    JOIN fact_extraction_run x ON x.id = f.extraction_run_id
+    WHERE x.${col} = $1 AND x.rules_version <> $2 LIMIT 1`, [id, FACT_RULES_VERSION]);
+  if (old.rows.length) throw new Error('fact_rules_upgrade_requires_decision_review');
+};
+
 // ---------------------------------------------------------------- Постановка и извлечение
 
 // Предпочтительные завершённые прогоны распознавания документов тендера и договора без извлечения текущей версии правил.
@@ -78,9 +88,11 @@ export const extractRunFacts = async (db: Queryable, runId: string): Promise<{ c
     )
   ).rows[0];
   if (!run || run.mail_attachment_id || !['complete', 'partial'].includes(run.status)) return { created: false, owner: null, facts: 0 };
+  await assertFactRulesUpgrade(db, { tenderId: run.tender_id, contractId: run.contract_id });
   const fragments = (
-    await db.query<{ id: string; text: string; origin: string; page_index: number | null; locator_kind: string | null }>(
-      `SELECT id, text, origin, page_index, locator ->> 'kind' AS locator_kind FROM evidence_fragment
+    await db.query<{ id: string; text: string; origin: string; page_index: number | null; locator_kind: string | null; table_scope: string | null }>(
+      `SELECT id, text, origin, page_index, locator ->> 'kind' AS locator_kind,
+              coalesce(locator ->> 'sheet', locator ->> 'tableIndex', page_index::text) AS table_scope FROM evidence_fragment
         WHERE run_id = $1 ORDER BY page_index NULLS LAST, ordinal NULLS LAST, part_index, id`,
       [runId],
     )
@@ -88,7 +100,7 @@ export const extractRunFacts = async (db: Queryable, runId: string): Promise<{ c
   const documentary = fragments.filter((f) => DOCUMENTARY.includes(f.origin));
   const firstPage = documentary.filter((f) => f.page_index === (documentary[0]?.page_index ?? null)).map((f) => f.text);
   const cls = classifyDocument({ firstPage, documentTitle: run.title });
-  const spans: IFactSpan[] = documentary.map((f) => ({ fragmentId: f.id, text: f.text, tableRow: TABLE_LOCATORS.includes(f.locator_kind ?? '') }));
+  const spans: IFactSpan[] = documentary.map((f) => ({ fragmentId: f.id, text: f.text, tableRow: TABLE_LOCATORS.includes(f.locator_kind ?? ''), tableScope: f.table_scope ?? '' }));
   const facts = extractDocumentFacts(spans);
   const byType: Record<string, number> = {};
   for (const f of facts) byType[f.factType] = (byType[f.factType] ?? 0) + 1;

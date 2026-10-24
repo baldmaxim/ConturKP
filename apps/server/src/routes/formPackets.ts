@@ -47,7 +47,7 @@ export const formPacketsRouter = (pool: Pool, store: BlobStore, config: IAppConf
   };
   const view = async (db: Queryable, p: PacketRow) => ({
     ...p, etag: formatEtag(p.id, p.row_version),
-    summary:p.input?Object.fromEntries(Object.entries(compilePacket(p.input).data).filter(([k])=>['th_total','nomination_total','kp_total','vat_amount'].includes(k))):null,
+    summary:p.input?Object.fromEntries(Object.entries(compilePacket(p.input).data).filter(([k])=>['th_total','nomination_total','kp_total_before_bond','performance_bond_amount','performance_bond_bank_fee','performance_bond_price_addition','kp_total','vat_amount'].includes(k))):null,
     calculationCheck:await calculationCheck(db,p.input),
     sources: (await db.query(`SELECT s.id,s.name,s.blob_sha256,s.role,s.origin FROM form_packet_source s JOIN form_packet p ON p.id=s.packet_id WHERE p.stage_id=$1 ORDER BY s.created_at`, [p.stage_id])).rows,
     history: (await db.query('SELECT id,seq,sha256,changes,created_at FROM form_packet_version WHERE packet_id=$1 ORDER BY seq DESC', [p.id])).rows,

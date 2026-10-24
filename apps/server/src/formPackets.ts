@@ -14,6 +14,7 @@ export const PacketInput = z.object({
   }).strict(),
   values: z.record(key, z.string().max(100_000)),
   calculationRevisionId:z.uuid().nullable().default(null),
+  performanceBond:z.object({coveragePercent:z.string().max(20),annualRatePercent:z.string().max(20),months:z.string().max(20),addVat:z.boolean()}).strict().nullable().default(null),
   nominations:z.array(z.object({key,title:z.string().min(1).max(500),amount:z.string().max(40),vatIncluded:z.boolean().nullable(),vatRate:z.string().max(20),gpPercent:z.string().max(20)}).strict()).max(100).default([]),
   notes: z.string().max(20_000).default(''),
   positions: z.array(z.object({ key, text: z.string().max(20_000), sourceId: z.uuid().nullable(), confirmed: z.boolean() }).strict()).max(100).default([]),
@@ -50,7 +51,7 @@ export const compilePacket = (input: IPacketInput): ICompiledPacket => {
   if(input.values.th_total){
     if(!input.values.vat_rate)throw new Error('Укажите основную ставку НДС');
     if(new Set(input.nominations.map(n=>n.key)).size!==input.nominations.length)throw new Error('Номинированные строки имеют повторяющиеся идентификаторы');
-    const money=packetMoney(input.values.th_total,input.values.vat_rate,input.nominations);
+    const money=packetMoney(input.values.th_total,input.values.vat_rate,input.nominations,input.performanceBond?{...input.performanceBond,months:input.values.c09_months_to_zos??input.performanceBond.months}:null);
     Object.assign(data,money.fields);issues.push(...money.issues);
     if(input.values.reference_total&&money.total&&formatPacketMoney(input.values.reference_total)!==money.fields.kp_total)issues.push(`Текущий итог ${money.fields.kp_total} руб. отличается от исторического ${formatPacketMoney(input.values.reference_total)} руб.; сверить состав расчёта и оферту перед согласованием`);
   }
@@ -82,5 +83,6 @@ export const packetChanges = (before: IPacketInput | null, after: IPacketInput):
   if (JSON.stringify(before.attachments) !== JSON.stringify(after.attachments)) changed.push('attachments');
   if (before.notes !== after.notes) changed.push('notes');
   if (JSON.stringify(before.nominations) !== JSON.stringify(after.nominations)) changed.push('nominations');
+  if (JSON.stringify(before.performanceBond) !== JSON.stringify(after.performanceBond)) changed.push('performanceBond');
   return changed;
 };

@@ -4,6 +4,15 @@ import {blankGroupUnitPrices} from '../packages/adapters/src/office/groupPrices.
 import {openPackage,writePackage} from '../packages/adapters/src/office/ooxml.ts';
 import PizZip from 'pizzip';
 const row=(patch:Partial<INomination>={}):INomination=>({key:'nom1',title:'Раздел',amount:'122',vatIncluded:true,vatRate:'22',gpPercent:'14',...patch});
+it('расход БГ согласован с конечной ценой, НДС добавляется один раз, генподряд сверху не начисляется',()=>{
+ const b={coveragePercent:'3',annualRatePercent:'3',months:'30',addVat:true};
+ const result=packetMoney('1000','22',[],b);
+ expect(result.total).toBe('1002.76');expect(result.fields.performance_bond_amount).toBe('30,08');
+ expect(result.fields.performance_bond_bank_fee).toBe('2,26');expect(result.fields.performance_bond_price_addition).toBe('2,76');
+ expect(result.fields.nomination_total).toBe('0,00');expect(result.issues.join()).toContain('предварительно');
+ expect(packetMoney('1000','22',[],{...b,addVat:false}).total).toBe('1002.26');
+ expect(()=>packetMoney('1000','22',[],{...b,coveragePercent:'100',annualRatePercent:'100',months:'12'})).toThrow('конечную цену');
+});
 it('явно различает итог шапки и сумму позиций, допускает только копейку округления',()=>{
  expect(checkCalculationTotals('1234567890.12','1190271785.517341').reconciled).toBe(false);
  expect(checkCalculationTotals('1234567890.12','1190271785.517341').differenceDisplay).toBe('44 296 104,60');

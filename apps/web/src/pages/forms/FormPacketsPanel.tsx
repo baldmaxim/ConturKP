@@ -11,6 +11,7 @@ interface Input {
   definition:{schema:{sections:{key:string;title:string;fields:Field[]}[]};recipes:Record<string,string>;recipeVariants?:Record<string,Record<string,string>>;outputs:{revisionId:string;name:string;mechanism?:string}[]};
   values:Record<string,string>;notes:string;
   calculationRevisionId:string|null;
+  performanceBond:{coveragePercent:string;annualRatePercent:string;months:string;addVat:boolean}|null;
   nominations:{key:string;title:string;amount:string;vatIncluded:boolean|null;vatRate:string;gpPercent:string}[];
   positions:{key:string;text:string;sourceId:string|null;confirmed:boolean}[];
   attachments:{sourceId:string;blankUnitPriceRows?:number[]}[];
@@ -72,6 +73,16 @@ export const FormPacketsPanel:FC<{stageId:string}>=({stageId})=>{
      </label>)}
     </div>
    </details>)}
+   <details><summary>БГ на исполнение контракта</summary><div className={form.stack}>
+    <label><input type="checkbox" disabled={!editable} checked={Boolean(input.performanceBond)} onChange={e=>change({...input,performanceBond:e.target.checked?{coveragePercent:'3',annualRatePercent:'3',months:input.values.c09_months_to_zos??'30',addVat:true}:null})}/> Требуется БГ на исполнение</label>
+    {input.performanceBond?<>
+     <label>Размер обеспечения от полной цены договора, %<input disabled={!editable} inputMode="decimal" value={input.performanceBond.coveragePercent} onChange={e=>change({...input,performanceBond:{...input.performanceBond!,coveragePercent:e.target.value}})}/></label>
+     <label>Комиссия банка, % годовых<input disabled={!editable} inputMode="decimal" value={input.performanceBond.annualRatePercent} onChange={e=>change({...input,performanceBond:{...input.performanceBond!,annualRatePercent:e.target.value}})}/></label>
+     <label>Срок, мес.<input disabled={!editable||Boolean(input.values.c09_months_to_zos)} inputMode="decimal" value={input.values.c09_months_to_zos??input.performanceBond.months} onChange={e=>change({...input,performanceBond:{...input.performanceBond!,months:e.target.value}})}/></label>
+     <label><input type="checkbox" disabled={!editable} checked={input.performanceBond.addVat} onChange={e=>change({...input,performanceBond:{...input.performanceBond!,addVat:e.target.checked}})}/> Прибавка к цене: комиссия с НДС КП, без генподрядной надбавки</label>
+     <p className={styles.muted}>БГ рассчитывается от полной цены с её стоимостью. Срок связан со сроком строительства; итог предварительный до подтверждения банка.</p>
+    </>:null}
+   </div></details>
    <details open><summary>Номинированные стоимости</summary><div className={form.stack}>
     <p className={styles.muted}>Эти стоимости добавляются к расчёту TenderHub. Укажите базу НДС и вознаграждение генподрядчика для каждой строки.</p>
     {input.nominations.map((row,i)=>{
@@ -85,7 +96,7 @@ export const FormPacketsPanel:FC<{stageId:string}>=({stageId})=>{
      </div>;
     })}
     <Button disabled={!editable} onClick={()=>change({...input,nominations:[...input.nominations,{key:`n${newUuid().replace(/-/gu,'').slice(0,12)}`,title:'Новый раздел',amount:'',vatIncluded:null,vatRate:input.values.vat_rate??'',gpPercent:''}]})}>Добавить номинированный раздел</Button>
-    {packet.summary?<dl>{Object.entries(packet.summary).map(([k,v])=><div key={k}><dt>{{th_total:'Расчёт TenderHub',nomination_total:'Номинированные разделы с генподрядом',kp_total:'Итог КП',vat_amount:'В том числе НДС'}[k]??k}</dt><dd>{v} ₽</dd></div>)}</dl>:null}
+    {packet.summary?<dl>{Object.entries(packet.summary).map(([k,v])=><div key={k}><dt>{{th_total:'Расчёт TenderHub',nomination_total:'Номинированные разделы с генподрядом',kp_total_before_bond:'Цена до стоимости БГ',performance_bond_amount:'Размер обеспечения БГ (не прибавка к цене)',performance_bond_bank_fee:'Расход на комиссию банка',performance_bond_price_addition:'Прибавка к цене за БГ',kp_total:'Итог КП',vat_amount:'В том числе НДС'}[k]??k}</dt><dd>{v} ₽</dd></div>)}</dl>:null}
     {dirty?<p className={styles.muted}>Состав итога обновится после сохранения изменений.</p>:null}
    </div></details>
    <details><summary>Формулировки условий и письма</summary>

@@ -9,6 +9,7 @@ const DECIMAL = '(\\d+(?:[.,]\\d+)?)';
 // Срок аванса читается только из пункта о размере аванса: «зачёт аванса … в течение 30 дней» — не второй срок.
 const ADVANCE_SIZE = /аванс\p{L}*[^.%]{0,40}?(?:в\s+размере|составляет)\s+\d/iu;
 const AMOUNT = '(\\d{1,3}(?:[ \\u00a0]\\d{3})+(?:[.,]\\d{1,2})?|\\d+(?:[.,]\\d{1,2})?)';
+const TOTAL_WORD = /(?<![\p{L}\p{N}])итого(?![\p{L}\p{N}])/iu;
 const ORGANIZATION = '((?:ООО|АО|ПАО|ЗАО|ТОО|ИП)\\s*«[^»]+»)';
 
 // Только типографика. Цифры, буквы и правовая форма сохраняются (К3 ≠ КЗ).
@@ -164,9 +165,9 @@ const clauseContext = (text: string): { clauseRef: string; amends: boolean; text
 const cellsOf = (text: string): string[] => text.trim().replace(/^\|/u, '').replace(/\|$/u, '').split('|').map((cell) => cell.trim());
 const tableRowFact = (span: IFactSpan, tableScope: string, moneyColumn: number | null, tableCurrency: string): (IFound & { type: FactType }) | null => {
   const { text } = span;
-  if (!/итого/iu.test(text)) return null;
+  if (!TOTAL_WORD.test(text)) return null;
   const cells = cellsOf(text);
-  const label = cells.find((c) => /итого/iu.test(c))!;
+  const label = cells.find((c) => TOTAL_WORD.test(c))!;
   const grandTotal = /^итого\s+по\s+смет[еа]\s*[:.]?$/iu.test(label);
   // «Итого на РП», мощности и физические объёмы не являются стоимостью.
   const money = currencyOf(text);

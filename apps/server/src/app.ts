@@ -30,6 +30,7 @@ import { economicsRouter } from './routes/economics.ts';
 import { formDraftsRouter } from './routes/formDrafts.ts';
 import { formSuggestionsRouter } from './routes/formSuggestions.ts';
 import { formTemplatesRouter } from './routes/formTemplates.ts';
+import { formPacketsRouter } from './routes/formPackets.ts';
 import { releaseCandidatesRouter } from './routes/releaseCandidates.ts';
 import { approvalsRouter } from './routes/approvals.ts';
 import { deliveriesRouter } from './routes/deliveries.ts';
@@ -78,6 +79,7 @@ export const createApp = (deps: IAppDeps): express.Express => {
   // Состав допускает до 5000 редакций: общий предел 100 КиБ отсекает большие
   // допустимые наборы ещё до проверки схемы/прав. Расширение ограничено этой PUT-командой.
   api.put('/source-set-revisions/:id/items', express.json({ limit: '1mb' }));
+  api.put('/form-packets/:id', express.json({ limit: '1mb' }));
   api.use(express.json({ limit: '100kb' }));
   api.use(healthRouter(config, pool, store));
   api.use(sessionMiddleware(config, pool, clock));
@@ -106,6 +108,7 @@ export const createApp = (deps: IAppDeps): express.Express => {
   api.use(calculationClosureRouter(pool));
   api.use(economicsRouter(pool, config));
   api.use(formTemplatesRouter(pool, store, config));
+  api.use(formPacketsRouter(pool, store, config));
   api.use(formDraftsRouter(pool));
   api.use(formSuggestionsRouter(pool, config));
   api.use(releaseCandidatesRouter(pool, store));

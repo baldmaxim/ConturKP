@@ -9,6 +9,7 @@ import Docxtemplater from 'docxtemplater';
 import type PizZip from 'pizzip';
 import { tagsOfText, type IMarkupTag, type RenderValue } from '@kontur/core';
 import { cellTexts, decodeXml, DOCX_PART_TITLE, docxParagraphTexts, docxTextParts, encodeXml, OfficeError, openPackage, sheets, writePackage } from './ooxml.ts';
+import { fitWrappedRows } from './fitRows.ts';
 
 // ---------------------------------------------------------------- Сканер разметки
 
@@ -183,7 +184,8 @@ export const renderXlsx = (sample: Buffer, data: Record<string, RenderValue>, nu
     }
     zip.file(sh.part, xml);
   });
-  return writePackage(zip);
+  const result=writePackage(zip);
+  return /name="_KonturFitRows"/u.test(zip.file('xl/workbook.xml')?.asText()??'')?fitWrappedRows(result):result;
 };
 
 const addHeaderMark = (xml: string, mark: string): string => {

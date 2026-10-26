@@ -37,7 +37,7 @@ export interface IRevisionRecognitionInfo {
 export const revisionRecognitionInfo = async (db: Queryable, revisionId: string): Promise<IRevisionRecognitionInfo | null> => {
   const r = await db.query<IRevisionRecognitionInfo>(
     `SELECT dr.id, dr.document_id, dr.tender_id, dr.contract_id, dr.blob_sha256,
-            local_input_format(b.media_type) AS input_format,
+            blob_local_input_format(b.sha256) AS input_format,
             recognition_revision_route(dr.id) AS route,
             d.recognition_route AS document_route
        FROM document_revision dr
@@ -132,7 +132,7 @@ export const autoRecognitionCandidates = async (
 ): Promise<{ revision_id: string; input_format: LocalInputFormat }[]> => {
   const r = await db.query<{ revision_id: string; input_format: LocalInputFormat }>(
     `SELECT c.id AS revision_id, c.input_format
-       FROM (SELECT dr.id, dr.received_at, local_input_format(b.media_type) AS input_format
+       FROM (SELECT dr.id, dr.received_at, blob_local_input_format(b.sha256) AS input_format
                FROM document_revision dr JOIN blob b ON b.sha256 = dr.blob_sha256) c
       WHERE c.input_format IS NOT NULL
         AND (c.input_format <> 'pdf' OR recognition_revision_route(c.id) = 'local')

@@ -52,4 +52,18 @@ describe('S18-08: HTTP-лимит большого состава источни
     const response = await scenario.eng1.put(`/source-set-revisions/${revisionId}/items`, { padding: 'x'.repeat(1024 * 1024 + 1) }, { headers: { 'If-Match': etag } });
     expect(response.status).toBe(413);
   });
+
+  it('комплект сохраняет более 100 КиБ; расширение не распространяется на другой метод и вложенный путь', async () => {
+    const made = await scenario.eng1.post(`/stages/${scenario.stageA}/form-packets`, { title: 'Большой комплект' }, { headers: idem() });
+    expect(made.status, made.text).toBe(201);
+    const body = { definition: { schema: { schemaVersion: 'forms/1', title: 'Условия', sections: [{ key: 'main', title: 'Условия', fields: [{ key: 'text', label: 'Текст', type: 'text' }] }] }, recipes: { clause: 'я'.repeat(60_000) }, outputs: [] }, values: {} };
+    expect(Buffer.byteLength(JSON.stringify(body))).toBeGreaterThan(100 * 1024);
+    const path = `/form-packets/${made.body.id}`;
+    const saved = await scenario.eng1.put(path, body, { headers: { 'If-Match': made.body.etag } });
+    expect(saved.status, saved.text).toBe(200);
+    expect(saved.body.input.definition.recipes.clause).toBe(body.definition.recipes.clause);
+    expect((await scenario.eng1.post(path, body, { headers: idem() })).status).toBe(413);
+    expect((await scenario.eng1.put(path + '/extra', body)).status).toBe(413);
+    expect((await scenario.eng1.put(path, { padding: 'x'.repeat(1024 * 1024 + 1) })).status).toBe(413);
+  });
 });

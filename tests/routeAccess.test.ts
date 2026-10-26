@@ -30,6 +30,7 @@ const TENDER_SCOPED = new Set([
   'requirement-revisions', 'reason-runs', 'qa-threads', 'negotiation-sessions', 'jobs', 'imports', 'import-items', 'holds', 'field-suggestion-runs',
   'evidence', 'evidence-scopes', 'evidence-facts', 'customer-questions', 'compliance-incidents', 'candidate-files', 'calculation-captures',
   'approvals', 'answer-runs', 'analysis-runs', 'dialogs',
+  'form-packets', 'form-packet-files', 'form-packet-sources',
 ]);
 
 // Сегмент пути → таблица (исключения из правила «множественное → единственное»).
@@ -174,6 +175,17 @@ beforeAll(async () => {
   tenderA = s.st.e.s.tenderA;
   app = createApp({ config: s.st.e.config, pool: s.st.db.pool, clock: new Clock().read, logError: () => undefined });
   routes = enumerate(app);
+  // Реальные объекты новых маршрутов: чужой инженер проверяется на существующем комплекте и его файлах.
+  const eng = s.st.e.s.eng1, stage = s.st.e.s.stageA;
+  const packet = await eng.post(`/stages/${stage}/form-packets`, { title: 'ACL-комплект' }, { headers: idem() });
+  expect(packet.status, packet.text).toBe(201);
+  const input = { definition: { schema: { schemaVersion: 'forms/1', title: 'ACL', sections: [{ key: 'main', title: 'Условия', fields: [{ key: 'text', label: 'Текст', type: 'text' }] }] }, recipes: {}, outputs: [] }, values: {} };
+  const saved = await eng.put(`/form-packets/${packet.body.id}`, input, { headers: { 'If-Match': packet.body.etag } });
+  expect(saved.status, saved.text).toBe(200);
+  const source = await eng.post(`/form-packets/${packet.body.id}/sources?name=acl-reference.txt`, Buffer.from('ACL reference'), { headers: { ...idem(), 'Content-Type': 'application/octet-stream' } });
+  expect(source.status, source.text).toBe(201);
+  const built = await eng.post(`/form-packets/${packet.body.id}/build`, { previewPdf: false }, { headers: { ...idem(), 'If-Match': saved.body.etag } });
+  expect(built.status, built.text).toBe(201);
 });
 afterAll(async () => closeStage14(s));
 

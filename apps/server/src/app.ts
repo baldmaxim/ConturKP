@@ -77,9 +77,12 @@ export const createApp = (deps: IAppDeps): express.Express => {
 
   const api = express.Router();
   // Состав допускает до 5000 редакций: общий предел 100 КиБ отсекает большие
-  // допустимые наборы ещё до проверки схемы/прав. Расширение ограничено этой PUT-командой.
-  api.put('/source-set-revisions/:id/items', express.json({ limit: '1mb' }));
-  api.put('/form-packets/:id', express.json({ limit: '1mb' }));
+  // допустимые наборы ещё до проверки схемы/прав. Парсер — middleware, а не повторный маршрут.
+  const largeJson = express.json({ limit: '1mb' });
+  api.use(['/source-set-revisions/:id/items', '/form-packets/:id'], (req, res, next) => {
+    if (req.method === 'PUT' && req.path === '/') return largeJson(req, res, next);
+    next();
+  });
   api.use(express.json({ limit: '100kb' }));
   api.use(healthRouter(config, pool, store));
   api.use(sessionMiddleware(config, pool, clock));

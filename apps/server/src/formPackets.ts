@@ -14,6 +14,7 @@ export const PacketInput = z.object({
   }).strict(),
   values: z.record(key, z.string().max(100_000)),
   calculationRevisionId:z.uuid().nullable().default(null),
+  calculationInsurance:z.object({calculationRevisionId:z.uuid(),amount:z.string().regex(/^\d+(?:[.,]\d{1,2})?$/u).max(40),basis:z.string().trim().min(10).max(2000)}).strict().optional(),
   performanceBond:z.object({coveragePercent:z.string().max(20),annualRatePercent:z.string().max(20),months:z.string().max(20),addVat:z.boolean()}).strict().nullable().default(null),
   nominations:z.array(z.object({key,title:z.string().min(1).max(500),amount:z.string().max(40),vatIncluded:z.boolean().nullable(),vatRate:z.string().max(20),gpPercent:z.string().max(20)}).strict()).max(100).default([]),
   notes: z.string().max(20_000).default(''),
@@ -25,6 +26,7 @@ export interface ICompiledPacket { data: Record<string, string>; numbers: Set<st
 
 const REF = /\[\[([a-z][a-z0-9_]{0,63})\]\]/gu;
 export const compilePacket = (input: IPacketInput): ICompiledPacket => {
+  if(input.calculationInsurance&&input.calculationInsurance.calculationRevisionId!==input.calculationRevisionId)throw new Error('Расшифровка страхования должна относиться к закреплённой ревизии расчёта');
   const checked = validateSchema(input.definition.schema);
   if (!checked.ok) throw new Error(checked.issues.map(x => `${x.path}: ${x.message}`).join('; '));
   const schema = checked.schema;
@@ -84,5 +86,6 @@ export const packetChanges = (before: IPacketInput | null, after: IPacketInput):
   if (before.notes !== after.notes) changed.push('notes');
   if (JSON.stringify(before.nominations) !== JSON.stringify(after.nominations)) changed.push('nominations');
   if (JSON.stringify(before.performanceBond) !== JSON.stringify(after.performanceBond)) changed.push('performanceBond');
+  if (JSON.stringify(before.calculationInsurance) !== JSON.stringify(after.calculationInsurance)) changed.push('calculationInsurance');
   return changed;
 };

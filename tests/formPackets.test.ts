@@ -11,7 +11,7 @@ const input = (): IPacketInput => ({
   {key:'threshold',label:'Порог',type:'number',min:'0',scale:2,required:true},
   {key:'prices_date',label:'Дата цен',type:'date'}, {key:'bsm_date',label:'Дата БСМ',type:'date'},
  ]}]},recipes:{terms:'Рост [[threshold]] %, цены [[prices_date]], БСМ [[bsm_date]].',letter:'[[threshold]] %'},recipeVariants:{},outputs:[]},
- values:{threshold:'7.25',prices_date:'2026-08-28',bsm_date:'2026-09-28'},calculationRevisionId:null,nominations:[],positions:[],notes:'Внутренняя пометка',attachments:[],
+ values:{threshold:'7.25',prices_date:'2026-08-28',bsm_date:'2026-09-28'},calculationRevisionId:null,performanceBond:null,nominations:[],positions:[],notes:'Внутренняя пометка',attachments:[],
 });
 describe('общие данные подачи',()=>{
  it('один порог вне набора 0/5 и две независимые даты во всех документах',()=>{

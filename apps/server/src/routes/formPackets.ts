@@ -43,7 +43,8 @@ export const formPacketsRouter = (pool: Pool, store: BlobStore, config: IAppConf
   const calculationCheck=async(db:Queryable,input:IPacketInput|null)=>{
     if(!input?.calculationRevisionId)return null;
     const row=(await db.query<{header:string;positions:string}>(`SELECT c.kp_total::text AS header,COALESCE((SELECT sum(p.commercial_total) FROM calculation_position p WHERE p.content_id=c.id),0)::text AS positions FROM calculation_revision r JOIN calculation_content c ON c.id=r.content_id WHERE r.id=$1`,[input.calculationRevisionId])).rows[0];
-    return row?checkCalculationTotals(row.header,row.positions):null;
+    const insurance=input.calculationInsurance?.calculationRevisionId===input.calculationRevisionId?input.calculationInsurance:undefined;
+    return row?{...checkCalculationTotals(row.header,row.positions,insurance?.amount),insuranceBasis:insurance?.basis??null}:null;
   };
   const view = async (db: Queryable, p: PacketRow) => ({
     ...p, etag: formatEtag(p.id, p.row_version),
@@ -139,7 +140,7 @@ export const formPacketsRouter = (pool: Pool, store: BlobStore, config: IAppConf
       const compiled=compilePacket(p.input), buildId=randomUUID();
       const issues=[...compiled.issues,'Проверочный черновик: шаблоны и коммерческие условия ожидают проверки владельца; это не выпуск КП'];
       const check=await calculationCheck(db,p.input);
-      if(check&&!check.reconciled)issues.push(`Не сверена шапка TenderHub с суммой позиций: разница ${check.differenceDisplay} руб. Цена требует проверки источника`);
+      if(check&&!check.reconciled)issues.push(`Не сверена шапка TenderHub с суммой позиций: нерасшифрованный остаток ${check.unexplainedDifferenceDisplay} руб. Цена требует проверки источника`);
       const converter=opts.previewPdf?createOfficeConverter(config.office):null;
       if(opts.previewPdf&&!converter)throw invalid('Конвертер PDF недоступен');
       await db.query('INSERT INTO form_packet_build(id,version_id,issues,created_by) VALUES($1,$2,$3,$4)',[buildId,p.current_version_id,JSON.stringify(issues),ctx.principal.userId]);

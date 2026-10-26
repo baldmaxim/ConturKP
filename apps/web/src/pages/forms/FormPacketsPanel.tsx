@@ -14,6 +14,7 @@ interface Field {key:string;label:string;type:string;multiline?:boolean;options?
 interface Input {
  definition:{schema:{sections:{key:string;title:string;fields:Field[]}[]};recipes:Record<string,string>;recipeVariants?:Record<string,Record<string,string>>;outputs:{revisionId:string;name:string;mechanism?:string}[]};
  values:Record<string,string>;notes:string;calculationRevisionId:string|null;
+ calculationInsurance?:{calculationRevisionId:string;amount:string;basis:string};
  performanceBond:{coveragePercent:string;annualRatePercent:string;months:string;addVat:boolean}|null;
  nominations:{key:string;title:string;amount:string;vatIncluded:boolean|null;vatRate:string;gpPercent:string}[];
  positions:{key:string;text:string;sourceId:string|null;confirmed:boolean}[];
@@ -21,7 +22,7 @@ interface Input {
 }
 interface Packet {
  id:string;title:string;etag:string;current_version_id:string|null;seq:number|null;based_on_id:string|null;input:Input|null;
- summary:Record<string,string>|null;calculationCheck:{reconciled:boolean;differenceDisplay:string}|null;
+ summary:Record<string,string>|null;calculationCheck:{reconciled:boolean;differenceDisplay:string;unexplainedDifferenceDisplay:string;insuranceAmount:string|null;insuranceDisplay:string|null;insuranceBasis:string|null}|null;
  sources:{id:string;name:string;blob_sha256:string;role:string;origin:string}[];
  history:{id:string;seq:number;changes:string[];created_at:string}[];
  builds:{id:string;version_id:string;issues:string[];created_at:string;files:{id:string;name:string;sha256:string}[]}[];
@@ -31,7 +32,7 @@ const TABS:{key:string;label:string;icon:TIconName}[]=[
  {key:'parameters',label:'Параметры',icon:'list-checks'},{key:'price',label:'Стоимость',icon:'calculator'},
  {key:'conditions',label:'Условия',icon:'scroll-text'},{key:'documents',label:'Документы',icon:'files'},
 ];
-const HISTORY_LABELS:Record<string,string>={definition:'формулировки и шаблоны',positions:'позиция заказчика',attachments:'приложения',notes:'внутренние пометки',nominations:'номинированные стоимости',performanceBond:'банковская гарантия'};
+const HISTORY_LABELS:Record<string,string>={definition:'формулировки и шаблоны',positions:'позиция заказчика',attachments:'приложения',notes:'внутренние пометки',nominations:'номинированные стоимости',performanceBond:'банковская гарантия',calculationInsurance:'расшифровка страхования TenderHub'};
 const dateLabel=(value:string):string=>new Date(value).toLocaleString('ru-RU',{day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'});
 export const FormPacketsPanel:FC<{stageId:string}>=({stageId})=>{
  const resource=useApiResource(signal=>apiGet<List>(`/stages/${stageId}/form-packets`,{signal}),stageId);
@@ -101,6 +102,10 @@ export const FormPacketsPanel:FC<{stageId:string}>=({stageId})=>{
       </>:null}
       {tab==='price'?<>
        <div className={styles.sectionHeading}><h4>Стоимость и обеспечение</h4><p>Номинированные разделы дополняют расчёт TenderHub. Итог обновляется после сохранения.</p></div>
+       {input.calculationRevisionId?<section className={styles.bond}><div className={styles.subheading}><h5>Страхование в итоге TenderHub</h5></div>
+        <label className={styles.check}><input type="checkbox" disabled={!editable} checked={Boolean(input.calculationInsurance)} onChange={e=>{const next={...input};if(e.target.checked)next.calculationInsurance={calculationRevisionId:input.calculationRevisionId!,amount:'',basis:''};else delete next.calculationInsurance;change(next);}}/><span>Сохранить расшифровку страхования</span></label>
+        {input.calculationInsurance?<><TextField label="Страхование, ₽" inputMode="decimal" disabled={!editable} value={input.calculationInsurance.amount} onValueChange={amount=>change({...input,calculationInsurance:{...input.calculationInsurance!,amount}})}/><TextAreaField label="Основание расшифровки" rows={3} disabled={!editable} value={input.calculationInsurance.basis} onValueChange={basis=>change({...input,calculationInsurance:{...input.calculationInsurance!,basis}})}/><p className={styles.caption}>Страхование уже входит в итог TenderHub. Расшифровка используется для сверки этой ревизии и сохраняется в истории подачи.</p></>:null}
+       </section>:null}
        <div className={styles.subheading}><h5>Номинированные разделы</h5><span className={styles.count}>{input.nominations.length}</span></div>
        <div className={styles.cardList}>{input.nominations.map((row,index)=>{
         const edit=(patch:Partial<typeof row>):void=>{const nominations=[...input.nominations];nominations[index]={...row,...patch};change({...input,nominations});};
@@ -165,7 +170,8 @@ export const FormPacketsPanel:FC<{stageId:string}>=({stageId})=>{
       {packet.summary.performance_bond_amount?<details className={styles.bondDetails}><summary>Расчёт банковской гарантии<Icon name="chevron-down" size={16}/></summary><dl className={styles.breakdown}><div><dt>Сумма обеспечения</dt><dd>{packet.summary.performance_bond_amount} ₽</dd></div><div><dt>Комиссия банка</dt><dd>{packet.summary.performance_bond_bank_fee} ₽</dd></div></dl><p className={styles.caption}>Обеспечение не прибавляется к цене КП.</p></details>:null}
       {dirty?<p className={styles.dirtyHint} role="status">Сохраните изменения, чтобы пересчитать итог.</p>:null}
      </section>:null}
-     {packet.calculationCheck&&!packet.calculationCheck.reconciled?<div className={styles.notice}><Icon name="info" size={16}/><div><strong>Требуется сверка цены</strong><p>Разница между шапкой TenderHub и суммой позиций: {packet.calculationCheck.differenceDisplay} ₽. Нужна расшифровка дополнительных начислений; итог пока проверочный.</p></div></div>:null}
+     {packet.calculationCheck?.insuranceAmount!==null&&packet.calculationCheck?.insuranceAmount!==undefined?<section className={styles.sideSection}><h5>Страхование в итоге TenderHub</h5><p>{packet.calculationCheck.insuranceDisplay} ₽ · включено в расчёт</p><p className={styles.caption}>{packet.calculationCheck.insuranceBasis}</p>{packet.calculationCheck.reconciled?<p className={styles.caption}>Сумма позиций и страхование совпадают с итогом TenderHub.</p>:null}</section>:null}
+     {packet.calculationCheck&&!packet.calculationCheck.reconciled?<div className={styles.notice}><Icon name="info" size={16}/><div><strong>Требуется сверка цены</strong><p>Нерасшифрованный остаток итога TenderHub: {packet.calculationCheck.unexplainedDifferenceDisplay} ₽. Нужна расшифровка дополнительных начислений; итог пока проверочный.</p></div></div>:null}
      {latest?<section className={styles.sideSection}><div className={styles.subheading}><h5>Готовый черновик</h5><span className={styles.count}>{files.length}</span></div><p className={styles.caption}>{stale?'Требуется новая сборка':`Собран ${dateLabel(latest.created_at)}`}</p>
       {previewFiles.map(f=><a key={f.id} className={styles.previewFile} href={`/api/v1/form-packet-files/${f.id}`} target="_blank" rel="noreferrer"><span className={styles.fileType}>PDF</span><span>{f.name.replace(/\.pdf$/iu,'')}</span><Icon name="external-link" size={16}/></a>)}
       <Button variant="ghost" className={styles.allFiles} icon="folder" onClick={()=>setTab('documents')}>Все файлы комплекта</Button>

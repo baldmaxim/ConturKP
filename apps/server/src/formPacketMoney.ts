@@ -29,10 +29,12 @@ export const moneyWords=(value:string):string=>{
 export const formatPacketMoney=(value:string):string=>{
  const [whole,cents]=n(value,'Сумма').toFixed(2).split('.');return `${whole!.replace(/\B(?=(\d{3})+(?!\d))/gu,' ')}${cents==='00'?',00':','+cents}`;
 };
-export const checkCalculationTotals=(header:string,positions:string)=>{
+export const checkCalculationTotals=(header:string,positions:string,insuranceAmount?:string)=>{
  const difference=new D(header).minus(new D(positions));
  if(!difference.isFinite())throw new Error('Итоги расчёта не определены');
- return {header,positions,difference:difference.toFixed(2),reconciled:difference.abs().lte('0.01'),differenceDisplay:(difference.isNegative()?'-':'')+formatPacketMoney(difference.abs().toFixed(2))};
+ const insurance=insuranceAmount===undefined?null:n(insuranceAmount,'Страхование'),unexplained=difference.minus(insurance??0);
+ const display=(v:Decimal)=>(v.isNegative()?'-':'')+formatPacketMoney(v.abs().toFixed(2));
+ return {header,positions,difference:difference.toFixed(2),reconciled:unexplained.abs().lte('0.01'),differenceDisplay:display(difference),insuranceAmount:insurance?.toFixed(2)??null,insuranceDisplay:insurance?display(insurance):null,unexplainedDifference:unexplained.toFixed(2),unexplainedDifferenceDisplay:display(unexplained)};
 };
 export const packetMoney=(sourceTotal:string,rate:string,nominations:readonly INomination[],bond:IPerformanceBond|null=null):{fields:Record<string,string>;issues:string[];addition:string|null;total:string|null}=>{
  const base=n(sourceTotal,'Итог TenderHub'),baseRate=n(rate,'Ставка НДС');

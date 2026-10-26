@@ -1,6 +1,7 @@
 // S18-26: порядок загрузки образца и документа не блокирует распознавание тех же байтов.
 import { createHash, randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, expect, it } from 'vitest';
+import { backupRoleProblems, restoreSafetyProblems } from '../packages/db/src/backup.ts';
 import { buildScenario, createTestDb, drain, idem, makeApp, makeWorker, testConfig, type IScenario, type ITestDb } from './helpers.ts';
 import { contractDocx, smetaStromynkaXlsx, uniqueCopy } from './localFixtures.ts';
 
@@ -20,6 +21,11 @@ const sample=async(name:string,bytes:Buffer)=>{
 };
 const blob=async(sha:string)=>(await db.pool.query('SELECT * FROM blob WHERE sha256=$1',[sha])).rows[0];
 const format=async(sha:string)=>(await db.pool.query<{format:string|null}>('SELECT blob_local_input_format($1) AS format',[sha])).rows[0]!.format;
+
+it('резервная копия: добавление деклараций не нарушает права чтения и восстановимость дампа',async()=>{
+ expect(await backupRoleProblems(db.pool)).toEqual([]);
+ expect(await restoreSafetyProblems(db.pool)).toEqual([]);
+});
 
 it.each([
  ['docx',()=>contractDocx()],['xlsx',()=>smetaStromynkaXlsx()],

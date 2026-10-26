@@ -1,6 +1,9 @@
 -- S18-26: конкретный формат может быть подтверждён после первоначальной загрузки образца.
 -- Байты и первоначальная метаинформация blob остаются неизменными. Никакого угадывания по имени
 -- или остатку данных: декларацию дописывает существующий путь регистрации конкретного MIME.
+-- CHECK ниже вызывает функцию при pg_restore с пустым search_path (S18-27, ADR-011).
+-- Применённые миграции не меняем: настройка добавлена в ещё не установленную 0055.
+ALTER FUNCTION local_input_format(text) SET search_path TO public;
 CREATE TABLE blob_format_declaration (
   blob_sha256 text NOT NULL REFERENCES blob(sha256),
   media_type text NOT NULL CHECK (local_input_format(media_type) IS NOT NULL),

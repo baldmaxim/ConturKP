@@ -1,23 +1,89 @@
 /* Вкладки прокручиваются внутри своего контейнера — у страницы горизонтальной прокрутки нет. */
-.scroller {
-  overflow-x: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: none;
+.container {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
   border-bottom: 1px solid var(--border-subtle);
+}
+
+.scroller {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
 }
 
 .scroller::-webkit-scrollbar {
   display: none;
 }
 
+.moreLeft {
+  mask-image: linear-gradient(to right, transparent, #000 20px);
+}
+
+.moreRight {
+  mask-image: linear-gradient(to left, transparent, #000 20px);
+}
+
+.moreLeft.moreRight {
+  mask-image: linear-gradient(to right, transparent, #000 20px, #000 calc(100% - 20px), transparent);
+}
+
+.scrollButton {
+  display: inline-flex;
+  flex: 0 0 36px;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin: 4px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--accent-soft);
+  color: var(--accent);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.scrollButton:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+
+.scrollButton:disabled {
+  background: transparent;
+  color: var(--muted);
+  opacity: 0.35;
+  cursor: default;
+}
+
+.scrollLeft svg {
+  transform: rotate(180deg);
+}
+
+.hint {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .tabs {
   display: flex;
   gap: var(--space-1);
-  min-width: max-content;
+  width: max-content;
+  min-width: 100%;
 }
 
 .tab {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   gap: var(--space-2);
   min-height: 44px;

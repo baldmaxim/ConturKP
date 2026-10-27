@@ -74,6 +74,8 @@ export const indexBuildHandler: IJobHandlerSpec = {
       return;
     }
     const units = await unitsMissingInVersion(ctx.pool, versionId, ctx.config.search.indexBuildUnitsPerBatch);
+    let done = 0;
+    await ctx.reportProgress?.({ phase: 'processing', completed: 0, total: units.length || null, unit: 'documents' });
     for (const unit of units) {
       ctx.throwIfStopped();
       const { pages, indexed, skipped } = chunkUnit(await fragmentsForIndex(ctx.pool, unit.id));
@@ -83,6 +85,7 @@ export const indexBuildHandler: IJobHandlerSpec = {
         // той же транзакцией. Если пачка уже выполняется, её хук then увидит новые чанки.
         if (r.chunks > 0 && v.embedding_model && ctx.embeddings) await enqueueIndexEmbed(client, versionId);
       });
+      await ctx.reportProgress?.({ phase: 'processing', completed: ++done, total: units.length, unit: 'documents' });
     }
     await ctx.complete(undefined, async (client) => {
       if ((await unitsMissingInVersion(client, versionId, 1)).length > 0) await enqueueIndexBuild(client, versionId);
@@ -112,6 +115,7 @@ export const indexEmbedHandler: IJobHandlerSpec = {
     const after = typeof ctx.job.payload.afterChunkId === 'string' ? ctx.job.payload.afterChunkId : null;
     let chunks = await chunksWithoutVectors(ctx.pool, versionId, e.batchSize, after);
     if (chunks.length === 0 && after !== null) chunks = await chunksWithoutVectors(ctx.pool, versionId, e.batchSize);
+    await ctx.reportProgress?.({ phase: 'processing', completed: 0, total: chunks.length || null, unit: 'chunks' });
     const template = templateOfInputVersion(v.embedding_input_version!);
     const key = { purpose: 'index' as const, model: v.embedding_model, fingerprint: v.embedding_model_fingerprint!, inputVersion: v.embedding_input_version!, dim: v.embedding_dim! };
     const inputs = chunks.map((c) => embeddingInput(template, 'index', chunkText({ headerText: c.header_text, bodyText: c.body_text })));
@@ -135,6 +139,7 @@ export const indexEmbedHandler: IJobHandlerSpec = {
       await noteModelSuccess(ctx.pool);
     }
     ctx.throwIfStopped();
+    await ctx.reportProgress?.({ phase: 'saving', completed: chunks.length, total: chunks.length || null, unit: 'chunks' });
     await ctx.complete(
       async (client) => {
         await insertChunkVectors(

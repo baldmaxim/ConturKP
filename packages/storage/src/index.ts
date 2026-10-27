@@ -208,3 +208,5 @@ export * from './ocrModels.ts';
 export * from './deliveryFs.ts';
 export * from './backup.ts';
 export * from './space.ts';
+
+export * from './contractHistory.ts';

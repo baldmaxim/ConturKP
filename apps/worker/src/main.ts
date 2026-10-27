@@ -1,6 +1,7 @@
 // Процесс worker (ADR-001 §6, ADR-004): сверка схемы, heartbeat для /ready, циклы заданий и обслуживания.
 // Остановка (этап 17, проект §3): новые задания не берутся, текущие прерываются и возвращаются в очередь
 // владельцем без потери попытки; heartbeat пишется только при живости всех циклов.
+import {startContractHistoryProxy} from './contractHistoryProxy.ts';
 import { hostname } from 'node:os';
 import { ConfigError, installShutdown, loadConfig } from '@kontur/config';
 import { beat, checkSchema, createPool, retireHeartbeat } from '@kontur/db';
@@ -24,6 +25,7 @@ const main = async (): Promise<void> => {
   }
   const store = new BlobStore(config.storageRoot, config.storageSpace);
   await store.init();
+  const stopHistoryProxy = await startContractHistoryProxy(pool, config);
   const startedAt = new Date();
   const processId = `worker:${hostname()}:${process.pid}:${startedAt.getTime()}`;
   const embeddings = createEmbeddings(config.embedding);
@@ -61,6 +63,7 @@ const main = async (): Promise<void> => {
     graceMs,
     log,
     stop: async (_reason, fatal) => {
+      await stopHistoryProxy();
       clearInterval(timer);
       controller.abort();
       // Срок на возврат заданий — с запасом до принудительного выхода.

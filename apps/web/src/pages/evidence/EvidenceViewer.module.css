@@ -29,7 +29,7 @@
   position: relative;
   max-width: 100%;
   overflow: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);

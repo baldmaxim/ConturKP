@@ -10,7 +10,7 @@ export type TPrincipalKind = 'human' | 'model_via_mcp' | 'integration' | 'system
 export type TAuditOutcome = 'allowed' | 'denied' | 'failed';
 
 /** Глобальные возможности пользователя. */
-export type TGlobalCapability = 'admin.users' | 'admin.tender' | 'admin.audit' | 'admin.intake' | 'admin.contract' | 'admin.mailbox' | 'admin.delivery' | 'admin.templates' | 'wording.approve';
+export type TGlobalCapability = 'office.read' | 'templates.read' | 'admin.roles' | 'tender.read.all' | 'contract.read.all' | 'mail.read.all' | 'admin.users' | 'admin.tender' | 'admin.audit' | 'admin.intake' | 'admin.contract' | 'admin.mailbox' | 'admin.delivery' | 'admin.templates' | 'wording.approve';
 
 /** Возможности пользователя в конкретном тендере. */
 export type TTenderCapability =
@@ -47,13 +47,13 @@ export interface IMembership {
 }
 
 export interface IMe {
-  accessVersion?: string;
-  assignedRoles?: string[];
-  tendersAvailable?: boolean;
   id: string;
   login: string;
   displayName: string;
-  roles: TGlobalRole[];
+  roles: string[];
+  assignedRoles?: string[];
+  tendersAvailable?: boolean;
+  accessVersion?: string;
   capabilities: string[];
   memberships: IMembership[];
   /** Раздел «Договоры»: администратор договоров, право создавать договоры или выдача по договору. */
@@ -173,7 +173,7 @@ export interface IUser {
 export interface IUserCreateInput {
   login: string;
   displayName: string;
-  roles: TGlobalRole[];
+  roles: string[];
   password: string;
 }
 

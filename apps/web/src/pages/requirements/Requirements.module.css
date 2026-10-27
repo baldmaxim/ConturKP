@@ -151,7 +151,7 @@
 .scroll {
   max-height: 60dvh;
   overflow: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-x: contain;
 }
 
 @media (min-width: 768px) {

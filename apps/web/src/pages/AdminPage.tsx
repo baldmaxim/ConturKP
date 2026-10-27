@@ -5,6 +5,7 @@ import { EmptyState } from '../components/EmptyState';
 import { PageHeader } from '../components/PageHeader';
 import { Tabs, tabId, tabPanelId, type ITab } from '../components/Tabs';
 import { useAuth } from '../hooks/useAuth';
+import { RolesPanel } from './admin/RolesPanel';
 import { OperationsPanel } from './admin/OperationsPanel';
 import { AuditLog } from './AuditLog';
 import { ContractCreatorsPanel } from './contracts/ContractCreatorsPanel';
@@ -16,6 +17,7 @@ export const AdminPage: FC = () => {
   const { can } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const canUsers = can('admin.users');
+  const canRoles = can('admin.roles');
   const canAudit = can('admin.audit');
   const canContracts = can('admin.contract');
   const canDelivery = can('admin.delivery');
@@ -25,6 +27,7 @@ export const AdminPage: FC = () => {
     if (canUsers) {
       result.push({ id: 'users', label: 'Пользователи', icon: 'users' });
     }
+    if (canRoles) result.push({id:'roles',label:'Роли и права',icon:'users'});
     if (canContracts) {
       result.push({ id: 'contracts', label: 'Создание договоров', icon: 'file-signature' });
     }
@@ -36,9 +39,9 @@ export const AdminPage: FC = () => {
       result.push({ id: 'audit', label: 'Журнал вне тендеров', icon: 'scroll-text' });
     }
     return result;
-  }, [canUsers, canAudit, canContracts, canDelivery]);
+  }, [canUsers, canRoles, canAudit, canContracts, canDelivery]);
 
-  if (canAudit && searchParams.get('tab') === 'office') return <Navigate to="/office" replace />;
+  if (can('office.read') && searchParams.get('tab') === 'office') return <Navigate to="/office" replace />;
 
   if (tabs.length === 0) {
     return (
@@ -59,6 +62,7 @@ export const AdminPage: FC = () => {
       <Tabs tabs={tabs} active={active} onChange={(id) => setSearchParams({ tab: id }, { replace: true })} label="Разделы администрирования" />
       <div className={styles.panel} role="tabpanel" id={tabPanelId(active)} aria-labelledby={tabId(active)}>
         {active === 'users' ? <UsersPanel /> : null}
+        {active === 'roles' ? <RolesPanel /> : null}
         {active === 'contracts' ? <ContractCreatorsPanel /> : null}
         {active === 'delivery' ? <DestinationsPanel /> : null}
         {active === 'operations' ? <OperationsPanel /> : null}

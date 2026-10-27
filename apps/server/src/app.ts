@@ -6,12 +6,12 @@ import type { IAppConfig } from '@kontur/config';
 import type { Pool } from '@kontur/db';
 import { BlobStore, localOcrFactory } from '@kontur/storage';
 import express, { type NextFunction, type Request, type Response } from 'express';
+import { appUpdateRouter } from './appUpdate.ts';
 import { requestIdOf } from './http/context.ts';
 import { fromStorageError, HttpError, sendProblem } from './http/errors.ts';
 import { csrfGuard, securityHeaders, sessionMiddleware } from './http/security.ts';
 import { operationsRouter } from './routes/operations.ts';
 import { adminRouter } from './routes/admin.ts';
-import { rolesRouter } from './routes/roles.ts';
 import { authRouter } from './routes/auth.ts';
 import { documentsRouter } from './routes/documents.ts';
 import { evidenceScopesRouter } from './routes/evidenceScopes.ts';
@@ -20,6 +20,7 @@ import { importsRouter } from './routes/imports.ts';
 import { intakeRouter } from './routes/intake.ts';
 import { localRecognitionRouter } from './routes/localRecognition.ts';
 import { mailboxesRouter } from './routes/mailboxes.ts';
+import { rolesRouter } from './routes/roles.ts';
 import { mailMessagesRouter } from './routes/mailMessages.ts';
 import { recognitionRouter } from './routes/recognition.ts';
 import { searchRouter } from './routes/search.ts';
@@ -49,10 +50,12 @@ import { reviewsRouter } from './routes/reviews.ts';
 import { stageRecordsRouter } from './routes/stageRecords.ts';
 import { contractDocumentsRouter } from './routes/contractDocuments.ts';
 import { contractLinksRouter } from './routes/contractLinks.ts';
+import { contractHistoryRouter } from './routes/contractHistory.ts';
 import { contractsRouter } from './routes/contracts.ts';
 import { sourceSetsRouter } from './routes/sourceSets.ts';
 import { stagesRouter } from './routes/stages.ts';
 import { tendersRouter } from './routes/tenders.ts';
+import { tenderHistoryRouter } from './routes/tenderHistory.ts';
 
 export interface IAppDeps {
   config: IAppConfig;
@@ -90,6 +93,7 @@ export const createApp = (deps: IAppDeps): express.Express => {
   api.use(csrfGuard(config, pool));
   api.use(authRouter(config, pool, clock));
   api.use(tendersRouter(pool));
+  api.use(tenderHistoryRouter(pool, store, config));
   api.use(stagesRouter(pool));
   api.use(adminRouter(pool, clock));
   api.use(rolesRouter(pool));
@@ -102,6 +106,7 @@ export const createApp = (deps: IAppDeps): express.Express => {
   api.use(sourceSetsRouter(pool));
   api.use(evidenceScopesRouter(pool));
   api.use(contractsRouter(pool));
+  api.use(contractHistoryRouter(pool, config));
   api.use(contractLinksRouter(pool));
   api.use(contractDocumentsRouter(pool, store, config));
   api.use(searchRouter(pool, config, clock));
@@ -134,9 +139,10 @@ export const createApp = (deps: IAppDeps): express.Express => {
   app.use('/api/v1', api);
   // MCP портала (этап 16): отдельная точка вне /api/v1 — только токен, без cookie и без проверки CSRF.
   app.use('/mcp', mcpRouter({ pool, store, config, clock, logError }));
+  const webDist = config.webDistDir ?? DEFAULT_WEB_DIST;
+  app.use('/api', appUpdateRouter(webDist));
   app.use('/api', (_req: Request, _res: Response, next: NextFunction) => next(new HttpError(404, 'NOT_FOUND', 'Маршрут не найден')));
 
-  const webDist = config.webDistDir ?? DEFAULT_WEB_DIST;
   if (existsSync(join(webDist, 'index.html'))) {
     app.use(
       express.static(webDist, {

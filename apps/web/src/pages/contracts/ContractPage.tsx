@@ -16,12 +16,14 @@ import { ContractCardPanel } from './ContractCardPanel';
 import { ContractDocumentsPanel } from './ContractDocumentsPanel';
 import { ContractLinksPanel } from './ContractLinksPanel';
 import { ContractSearchPanel } from './ContractSearchPanel';
+import { ContractHistoryPanel } from './ContractHistoryPanel';
 import { FactGraphPanel } from '../facts/FactGraphPanel';
 
 const tabsFor = (contract: IContract, isContractAdmin: boolean): ITab[] => {
   const canRead = contract.capabilities.includes('contract.read');
   const tabs: ITab[] = [];
   if (canRead) {
+    tabs.push({ id: 'history', label: 'История', icon: 'files' });
     tabs.push({ id: 'documents', label: 'Документы', icon: 'files' });
     tabs.push({ id: 'search', label: 'Поиск', icon: 'search' });
     tabs.push({ id: 'facts', label: 'Факты и редакции', icon: 'layers' });
@@ -62,6 +64,7 @@ export const ContractPage: FC = () => {
       />
       <Tabs tabs={tabs} active={active} onChange={(id) => setSearchParams({ tab: id }, { replace: true })} label="Разделы договора" />
       <div className={styles.panel} role="tabpanel" id={tabPanelId(active)} aria-labelledby={tabId(active)}>
+        {active === 'history' ? <ContractHistoryPanel contractId={contract.id} /> : null}
         {active === 'documents' ? <ContractDocumentsPanel contract={contract} /> : null}
         {active === 'search' ? <ContractSearchPanel contractId={contract.id} /> : null}
         {active === 'facts' ? <FactGraphPanel owner={{ kind: 'contract', id: contract.id }} /> : null}

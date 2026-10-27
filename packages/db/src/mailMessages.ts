@@ -253,6 +253,50 @@ export const listMailboxMessages = async (db: Queryable, mailboxId: string, limi
   return r.rows;
 };
 
+/** Полная история ящика; вызывающий проверяет mail.read до поиска и подсчёта. */
+export const listMailboxMessagePage = async (
+  db: Queryable,
+  mailboxId: string,
+  options: { q: string; page: number; pageSize: number },
+): Promise<{ items: IMailMessageRow[]; total: number; page: number; pageSize: number }> => {
+  // Последнюю ревизию каждого письма выбираем одним проходом. Текст ищем по существующему индексу
+  // единиц источника, без повторного просмотра всех фрагментов для каждой строки истории.
+  const predicate = options.q === '' ? 'true' : `(
+    strpos(lower(coalesce(r.subject, '')), lower($2)) > 0
+    OR strpos(lower(coalesce(r.from_address, '')), lower($2)) > 0
+    OR EXISTS (SELECT 1 FROM jsonb_array_elements(r.participants) p
+                WHERE strpos(lower(coalesce(p->>'name', '') || ' ' || coalesce(p->>'address', '')), lower($2)) > 0)
+    OR EXISTS (SELECT 1 FROM evidence_fragment f WHERE f.source_unit_type = 'mail_message_revision'
+                  AND f.source_unit_id = r.id AND strpos(lower(f.text), lower($2)) > 0)
+    OR EXISTS (SELECT 1 FROM mail_attachment a WHERE a.revision_id = r.id
+                  AND strpos(lower(a.filename), lower($2)) > 0))`;
+  const selection = await db.query<{ total: number; page: number; ids: string[] }>(
+    `WITH latest AS MATERIALIZED (
+       SELECT DISTINCT ON (r.message_id) r.*, m.created_at AS message_created_at
+         FROM mail_message m JOIN mail_message_revision r ON r.message_id = m.id
+        WHERE m.mailbox_id = $1 AND $2::text IS NOT NULL ORDER BY r.message_id, r.seq DESC
+     ), matching AS MATERIALIZED (
+       SELECT r.* FROM latest r WHERE ${predicate}
+     ), totals AS (SELECT count(*)::int AS total FROM matching),
+     bounds AS (SELECT total, least($3::int, greatest(1, (total + $4::int - 1) / $4::int)) AS page FROM totals)
+     SELECT b.total, b.page,
+            ARRAY(SELECT r.message_id FROM matching r
+                   ORDER BY r.sent_at DESC NULLS LAST, r.message_created_at DESC, r.message_id
+                   LIMIT $4 OFFSET (SELECT (page - 1) * $4 FROM bounds)) AS ids
+       FROM bounds b`,
+    [mailboxId, options.q, options.page, options.pageSize],
+  );
+  const { total, page, ids } = selection.rows[0]!;
+  // Материализация ограничивает MailHub-проекцию SELECT_MESSAGE импортами выбранной страницы:
+  // большой mail_import просматривается один раз, а не заново для каждой строки результата.
+  const items = ids.length === 0 ? [] : (await db.query<IMailMessageRow>(
+    `WITH mail_import AS MATERIALIZED (SELECT hi.* FROM public.mail_import hi WHERE hi.message_id = ANY($1::uuid[]))
+     ${SELECT_MESSAGE} WHERE m.id = ANY($1::uuid[]) ORDER BY array_position($1::uuid[], m.id)`,
+    [ids],
+  )).rows;
+  return { items, total, page, pageSize: options.pageSize };
+};
+
 // Письма в контексте тендера: действующая связь с тендером и mail.read на ящик. Письмо без mail.read
 // не показывается и не считается — ни темой, ни числом (OD-07-3).
 export const listTenderMessages = async (db: Queryable, ctx: IAccessContext, tenderId: string): Promise<(IMailMessageRow & { stage_id: string | null })[]> => {

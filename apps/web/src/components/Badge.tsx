@@ -7,6 +7,7 @@ export type TBadgeTone = 'neutral' | 'muted' | 'accent' | 'info' | 'success' | '
 
 interface IBadgeProps {
   label: string;
+  title?: string;
   icon: TIconName;
   tone?: TBadgeTone;
   /** Пунктирная рамка: неполная обработка и незавершённые состояния (BRAND.md §4.6). */
@@ -14,8 +15,8 @@ interface IBadgeProps {
 }
 
 /** Бейдж статуса: подпись + иконка + цвет (цвет не единственный носитель смысла). */
-export const Badge: FC<IBadgeProps> = ({ label, icon, tone = 'neutral', dashed = false }) => (
-  <span className={cx(styles.badge, styles[tone], dashed && styles.dashed)} title={label}>
+export const Badge: FC<IBadgeProps> = ({ label, title, icon, tone = 'neutral', dashed = false }) => (
+  <span className={cx(styles.badge, styles[tone], dashed && styles.dashed)} title={title ?? label} aria-label={title}>
     <Icon name={icon} size={16} />
     <span className={styles.text}>{label}</span>
   </span>

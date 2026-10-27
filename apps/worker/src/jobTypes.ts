@@ -1,7 +1,7 @@
 // Типы, ошибки и константы заданий worker (ADR-004, state-machines §2); вынесены из runtime.ts (этап 17).
 import type { IDeliveryFs, ILocalOcrEngineFactory, IModelGatewayChat, IModelGatewayEmbeddings } from '@kontur/adapters';
 import type { IAppConfig } from '@kontur/config';
-import type { IJobRow, Pool, PoolClient } from '@kontur/db';
+import type { IJobRow, IJobProgress, Pool, PoolClient } from '@kontur/db';
 import type { BlobStore } from '@kontur/storage';
 
 export class LeaseLostError extends Error {
@@ -53,6 +53,8 @@ export interface IJobContext {
   // встаёт в очередь без конфликта dedupe_key с самим завершающимся заданием (ADR-004 §7a).
   complete: (fn?: (client: PoolClient) => Promise<void>, then?: (client: PoolClient) => Promise<void>) => Promise<void>;
   throwIfStopped: () => void;
+  // В рабочем runtime присутствует всегда; необязателен для автономных обработчиков/старых тестовых контекстов.
+  reportProgress?: (progress: IJobProgress) => Promise<void>;
 }
 
 export interface IJobFailure {
@@ -103,7 +105,7 @@ export type WorkerLoop = 'background' | 'interactive' | 'queue' | 'search';
 
 // Виды заданий с внешними действиями: на восстановленной копии (WORKER_MODE=restore_check) не выполняются и не
 // планируются — пути назначений, папки и TenderHub в копии настоящие (проект §4.4, толкование §16 п. 3).
-export const EXTERNAL_KINDS: readonly string[] = ['delivery.place', 'delivery.probe', 'calculation.capture', 'intake.scan', 'mailhub.sync', 'mailhub.fetch'];
+export const EXTERNAL_KINDS: readonly string[] = ['delivery.place', 'delivery.probe', 'calculation.capture', 'intake.scan', 'mailhub.sync', 'mailhub.fetch', 'history.sync','history.scan','history.verify'];
 
 // Задание, остановленное нехваткой места, повторяется не раньше чем через 5 минут.
 export const STORAGE_FULL_DELAY_MS = 300_000;

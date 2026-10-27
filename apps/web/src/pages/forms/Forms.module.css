@@ -1,5 +1,5 @@
 /* Приложения этапа 11: от 360 px — одна колонка, шаги разделов прокручиваются горизонтально в своём контейнере;
-   от 1024 px — поля слева, список незавершённых справа. Цвета — только токены темы. */
+   от 1024 px — поля слева, список незавершённых справа. Короткие поля — до трёх в строке. Цвета — токены темы. */
 .muted {
   margin: 0;
   color: var(--muted);
@@ -15,7 +15,7 @@
 
 @media (min-width: 1024px) {
   .layout {
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem);
     align-items: start;
   }
 }
@@ -24,7 +24,7 @@
   display: flex;
   gap: var(--space-1);
   overflow-x: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
   padding-bottom: var(--space-1);
 }
@@ -110,7 +110,7 @@
   font-variant-numeric: tabular-nums;
   max-height: 24rem;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-x: contain;
 }
 
 .actions {
@@ -175,7 +175,7 @@
 
 .tableWrap {
   overflow-x: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -229,6 +229,11 @@
   gap: var(--space-2);
 }
 
+/* Кнопка создания стоит на одном уровне с самим select, ниже его подписи. */
+[aria-labelledby='apps-title'] > .row {
+  align-items: flex-end;
+}
+
 /* Переключатель «С образцом для генерации»: тап-цель не меньше 44 px. */
 .toggle {
   display: flex;
@@ -273,6 +278,64 @@
 
 .draftItem[aria-current='true'] {
   border-color: var(--accent);
+}
+
+/* Плотность мастера приложения задаётся локально, без изменения общих форм. */
+.wizard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.wizard .wizardSection {
+  min-width: 0;
+  padding: var(--space-3);
+  gap: var(--space-2);
+}
+
+.fieldSection {
+  container-type: inline-size;
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-2);
+}
+
+.fieldWide {
+  grid-column: 1 / -1;
+}
+
+.fieldGrid > .card {
+  padding: var(--space-2);
+  gap: var(--space-1);
+}
+
+.fieldGrid .fields {
+  gap: var(--space-1);
+}
+
+.fieldGrid .actions > button {
+  padding-inline: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.fieldGrid input[type='date'] {
+  width: min(100%, 12rem);
+}
+
+@container (min-width: 520px) {
+  .fieldGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 780px) {
+  .fieldGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

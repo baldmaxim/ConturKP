@@ -100,7 +100,7 @@ export const MembersPanel: FC<IMembersPanelProps> = ({ tenderId, canAdmin, canLi
     .filter((user) => user.status === 'active')
     .map((user) => ({
       value: user.id,
-      label: `${user.displayName} (${user.login}) — ${user.roles.map(globalRoleLabel).join(', ') || 'без ролей'}`,
+      label: `${user.displayName} (${user.login}) — ${(user.roleNames ?? user.roles.map(globalRoleLabel)).join(', ') || 'без ролей'}`,
     }));
 
   const renderAssignForm = (): ReactNode => {
@@ -232,6 +232,7 @@ export const MembersPanel: FC<IMembersPanelProps> = ({ tenderId, canAdmin, canLi
   return (
     <section className={form.stack} aria-label="Участники тендера">
       {actionError ? <Notice tone="danger">{actionError}</Notice> : null}
+      <Notice tone="info">Общий просмотр определяется разрешениями роли. Назначение на тендер открывает действия по выбранной роли.</Notice>
       {renderAssignForm()}
       {renderList()}
       {removing ? (
@@ -245,8 +246,8 @@ export const MembersPanel: FC<IMembersPanelProps> = ({ tenderId, canAdmin, canLi
           onClose={() => setRemoving(null)}
         >
           <p>
-            {removing.displayName} ({MEMBER_ROLE_LABELS[removing.memberRole].toLowerCase()}) потеряет доступ к этапам и
-            материалам этого тендера.
+            Назначение {removing.displayName} ({MEMBER_ROLE_LABELS[removing.memberRole].toLowerCase()}) будет снято.
+            Действия по этому назначению станут недоступны. При глобальной роли руководителя просмотр тендера сохранится.
           </p>
         </ConfirmDialog>
       ) : null}

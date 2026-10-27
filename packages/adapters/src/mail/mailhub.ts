@@ -3,6 +3,27 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 
 export const MAILHUB_CONTRACT = 'mailhub-service-read/1';
+
+// Сервисный контракт: недоступный оригинал требует редкой проверки источника,
+// а не трёх немедленных загрузок одного и того же UID.
+const originalUnavailable = async (res: Response): Promise<boolean> => {
+  if (!res.body) return false;
+  const reader = res.body.getReader(), chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();if (done) break;
+      size += value.length;
+      if (size > 4096) { await reader.cancel();return false; }
+      chunks.push(value);
+    }
+  } finally { reader.releaseLock(); }
+  try {
+    const body: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    return typeof body === 'object' && body !== null &&
+      (('code' in body && body.code === 'ORIGINAL_NOT_AVAILABLE') || ('detail' in body && body.detail === 'Оригинал сейчас недоступен'));
+  } catch { return false; }
+};
 const Copy = z.object({
   mailboxId: z.uuid(),
   mailbox: z.string().min(1).max(64),
@@ -101,6 +122,9 @@ export class MailHubReader {
         },
       );
       if (res.status !== 200) {
+        if (res.status === 409 && /^\/api\/v1\/service\/mail\/messages\/[\w-]+\/eml$/.test(path) && await originalUnavailable(res)) {
+          throw new MailHubReadError('ORIGINAL_NOT_AVAILABLE', false);
+        }
         await res.body?.cancel();
         throw new MailHubReadError(
           `HTTP_${res.status}`,

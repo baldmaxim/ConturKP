@@ -1,5 +1,23 @@
 /* Дизайн-токены «Контур КП» (BRAND.md §3.3, §5, §7, §10). Hex допустим только здесь. */
 
+/* Цветные ветки хронологии, по исходному HTML. Подписи читаются основным цветом текста. */
+:root,:root[data-theme='light']{
+  --history-lane-0:#2670A9;--history-lane-1:#8053BA;--history-lane-2:#24713D;
+  --history-lane-3:#A04E08;--history-lane-4:#AC3C76;--history-lane-5:#217E9C;
+  --history-lane-6:#4D734F;--history-lane-7:#86630D;--history-lane-8:#626F7E;
+  --history-lane-9:#AF4A46;--history-lane-10:#536875;--history-lane-11:#6661B4;
+  --history-lane-12:#087D83;--history-lane-13:#90653F;--history-lane-14:#8B5A9C;
+  --history-lane-15:#3A7957;--history-lane-16:#AC6A30;--history-lane-17:#416CAA;
+}
+:root[data-theme='dark']{
+  --history-lane-0:#58A6FF;--history-lane-1:#D2A8FF;--history-lane-2:#7EE787;
+  --history-lane-3:#FFA657;--history-lane-4:#F778BA;--history-lane-5:#79C0FF;
+  --history-lane-6:#A5D6A7;--history-lane-7:#E3B341;--history-lane-8:#B1BAC4;
+  --history-lane-9:#FF7B72;--history-lane-10:#C9D1D9;--history-lane-11:#A5A9FF;
+  --history-lane-12:#56D4DD;--history-lane-13:#D4A76A;--history-lane-14:#D9A5FF;
+  --history-lane-15:#8ED1A4;--history-lane-16:#F2BC89;--history-lane-17:#91B5DE;
+}
+
 :root,
 :root[data-theme='light'] {
   color-scheme: light;

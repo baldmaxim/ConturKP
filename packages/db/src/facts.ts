@@ -5,7 +5,7 @@ import {
   classifyDocument,
   computeFactGraph,
   documentKindOf,
-  extractDocumentFacts,
+  extractProfiledDocumentFacts,
   FACT_RULES_VERSION,
   type FactDecisionKind,
   type FactType,
@@ -80,8 +80,8 @@ export const extractRunFacts = async (db: Queryable, runId: string): Promise<{ c
   const done = await db.query('SELECT 1 FROM fact_extraction_run WHERE recognition_run_id = $1 AND rules_version = $2', [runId, FACT_RULES_VERSION]);
   if (done.rows[0]) return { created: false, owner: null, facts: 0 };
   const run = (
-    await db.query<{ status: string; document_revision_id: string; document_id: string; tender_id: string | null; contract_id: string | null; mail_attachment_id: string | null; title: string }>(
-      `SELECT rr.status, rr.document_revision_id, v.document_id, d.tender_id, d.contract_id, d.mail_attachment_id, d.title
+    await db.query<{ status: string; document_revision_id: string; document_id: string; tender_id: string | null; contract_id: string | null; mail_attachment_id: string | null; title: string; fact_input_profile: string | null }>(
+      `SELECT rr.status, rr.document_revision_id, v.document_id, d.tender_id, d.contract_id, d.mail_attachment_id, d.title, rr.recognizer->'config'->>'factInputProfile' AS fact_input_profile
          FROM recognition_run rr JOIN document_revision v ON v.id = rr.document_revision_id JOIN document d ON d.id = v.document_id
         WHERE rr.id = $1`,
       [runId],
@@ -101,7 +101,9 @@ export const extractRunFacts = async (db: Queryable, runId: string): Promise<{ c
   const firstPage = documentary.filter((f) => f.page_index === (documentary[0]?.page_index ?? null)).map((f) => f.text);
   const cls = classifyDocument({ firstPage, documentTitle: run.title });
   const spans: IFactSpan[] = documentary.map((f) => ({ fragmentId: f.id, text: f.text, tableRow: TABLE_LOCATORS.includes(f.locator_kind ?? ''), tableScope: f.table_scope ?? '' }));
-  const facts = extractDocumentFacts(spans);
+  if (run.fact_input_profile && !run.contract_id) throw new Error('Contract fact profile requires a contract');
+  const profiled = extractProfiledDocumentFacts(spans, run.fact_input_profile);
+  const facts = profiled.facts;
   const byType: Record<string, number> = {};
   for (const f of facts) byType[f.factType] = (byType[f.factType] ?? 0) + 1;
   const x = await db.query<{ id: string }>(
@@ -112,7 +114,7 @@ export const extractRunFacts = async (db: Queryable, runId: string): Promise<{ c
       runId, run.document_revision_id, run.document_id, run.tender_id, run.contract_id, FACT_RULES_VERSION, cls.kind, cls.number.slice(0, 200),
       cls.documentDate, cls.parentRef?.number.slice(0, 200) ?? null, cls.parentRef?.numberKey.slice(0, 200) ?? null, cls.parentRef?.date ?? null,
       cls.method.slice(0, 60), documentary.length, facts.length,
-      JSON.stringify({ fragments: fragments.length, documentary: documentary.length, otherOrigins: fragments.length - documentary.length, byType }),
+      JSON.stringify({ fragments: fragments.length, documentary: documentary.length, otherOrigins: fragments.length - documentary.length, byType, ...(run.fact_input_profile ? { inputProfile: run.fact_input_profile, excludedCandidates: profiled.excluded } : {}) }),
     ],
   );
   for (const f of facts) {

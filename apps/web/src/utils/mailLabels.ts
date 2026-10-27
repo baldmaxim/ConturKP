@@ -48,10 +48,27 @@ export const INTEGRATION_LABELS: Record<string, string> = {
 };
 
 export const integrationText = (i: ICommunicationIntegration): string => {
-  const what = INTEGRATION_LABELS[i.system] ?? i.system;
+  const componentLabels: Record<string, string> = {
+    MailHubMailboxReader: 'Входящие письма MailHub',
+    MailHubSentReader: 'Отправленные письма MailHub',
+  };
+  const what = componentLabels[i.component] ?? INTEGRATION_LABELS[i.system] ?? i.system;
   if (i.status === 'BLOCKED_EXTERNAL') return `${what}: заблокировано внешней зависимостью${i.blockedBy ? ` ${i.blockedBy}` : ''}. Штатный путь — ручной импорт файлов.`;
   if (i.status === 'NOT_IMPLEMENTED') return `${what}: не реализовано.`;
-  return `${what}: ${i.status}.`;
+  if (i.status === 'VERIFIED_LIVE') return `${what}: подключено и проверено.`;
+  return `${what}: проверено на тестовых данных.`;
+};
+
+/** Один статус почты; разные состояния входящих и отправленных не скрываются. */
+export const mailhubIntegrationText = (integrations: ICommunicationIntegration[]): string | null => {
+  const mailhub = integrations.filter((i) => i.system === 'mailhub');
+  if (mailhub.length === 0) return null;
+  if (
+    mailhub.some((i) => i.component === 'MailHubMailboxReader') &&
+    mailhub.some((i) => i.component === 'MailHubSentReader') &&
+    mailhub.every((i) => i.status === 'VERIFIED_LIVE')
+  ) return 'MailHub: чтение входящих и отправленных писем подключено и проверено.';
+  return mailhub.map(integrationText).join(' ');
 };
 
 export const QA_STATUS_LABELS: Record<'open' | 'answered' | 'withdrawn', string> = {

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type FC } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { getEvidence } from '../../api/recognitionEndpoints';
 import type { IEvidenceDetail } from '../../api/types';
 import { Badge } from '../../components/Badge';
+import { Button } from '../../components/Button';
 import { ErrorState } from '../../components/ErrorState';
 import { LoadingState } from '../../components/LoadingState';
 import { Notice } from '../../components/Notice';
@@ -11,6 +12,7 @@ import { useApiResource } from '../../hooks/useApiResource';
 import { evidenceOverlay, type IEvidenceOverlay } from '../../utils/bbox';
 import { anchorLabel, engineLabel, isLocalEngine, isPdf, originMeta, RECOGNITION_OUTCOME, UNIT_KIND_LABELS } from '../../utils/localRecognitionLabels';
 import { fragmentKindLabel, recognitionWarningLabel } from '../../utils/sourceLabels';
+import { factReturnPath } from '../../utils/factNavigation';
 import form from '../../styles/form.module.css';
 import list from '../../styles/list.module.css';
 import { EvidenceSource } from './EvidenceSource';
@@ -27,8 +29,14 @@ type IRender = IEvidenceOverlay;
  * рамки честнее рамки наугад (A17, I18). У фрагмента локального распознавания (этап 05a) координат
  * нет никогда (D-014): показываются текст и структурный якорь, у PDF — страница без выделения.
  */
-export const EvidenceViewer: FC = () => {
-  const { fragmentId = '' } = useParams();
+export const EvidenceViewer: FC<{ fragmentId?: string; embedded?: boolean }> = ({ fragmentId: providedId, embedded = false }) => {
+  const { fragmentId: routeId = '' } = useParams();
+  const fragmentId = providedId ?? routeId;
+  const [originalRequested, setOriginalRequested] = useState(false);
+  const showOriginal = !embedded || originalRequested;
+  const [searchParams] = useSearchParams();
+  const returnTo = factReturnPath(searchParams.get('returnTo'));
+  const returnBack = returnTo ? { to: returnTo, label: returnTo.startsWith('/contracts/') ? 'К фактам договора' : 'К фактам тендера' } : undefined;
   const res = useApiResource((signal) => getEvidence(fragmentId, signal), fragmentId);
   // Ключ отрисовки: всё, что влияет на выделение. Пока он не совпал с показанным, рамка
   // прежнего фрагмента текущей не считается — она относилась бы не к этому тексту (R04-14).
@@ -59,7 +67,7 @@ export const EvidenceViewer: FC = () => {
   const pdfOriginal = fragment ? fragment.mediaType === null || isPdf(fragment.mediaType) : false;
 
   useEffect(() => {
-    if (!fragment?.contentUrl || fragment.pageIndex === null || !pdfOriginal) {
+    if (!showOriginal || !fragment?.contentUrl || fragment.pageIndex === null || !pdfOriginal) {
       // Ни страницы, ни ссылки на оригинал: прежний холст и выделение перестают быть текущими.
       setDrawn(null);
       setRenderError(null);
@@ -67,6 +75,7 @@ export const EvidenceViewer: FC = () => {
     }
     let cancelled = false;
     let task: { cancel: () => void } | null = null;
+    let disposeLoading: (() => void) | null = null;
     const key = overlayKey;
     const draw = async (): Promise<void> => {
       setRenderError(null);
@@ -81,6 +90,7 @@ export const EvidenceViewer: FC = () => {
         disableStream: true,
         disableAutoFetch: true,
       });
+      disposeLoading = () => { void loading.destroy().catch(() => undefined); };
       const doc = await loading.promise;
       if (cancelled) {
         void doc.destroy();
@@ -126,16 +136,17 @@ export const EvidenceViewer: FC = () => {
     return () => {
       cancelled = true;
       task?.cancel();
+      disposeLoading?.();
     };
     // Ключ включает всё, что влияет на выделение: смена фрагмента на той же странице того
     // же PDF обязана перерисовать рамку, а не оставить прежнюю (R04-14).
-  }, [overlayKey]);
+  }, [overlayKey, showOriginal]);
 
   if (res.loading && !fragment) {
-    return <LoadingState />;
+    return <>{returnBack ? <PageHeader title="Цитата" back={returnBack} /> : null}<LoadingState /></>;
   }
   if (res.error || !fragment) {
-    return <ErrorState error={res.error} onRetry={res.reload} notFoundTitle="Доказательство не найдено или нет доступа" />;
+    return <>{returnBack ? <PageHeader title="Цитата" back={returnBack} /> : null}<ErrorState error={res.error} onRetry={res.reload} notFoundTitle="Доказательство не найдено или нет доступа" /></>;
   }
 
   const origin = originMeta(fragment.origin, fragment.runEngine);
@@ -144,7 +155,7 @@ export const EvidenceViewer: FC = () => {
   if (communication) {
     return (
       <>
-        <PageHeader title="Доказательство" subtitle={fragment.locator ? anchorLabel(fragment.locator) : fragmentKindLabel(fragment.fragmentKind)} />
+        {!embedded ? <PageHeader title="Доказательство" back={returnBack} subtitle={fragment.locator ? anchorLabel(fragment.locator) : fragmentKindLabel(fragment.fragmentKind)} /> : null}
         <section className={form.section} aria-label="Текст фрагмента">
           <div className={styles.head}>
             <Badge tone={origin.tone} icon={origin.icon} dashed={origin.dashed} label={origin.label} />
@@ -165,11 +176,11 @@ export const EvidenceViewer: FC = () => {
 
   return (
     <>
-      <PageHeader
+      {!embedded ? <PageHeader
         title="Доказательство"
         subtitle={anchor ?? `${fragmentKindLabel(fragment.fragmentKind)}${pageNo ? ` · страница ${pageNo}` : ''}`}
-        back={fragment.documentId ? { to: `/documents/${fragment.documentId}`, label: 'К документу' } : undefined}
-      />
+        back={returnBack ?? (fragment.documentId ? { to: `/documents/${fragment.documentId}`, label: 'К документу' } : undefined)}
+      /> : null}
       <section className={form.section} aria-label="Текст фрагмента">
         <div className={styles.head}>
           <Badge tone={origin.tone} icon={origin.icon} dashed={origin.dashed} label={origin.label} />
@@ -207,7 +218,7 @@ export const EvidenceViewer: FC = () => {
         <EvidenceSource fragment={fragment} />
       </section>
 
-      <section className={form.section} aria-label="Участок оригинала">
+      {!showOriginal ? <Button icon="scan-search" onClick={() => setOriginalRequested(true)}>Показать страницу оригинала</Button> : <section className={form.section} aria-label="Участок оригинала">
         {fragment.runStatus === 'partial' ? (
           <Notice tone="warning">
             {local
@@ -280,7 +291,7 @@ export const EvidenceViewer: FC = () => {
             Открыть оригинал целиком
           </a>
         ) : null}
-      </section>
+      </section>}
     </>
   );
 };

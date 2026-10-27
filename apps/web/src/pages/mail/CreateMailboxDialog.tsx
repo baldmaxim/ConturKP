@@ -74,7 +74,7 @@ export const CreateMailboxDialog: FC<ICreateMailboxDialogProps> = ({ onClose, on
           { value: 'mailhub', label: 'Ящик MailHub' },
         ]}
         onValueChange={(v) => setSystem(v as 'manual' | 'mailhub')}
-        hint="Автоматическое чтение MailHub пока заблокировано (X-03): письма и в этот ящик загружаются файлами EML."
+        hint="Регистрация ящика не подключает синхронизацию MailHub. Подключение настраивается администратором отдельно; файлы EML можно импортировать вручную."
       />
       <TextField label="Адрес ящика" required type="email" autoComplete="off" value={account} onValueChange={setAccount} error={errors.externalAccountId} />
       <TextField label="Название" required autoComplete="off" value={name} onValueChange={setName} error={errors.displayName} hint="Например: Тендерный отдел." />

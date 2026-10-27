@@ -35,6 +35,9 @@ export const FieldCard: FC<IFieldCardProps> = ({ draftId, tenderId, field: f, ca
   const [history, setHistory] = useState(false);
   const d = f.definition;
   const v = f.latest;
+  const compact = d.type === 'date' || d.type === 'number'
+    || (d.type === 'choice' && !d.multiple)
+    || (d.type === 'text' && !d.multiline && d.maxLength !== undefined && d.maxLength <= 80);
 
   const run = (body: TFieldAction, done = 'Значение сохранено'): void => {
     setBusy(true);
@@ -82,7 +85,7 @@ export const FieldCard: FC<IFieldCardProps> = ({ draftId, tenderId, field: f, ca
   const state = v ? STATE_LABEL[v.state] : null;
   const canConfirm = v !== null && v.value !== null && (v.state === 'carried_over' || v.state === 'needs_discussion' || v.stale);
   return (
-    <article id={`field-${f.key}`} className={[styles.card, v?.stale ? styles.cardStale : '', f.applicable ? '' : styles.cardInactive].join(' ')} aria-labelledby={`field-${f.key}-label`}>
+    <article id={`field-${f.key}`} className={[styles.card, compact ? '' : styles.fieldWide, v?.stale ? styles.cardStale : '', f.applicable ? '' : styles.cardInactive].join(' ')} aria-labelledby={`field-${f.key}-label`}>
       <div className={styles.cardHead}>
         <h4 id={`field-${f.key}-label`} className={styles.label}>
           {d.label}

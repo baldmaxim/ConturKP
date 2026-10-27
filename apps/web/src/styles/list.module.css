@@ -168,7 +168,7 @@
   .tableWrap {
     display: block;
     overflow-x: auto;
-    overscroll-behavior: contain;
+    overscroll-behavior-x: contain;
     background: var(--surface);
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-lg);
@@ -190,4 +190,18 @@
     height: 40px;
     padding-block: var(--space-1);
   }
+}
+
+/* Название роли и её служебные сведения разделены на строки. */
+.roleIdentity > strong,
+.roleIdentity > span {
+  display: block;
+}
+
+.roleIdentity > p {
+  margin: var(--space-1) 0;
+}
+
+.roleIdentity > span {
+  margin-top: 2px;
 }

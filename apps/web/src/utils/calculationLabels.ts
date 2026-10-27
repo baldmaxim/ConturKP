@@ -54,11 +54,23 @@ export const formatDecimal = (value: string | null | undefined): string => {
 
 const CURRENCY_SIGN: Record<string, string> = { RUB: '₽', USD: '$', EUR: '€', CNY: '¥' };
 
+// Денежные суммы показываем ровно с двумя знаками после запятой, округляя отображение без перевода в number.
+export const formatAmount = (value: string | null | undefined): string => {
+  const m = value ? /^(-?)(\d+)(?:\.(\d+))?$/u.exec(value) : null;
+  if (!m) return formatDecimal(value);
+  const fraction = (m[3] ?? '').padEnd(3, '0');
+  const cents = (BigInt(`${m[2]}${fraction.slice(0, 2)}`) + (fraction[2]! >= '5' ? 1n : 0n))
+    .toString()
+    .padStart(3, '0');
+  const sign = cents === '000' ? '' : m[1];
+  return formatDecimal(`${sign}${cents.slice(0, -2)}.${cents.slice(-2)}`);
+};
+
 // Валюта показывается только подтверждённая источником (UNKNOWN — без знака).
 export const formatMoney = (m: IMoney | null): string => {
   if (!m) return '—';
   const sign = CURRENCY_SIGN[m.currency];
-  return `${formatDecimal(m.amount)}${sign ? ` ${sign}` : ''}${m.unit ? `/${m.unit}` : ''}`;
+  return `${formatAmount(m.amount)}${sign ? ` ${sign}` : ''}${m.unit ? `/${m.unit}` : ''}`;
 };
 
 export const ATTEMPT_REASON: Record<string, string> = {

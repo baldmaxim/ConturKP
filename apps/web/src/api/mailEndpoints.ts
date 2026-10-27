@@ -8,6 +8,7 @@ import type {
   IMailImport,
   IMailLink,
   IMailMessage,
+  IMailMessagePage,
   IMailMessageDetail,
   IMailRevisionDetail,
   INegotiationSession,
@@ -35,8 +36,8 @@ export const listMailAccess = (id: string, signal?: AbortSignal): Promise<IMailA
 export const putMailAccess = (id: string, rowVersion: number, userId: string, capabilities: TMailCapability[]): Promise<IMailAccessList> =>
   apiPut<IMailAccessList>(`/mailboxes/${enc(id)}/access/${enc(userId)}`, { body: { capabilities }, ifMatch: etagOf(id, rowVersion) });
 
-export const listMailboxMessages = (id: string, signal?: AbortSignal): Promise<IListResponse<IMailMessage>> =>
-  apiGet<IListResponse<IMailMessage>>(`/mailboxes/${enc(id)}/messages`, { signal });
+export const listMailboxMessages = (id: string, options: { q: string; page: number; pageSize: number }, signal?: AbortSignal): Promise<IMailMessagePage> =>
+  apiGet<IMailMessagePage>(`/mailboxes/${enc(id)}/messages?${new URLSearchParams({ q: options.q, page: String(options.page), pageSize: String(options.pageSize) })}`, { signal });
 
 export const listMailImports = (id: string, signal?: AbortSignal): Promise<IListResponse<IMailImport>> =>
   apiGet<IListResponse<IMailImport>>(`/mailboxes/${enc(id)}/imports`, { signal });

@@ -39,6 +39,13 @@ export interface IMailAccessRow {
   capabilities: TMailCapability[];
 }
 
+export interface IMailMessagePage {
+  items: IMailMessage[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface IMailAccessList {
   items: IMailAccessRow[];
   mailboxRowVersion: number;

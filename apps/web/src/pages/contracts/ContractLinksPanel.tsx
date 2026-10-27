@@ -3,6 +3,7 @@ import { archiveContractLink, createContractLink, listContractLinks, updateContr
 import type { IContract, IContractLink } from '../../api/contractTypes';
 import { listStages, listTenders } from '../../api/endpoints';
 import { describeError, hasCode } from '../../api/errors';
+import { AppLink } from '../../components/AppLink';
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
@@ -165,7 +166,7 @@ export const ContractLinksPanel: FC<IContractLinksPanelProps> = ({ contract }) =
           {links.map((l) => (
             <li key={l.id} className={list.card}>
               <div className={list.cardHead}>
-                <span className={list.cardTitle}>{`${l.tender.code} · ${l.tender.title}`}</span>
+                <AppLink className={list.rowLink} to={`/tenders/${l.tenderId}?tab=contracts`}>{`${l.tender.code} · ${l.tender.title}`}</AppLink>
                 {l.status === 'active' ? <Badge tone="success" icon="link" label="Действует" /> : <Badge tone="neutral" icon="archive" dashed label="В архиве" />}
               </div>
               <dl className={list.meta}>

@@ -66,5 +66,10 @@ export * from './releaseComparisons.ts';
 export * from './apiTokens.ts';
 export * from './mcpProposals.ts';
 export * from './mailhub.ts';
+export * from './tenderHistory.ts';
+export * from './historyContent.ts';
+
+export * from './contractHistory.ts';
+export * from './contractHistoryPlan.ts';
 
 export * from './roles.ts';

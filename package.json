@@ -40,7 +40,9 @@
     "ops:service": "node scripts/ops/service.ts",
     "ops:measure": "node scripts/ops/measure.ts",
     "ops:acceptance-matrix": "node scripts/ops/acceptance-matrix.ts",
-    "ops:pilot": "node --env-file-if-exists=.env scripts/ops/pilot.ts"
+    "ops:pilot": "node --env-file-if-exists=.env scripts/ops/pilot.ts",
+    "test:node": "node --test --test-concurrency=1 tests/*.node-test.mjs",
+    "test:all": "npm test -- --maxWorkers=1 --fileParallelism=false && npm run test:node"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.3.1",

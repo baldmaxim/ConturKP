@@ -2,6 +2,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   canSeeTenderCard,
+  effectiveContractCapabilities,
+  effectiveMailCapabilities,
+  tenderAuditScope,
   formatEtag,
   globalCapabilities,
   hashPassword,
@@ -78,6 +81,17 @@ describe('возможности', () => {
       'calculation.close',
       'audit.read',
     ]);
+  });
+  it('руководитель без назначения получает только чтение и журнал', () => {
+    expect(tenderCapabilities(roles('manager'), null)).toEqual(['tender.read', 'requirement.read', 'fact.read', 'audit.read']);
+    expect(canSeeTenderCard(roles('manager'), null)).toBe(true);
+    expect(tenderAuditScope(roles('manager'), null)).toEqual({ kind: 'all' });
+    expect(effectiveContractCapabilities(roles('manager'), undefined)).toEqual(['contract.read']);
+    expect(effectiveMailCapabilities(roles('manager'), undefined)).toEqual(['mail.read']);
+    expect(effectiveContractCapabilities(roles('engineer'), undefined)).toEqual([]);
+    expect(effectiveMailCapabilities(roles('admin'), undefined)).toEqual([]);
+    expect(effectiveContractCapabilities(roles('manager'), new Set(['contract.manage']))).toEqual(['contract.read', 'contract.manage']);
+    expect(effectiveMailCapabilities(roles('manager'), new Set(['mail.link']))).toEqual(['mail.read', 'mail.link']);
   });
   it('назначение без соответствующей глобальной роли не действует', () => {
     expect(tenderCapabilities(roles('engineer'), 'manager')).toEqual([]);

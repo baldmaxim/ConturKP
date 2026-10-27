@@ -24,6 +24,7 @@ export * from './local/docx.ts';
 export * from './local/xlsx.ts';
 export * from './local/csv.ts';
 export * from './local/settings.ts';
+export * from './local/historyCompare.ts';
 export * from './mail/eml.ts';
 export * from './mail/htmlText.ts';
 export * from './mail/mailBody.ts';
@@ -40,3 +41,5 @@ export * from './office/converterTypes.ts';
 export * from './office/pdf.ts';
 export * from './delivery/index.ts';
 export * from './mail/mailhub.ts';
+
+export * from './local/historyMetadata.ts';

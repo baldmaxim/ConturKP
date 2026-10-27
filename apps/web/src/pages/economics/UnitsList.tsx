@@ -8,7 +8,7 @@ import { ErrorState } from '../../components/ErrorState';
 import { LoadingState } from '../../components/LoadingState';
 import { useApiResource } from '../../hooks/useApiResource';
 import { useToast } from '../../hooks/useToast';
-import { formatDecimal } from '../../utils/calculationLabels';
+import { formatAmount } from '../../utils/calculationLabels';
 import { COMPONENT_LABEL, notDecomposedText, REASON_KIND_LABEL, REASON_STATUS_LABEL, signed, UNIT_KIND_LABEL } from '../../utils/economicsLabels';
 import form from '../../styles/form.module.css';
 import { ReasonDialog } from './ReasonDialog';
@@ -22,7 +22,7 @@ interface IUnitsListProps {
 
 const Measure: FC<{ label: string; m: IComparisonUnit['cost'] }> = ({ label, m }) => (
   <span>
-    {`${label}: ${formatDecimal(m.left)} → ${formatDecimal(m.right)} ₽`}
+    {`${label}: ${formatAmount(m.left)} → ${formatAmount(m.right)} ₽`}
     {m.comparable ? <strong>{` (${signed(m.delta)})`}</strong> : <span className={styles.muted}>{` — несопоставимо: ${m.reason ?? ''}`}</span>}
   </span>
 );

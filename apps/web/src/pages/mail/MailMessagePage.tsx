@@ -44,7 +44,7 @@ export const MailMessagePage: FC = () => {
     <>
       <PageHeader
         back={{ to: `/mailboxes/${m.mailboxId}`, label: m.mailboxName }}
-        title={m.subject ?? 'Без темы'}
+        title="Письмо"
         subtitle={
           <span className={styles.headLine}>
             <span>{m.from ?? 'отправитель не указан'}</span>

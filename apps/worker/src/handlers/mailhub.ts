@@ -106,13 +106,14 @@ export const mailhubFetchHandler: IJobHandlerSpec = {
     const source = (
       await ctx.pool.query<{
         import_id: string | null;
+        skipped: boolean;
         copies: Array<{ mailbox: string; folder: string; role: string }>;
       }>(
-        'SELECT import_id,copies FROM mailhub_message WHERE source_key=$1 AND external_id=$2',
+        "SELECT import_id,copies,retry_after='infinity'::timestamptz AS skipped FROM mailhub_message WHERE source_key=$1 AND external_id=$2",
         [key, itemId],
       )
     ).rows[0];
-    if (!connection?.enabled || !source || source.import_id) {
+    if (!connection?.enabled || !source || source.import_id || source.skipped) {
       await ctx.complete();
       return;
     }
@@ -126,12 +127,12 @@ export const mailhubFetchHandler: IJobHandlerSpec = {
       await ctx.complete(async (db) => {
         if (!(await getMailHubConnection(db, key))?.enabled) return;
         const locked = (
-          await db.query<{ import_id: string | null }>(
-            'SELECT import_id FROM mailhub_message WHERE source_key=$1 AND external_id=$2 FOR UPDATE',
+          await db.query<{ import_id: string | null; skipped: boolean }>(
+            "SELECT import_id,retry_after='infinity'::timestamptz AS skipped FROM mailhub_message WHERE source_key=$1 AND external_id=$2 FOR UPDATE",
             [key, itemId],
           )
         ).rows[0];
-        if (!locked || locked.import_id) return;
+        if (!locked || locked.import_id || locked.skipped) return;
         await insertBlob(db, { ...stored, mediaType: 'message/rfc822' });
         const imported = await createMailImport(db, {
           mailboxId: connection.mailbox_id,
@@ -165,11 +166,13 @@ export const mailhubFetchHandler: IJobHandlerSpec = {
   },
   async onTerminalFailure(db, ctx, error) {
     await db.query(
-      "UPDATE mailhub_message SET failure_code=$3,retry_after=now()+interval '1 day' WHERE source_key=$1 AND external_id=$2",
+      "UPDATE mailhub_message SET failure_code=$3,retry_after=now()+make_interval(secs=>$4::int) WHERE source_key=$1 AND external_id=$2 AND import_id IS NULL AND isfinite(retry_after)",
       [
         String(ctx.job.payload.sourceKey),
         String(ctx.job.payload.itemId),
         error.code,
+        error.code === 'ORIGINAL_NOT_AVAILABLE' ? 3600 :
+          ['UNAVAILABLE', 'TIMEOUT', 'EMPTY_RESPONSE', 'HTTP_409', 'HTTP_429'].includes(error.code) || /^HTTP_5\d\d$/.test(error.code) ? 60 : 86400,
       ],
     );
   },

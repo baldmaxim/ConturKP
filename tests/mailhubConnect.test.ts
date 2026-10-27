@@ -21,6 +21,8 @@ import {
 } from './helpers.ts';
 import { BlobStore } from '../packages/storage/src/index.ts';
 import { eml } from './mailFixtures.ts';
+import { mailhubFetchHandler } from '../apps/worker/src/handlers/mailhub.ts';
+import type { IJobContext } from '../apps/worker/src/runtime.ts';
 
 const itemId = randomUUID();
 const raw = eml({
@@ -119,6 +121,22 @@ afterAll(async () => {
 });
 
 describe('MailHub: five copies, one original', () => {
+  it('сетевой сбой повторяется через минуту, постоянный — через сутки', async () => {
+    const retryItem = randomUUID();
+    const ctx = { job: { payload: { sourceKey: api.sourceKey, itemId: retryItem } } } as unknown as IJobContext;
+    const client = await db.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('INSERT INTO mailhub_message(source_key,external_id,source_changed_at,copies) VALUES($1,$2,now(),$3::jsonb)', [api.sourceKey, retryItem, JSON.stringify(copies)]);
+      for (const [code, seconds] of [['UNAVAILABLE', 60], ['TIMEOUT', 60], ['HTTP_503', 60], ['CHECKSUM_MISMATCH', 86400]] as const) {
+        await mailhubFetchHandler.onTerminalFailure!(client, ctx, { code, message: code });
+        const row = (await client.query('SELECT failure_code,extract(epoch FROM retry_after-now())::int AS seconds FROM mailhub_message WHERE source_key=$1 AND external_id=$2', [api.sourceKey, retryItem])).rows[0];
+        expect(row.failure_code).toBe(code);expect(row.seconds).toBeGreaterThanOrEqual(seconds - 2);expect(row.seconds).toBeLessThanOrEqual(seconds);
+      }
+    } finally {
+      await client.query('ROLLBACK');client.release();
+    }
+  });
   it('полный цикл worker: одно письмо, одна ревизия и все пять ящиков', async () => {
     const worker = makeWorker(db, config);
     await scheduleMailHub(db.pool, api.sourceKey);
@@ -182,6 +200,15 @@ describe('MailHub: five copies, one original', () => {
         )
       ).rows[0].n,
     ).toBe(1);
+  });
+  it('запоздавший отказ не помечает уже полученное письмо ошибкой', async () => {
+    const client = await db.pool.connect();
+    try {
+      const ctx = { job: { payload: { sourceKey: api.sourceKey, itemId } } } as unknown as IJobContext;
+      await mailhubFetchHandler.onTerminalFailure!(client, ctx, { code: 'UNAVAILABLE', message: 'временный сбой' });
+      const row = (await client.query('SELECT import_id,failure_code FROM mailhub_message WHERE source_key=$1 AND external_id=$2', [api.sourceKey, itemId])).rows[0];
+      expect(row.import_id).not.toBeNull();expect(row.failure_code).toBeNull();
+    } finally { client.release(); }
   });
   it('позднее вхождение меняет происхождение, сохраняя письмо и вложение', async () => {
     const updated = {

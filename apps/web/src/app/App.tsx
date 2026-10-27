@@ -19,7 +19,8 @@ import { OfficePage } from '../pages/OfficePage';
 import { StagePage } from '../pages/StagePage';
 import { RequirementPage } from '../pages/requirements/RequirementPage';
 import { TenderPage } from '../pages/TenderPage';
-import { TendersPage } from '../pages/TendersPage';
+import { HistoryPage } from '../pages/history/HistoryPage';
+import { HomePage } from './HomePage';
 import { AppLayout } from './AppLayout';
 import { AuthProvider } from './AuthProvider';
 import { RequireAuth } from './RequireAuth';
@@ -42,7 +43,8 @@ export const App: FC = () => {
               </RequireAuth>
             }
           >
-            <Route index element={<TendersPage />} />
+            <Route index element={<HomePage />} />
+            <Route path="history" element={<HistoryPage />} />
             <Route path="tenders/:tenderId" element={<TenderPage />} />
             <Route path="stages/:stageId" element={<StagePage />} />
             <Route path="requirements/:requirementId" element={<RequirementPage />} />

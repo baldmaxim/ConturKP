@@ -9,11 +9,11 @@ import { Dialog } from '../components/Dialog';
 import { Notice } from '../components/Notice';
 import { SelectField } from '../components/SelectField';
 import { TextField } from '../components/TextField';
+import { useRoleCatalog } from '../hooks/useRoleCatalog';
 import { useUnsavedChanges } from '../hooks/unsavedChanges';
-import { GLOBAL_ROLES, GLOBAL_ROLE_LABELS, globalRoleLabel } from '../utils/labels';
+import { globalRoleLabel } from '../utils/labels';
 import form from '../styles/form.module.css';
 
-const ROLE_OPTIONS = GLOBAL_ROLES.map((role) => ({ value: role, label: GLOBAL_ROLE_LABELS[role] }));
 const STATUS_LABELS: Record<TUserStatus, string> = { active: 'Активен', disabled: 'Отключён' };
 
 const sameRoles = (a: string[], b: string[]): boolean => a.length === b.length && a.every((role) => b.includes(role));
@@ -31,21 +31,19 @@ export const UserEditDialog: FC<IUserEditDialogProps> = ({ user, isSelf, onClose
   const [base, setBase] = useState<IUser>(user);
   const [displayName, setDisplayName] = useState(user.displayName);
   const [roles, setRoles] = useState<string[]>(user.roles);
+  const roleCatalog = useRoleCatalog(roles);
   const [status, setStatus] = useState<TUserStatus>(user.status);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<{ current: IUser | null } | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const roleOptions = [...ROLE_OPTIONS, ...base.roles.filter((role) => !GLOBAL_ROLES.some((known) => known === role))
-    .map((role) => ({ value: role, label: base.roleNames?.[base.roles.indexOf(role)] ?? globalRoleLabel(role) }))];
-
   const patch: IUserPatch = {};
   if (displayName.trim() !== base.displayName) {
     patch.displayName = displayName.trim();
   }
   if (!sameRoles(roles, base.roles)) {
-    patch.roles = [...new Set(roles)];
+    patch.roles = roles;
   }
   if (status !== base.status) {
     patch.status = status;
@@ -105,7 +103,7 @@ export const UserEditDialog: FC<IUserEditDialogProps> = ({ user, isSelf, onClose
           <Button variant="ghost" onClick={onClose} disabled={saving}>
             Отмена
           </Button>
-          <Button variant="primary" type="submit" loading={saving} disabled={!dirty || conflict !== null}>
+          <Button variant="primary" type="submit" loading={saving} disabled={!dirty || conflict !== null || roleCatalog.loading || Boolean(roleCatalog.error)}>
             Сохранить
           </Button>
         </>
@@ -140,7 +138,8 @@ export const UserEditDialog: FC<IUserEditDialogProps> = ({ user, isSelf, onClose
       {formError ? <Notice tone="danger">{formError}</Notice> : null}
       <TextField label="Логин" value={user.login} onValueChange={() => undefined} readOnly hint="Логин не меняется." />
       <TextField label="Имя для отображения" required value={displayName} onValueChange={setDisplayName} error={errors.displayName} />
-      <CheckboxGroup legend="Роли" required options={roleOptions} selected={roles} onChange={setRoles} error={errors.roles} />
+      <CheckboxGroup legend="Роли" required options={roleCatalog.options} selected={roles} onChange={setRoles} error={errors.roles} />
+      {roleCatalog.error ? <Notice tone="danger">Не удалось загрузить роли. Закройте окно и повторите.</Notice> : <Notice tone="info">Права выбранных ролей объединяются. Настройка доступна в разделе «Роли и права».</Notice>}
       <SelectField
         label="Статус"
         value={status}

@@ -262,6 +262,12 @@ export const PatchMailboxRequest = z
 
 export const PutMailAccessRequest = z.object({ capabilities: z.array(MAIL_CAPABILITY).max(4) }).strict();
 
+export const MailMessagesQuery = z.object({
+  q: z.string().trim().max(500).default(''),
+  page: z.coerce.number().int().min(1).max(1_000_000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(50),
+});
+
 // Параметры импорта EML в строке запроса; имя файла — параметр name. Связь с тендером при импорте —
 // необязательна и требует mail.link (OD-07-7: связь подтверждает человек).
 export const MailImportQuery = z.object({
@@ -444,6 +450,7 @@ export * from './release.ts';
 export * from './delivery.ts';
 export * from './send.ts';
 export * from './mcp.ts';
+export * from './tenderHistory.ts';
 
 export const RolePermissions = z.array(z.enum(ROLE_PERMISSION_CATALOG.map(p => p.code))).max(100);
 export const CreateRoleRequest = z.object({ name: text(80), description: z.string().trim().max(500).default(''), baseRole: ROLE, permissions: RolePermissions }).strict();

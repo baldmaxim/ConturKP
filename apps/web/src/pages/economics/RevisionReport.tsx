@@ -6,7 +6,7 @@ import { ErrorState } from '../../components/ErrorState';
 import { LoadingState } from '../../components/LoadingState';
 import { Notice } from '../../components/Notice';
 import { useApiResource } from '../../hooks/useApiResource';
-import { formatDecimal } from '../../utils/calculationLabels';
+import { formatAmount, formatDecimal } from '../../utils/calculationLabels';
 import { formatDateTime } from '../../utils/datetime';
 import { COMPONENT_CODE_LABEL, DEVIATION_LABEL, RECONCILIATION_LABEL, rub } from '../../utils/economicsLabels';
 import form from '../../styles/form.module.css';
@@ -47,8 +47,8 @@ const DeviationLines: FC<{ revisionId: string; flag: string }> = ({ revisionId, 
               <td>{`${l.itemType} · ${l.description ?? '—'}`}</td>
               <td className={styles.num}>{formatDecimal(l.quantity)}</td>
               <td className={styles.num}>{formatDecimal(l.derivedQuantity)}</td>
-              <td className={styles.num}>{formatDecimal(l.totalAmount)}</td>
-              <td className={styles.num}>{l.recomputedCost === null ? 'неприменим' : formatDecimal(l.recomputedCost)}</td>
+              <td className={styles.num}>{formatAmount(l.totalAmount)}</td>
+              <td className={styles.num}>{l.recomputedCost === null ? 'неприменим' : formatAmount(l.recomputedCost)}</td>
             </tr>
           ))}
         </tbody>
@@ -101,7 +101,7 @@ export const RevisionReport: FC<IRevisionReportProps> = ({ revisionId }) => {
         <div className={styles.card}>
           <p className={styles.cardLabel}>Итог TenderHub (последнее наблюдаемое значение)</p>
           <p className={styles.cardValue}>{rub(rec.target)}</p>
-          <p className={styles.muted}>{`подтверждённая часть ${rub(rec.confirmedPartRounded)} · допуск ${formatDecimal(rec.tolerance)} ₽`}</p>
+          <p className={styles.muted}>{`подтверждённая часть ${rub(rec.confirmedPartRounded)} · допуск ${formatAmount(rec.tolerance)} ₽`}</p>
         </div>
         <div className={`${styles.card} ${styles.residual}`}>
           <p className={styles.cardLabel}>Неподтверждённый остаток — не итог КП</p>

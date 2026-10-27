@@ -15,6 +15,7 @@ import {
   heartbeatJob,
   lockOwnedJob,
   recordChatModelStatus,
+  reportJobProgress,
   scheduleMailHub,
   recoverExpiredJobs,
   releaseJob,
@@ -44,6 +45,8 @@ import {
 import { guardGateway, pause } from './loopUtils.ts';
 import { runSearchMaintenance, versionOutdated, type IMaintenanceReport } from './maintenance.ts';
 import { scheduleCalculationCaptures, scheduleFactExtraction, scheduleLocalRecognition, scheduleScans, scheduleStageInvalidation } from './scheduling.ts';
+import { scheduleHistorySync } from './handlers/tenderHistory.ts';
+import { scheduleHistoryWatch } from './handlers/historyWatch.ts';
 
 export * from './jobTypes.ts';
 
@@ -141,6 +144,8 @@ export class WorkerRuntime {
       ],
       // При остановке записи хранилища новые сканы не ставятся: файлы всё равно не запишутся (ADR-011 §10).
       ['сканы', async () => (this.restoreCheck || (await this.o.store.space.level()).level === 'stop' ? 0 : this.scheduleScans())],
+      ['хронология',async()=>this.restoreCheck||(await this.o.store.space.level()).level==='stop'?0:scheduleHistorySync(this.o.pool)],
+      ['файлы Tender',async()=>this.restoreCheck||(await this.o.store.space.level()).level==='stop'?0:scheduleHistoryWatch(this.o.pool)],
       ['выгрузки по сроку', () => (this.restoreCheck ? Promise.resolve(0) : this.scheduleCalculationCaptures())],
       ['почта MailHub', async () => {
         if(this.restoreCheck||!this.o.config.mailhub||(await this.o.store.space.level()).level==='stop')return;
@@ -250,6 +255,8 @@ export class WorkerRuntime {
       );
     }, Math.max(200, Math.floor(this.leaseMs / 3)));
     let completed = false;
+    let progress = { phase: 'processing', completed: 0, total: null, unit: 'files' } as import('@kontur/db').IJobProgress;
+    let lastProgressAt = 0;
     const throwIfStopped = (): void => {
       if (stopReason === 'lost') throw new LeaseLostError();
       if (stopReason === 'cancel') throw new JobCancelledError('отмена запрошена');
@@ -275,7 +282,19 @@ export class WorkerRuntime {
       deliveryFs: this.o.deliveryFs ?? nodeDeliveryFs(),
       signal: controller.signal,
       withLease,
+      reportProgress: async (next) => {
+        throwIfStopped();
+        // Не более одной записи в секунду между этапами; последняя единица записывается сразу.
+        const changed = next.phase !== progress.phase || next.total !== progress.total || next.unit !== progress.unit;
+        progress = next;
+        if (!changed && next.completed !== next.total && Date.now() - lastProgressAt < 1000) return;
+        await withLease(async (client) => {
+          if (!(await reportJobProgress(client, job.id, token, next))) throw new JobCancelledError('отмена запрошена');
+        });
+        lastProgressAt = Date.now();
+      },
       complete: async (fn, then) => {
+        if (!completed) await ctx.reportProgress!({ ...progress, phase: 'saving' });
         await withLease(async (client) => {
           if (fn) await fn(client);
           if (!(await succeedJob(client, job.id, token))) throw new LeaseLostError();
@@ -290,6 +309,7 @@ export class WorkerRuntime {
       if (!spec) throw new PermanentJobError('unknown_kind', `нет обработчика ${job.kind}`);
       // Отменённое до захвата задание не выполняется вовсе: сразу доменная отмена (R04-02).
       ctx.throwIfStopped();
+      await ctx.reportProgress!(progress);
       await spec.run(ctx);
       if (!completed) await ctx.complete();
       this.log(`задание ${job.kind} ${job.id} выполнено`);

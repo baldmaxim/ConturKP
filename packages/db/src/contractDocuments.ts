@@ -27,6 +27,10 @@ export interface IContractDocumentRow {
   latest_media_type: string;
   latest_size_bytes: number;
   latest_run_status: string | null;
+  preferred_run_id: string | null;
+  preferred_run_status: string | null;
+  preferred_pages_total: number | null;
+  preferred_pages_recognized: number | null;
 }
 
 const SELECT_DOCUMENT = `
@@ -34,10 +38,16 @@ const SELECT_DOCUMENT = `
          (SELECT count(*)::int FROM document_revision x WHERE x.document_id = d.id) AS revisions,
          lr.id AS latest_revision_id, lr.revision_seq AS latest_revision_seq, lr.received_at AS latest_received_at,
          b.media_type AS latest_media_type, b.size_bytes AS latest_size_bytes,
-         (SELECT r.status FROM recognition_run r WHERE r.document_revision_id = lr.id ORDER BY r.created_at DESC, r.id LIMIT 1) AS latest_run_status
+         (SELECT r.status FROM recognition_run r WHERE r.document_revision_id = lr.id ORDER BY r.created_at DESC, r.id LIMIT 1) AS latest_run_status,
+         pr.id AS preferred_run_id, pr.status AS preferred_run_status,
+         pr.pages_total AS preferred_pages_total, pr.pages_recognized AS preferred_pages_recognized
     FROM document d
     JOIN LATERAL (SELECT x.* FROM document_revision x WHERE x.document_id = d.id ORDER BY x.revision_seq DESC LIMIT 1) lr ON true
-    JOIN blob b ON b.sha256 = lr.blob_sha256`;
+    JOIN blob b ON b.sha256 = lr.blob_sha256
+    LEFT JOIN LATERAL (
+      SELECT r.id, r.status, r.pages_total, r.pages_recognized
+        FROM recognition_run r WHERE r.id = recognition_preferred_run(lr.id) LIMIT 1
+    ) pr ON true`;
 
 // Порядок: основной договор, затем допсоглашения и приложения в порядке загрузки.
 export const listContractDocuments = async (db: Queryable, contractId: string): Promise<IContractDocumentRow[]> => {

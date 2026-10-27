@@ -8,6 +8,7 @@ import { Button } from '../../components/Button';
 import { Notice } from '../../components/Notice';
 import { useToast } from '../../hooks/useToast';
 import { formatDateTime } from '../../utils/datetime';
+import { mailReadingSections } from '../../utils/mailBodyPresentation';
 import { DIRECTION_LABELS, REJECT_REASON_LABELS } from '../../utils/mailLabels';
 import { formatBytes, RECOGNITION_STATUS } from '../../utils/sourceLabels';
 import form from '../../styles/form.module.css';
@@ -15,6 +16,7 @@ import list from '../../styles/list.module.css';
 import styles from './Mail.module.css';
 
 const ROLE_LABELS: Record<string, string> = { from: 'От', sender: 'Отправитель', to: 'Кому', cc: 'Копия', bcc: 'Скрытая копия', reply_to: 'Ответить' };
+const SENDER_ROLES = new Set(['from', 'sender']);
 
 const attachmentBadge = (a: IMailAttachment) => {
   if (a.status === 'rejected') return <Badge tone="warning" icon="file-exclamation-point" dashed label={`Не принято: ${REJECT_REASON_LABELS[a.rejectReason ?? ''] ?? a.rejectReason}`} />;
@@ -57,9 +59,12 @@ export const MailRevisionView: FC<{ revision: IMailRevisionDetail; canRecognize:
     {revision.warnings.includes('identity_content_changed') ? (
       <Notice tone="warning">Копия с тем же идентификатором отличается от прежней: это новая ревизия письма, прежняя сохранена.</Notice>
     ) : null}
-    <section className={form.section} aria-label="Шапка письма">
-      <dl className={form.details}>
-        {revision.participants.map((p, i) => (
+    <section className={styles.envelope} aria-label="Шапка письма">
+      <div className={styles.subject}>
+        <h2>{revision.subject ?? 'Без темы'}</h2>
+      </div>
+      <dl className={styles.envelopeMeta}>
+        {revision.participants.filter((p) => SENDER_ROLES.has(p.role)).map((p, i) => (
           <div key={`${p.role}:${p.address}:${i}`}>
             <dt>{ROLE_LABELS[p.role] ?? p.role}</dt>
             <dd className={styles.address}>{p.name ? `${p.name} <${p.address}>` : p.address}</dd>
@@ -69,33 +74,42 @@ export const MailRevisionView: FC<{ revision: IMailRevisionDetail; canRecognize:
           <dt>Отправлено</dt>
           <dd className={form.num}>{revision.sentAt ? `${formatDateTime(revision.sentAt)} МСК` : 'дата не указана'}</dd>
         </div>
-        <div>
-          <dt>Направление</dt>
-          <dd>{DIRECTION_LABELS[revision.direction]}</dd>
-        </div>
-        <div>
-          <dt>Ревизия</dt>
-          <dd className={form.num}>{`${revision.seq} · импорт ${formatDateTime(revision.createdAt)} МСК`}</dd>
-        </div>
       </dl>
+      {revision.participants.some((p) => !SENDER_ROLES.has(p.role)) ? (
+        <details key={`${revision.id}:recipients`} className={styles.recipientDetails}>
+          <summary>Получатели и копии</summary>
+          <dl className={form.details}>
+            {revision.participants.filter((p) => !SENDER_ROLES.has(p.role)).map((p, i) => (
+              <div key={`${p.role}:${p.address}:${i}`}>
+                <dt>{ROLE_LABELS[p.role] ?? p.role}</dt>
+                <dd className={styles.address}>{p.name ? `${p.name} <${p.address}>` : p.address}</dd>
+              </div>
+            ))}
+          </dl>
+        </details>
+      ) : null}
     </section>
-    <section className={form.section} aria-label="Текст письма">
+    <section className={styles.readingPane} aria-label="Текст письма">
+      <h2 className={form.sectionTitle}>Текст письма</h2>
       {revision.body.length === 0 ? <p className={list.muted}>Текста у письма нет.</p> : null}
-      <ol className={styles.body}>
-        {revision.body.map((b) => (
-          <li key={b.fragmentId}>
-            {b.quoted ? (
-              <blockquote className={styles.quoted}>
-                <span className={styles.quoteLabel}>Цитата прежней переписки</span>
-                {b.text}
-              </blockquote>
-            ) : (
-              <p className={styles.block}>{b.text}</p>
-            )}
-          </li>
-        ))}
-      </ol>
+      {mailReadingSections(revision.body).map((section, index) => section.kind === 'message' ? (
+        <div key={index} className={styles.messageText}>{section.text}</div>
+      ) : section.kind === 'signature' ? (
+        <details key={`${revision.id}:signature:${index}`} className={styles.signature}>
+          <summary>Подпись и служебная информация</summary>
+          <aside aria-label="Подпись отправителя">{section.text}</aside>
+        </details>
+      ) : (
+        <details key={index} className={styles.previousMessages}>
+          <summary>Предыдущая переписка</summary>
+          <blockquote>{section.text}</blockquote>
+        </details>
+      ))}
     </section>
+    <details className={styles.sourceDetails}>
+      <summary>Сведения об источнике</summary>
+      <p>{`${DIRECTION_LABELS[revision.direction]} · Ревизия ${revision.seq} · импорт ${formatDateTime(revision.createdAt)} МСК`}</p>
+    </details>
     {revision.attachments.length > 0 ? (
       <section className={form.section} aria-labelledby="mail-attachments">
         <h2 id="mail-attachments" className={form.sectionTitle}>

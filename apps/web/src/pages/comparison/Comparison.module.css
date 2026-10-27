@@ -150,7 +150,7 @@
 
 .tableWrap {
   overflow-x: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-x: contain;
   max-width: 100%;
 }
 

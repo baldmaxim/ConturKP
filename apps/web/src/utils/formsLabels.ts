@@ -3,7 +3,7 @@
 import type { IFieldDefinition, IFormIssue, TFieldOrigin, TFieldState, TFieldValue } from '../api/formsTypes';
 import type { TBadgeTone } from '../components/Badge';
 import type { TIconName } from '../components/Icon';
-import { formatDecimal } from './calculationLabels';
+import { formatAmount, formatDecimal } from './calculationLabels';
 
 export const STATE_LABEL: Record<TFieldState, { label: string; tone: TBadgeTone; icon: TIconName }> = {
   accepted: { label: 'Принято', tone: 'success', icon: 'check' },
@@ -53,7 +53,7 @@ const formatDate = (iso: string): string => {
 // Значение для показа: число — с единицей, дата — ДД.ММ.ГГГГ, вариант — подписью, таблица — числом строк.
 export const formatFieldValue = (def: IFieldDefinition, value: TFieldValue | null | undefined): string => {
   if (value === null || value === undefined) return '—';
-  if (def.type === 'number' && typeof value === 'string') return `${formatDecimal(value)}${def.unit ? ` ${def.unit}` : ''}`;
+  if (def.type === 'number' && typeof value === 'string') return `${def.currency ? formatAmount(value) : formatDecimal(value)}${def.unit ? ` ${def.unit}` : ''}`;
   if (def.type === 'date' && typeof value === 'string') return formatDate(value);
   if (def.type === 'choice') {
     const labels = (Array.isArray(value) ? value : [value]).map((v) => def.options?.find((o) => o.value === v)?.label ?? String(v));

@@ -25,7 +25,7 @@ export const Header: FC = () => {
   const [tokensOpen, setTokensOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  const showAdmin = can('admin.users') || can('admin.audit') || can('admin.contract');
+  const showAdmin = can('admin.users') || can('admin.roles') || can('admin.audit') || can('admin.contract') || can('admin.delivery');
   const showContracts = me?.contractsAvailable ?? false;
   const showMail = me?.mailAvailable ?? false;
   // Этап 11: шаблоны и формулировки — пользователям с содержательной ролью (D-031 В-11-3).
@@ -36,6 +36,7 @@ export const Header: FC = () => {
   const adminActive = path.startsWith('/admin');
   const mailActive = path.startsWith('/mail') || path.startsWith('/mailboxes');
   const formsActive = path.startsWith('/forms');
+  const historyActive = path.startsWith('/history');
   const showOffice = can('office.read');
   const officeActive = path === '/office';
 
@@ -78,10 +79,16 @@ export const Header: FC = () => {
 
   const navLinks = (
     <>
-      <AppLink to="/" className={cx(styles.navLink, tendersActive && styles.active)} aria-current={tendersActive ? 'page' : undefined}>
+      {can('history.read') ? (
+        <AppLink to="/history" className={cx(styles.navLink, historyActive && styles.active)} aria-current={historyActive ? 'page' : undefined}>
+          <Icon name="scroll-text" />
+          <span>Хронология</span>
+        </AppLink>
+      ) : null}
+      {me?.tendersAvailable !== false ? (<AppLink to="/" className={cx(styles.navLink, tendersActive && styles.active)} aria-current={tendersActive ? 'page' : undefined}>
         <Icon name="briefcase" />
         <span>Тендеры</span>
-      </AppLink>
+      </AppLink>) : null}
       {showContracts ? (
         <AppLink to="/contracts" className={cx(styles.navLink, contractsActive && styles.active)} aria-current={contractsActive ? 'page' : undefined}>
           <Icon name="file-signature" />

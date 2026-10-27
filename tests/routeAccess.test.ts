@@ -17,12 +17,13 @@ import { ROUTE_INVENTORY } from './routeInventory.ts';
 vi.setConfig({ testTimeout: 300_000, hookTimeout: 900_000 });
 
 // Открытые точки: проверка готовности и вход.
-const PUBLIC = new Set(['GET /api/v1/health', 'GET /api/v1/ready', 'POST /api/v1/auth/login']);
+const PUBLIC = new Set(['GET /api/v1/health', 'GET /api/v1/ready', 'POST /api/v1/auth/login', 'GET /api/ui-version']);
 // Действия над собственной сессией — в проходах с сессией не участвуют (клиент разлогинился бы посреди прохода).
 const OWN_SESSION = new Set(['POST /api/v1/auth/logout', 'POST /api/v1/me/password', 'POST /api/v1/me/api-tokens']);
 
 // Объекты тендера: путь с таким сегментом перед первым параметром принадлежит тендеру.
 const TENDER_SCOPED = new Set([
+  'history-tasks',
   'tenders', 'stages', 'requirement-registries', 'releases', 'release-candidates', 'calculation-revisions', 'application-drafts', 'comparisons',
   'deliveries', 'requirement-candidates', 'findings', 'fact-candidates', 'document-revisions', 'requirements', 'send-events', 'release-comparisons',
   'release-comparison-items', 'recognition-runs', 'model-suggestions', 'mcp-proposals', 'intake-channels', 'field-suggestions', 'facts', 'documents',
@@ -35,6 +36,7 @@ const TENDER_SCOPED = new Set([
 
 // Сегмент пути → таблица (исключения из правила «множественное → единственное»).
 const TABLE: Record<string, string> = {
+  'history-tasks': 'tender_history_task',
   stages: 'tender_stage',
   evidence: 'evidence_fragment',
   imports: 'import_batch',
@@ -56,6 +58,9 @@ const singular = (seg: string): string => {
 
 // Действия руководителя тендера: инженер тендера получает 403 (I13, A25).
 const MANAGER_ONLY = [
+  'PUT /api/v1/tenders/:id/history-watch',
+  'PUT /api/v1/tenders/:id/history-sync',
+  'POST /api/v1/tenders/:id/history-import',
   'POST /api/v1/tenders/:id/stages',
   'POST /api/v1/stages/:id/requirement-registries',
   'POST /api/v1/requirement-registries/:id/reviews',
@@ -77,12 +82,14 @@ const MANAGER_ONLY = [
 const enumerate = (app: unknown): string[] => {
   const out: string[] = [];
   const MOUNTS = ['/api/v1', '/mcp', '/api'];
-  type Layer = { route?: { path: unknown; methods: Record<string, boolean> }; handle?: { stack?: Layer[] }; slash?: boolean; matchers?: Array<(p: string) => { path: string } | false> };
+  type Layer = { route?: { path: unknown; methods: Record<string, boolean>; stack?: { handle?: { name?: string } }[] }; handle?: { stack?: Layer[] }; slash?: boolean; matchers?: Array<(p: string) => { path: string } | false> };
   const walk = (stack: Layer[], prefix: string): void => {
     for (const l of stack) {
       if (l.route) {
         // Запасной маршрут интерфейса (RegExp) — не API.
         if (typeof l.route.path !== 'string') continue;
+        // Парсер большого JSON перед основным роутером продолжает цепочку; конечной точкой API не является.
+        if (l.route.stack?.length && l.route.stack.every((layer) => layer.handle?.name === 'jsonParser')) continue;
         for (const m of Object.keys(l.route.methods)) out.push(`${m.toUpperCase()} ${prefix}${l.route.path}`);
         continue;
       }
@@ -175,6 +182,10 @@ beforeAll(async () => {
   tenderA = s.st.e.s.tenderA;
   app = createApp({ config: s.st.e.config, pool: s.st.db.pool, clock: new Clock().read, logError: () => undefined });
   routes = enumerate(app);
+  await s.st.db.pool.query(
+    'INSERT INTO tender_history_task(tender_id,title,created_by,updated_by) VALUES($1,$2,$3,$3)',
+    [tenderA, 'Задача для проверки изоляции', s.st.e.s.ids.eng1],
+  );
   // Реальные объекты новых маршрутов: чужой инженер проверяется на существующем комплекте и его файлах.
   const eng = s.st.e.s.eng1, stage = s.st.e.s.stageA;
   const packet = await eng.post(`/stages/${stage}/form-packets`, { title: 'ACL-комплект' }, { headers: idem() });

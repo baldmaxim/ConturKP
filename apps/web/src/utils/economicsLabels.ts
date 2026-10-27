@@ -1,6 +1,6 @@
 // Подписи экономики этапа 10 (D-030). Термины — сметного отдела: вклад, остаток, колонка КП, предложение пары.
 import type { IEconomicsMoney } from '../api/economicsTypes';
-import { formatDecimal } from './calculationLabels';
+import { formatAmount } from './calculationLabels';
 
 export const COMPONENT_LABEL: Record<string, string> = {
   volume: 'Объём',
@@ -100,10 +100,11 @@ export const RECONCILIATION_LABEL: Record<string, string> = {
 };
 
 // Сумма в рублях: знак ₽ — подтверждённая валюта (D-030); НДС не указывается — неизвестен.
-export const rub = (m: IEconomicsMoney | null | undefined): string => (m ? `${formatDecimal(m.amount)} ₽` : '—');
+export const rub = (m: IEconomicsMoney | null | undefined): string => (m ? `${formatAmount(m.amount)} ₽` : '—');
 
 export const signed = (amount: string | null): string => {
   if (amount === null) return '—';
-  const text = formatDecimal(amount);
+  const text = formatAmount(amount);
+  if (text === '0,00') return text;
   return amount.startsWith('-') ? text.replace('-', '−') : amount === '0' ? text : `+${text}`;
 };

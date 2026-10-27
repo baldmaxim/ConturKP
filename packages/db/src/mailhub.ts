@@ -32,7 +32,10 @@ export const saveMailHubPage = async (
   for (const item of page.items) {
     await db.query(
       `INSERT INTO mailhub_message(source_key,external_id,source_changed_at,copies) VALUES($1,$2,$3,$4::jsonb)
-      ON CONFLICT(source_key,external_id) DO UPDATE SET source_changed_at=greatest(mailhub_message.source_changed_at,excluded.source_changed_at),copies=excluded.copies`,
+      ON CONFLICT(source_key,external_id) DO UPDATE SET source_changed_at=greatest(mailhub_message.source_changed_at,excluded.source_changed_at),copies=excluded.copies,
+      retry_after=CASE WHEN mailhub_message.retry_after='infinity'::timestamptz THEN mailhub_message.retry_after
+                       WHEN mailhub_message.import_id IS NULL AND mailhub_message.copies IS DISTINCT FROM excluded.copies
+                       THEN now() ELSE mailhub_message.retry_after END`,
       [key, item.id, item.changedAt, JSON.stringify(item.copies)],
     );
   }
@@ -75,7 +78,7 @@ export const scheduleMailHub = async (pool: Pool, key: string): Promise<void> =>
         kind: 'mailhub.sync',
         dedupeKey: `mailhub-sync:${key}`,
         payload: { sourceKey: key },
-        priority: 6,
+        priority: 50,
         resourceClass: 'network',
         maxAttempts: 3,
       });
@@ -84,7 +87,7 @@ export const scheduleMailHub = async (pool: Pool, key: string): Promise<void> =>
         `SELECT m.external_id FROM mailhub_message m JOIN mailhub_connection c USING(source_key)
     WHERE m.source_key=$1 AND c.enabled AND m.import_id IS NULL AND m.retry_after<=now()
       AND NOT EXISTS(SELECT 1 FROM job j WHERE j.dedupe_key='mailhub-fetch:'||m.source_key||':'||m.external_id::text AND j.status IN('queued','running'))
-    ORDER BY m.source_changed_at DESC,m.external_id LIMIT 3`,
+    ORDER BY m.retry_after,m.source_changed_at DESC,m.external_id LIMIT 3`,
         [key],
       )
     ).rows;
@@ -98,7 +101,7 @@ export const scheduleMailHub = async (pool: Pool, key: string): Promise<void> =>
         kind: 'mailhub.fetch',
         dedupeKey: `mailhub-fetch:${key}:${item.external_id}`,
         payload: { sourceKey: key, itemId: item.external_id },
-        priority: 6,
+        priority: 50,
         resourceClass: 'network',
         maxAttempts: 3,
       });

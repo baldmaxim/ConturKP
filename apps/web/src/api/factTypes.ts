@@ -15,6 +15,7 @@ export interface IGraphFactState {
 }
 
 export interface IGraphFact {
+  normalized?: Record<string, string | number>;
   id: string;
   type: string;
   title: string;

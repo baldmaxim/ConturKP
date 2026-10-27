@@ -1,3 +1,4 @@
+import { fitWrappedRows } from './fitRows.ts';
 // Разметка и генерация документов по размеченному образцу (этап 12; D-032 В-12-3; ADR-013 п. 2–3).
 // Сканер извлекает теги {{…}} из абзацев DOCX (включая разорванные Word на несколько фрагментов) и ячеек XLSX; проверку
 // по схеме делает ядро (`checkMarkup`). Генератор: DOCX — docxtemplater поверх pizzip, остальное содержимое пакета не
@@ -9,7 +10,6 @@ import Docxtemplater from 'docxtemplater';
 import type PizZip from 'pizzip';
 import { tagsOfText, type IMarkupTag, type RenderValue } from '@kontur/core';
 import { cellTexts, decodeXml, DOCX_PART_TITLE, docxParagraphTexts, docxTextParts, encodeXml, OfficeError, openPackage, sheets, writePackage } from './ooxml.ts';
-import { fitWrappedRows } from './fitRows.ts';
 
 // ---------------------------------------------------------------- Сканер разметки
 
@@ -185,7 +185,7 @@ export const renderXlsx = (sample: Buffer, data: Record<string, RenderValue>, nu
     zip.file(sh.part, xml);
   });
   const result=writePackage(zip);
-  return /name="_KonturFitRows"/u.test(zip.file('xl/workbook.xml')?.asText()??'')?fitWrappedRows(result):result;
+  return /name="_KonturFitRows"/u.test(zip.file('xl/workbook.xml')?.asText()??'') ? fitWrappedRows(result):result;
 };
 
 const addHeaderMark = (xml: string, mark: string): string => {

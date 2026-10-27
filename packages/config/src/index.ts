@@ -179,6 +179,11 @@ export interface IAppConfig {
   limits: IImportLimits;
   // Наблюдаемые папки допускаются только внутри этих корней (проверка realpath при каждом скане).
   intakeRoots: string[];
+  contractHistoryRoot?: string | null;
+  contractHistoryProxyPort?: number | null;
+  contractHistoryProxyKey?: string | null;
+  historyReportPaths?: string[];
+  historyWatchRoots?: string[];
   intakeStabilitySeconds: number;
   jobLeaseSeconds: number;
   gpuTakeoverGraceSeconds: number;
@@ -538,7 +543,12 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
       .split(';')
       .map((s) => s.trim())
       .filter(Boolean),
+    contractHistoryRoot: env.CONTRACT_HISTORY_ROOT?.trim() || null,
+    contractHistoryProxyPort: env.CONTRACT_HISTORY_PROXY_PORT ? intFrom(env, 'CONTRACT_HISTORY_PROXY_PORT', 0, problems) : null,
+    contractHistoryProxyKey: env.CONTRACT_HISTORY_PROXY_KEY?.trim() || null,
     intakeStabilitySeconds: intFrom(env, 'INTAKE_STABILITY_SECONDS', 10, problems),
+    historyReportPaths: (env.HISTORY_REPORT_PATHS ?? '').split(';').map(s=>s.trim()).filter(Boolean),
+    historyWatchRoots: (env.HISTORY_WATCH_ROOTS ?? '').split(';').map(s=>s.trim()).filter(Boolean),
     jobLeaseSeconds: intFrom(env, 'JOB_LEASE_SECONDS', 60, problems),
     gpuTakeoverGraceSeconds: intFrom(env, 'GPU_TAKEOVER_GRACE_SECONDS', 180, problems),
     shutdownGraceSeconds: intFrom(env, 'SHUTDOWN_GRACE_SECONDS', 20, problems),
@@ -583,6 +593,8 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
   for (const root of config.intakeRoots) {
     if (!isAbsolute(root)) problems.push(`INTAKE_ROOTS: «${root}» должен быть абсолютным путём`);
   }
+  if (config.contractHistoryRoot && !isAbsolute(config.contractHistoryRoot)) problems.push('CONTRACT_HISTORY_ROOT должен быть абсолютным путём');
+  if (Boolean(config.contractHistoryProxyPort) !== Boolean(config.contractHistoryProxyKey) || (config.contractHistoryProxyPort && (config.contractHistoryProxyPort < 1024 || config.contractHistoryProxyPort > 65535)) || (config.contractHistoryProxyKey && !/^[a-f0-9]{64}$/u.test(config.contractHistoryProxyKey))) problems.push('CONTRACT_HISTORY_PROXY_PORT и CONTRACT_HISTORY_PROXY_KEY должны быть заданы вместе; нужен порт 1024–65535 и ключ из 64 hex-символов');
   const e = config.embedding;
   if (Boolean(env.MAILHUB_URL) !== Boolean(env.MAILHUB_TOKEN)) problems.push('MAILHUB_URL и MAILHUB_TOKEN задаются вместе');
   if (config.mailhub) {

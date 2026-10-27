@@ -5,6 +5,31 @@
 
 export type TOfficeJobStatus = 'queued' | 'running' | 'failed';
 
+export interface IOfficeTask {
+  id: string | null;
+  kind: string;
+  tenderId: string | null;
+  hidden: boolean;
+  count: number;
+  progress: { phase: 'preparing' | 'processing' | 'saving'; completed: number; total: number | null; unit: 'files' | 'pages' | 'sheets' | 'documents' | 'chunks' } | null;
+  title?: string;
+  target?: string;
+}
+
+/** Текущее действие определяется видом задания, а не общей профессией агента. */
+export const TASK_ACTION: Record<string, string> = {
+  'import.expand': 'Распаковывает архив', 'import.register': 'Регистрирует документы', 'intake.scan': 'Проверяет входящую папку',
+  'mail.import': 'Импортирует письмо', 'mailhub.sync': 'Синхронизирует почту', 'mailhub.fetch': 'Загружает оригинал письма',
+  'recognition.import': 'Принимает результат распознавания', 'recognition.local': 'Распознаёт документ',
+  'index.build': 'Индексирует документы', 'index.embed': 'Строит поисковые векторы', 'index.purge': 'Удаляет старый индекс',
+  'search.semantic': 'Выполняет смысловой поиск', 'history.sync': 'Синхронизирует историю', 'history.scan': 'Ищет изменения в папке',
+  'history.verify': 'Проверяет содержимое файлов', 'analysis.rules': 'Разбирает требования по правилам', 'fact.extract': 'Извлекает факты',
+  'calculation.capture': 'Загружает расчёт', 'review.run': 'Проверяет комплект документов', 'stage.invalidate': 'Обновляет состояние этапа',
+  'candidate.assemble': 'Собирает коммерческое предложение', 'delivery.place': 'Размещает готовые файлы', 'delivery.probe': 'Проверяет папку размещения',
+  'analysis.extract': 'Извлекает требования с моделью', 'answer.generate': 'Готовит ответ на вопрос', 'review.model': 'Проверяет документы с моделью',
+  'economics.reasons': 'Анализирует экономическое обоснование', 'forms.suggest': 'Подбирает формы', 'model.probe': 'Проверяет доступность модели',
+};
+
 /** Группа заданий в ответе `GET /admin/office`: вид, состояние и тендер. Закрытый тендер не раскрывается — `hidden: true`. */
 export interface IOfficeItemView {
   kind: string;
@@ -22,6 +47,7 @@ export interface IOfficeView {
   items: IOfficeItemView[];
   tenders: Array<{ id: string; title: string }>;
   workersAlive: number;
+  tasks?: IOfficeTask[];
 }
 
 /** Русское множественное число: plural(3, ['задание', 'задания', 'заданий']) → «задания». */
@@ -61,7 +87,7 @@ export const ROLE_TITLE: Record<TOfficeRole, string> = {
 export const ROLE_KINDS: Record<Exclude<TOfficeRole, 'other'>, readonly string[]> = {
   intake: ['import.expand', 'import.register', 'intake.scan', 'mail.import', 'mailhub.sync', 'mailhub.fetch'],
   recognition: ['recognition.import', 'recognition.local'],
-  archive: ['index.build', 'index.embed', 'index.purge', 'search.semantic'],
+  archive: ['index.build', 'index.embed', 'index.purge', 'search.semantic', 'history.sync', 'history.scan', 'history.verify'],
   analyst: ['analysis.rules', 'fact.extract'],
   estimator: ['calculation.capture'],
   reviewer: ['review.run', 'stage.invalidate'],
@@ -172,6 +198,7 @@ export interface IOfficeDesk {
   status: string;
   /** Состояние словами целиком — для чтения с экрана. */
   caption: string;
+  tasks?: IOfficeTask[];
 }
 
 /** Отдыхающий в комнате отдыха. */
@@ -260,14 +287,18 @@ export const buildOffice = (view: IOfficeView): IOfficeModel => {
     const recentFailure = items.some((i) => i.status === 'failed' && i.lastFailedAt !== null && now - Date.parse(i.lastFailedAt) <= RECENT_FAILURE_MS);
     const lastErrorCode = lastErrorOf(items);
     const title = ROLE_TITLE[role];
-    const base = { role, title, running, queued, failed, lastErrorCode, folders: foldersOf(items, titles) };
+    const tasks = (view.tasks ?? items.filter(i => i.status === 'running').map(i => ({ id: null, kind: i.kind, tenderId: i.tenderId, hidden: i.hidden, count: i.count, progress: null })))
+      .filter(task => roleOfKind(task.kind) === role).map(task => ({ ...task, title: TASK_ACTION[task.kind] ?? task.kind,
+        target: task.hidden ? FOLDER_HIDDEN_TITLE : task.tenderId ? titles.get(task.tenderId) ?? 'Тендер' : 'Общая задача' }));
+    const base = { role, title, running, queued, failed, lastErrorCode, folders: foldersOf(items, titles), tasks };
     const tail = errorTail(failed, lastErrorCode);
 
     if (workerDown && (queued > 0 || running > 0)) {
       desks.push({ ...base, mood: 'dozing', pose: 'idle', status: 'дремлет: worker не работает', caption: `${title} дремлет: в очереди ${jobsWord(queued)}, worker не работает${tail}` });
     } else if (running > 0) {
       const wait = queued > 0 ? `, в очереди ещё ${queued}` : '';
-      desks.push({ ...base, mood: 'working', pose: BUSY_POSE[role], status: ROLE_ACTION[role], caption: `${title} ${ROLE_ACTION[role]}: в работе ${jobsWord(running)}${wait}${tail}` });
+      const action = tasks[0]?.title ?? ROLE_ACTION[role];
+      desks.push({ ...base, mood: 'working', pose: BUSY_POSE[role], status: action, caption: `${title}: ${action}; в работе ${jobsWord(running)}${wait}${tail}` });
     } else if (recentFailure) {
       desks.push({ ...base, mood: 'alarm', pose: 'wait', status: 'просит помощи: недавний отказ', caption: `${title} просит помощи: недавний отказ задания${queued > 0 ? `, в очереди ${jobsWord(queued)}` : ''}${tail}` });
     } else if (queued > 0) {

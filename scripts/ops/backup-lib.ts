@@ -4,6 +4,7 @@
 import { mkdir, rm, statfs } from 'node:fs/promises';
 import { join } from 'node:path';
 import pg from 'pg';
+import { withBackupOperation } from '../../packages/storage/src/backupRetention.ts';
 import { backupRoleProblems, openBackupSnapshot, restoreSafetyProblems } from '../../packages/db/src/index.ts';
 import {
   BACKUP_FORMAT,
@@ -57,6 +58,14 @@ const defaultFree = async (dir: string): Promise<number | null> => {
 };
 
 export const runBackup = async (o: IBackupOptions): Promise<IBackupResult> => {
+  if (await pathsOverlap(o.backupRoot, o.storageRoot)) {
+    throw new BackupError('backup_root_overlaps', 'каталог копий пересекается с рабочим хранилищем');
+  }
+  await mkdir(o.backupRoot, { recursive: true });
+  return withBackupOperation(o.backupRoot, 'backup', () => runBackupUnlocked(o));
+};
+
+const runBackupUnlocked = async (o: IBackupOptions): Promise<IBackupResult> => {
   const now = o.now ?? (() => new Date());
   if (await pathsOverlap(o.backupRoot, o.storageRoot)) {
     throw new BackupError('backup_root_overlaps', 'каталог копий совпадает с хранилищем или лежит внутри него: копия на том же месте — не копия (ADR-011 §8)');

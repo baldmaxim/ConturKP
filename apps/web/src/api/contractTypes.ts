@@ -77,6 +77,7 @@ export interface IContractLink {
 }
 
 export interface IContractDocument {
+  recognition?: { runId: string; status: string | null; pagesTotal: number | null; pagesRecognized: number | null } | null;
   id: string;
   contractId: string;
   title: string;

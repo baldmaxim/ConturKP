@@ -38,7 +38,7 @@ export const describeLocalRecognizer = async (format: LocalInputFormat, s: ILoca
         parser: format,
         maxReplacementRatio: QUALITY_GATE.maxReplacementRatio,
         maxFragmentChars: s.limits.maxFragmentChars,
-        ...(format === 'xlsx' ? { numbers: NUMBER_RENDERING_VERSION } : {}),
+        ...(format === 'xlsx' ? { numbers: NUMBER_RENDERING_VERSION, parserVersion: 2 } : {}),
       },
     };
   }

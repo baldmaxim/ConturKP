@@ -34,7 +34,7 @@ const problemOf = (xhr: XMLHttpRequest): IProblem => {
   };
 };
 
-const xhrUpload = <T>(url: string, file: File, idempotencyKey: string, onProgress: (fraction: number) => void): IUploadHandle<T> => {
+export const xhrUpload = <T>(url: string, file: File, idempotencyKey: string, onProgress: (fraction: number) => void): IUploadHandle<T> => {
   const xhr = new XMLHttpRequest();
   const promise = new Promise<T>((resolve, reject) => {
     xhr.open('POST', url);

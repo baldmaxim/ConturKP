@@ -152,7 +152,7 @@
     display: none;
   }
 
-  /* 768–1359 px: в навигации только иконки, подпись остаётся для скринридера. */
+  /* 768–1479 px: в навигации только иконки, подпись остаётся для скринридера. */
   .nav .navLink span {
     position: absolute;
     width: 1px;
@@ -167,7 +167,7 @@
   }
 }
 
-@media (min-width: 1360px) {
+@media (min-width: 1480px) {
   .nav .navLink span {
     position: static;
     width: auto;

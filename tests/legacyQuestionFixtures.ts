@@ -12,7 +12,7 @@ import { formatEtag } from '../packages/core/src/index.ts';
 import { createPool, dropDatabase, migrate, MIGRATIONS_DIR, setupDatabase } from '../packages/db/src/index.ts';
 import { createContract, grantCreator, linkContract, setAccess, uploadMain } from './contractFixtures.ts';
 import { ADMIN_URL, idem, testConfig, type ITestDb, type TestClient } from './helpers.ts';
-import { addQuestionOrigin, dropQuestionOrigin, dropRoleCatalog } from './legacySchema.ts';
+import { addQuestionOrigin, dropQuestionOrigin, dropRoleCatalog, dropLegacyJobProgress } from './legacySchema.ts';
 import { buildStage08, confirm, propose, supports, type IStage08 } from './requirementFixtures.ts';
 import { fixScope, fragmentIdOf, seedEvidenceRun, setWorkingSet } from './searchFixtures.ts';
 
@@ -86,6 +86,7 @@ export const buildLegacyStage = async (label: string, secret: string): Promise<I
         const columns = await db.pool.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'customer_question' AND column_name IN ('source_proposal_id', 'basis_requirement_ids', 'basis_unknown')");
         expect(columns.rowCount).toBe(0);
       }
+      if (max >= 52) await dropLegacyJobProgress(db.migratorUrl);
       if (max >= 54) await dropRoleCatalog(db.migratorUrl);
       return migrateTo(max);
     };

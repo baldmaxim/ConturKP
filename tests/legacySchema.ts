@@ -66,12 +66,21 @@ export const dropClosureTables = async (migratorUrl: string): Promise<void> => {
 // временная модель удаляется без CASCADE. Маркер не позволяет удалить реальный каталог.
 const ROLE_FIXTURE_MARKER = 'kontur-test-legacy-role-read-model';
 const OUTCOME_FIXTURE_MARKER = 'kontur-test-legacy-outcome-read-model';
+const PROGRESS_FIXTURE_MARKER = 'kontur-test-legacy-job-progress';
 export const addRoleCatalog = async (migratorUrl: string): Promise<void> => {
   const url = new URL(migratorUrl);
   if (!url.pathname.startsWith('/kontur_kp_test_')) throw new Error('Каталог совместимости — только тестовая БД');
   const db = new pg.Client({ connectionString: migratorUrl });
   await db.connect();
   try {
+    // HEAD очереди пишет временные счётчики с 0052. На старой схеме они нужны
+    // только для подготовки синтетических данных; реальная 0052 остаётся неизменной.
+    const progress = await db.query("SELECT 1 FROM pg_attribute WHERE attrelid='job'::regclass AND attname='progress' AND NOT attisdropped");
+    if (progress.rowCount === 0) {
+      if ((await db.query('SELECT 1 FROM schema_migration WHERE version=52')).rowCount) throw new Error('Нельзя подменять применённую миграцию 0052');
+      await db.query('ALTER TABLE job ADD COLUMN progress jsonb');
+      await db.query("COMMENT ON COLUMN job.progress IS 'kontur-test-legacy-job-progress'");
+    }
     // HEAD читает outcome при подготовке исторических данных. Это только временная
     // колонка тестовой БД: настоящая 0055 и её CHECK применяются после её удаления.
     const outcome = await db.query("SELECT 1 FROM pg_attribute WHERE attrelid='tender'::regclass AND attname='outcome' AND NOT attisdropped");
@@ -92,6 +101,7 @@ export const addRoleCatalog = async (migratorUrl: string): Promise<void> => {
   } finally { await db.end(); }
 };
 export const dropRoleCatalog = async (migratorUrl: string): Promise<void> => {
+  await dropLegacyJobProgress(migratorUrl);
   const url = new URL(migratorUrl);
   if (!url.pathname.startsWith('/kontur_kp_test_')) throw new Error('Каталог совместимости — только тестовая БД');
   const db = new pg.Client({ connectionString: migratorUrl });
@@ -108,5 +118,22 @@ export const dropRoleCatalog = async (migratorUrl: string): Promise<void> => {
     await db.query('DROP FUNCTION user_role_permissions(uuid)');
     await db.query('DROP VIEW effective_user_role');
     await db.query('DROP TABLE portal_role');
+  } finally { await db.end(); }
+};
+
+// Только искусственная колонка старой тестовой схемы; реальная 0052 не имеет этого маркера.
+// Счётчики завершённых синтетических попыток не существовали в исходной схеме.
+// Прогресс активной/повторяемой попытки терять нельзя даже в фикстуре.
+export const dropLegacyJobProgress = async (migratorUrl: string): Promise<void> => {
+  const url = new URL(migratorUrl);
+  if (!url.pathname.startsWith('/kontur_kp_test_')) throw new Error('Прогресс совместимости — только тестовая БД');
+  const db = new pg.Client({ connectionString: migratorUrl });
+  await db.connect();
+  try {
+    const marker = (await db.query("SELECT col_description(attrelid,attnum) AS marker FROM pg_attribute WHERE attrelid='job'::regclass AND attname='progress' AND NOT attisdropped")).rows[0]?.marker;
+    if (marker !== PROGRESS_FIXTURE_MARKER) return;
+    if ((await db.query('SELECT 1 FROM schema_migration WHERE version=52')).rowCount) throw new Error('Реальная миграция 0052 уже применена: удаление запрещено');
+    if ((await db.query("SELECT 1 FROM job WHERE progress IS NOT NULL AND status IN ('queued','running') LIMIT 1")).rowCount) throw new Error('Прогресс активного задания: удаление запрещено');
+    await db.query('ALTER TABLE job DROP COLUMN progress');
   } finally { await db.end(); }
 };

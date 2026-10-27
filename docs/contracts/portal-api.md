@@ -179,7 +179,7 @@
 | `POST /mailboxes` | `admin.mailbox` | IK | тело `{ system: 'manual' \| 'mailhub', externalAccountId, displayName }`; `201`; тот же адрес — `409 mailbox_exists` |
 | `GET /mailboxes/{id}`, `PATCH /mailboxes/{id}` | выдача или `admin.mailbox` / `admin.mailbox` или `mail.manage` | IM | служебная карточка; тело `{ displayName?, status? }` — архив без удаления |
 | `GET /mailboxes/{id}/access`, `PUT /mailboxes/{id}/access/{userId}` | `admin.mailbox` | IM (ETag ящика) | тело `{ capabilities: ('mail.read' \| 'mail.import' \| 'mail.link' \| 'mail.manage')[] }` — полный набор; пользователю без роли инженера или руководителя — `409` |
-| `GET /mailboxes/{id}/messages` | `mail.read` | — | письма ящика с последней ревизией |
+| `GET /mailboxes/{id}/messages` | `mail.read` | — | письма ящика с последней ревизией; q (до 500 символов), page (от 1), pageSize (1–200, по умолчанию 50). Ответ: items, total, page, pageSize; page ограничивается последней доступной страницей. Без параметров возвращаются первые 50 писем |
 | `POST /mailboxes/{id}/imports?name=&direction=&folder=&tenderId=&stageId=` | `mail.import`; связь — ещё `mail.link` и `source.write` по тендеру | IK | тело — файл `.eml` (`application/octet-stream`); `202` и запись импорта `queued`, разбирает worker (`mail.import`); архивный ящик — `409`; не письмо — `400` |
 | `GET /mailboxes/{id}/imports`, `GET /mail-imports/{id}` | `mail.read` или `mail.import` (свой импорт — всегда) | — | исход: `done` (письмо, ревизия, `createdRevision`) или `failed` (`mail_empty`, `mail_malformed`, `mail_too_large`) |
 | `GET /mail-messages/{id}` | `mail.read` | — | текущая ревизия (шапка, тело по блокам с признаком `quoted`, вложения со статусом распознавания), `revisionList`, `siblings` — копии коммуникации только в читаемых ящиках, `tenderLinks` — связи с видимыми тендерами, `candidates` — с `mail.link` |
@@ -380,3 +380,30 @@
 4. Отсутствие данных различается: `not_found_in_scope`, `not_provided`, `no_data`, `incomplete_processing`, `confirmed_discrepancy` (I07). Словарь статусов ответа (этап 08a, AD-08a-2) — объединение этого набора, `needs_clarification` и двух положительных итогов `confirmed_by_citations`, `citations_disagree`; `not_provided` и `confirmed_discrepancy` ответное ядро не присваивает (отсутствие условия не выводится из ненайденного; разногласие подтверждает человек на этапе 09). Статус ответа не совпадает ни с одним результатом регламентной проверки (`review_check_result.outcome`): «подтверждено цитатами» не означает «проверено по регламенту»; недостаток оснований, отказ, ошибка формата и отключение модели — `incomplete_processing` с причиной (I18).
 5. Ответ на чтение исторического выпуска строится только из его закреплённых входов; поздние документы не попадают (I05).
 6. Ответ ответного ядра (этап 08a, D-027) показывает только утверждения, прошедшие правила: каждая метка цитаты существует в пакете хода и входит в область; каждое число утверждения есть в процитированном фрагменте документального происхождения с той же единицей (проценты не смешиваются с днями и годами; `B30`, `КС-2`, номера пунктов числами не считаются); значение перекрытой редакции не выдаётся за текущее. Конфликт оснований показывается обоими значениями с пометкой, а не разрешается. Непроверенный текст модели не хранится (только SHA-256) и не показывается.
+
+
+## История тендера и договора (интеграция ПК/Linux, 27.10.2026)
+
+Маршруты ниже имеют обычный префикс /api/v1. Доступ определяется текущими правами, а не наличием строки истории: выбранные тендеры требуют tender.read; общая история отделена от тендерной. Подробные схемы HistoryQuery/HistoryTaskRequest/HistoryTaskPatch/HistoryImportRequest — packages/contracts/src/tenderHistory.ts.
+
+| Маршрут | Поведение |
+|---|---|
+| `GET /history, /history/summary, /history/files, /history/tasks` | history.read; фильтры scope=all/common/tenders, повторяемый tenderId (до 100 выбранных), q, kind, technical, fileFacts, cursor, limit (1–100, по умолчанию 40); общие материалы не подмешиваются в выбранные тендеры |
+| `GET /tenders/{id}/{history,history-summary,history-files,history-tasks}` | tender.read; те же фильтры истории в области одного тендера |
+| `POST /tenders/{id}/history-import` | source.write и управление историей тендера (доступ к содержимому и admin.tender либо hold.resolve); явное confirmBinding=true, привязка к папке; сохраняет метаданные и SHA, не создаёт редакций документов, отправок или событий входного барьера |
+| `GET /tenders/{id}/history-report-sources; PUT /tenders/{id}/history-sync, /history-watch` | тот же доступ управления; источник выбирается из разрешённого набора, PUT защищён If-Match привязки |
+| `GET /history/members; POST /history/tasks` | общая история требует разрешения history.read, запись также history.write; основание задачи не может принадлежать закрытому тендеру |
+| `POST /tenders/{id}/history-tasks` | source.write; задача и её основания принадлежат области тендера |
+| `PATCH /history-tasks/{id}` | source.write в тендере либо право записи общей истории; If-Match, 412 при конфликте; при resolved обязательно непустое resolution |
+| `PUT /history-watches/{id}` | управление общей историей: чтение общей области и history.manage; If-Match привязки |
+| `GET /history/records/{id}/versions, /comparison, /versions/{before,after}/original` | повторная проверка доступа к записи и источнику; версии и сравнение не открывают закрытые письма/тендеры; оригинал выдаётся только для доступной файловой версии |
+| `GET /contracts/{id}/history` | contract.read; поиск q, роль документа role, review=true, offset; страницы по 50, сводка и originalsAvailable |
+| `GET /contracts/{id}/history/files/{fileId}/original` | contract.read; источник должен совпасть со снимком, проверяются размер и mtime; изменённый/недоступный источник — 409 STATE_CONFLICT, превышение лимита — 413 VALIDATION_FAILED |
+
+Исторический HTML используется только как контейнер JSON: его scripts и ссылки не выполняются. Факт импорта метаданных не означает проверки содержания источников или приёмки этапа. Повторная загрузка сохраняет идентичность и не размножает прежние записи. Общие источники и связи нескольких тендеров фильтруются с проверкой доступности обеих сторон; архивирование не удаляет данные истории.
+
+## Задачи Офиса и обновление интерфейса (интеграция ПК/Linux)
+
+GET /admin/office/diagnostics, /admin/office/tasks и /admin/office/tasks/{id} требуют office.read, как сводка /admin/office. Диагностика принимает фильтр kinds; список задач — kinds, tender, status, offset. Закрытые тендеры остаются агрегатами: их идентификаторы, прогресс, payload и текст ошибки не раскрываются. Для доступных заданий диагностика возвращает код ошибки и служебные счётчики, без payload и текста ошибки. office.read не открывает /admin/operations.
+
+Отдельно от /api/v1 доступны GET /api/ui-version и файлы сетевой страницы /api/ui-update, /api/ui-update.js, /api/ui-update.css, /api/ui-update-shell. Это открытые точки версии/оболочки UI без данных пользователя, с Cache-Control: no-store. ui-version возвращает {version}; недоступный манифест сборки — 503 INTERNAL.

@@ -108,7 +108,7 @@ export const operationsRouter = (pool: Pool, config: IAppConfig, store: BlobStor
   router.get(
     '/admin/office',
     query(pool, 'admin.office', 'operations', async (ctx, _req, res) => {
-      if (!globalCapabilities(ctx.roles).includes('admin.audit')) throw forbidden('admin.audit', { entityType: 'operations' });
+      if (!globalCapabilities(ctx.roles).includes('office.read')) throw forbidden('office.read', { entityType: 'operations' });
       const snapshot = await officeSnapshot(pool, contentTenderIds(ctx));
       res.json({
         at: snapshot.at.toISOString(),

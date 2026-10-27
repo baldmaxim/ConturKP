@@ -1,3 +1,4 @@
+import { dropRoleCatalog } from './legacySchema.ts';
 // Этап 16, передача 16-2 (Review 16-1, R16-01; находка S16-12): происхождение вопроса заказчику. Вопрос из принятого
 // предложения чата наследует закрытость цитат предложения — при чтении, правке, отправке и ответе; ссылка на
 // предложение неизменна. Отвязка требования наследование не снимает. Вторая линия — миграция 0041: принятое
@@ -369,6 +370,7 @@ describe('обновление схемы 0040 → последняя мигра
       const openQuestion = await acceptLegacy(open, 'Уточните срок поставки окон');
       const plain = (await up.pool.query<{ id: string }>("INSERT INTO customer_question (tender_id, stage_id, text, created_by, updated_by) VALUES ($1, $2, 'Обычный вопрос', $3, $3) RETURNING id", [s.tenderA, s.stageA, s.ids.eng1])).rows[0]!.id;
 
+      await dropRoleCatalog(up.migratorUrl);
       expect(await migrateTo(LATEST)).toBe(LATEST - 40);
 
       const rows = await up.pool.query<{ id: string; source_proposal_id: string | null; row_version: string }>('SELECT id, source_proposal_id, row_version FROM customer_question WHERE stage_id = $1', [s.stageA]);

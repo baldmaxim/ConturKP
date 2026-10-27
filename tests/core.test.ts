@@ -86,10 +86,10 @@ describe('возможности', () => {
   it('администратор без назначения: только администрирование и журнал, без содержимого', () => {
     expect(tenderCapabilities(roles('admin'), null)).toEqual(['audit.read', 'admin.tender']);
     expect(canSeeTenderCard(roles('admin'), null)).toBe(true);
-    expect(globalCapabilities(roles('admin'))).toEqual(['admin.users', 'admin.tender', 'admin.audit', 'admin.intake', 'admin.contract', 'admin.mailbox', 'admin.delivery']);
-    // Этап 11 (D-031 В-11-3): шаблоны компании и формулировки — роль «руководитель», без доступа к содержимому тендеров.
-    expect(globalCapabilities(roles('manager', 'engineer'))).toEqual(['admin.templates', 'wording.approve']);
-    expect(globalCapabilities(roles('engineer'))).toEqual([]);
+    expect(globalCapabilities(roles('admin'))).toEqual(['admin.users', 'admin.tender', 'admin.audit', 'admin.intake', 'admin.contract', 'admin.mailbox', 'admin.delivery', 'admin.roles', 'office.read', 'history.manage']);
+    // Политика 0053–0054: общий просмотр руководителя не даёт административных прав.
+    expect(globalCapabilities(roles('manager', 'engineer'))).toEqual(['admin.templates', 'wording.approve', 'office.read', 'templates.read', 'tender.read.all', 'contract.read.all', 'mail.read.all', 'history.read', 'history.write']);
+    expect(globalCapabilities(roles('engineer'))).toEqual(['templates.read', 'history.read', 'history.write']);
   });
 });
 

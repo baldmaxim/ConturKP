@@ -1,3 +1,4 @@
+import { restrictManagerPermissions } from './roleFixtures.ts';
 // Этап 12 — комплект-кандидат через API на настоящем worker и LibreOffice (D-032; ADR-013; проверки задания):
 // разметка ревизии и её утверждение; сборка из закреплённых входов с точными файлами, превью и манифестом; чтение не
 // пересобирает; идемпотентность; числа с расчётом; пометки режимов в документах и превью; права при сборке и при каждом
@@ -246,9 +247,12 @@ describe('права (D-032 В-12-7)', () => {
         expect(JSON.stringify(r.body)).not.toContain(SECRET);
       }
       expect((await e.s.eng3.get(`/release-candidates/${c.id}`)).status).toBe(404);
-      await setMailAccess(e.s.admin, box, e.s.ids.manager, []);
-      expect(await view(e.s.manager, c.id)).toMatchObject({ restricted: true });
-      expect((await e.s.manager.get(`/candidate-files/${c.files[0]!.id}/content`)).status).toBe(409);
+      const restorePermissions = await restrictManagerPermissions(e.s.admin, e.s.ids.manager, ['mail.read.all']);
+      try {
+        await setMailAccess(e.s.admin, box, e.s.ids.manager, []);
+        expect(await view(e.s.manager, c.id)).toMatchObject({ restricted: true });
+        expect((await e.s.manager.get(`/candidate-files/${c.files[0]!.id}/content`)).status).toBe(409);
+      } finally { await restorePermissions(); }
     } finally {
       await setMailAccess(e.s.admin, box, e.s.ids.eng1, MAIL_ACCESS);
       await setMailAccess(e.s.admin, box, e.s.ids.manager, MAIL_ACCESS);

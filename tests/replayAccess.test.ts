@@ -1,3 +1,4 @@
+import { restrictManagerPermissions } from './roleFixtures.ts';
 // Этап 15a (S15-14, D-036): сохранённый ответ команды привязан к правам, с которыми он построен. После отзыва права повтор
 // по тому же ключу идемпотентности не возвращает сохранённое тело: `409 replay_unavailable`, второй записи нет. Сценарий —
 // команда этапа 08 `assumption.create`, названная в Review 15-2: допущение по требованию, формулировка которого закрыта
@@ -34,6 +35,8 @@ beforeAll(async () => {
   db = await createTestDb();
   st = await buildStage08(db, config);
   const { s } = st;
+  // Ограниченный профиль проверяет выдачи; общий просмотр manager проверяется отдельно.
+  await restrictManagerPermissions(s.admin, s.ids.manager, ['contract.read.all', 'mail.read.all']);
   await grantCreator(s.admin, s.ids.manager);
   contract = await createContract(s.manager, 'Д-15A-1');
   await setAccess(s.admin, contract, s.ids.manager, FULL);

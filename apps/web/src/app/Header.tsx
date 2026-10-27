@@ -29,14 +29,14 @@ export const Header: FC = () => {
   const showContracts = me?.contractsAvailable ?? false;
   const showMail = me?.mailAvailable ?? false;
   // Этап 11: шаблоны и формулировки — пользователям с содержательной ролью (D-031 В-11-3).
-  const showForms = (me?.roles ?? []).some((r) => r === 'manager' || r === 'engineer');
+  const showForms = can('templates.read');
   const path = location.pathname;
   const tendersActive = path === '/' || path.startsWith('/tenders') || path.startsWith('/stages');
   const contractsActive = path.startsWith('/contracts') || path.startsWith('/contract-documents');
   const adminActive = path.startsWith('/admin');
   const mailActive = path.startsWith('/mail') || path.startsWith('/mailboxes');
   const formsActive = path.startsWith('/forms');
-  const showOffice = can('admin.audit');
+  const showOffice = can('office.read');
   const officeActive = path === '/office';
 
   useEffect(() => {

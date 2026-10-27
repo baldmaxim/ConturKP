@@ -1,3 +1,4 @@
+import { addRoleCatalog } from './legacySchema.ts';
 // S18-25: минимальный снимок источника по контракту 0017/0018 на схеме 0040.
 // Современный mail worker зависит от 0045 и не может готовить историческую БД.
 // Все INSERT выполняются ролью приложения, со штатными FK и охранниками создания ревизии.
@@ -15,6 +16,7 @@ export interface ILegacy40QuestionStage {
 }
 
 export const buildLegacy40QuestionStage = async (db: ITestDb): Promise<ILegacy40QuestionStage> => {
+  await addRoleCatalog(db.migratorUrl);
   const config = testConfig(), app = makeApp(db, undefined, config), s = await buildScenario(db, app);
   const box = await createMailbox(s.admin, 'legacy40@example.test');
   await setMailAccess(s.admin, box, s.ids.eng1!, ['mail.read', 'mail.import', 'mail.link']);

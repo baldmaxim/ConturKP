@@ -11,6 +11,8 @@ import { evidenceScopeContentHash, sourceSetContentHash } from '../packages/core
 import { createPool, dropDatabase, migrate, MIGRATIONS_DIR, setupDatabase, type Pool } from '../packages/db/src/index.ts';
 import { ADMIN_URL, createUser, idem, makeApp, TestClient, testConfig, type ITestDb } from './helpers.ts';
 
+import { addRoleCatalog } from './legacySchema.ts';
+
 const name = `kontur_kp_test_upgrade08_${Date.now().toString(36)}`;
 const urlFor = (user: string): string => {
   const u = new URL(ADMIN_URL);
@@ -138,6 +140,7 @@ describe('обновление схемы 0018 → 0019 (D-026)', () => {
     expect(late).toBe('55000');
     // Приложение на обновлённой базе: реестр на прежнем снимке, новый снимок включает Q&A, цитата ответа.
     const db = { pool, name, appUrl: urlFor('kontur_app'), migratorUrl: urlFor('kontur_migrator'), drop: async () => undefined } as unknown as ITestDb;
+    await addRoleCatalog(db.migratorUrl);
     const app = makeApp(db, undefined, testConfig());
     const mgr = new TestClient(app);
     expect((await mgr.login('manager')).status).toBe(200);

@@ -6,6 +6,6 @@ import { OfficePanel } from './admin/office/OfficePanel';
 
 export const OfficePage: FC = () => {
   const { can } = useAuth();
-  if (!can('admin.audit')) return <EmptyState icon="shield-x" title="Нет доступа" text="Офис доступен администраторам портала." />;
+  if (!can('office.read')) return <EmptyState icon="shield-x" title="Нет доступа" text="Для вашей роли просмотр Офиса недоступен." />;
   return <><PageHeader title="Офис" subtitle="Фоновые задания и состояние команды" /><OfficePanel /></>;
 };

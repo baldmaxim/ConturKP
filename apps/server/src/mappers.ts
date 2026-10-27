@@ -9,6 +9,7 @@ export const toUser = (u: IUserRow): IUser => ({
   displayName: u.display_name,
   status: u.status,
   roles: u.roles,
+  roleNames: u.role_names,
   rowVersion: u.row_version,
   createdAt: u.created_at.toISOString(),
 });

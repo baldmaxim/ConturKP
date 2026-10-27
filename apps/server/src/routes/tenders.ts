@@ -154,7 +154,7 @@ export const tendersRouter = (pool: Pool): Router => {
         const { memberRole } = parseBody(PutMemberRequest, req.body);
         const user = await getUser(client, userId);
         if (!user) throw notFound({ entityType: 'app_user', entityId: userId, tenderId: id });
-        if (user.status !== 'active' || !user.roles.includes(memberRole)) {
+        if (user.status !== 'active' || !user.effective_roles.includes(memberRole)) {
           throw new HttpError(409, 'STATE_CONFLICT', `у пользователя нет действующей роли ${memberRole}`, {}, { tenderId: id, entityId: userId });
         }
         const current = await activeMembership(client, id, userId);

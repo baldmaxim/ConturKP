@@ -3,9 +3,10 @@
 import { randomBytes } from 'node:crypto';
 import type { IAppConfig } from '@kontur/config';
 import { ChangePasswordRequest, LoginRequest, type IMe } from '@kontur/contracts';
-import { burnPasswordCheck, globalCapabilities, hashPassword, needsRehash, verifyPassword } from '@kontur/core';
+import { burnPasswordCheck, globalCapabilities, rolePermission, hashPassword, needsRehash, verifyPassword } from '@kontur/core';
 import {
   canCreateContract,
+  accessFingerprint,
   findCredential,
   getPasswordHash,
   grantedContractIds,
@@ -33,12 +34,15 @@ const toMe = (ctx: IAccessContext): IMe => ({
   login: ctx.principal.login,
   displayName: ctx.principal.displayName,
   roles: [...ctx.roles].sort(),
+  assignedRoles: [...ctx.assignedRoles ?? ctx.roles],
+  accessVersion: accessFingerprint(ctx),
   capabilities: [...globalCapabilities(ctx.roles), ...(canCreateContract(ctx) ? ['contract.create'] : [])],
   memberships: [...ctx.memberships.entries()]
     .filter(([, role]) => ctx.roles.has(role))
     .map(([tenderId, memberRole]) => ({ tenderId, memberRole })),
-  contractsAvailable: globalCapabilities(ctx.roles).includes('admin.contract') || canCreateContract(ctx) || grantedContractIds(ctx).length > 0,
-  mailAvailable: globalCapabilities(ctx.roles).includes('admin.mailbox') || [...ctx.mailGrants.keys()].some((id) => mailCaps(ctx, id).length > 0),
+  tendersAvailable: globalCapabilities(ctx.roles).includes('admin.tender') || rolePermission(ctx.roles,'tender.read'),
+  contractsAvailable: (rolePermission(ctx.roles, 'contract.read.all', ctx.roles.has('manager')) && rolePermission(ctx.roles, 'contract.read', true)) || globalCapabilities(ctx.roles).includes('admin.contract') || canCreateContract(ctx) || grantedContractIds(ctx).length > 0,
+  mailAvailable: (rolePermission(ctx.roles, 'mail.read.all', ctx.roles.has('manager')) && rolePermission(ctx.roles, 'mail.read', true)) || globalCapabilities(ctx.roles).includes('admin.mailbox') || [...ctx.mailGrants.keys()].some((id) => mailCaps(ctx, id).length > 0),
 });
 
 export const authRouter = (config: IAppConfig, pool: Pool, clock: () => Date): Router => {

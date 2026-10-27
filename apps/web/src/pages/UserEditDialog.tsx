@@ -2,7 +2,7 @@ import { useState, type FC } from 'react';
 import { updateUser } from '../api/endpoints';
 import { conflictCurrent, describeError, fieldErrorsOf, hasCode } from '../api/errors';
 import { isUser } from '../api/guards';
-import type { IUser, IUserPatch, TGlobalRole, TUserStatus } from '../api/types';
+import type { IUser, IUserPatch, TUserStatus } from '../api/types';
 import { Button } from '../components/Button';
 import { CheckboxGroup } from '../components/CheckboxGroup';
 import { Dialog } from '../components/Dialog';
@@ -16,7 +16,6 @@ import form from '../styles/form.module.css';
 const ROLE_OPTIONS = GLOBAL_ROLES.map((role) => ({ value: role, label: GLOBAL_ROLE_LABELS[role] }));
 const STATUS_LABELS: Record<TUserStatus, string> = { active: 'Активен', disabled: 'Отключён' };
 
-const toRoles = (values: string[]): TGlobalRole[] => GLOBAL_ROLES.filter((role) => values.includes(role));
 const sameRoles = (a: string[], b: string[]): boolean => a.length === b.length && a.every((role) => b.includes(role));
 
 interface IUserEditDialogProps {
@@ -38,12 +37,15 @@ export const UserEditDialog: FC<IUserEditDialogProps> = ({ user, isSelf, onClose
   const [conflict, setConflict] = useState<{ current: IUser | null } | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const roleOptions = [...ROLE_OPTIONS, ...base.roles.filter((role) => !GLOBAL_ROLES.some((known) => known === role))
+    .map((role) => ({ value: role, label: base.roleNames?.[base.roles.indexOf(role)] ?? globalRoleLabel(role) }))];
+
   const patch: IUserPatch = {};
   if (displayName.trim() !== base.displayName) {
     patch.displayName = displayName.trim();
   }
   if (!sameRoles(roles, base.roles)) {
-    patch.roles = toRoles(roles);
+    patch.roles = [...new Set(roles)];
   }
   if (status !== base.status) {
     patch.status = status;
@@ -126,7 +128,7 @@ export const UserEditDialog: FC<IUserEditDialogProps> = ({ user, isSelf, onClose
               <dt>Имя сейчас</dt>
               <dd>{conflict.current.displayName}</dd>
               <dt>Роли сейчас</dt>
-              <dd>{conflict.current.roles.map(globalRoleLabel).join(', ') || 'без ролей'}</dd>
+              <dd>{(conflict.current.roleNames ?? conflict.current.roles.map(globalRoleLabel)).join(', ') || 'без ролей'}</dd>
               <dt>Статус сейчас</dt>
               <dd>{STATUS_LABELS[conflict.current.status]}</dd>
             </dl>
@@ -138,7 +140,7 @@ export const UserEditDialog: FC<IUserEditDialogProps> = ({ user, isSelf, onClose
       {formError ? <Notice tone="danger">{formError}</Notice> : null}
       <TextField label="Логин" value={user.login} onValueChange={() => undefined} readOnly hint="Логин не меняется." />
       <TextField label="Имя для отображения" required value={displayName} onValueChange={setDisplayName} error={errors.displayName} />
-      <CheckboxGroup legend="Роли" required options={ROLE_OPTIONS} selected={roles} onChange={setRoles} error={errors.roles} />
+      <CheckboxGroup legend="Роли" required options={roleOptions} selected={roles} onChange={setRoles} error={errors.roles} />
       <SelectField
         label="Статус"
         value={status}

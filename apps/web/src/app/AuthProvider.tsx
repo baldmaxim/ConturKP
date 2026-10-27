@@ -47,6 +47,15 @@ export const AuthProvider: FC<IAuthProviderProps> = ({ children }) => {
     return () => controller.abort();
   }, [loadMe]);
 
+  // Права перечитываются без выхода из сессии; устаревшие экраны сбрасывает accessVersion оболочки.
+  useEffect(() => {
+    if(state.status !== 'authenticated') return;
+    const id=state.me?.id;const controller=new AbortController();let pending=false;
+    const poll=async():Promise<void>=>{if(pending||document.visibilityState!=='visible')return;pending=true;try{const me=await getMe(controller.signal);setState(prev=>prev.status==='authenticated'&&prev.me?.id===id?{status:'authenticated',me,error:null}:prev);}catch(error){if(error instanceof ApiError&&error.status===401)setState(ANONYMOUS);}finally{pending=false;}};
+    const visible=():void=>{void poll();};const timer=window.setInterval(visible,30_000);document.addEventListener('visibilitychange',visible);
+    return()=>{controller.abort();clearInterval(timer);document.removeEventListener('visibilitychange',visible);};
+  },[state.status,state.me?.id]);
+
   const login = useCallback(async (loginName: string, password: string): Promise<void> => {
     const me = await apiLogin(loginName, password);
     setState({ status: 'authenticated', me, error: null });

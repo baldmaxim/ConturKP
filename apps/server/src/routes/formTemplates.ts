@@ -13,7 +13,7 @@ import {
   MarkupCheckRequest,
   WordingsQuery,
 } from '@kontur/contracts';
-import { allFields, fieldChanges, formatEtag, globalCapabilities, hasContentRole, validateSchema, type IFormSchema } from '@kontur/core';
+import { allFields, fieldChanges, formatEtag, globalCapabilities, hasContentRole, rolePermission, validateSchema, type IFormSchema } from '@kontur/core';
 import {
   addWordingVersion,
   approveTemplateRevision,
@@ -53,7 +53,7 @@ const canApproveCompanyWording = (ctx: IAccessContext): boolean => globalCapabil
 
 // Чтение шаблона: компании — пользователь с содержательной ролью; заказчика — участник тендера (иначе 404).
 const canReadTemplate = (ctx: IAccessContext, tenderId: string | null): boolean =>
-  tenderId === null ? hasContentRole(ctx.roles) || isTemplateAdmin(ctx) : hasTenderCap(ctx, tenderId, 'tender.read');
+  tenderId === null ? globalCapabilities(ctx.roles).includes('templates.read') || isTemplateAdmin(ctx) : hasTenderCap(ctx, tenderId, 'tender.read');
 
 const canManage = (ctx: IAccessContext, tenderId: string | null): boolean => (tenderId === null ? isTemplateAdmin(ctx) : hasTenderCap(ctx, tenderId, 'template.manage'));
 
@@ -349,7 +349,7 @@ export const formTemplatesRouter = (pool: Pool, store: BlobStore, config: IAppCo
 
   // ---------------------------------------------------------------- Формулировки
 
-  const canProposeWording = (ctx: IAccessContext, tenderId: string | null) => (tenderId === null ? hasContentRole(ctx.roles) : hasTenderCap(ctx, tenderId, 'application.fill'));
+  const canProposeWording = (ctx: IAccessContext, tenderId: string | null) => (tenderId === null ? rolePermission(ctx.roles,'wording.propose',hasContentRole(ctx.roles)) : hasTenderCap(ctx, tenderId, 'application.fill'));
   const canApproveWording = (ctx: IAccessContext, tenderId: string | null) => (tenderId === null ? canApproveCompanyWording(ctx) : hasTenderCap(ctx, tenderId, 'template.manage'));
   const loadWordingVersion = async (db: Queryable, ctx: IAccessContext, id: string, lock = false): Promise<IWordingRow> => {
     const w = await getWordingVersion(db, id, lock);
@@ -363,7 +363,7 @@ export const formTemplatesRouter = (pool: Pool, store: BlobStore, config: IAppCo
       const q = parseBody(WordingsQuery, req.query);
       const tenderId = q.tenderId?.toLowerCase() ?? null;
       if (tenderId && !hasTenderCap(ctx, tenderId, 'tender.read')) throw notFound({ entityType: 'tender', entityId: tenderId });
-      if (!hasContentRole(ctx.roles) && !isTemplateAdmin(ctx)) throw forbidden('tender.read', { entityType: 'wording' });
+      if (!globalCapabilities(ctx.roles).includes('templates.read') && !isTemplateAdmin(ctx)) throw forbidden('tender.read', { entityType: 'wording' });
       const rows = await listWordings(pool, ctx, { tenderId, query: q.q ?? null, tag: q.tag ?? null, status: q.status ?? null });
       res.json({ items: rows.map(toWording), canApproveCompany: canApproveCompanyWording(ctx) });
     }),

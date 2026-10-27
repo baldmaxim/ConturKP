@@ -1,3 +1,4 @@
+import { restrictManagerPermissions } from './roleFixtures.ts';
 // Регрессии Review 15-1 (docs/reviews/15-review-1.md): R15-01 — повтор команды по ключу идемпотентности не возвращает
 // сохранённый закрытый текст; R15-02 — сторона сравнения показывает состояние вопроса на момент закрепления; R15-03 — у
 // письма вне снимка есть закреплённая ревизия, позднейшая редакция вывод не меняет. Первые восемь проверок — независимые
@@ -170,8 +171,13 @@ const preparePrivacy = async (): Promise<IPrivacy> => {
   privacyFixture = { mail, reg: reg.body, accepted: accepted.body, incident: incident.body, registerBody, registerKey, extraKey, extraBody, incidentBody, incidentKey };
   return privacyFixture;
 };
+let restoreManagerPermissions: (() => Promise<void>) | null = null;
 const redact = async (actor: 'eng1' | 'manager', on: boolean) => {
+  if (actor === 'manager' && !on && !restoreManagerPermissions) restoreManagerPermissions = await restrictManagerPermissions(st.e.s.admin, st.e.s.ids.manager, ['mail.read.all']);
   await setMailAccess(st.e.s.admin, st.mailbox, st.e.s.ids[actor], on ? (actor === 'eng1' ? ['mail.read', 'mail.import', 'mail.link'] : ['mail.read']) : (actor === 'eng1' ? ['mail.import', 'mail.link'] : []));
+  if (actor === 'manager' && on && restoreManagerPermissions) {
+    const restore = restoreManagerPermissions; restoreManagerPermissions = null; await restore();
+  }
 };
 
 it('idempotent send registration rechecks mailbox visibility after access is revoked', async () => {

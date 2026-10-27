@@ -121,7 +121,7 @@ describe('подмена роли (A25)', () => {
     expect(self.status).toBe(403);
     const me = await s.eng1.get('/me', { headers: spoof });
     expect(me.body.roles).toEqual(['engineer']);
-    expect(me.body.capabilities).toEqual([]);
+    expect(me.body.capabilities).toEqual(['templates.read', 'history.read', 'history.write']);
   });
 
   it('инженер не читает журнал тендера и администрирование', async () => {
@@ -154,10 +154,11 @@ describe('администратор без назначения', () => {
     expect((await s.admin.get(`/stages/${s.stageA}`)).status).toBe(404);
   });
 
-  it('снятие глобальной роли сразу лишает прав по назначению', async () => {
+  it('снятие содержательной роли в admin сразу лишает прав по назначению', async () => {
+    // manager даёт общий просмотр; чистый admin позволяет проверить именно отзыв содержимого.
     const u = await s.admin.get('/admin/users');
     const eng2 = u.body.items.find((x: { login: string }) => x.login === 'eng2');
-    const r = await s.admin.patch(`/admin/users/${s.ids.eng2}`, { roles: ['manager'] }, { headers: { 'If-Match': `"${s.ids.eng2}:${eng2.rowVersion}"` } });
+    const r = await s.admin.patch(`/admin/users/${s.ids.eng2}`, { roles: ['admin'] }, { headers: { 'If-Match': `"${s.ids.eng2}:${eng2.rowVersion}"` } });
     expect(r.status).toBe(200);
     expect((await s.eng2.get(`/stages/${s.stageA}`)).status).toBe(404);
     const back = await s.admin.patch(`/admin/users/${s.ids.eng2}`, { roles: ['engineer'] }, { headers: { 'If-Match': r.headers.etag } });

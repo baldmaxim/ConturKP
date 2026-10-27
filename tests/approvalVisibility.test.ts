@@ -1,3 +1,4 @@
+import { restrictManagerPermissions } from './roleFixtures.ts';
 // Этап 13 — права на содержимое пунктов матрицы (урок R11-01, R08-02): критическое замечание по письму из ящика, к
 // которому у инженера 2 нет доступа. Его заголовок не попадает в карточку инженера 2 (пункт без текста, «закрыт»), не
 // попадает в манифест выпуска (родовой заголовок); манифест с решением по закрытому предмету инженер 2 не читает
@@ -54,11 +55,17 @@ describe('пункты матрицы по правам пользователя
   it('руководитель без доступа к ящику не принимает риск по закрытому пункту; с доступом — принимает; манифест выпуска без заголовка замечания и только при доступе', async () => {
     let c = await assembled(st);
     await notApplicable(st, c.id, 'Письмо и прежние документы не меняют комплект');
-    await setMailAccess(st.e.s.admin, box, st.e.s.ids.manager, []);
-    const denied = await acceptRisk(st, c, { blockerCode: 'CRITICAL_FINDINGS_OPEN', subjectType: 'finding', subjectId: findingId, reason: 'Риск без чтения оснований' });
-    expect(denied.status, denied.text).toBe(409);
-    expect(denied.body.current.reason).toBe('restricted_fragments');
-    await setMailAccess(st.e.s.admin, box, st.e.s.ids.manager, MAIL);
+    const restorePermissions = await restrictManagerPermissions(st.e.s.admin, st.e.s.ids.manager, ['mail.read.all']);
+    try {
+      await setMailAccess(st.e.s.admin, box, st.e.s.ids.manager, []);
+      const denied = await acceptRisk(st, c, { blockerCode: 'CRITICAL_FINDINGS_OPEN', subjectType: 'finding', subjectId: findingId, reason: 'Риск без чтения оснований' });
+      expect(denied.status, denied.text).toBe(409);
+      expect(denied.body.current.reason).toBe('restricted_fragments');
+      await setMailAccess(st.e.s.admin, box, st.e.s.ids.manager, MAIL);
+      } finally {
+      await setMailAccess(st.e.s.admin, box, st.e.s.ids.manager, MAIL);
+      await restorePermissions();
+    }
     c = await view(st, c.id);
     await acceptAll(st, c);
     const a = await approve(st, (c = await view(st, c.id)));

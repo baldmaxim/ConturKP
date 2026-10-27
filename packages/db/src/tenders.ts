@@ -1,6 +1,6 @@
 // Тендеры, участники, этапы (data-model §4.2). Условие области тендера — в каждом запросе
 // (ADR-006 §6): карточку видит участник или администратор, этапы — только участник.
-import type { MemberRole } from '@kontur/core';
+import { globalCapabilities, rolePermission, type MemberRole } from '@kontur/core';
 import { contentTenderIds, type IAccessContext } from './access.ts';
 import type { Queryable } from './pool.ts';
 
@@ -28,8 +28,8 @@ const VISIBLE = `($3::boolean OR m.member_role = ANY($2::text[]))`;
 
 const scopeArgs = (ctx: IAccessContext): [string, string[], boolean] => [
   ctx.principal.userId,
-  [...ctx.roles],
-  ctx.roles.has('admin'),
+  rolePermission(ctx.roles, 'tender.read', true) ? [...ctx.roles] : [],
+  globalCapabilities(ctx.roles).includes('admin.tender') || (rolePermission(ctx.roles, 'tender.read.all', ctx.roles.has('manager')) && rolePermission(ctx.roles, 'tender.read', true)),
 ];
 
 export const listTenders = async (db: Queryable, ctx: IAccessContext): Promise<ITenderRow[]> => {

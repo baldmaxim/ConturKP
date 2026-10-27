@@ -46,6 +46,9 @@ export interface IMembership {
 }
 
 export interface IMe {
+  accessVersion?: string;
+  assignedRoles?: string[];
+  tendersAvailable?: boolean;
   id: string;
   login: string;
   displayName: string;
@@ -159,6 +162,7 @@ export interface IUser {
   displayName: string;
   status: TUserStatus;
   roles: string[];
+  roleNames?: string[];
   rowVersion: number;
   createdAt: string;
 }
@@ -173,7 +177,7 @@ export interface IUserCreateInput {
 export interface IUserPatch {
   displayName?: string;
   status?: TUserStatus;
-  roles?: TGlobalRole[];
+  roles?: string[];
 }
 
 export interface IListResponse<T> {

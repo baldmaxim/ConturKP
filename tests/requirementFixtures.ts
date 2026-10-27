@@ -35,6 +35,7 @@ export const etag = async (client: TestClient, path: string): Promise<string> =>
 
 // Тендер A, этап A: документ ТЗ на двух страницах, замороженный набор, снимок, реестр № 1 (руководитель).
 export const buildStage08 = async (db: ITestDb, config: IAppConfig): Promise<IStage08> => {
+  await addRoleCatalog(db.migratorUrl);
   const app = makeApp(db, undefined, config);
   const s = await buildScenario(db, app);
   const docRev = await uploadDocument(db, config, s.eng1, s.stageA, 'тз.pdf');
@@ -77,3 +78,5 @@ export const confirmedRequirement = async (st: IStage08, statement: string, frag
 // Worker с заданной генеративной моделью (сценарии отказов и ответов).
 export const workerWithChat = (db: ITestDb, config: IAppConfig, chat: IModelGatewayChat | null, workerId = 'test-worker-08'): WorkerRuntime =>
   new WorkerRuntime({ pool: db.pool, store: new BlobStore(config.storageRoot), config, handlers: HANDLERS, workerId, chat });
+
+import { addRoleCatalog } from './legacySchema.ts';

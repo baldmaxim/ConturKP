@@ -3,7 +3,7 @@
 // без собственной mail.read и роли инженера или руководителя не видит. Выдача — строка на тройку
 // «ящик, пользователь, возможность», как contract_access (D-022).
 import type { MailCapability } from '@kontur/core';
-import { mailCaps, type IAccessContext } from './access.ts';
+import { mailCaps, readableMailboxIds, type IAccessContext } from './access.ts';
 import { enqueueJob } from './jobs.ts';
 import type { Queryable } from './pool.ts';
 
@@ -26,7 +26,7 @@ const SELECT_MAILBOX = `
 
 // Ящики пользователя: с любой действующей выдачей; администратору — все (только служебные сведения).
 export const listMailboxes = async (db: Queryable, ctx: IAccessContext, admin: boolean): Promise<IMailboxRow[]> => {
-  const ids = [...ctx.mailGrants.keys()].filter((id) => mailCaps(ctx, id).length > 0);
+  const ids = [...new Set([...readableMailboxIds(ctx), ...[...ctx.mailGrants.keys()].filter((id) => mailCaps(ctx, id).length > 0)])];
   const r = await db.query<IMailboxRow>(`${SELECT_MAILBOX} WHERE $1 OR m.id = ANY($2::uuid[]) ORDER BY m.display_name, m.id`, [admin, ids]);
   return r.rows;
 };

@@ -17,3 +17,5 @@ export * from './release/index.ts';
 export * from './delivery/index.ts';
 export * from './send/index.ts';
 export * from './releaseCompare/index.ts';
+
+export * from './rolePolicy.ts';

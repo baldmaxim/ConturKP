@@ -67,10 +67,10 @@ const AuthorizedOfficeProvider: FC<{ children: ReactNode }> = ({ children }) => 
   return <OfficeContext.Provider value={value}>{children}</OfficeContext.Provider>;
 };
 
-/** При смене пользователя весь снимок уничтожается; без admin.audit запросов и старых данных нет. */
+/** При смене пользователя весь снимок уничтожается; без office.read запросов и старых данных нет. */
 export const OfficeProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const { me, can } = useAuth();
-  return me && can('admin.audit')
+  return me && can('office.read')
     ? <AuthorizedOfficeProvider key={me.id}>{children}</AuthorizedOfficeProvider>
     : <OfficeContext.Provider value={EMPTY_OFFICE}>{children}</OfficeContext.Provider>;
 };

@@ -1,3 +1,4 @@
+import { restrictManagerPermissions } from './roleFixtures.ts';
 // Регрессии Review 11-1 (docs/reviews/11-review-1.md). Написаны до исправления продукта; на коде bf4d44f тесты дефектов
 // падают, контрольные сценарии (прямое закрытое основание, действующее основание до новой редакции ТЗ) проходят и до,
 // и после исправления.
@@ -252,6 +253,7 @@ describe('R11-02 — «обсудить» не раскрывает скрыто
   });
 
   it('отзыв права после создания версии: обсуждение скрыто и от самого автора', async () => {
+    const restorePermissions = await restrictManagerPermissions(s.admin, s.ids.manager, ['mail.read.all']);
     await setMailAccess(s.admin, box, s.ids.manager, []);
     try {
       expect((await fieldNow(s.manager, draftA.id, 'mail_text')).latest).toMatchObject({ restricted: true, value: null });
@@ -262,6 +264,7 @@ describe('R11-02 — «обсудить» не раскрывает скрыто
       expect(r.text).not.toContain(SECRET_LETTER);
     } finally {
       await setMailAccess(s.admin, box, s.ids.manager, MAIL_ACCESS);
+      await restorePermissions();
     }
   });
 

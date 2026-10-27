@@ -11,6 +11,7 @@ import { fromStorageError, HttpError, sendProblem } from './http/errors.ts';
 import { csrfGuard, securityHeaders, sessionMiddleware } from './http/security.ts';
 import { operationsRouter } from './routes/operations.ts';
 import { adminRouter } from './routes/admin.ts';
+import { rolesRouter } from './routes/roles.ts';
 import { authRouter } from './routes/auth.ts';
 import { documentsRouter } from './routes/documents.ts';
 import { evidenceScopesRouter } from './routes/evidenceScopes.ts';
@@ -91,6 +92,7 @@ export const createApp = (deps: IAppDeps): express.Express => {
   api.use(tendersRouter(pool));
   api.use(stagesRouter(pool));
   api.use(adminRouter(pool, clock));
+  api.use(rolesRouter(pool));
   api.use(operationsRouter(pool, config, store));
   api.use(importsRouter(pool, store, config));
   api.use(documentsRouter(pool, store));

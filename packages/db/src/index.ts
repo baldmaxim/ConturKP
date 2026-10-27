@@ -66,3 +66,5 @@ export * from './releaseComparisons.ts';
 export * from './apiTokens.ts';
 export * from './mcpProposals.ts';
 export * from './mailhub.ts';
+
+export * from './roles.ts';

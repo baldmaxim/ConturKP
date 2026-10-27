@@ -1,4 +1,5 @@
-// «Офис» в администрировании: GET /admin/office — только admin.audit; задания по тендерам без содержимого-доступа
+import { restrictManagerPermissions } from './roleFixtures.ts';
+// «Офис» в администрировании: GET /admin/office — по office.read; задания по тендерам без содержимого-доступа
 // не раскрывают ни идентификатор, ни название; текст ошибки задания в ответ не попадает.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { officeSnapshot } from '../packages/db/src/index.ts';
@@ -25,8 +26,9 @@ beforeAll(async () => {
   db = await createTestDb();
   const app = createApp({ config, pool: db.pool, clock: new Clock().read, logError: () => undefined });
   s = await buildScenario(db, app);
-  // Администратор с ролью руководителя, назначенный на третий тендер: его содержимое он видит, тендеры A и B — нет.
+  // Для проверки закрытых A/B руководителю явно ограничен общий просмотр; admin остаётся отдельной ролью.
   const chiefId = await createUser(db.pool, 'chief', ['admin', 'manager'], 'Админ-руководитель');
+  await restrictManagerPermissions(s.admin, chiefId, ['tender.read.all']);
   const created = await s.admin.post('/tenders', { code: 'C-1', title: 'Видимый тендер C' }, { headers: idem() });
   expect(created.status, created.text).toBe(201);
   tenderC = created.body.id as string;
@@ -52,9 +54,10 @@ afterAll(async () => {
 type Item = { kind: string; status: string; tenderId: string | null; hidden: boolean; count: number; lastErrorCode: string | null; lastFailedAt: string | null };
 
 describe('GET /admin/office', () => {
-  it('инженер и руководитель без admin.audit — 403, аноним — 401', async () => {
+  it('без office.read — 403, руководителю разрешено, аноним — 401', async () => {
     expect((await s.eng1.get('/admin/office')).status).toBe(403);
-    expect((await s.manager.get('/admin/office')).status).toBe(403);
+    expect((await s.manager.get('/admin/office')).status).toBe(200);
+    expect((await s.manager.get('/admin/operations')).status).toBe(403);
     expect((await new TestClient(createApp({ config, pool: db.pool, clock: new Clock().read, logError: () => undefined })).get('/admin/office')).status).toBe(401);
   });
 

@@ -114,11 +114,19 @@ export const tendersRouter = (pool: Pool): Router => {
         const expected = requireIfMatch(req, id);
         if (expected !== t.row_version) throw versionConflict(toTender(ctx, t));
         const body = parseBody(PatchTenderRequest, req.body);
-        await updateTender(client, ctx, id, body);
+        const status = body.status ?? t.status;
+        if (status === 'active' && body.outcome != null) {
+          throw new HttpError(400, 'VALIDATION_FAILED', 'Результат указывается при переносе тендера в архив.', { errors: [{ path: 'outcome', message: 'Для действующего тендера результат не указывается.' }] });
+        }
+        const outcome = status === 'active' ? null : body.outcome !== undefined ? body.outcome : t.outcome;
+        if (status === 'archived' && !outcome) {
+          throw new HttpError(400, 'VALIDATION_FAILED', 'Выберите результат тендера.', { errors: [{ path: 'outcome', message: 'Выберите: выигран или проигран.' }] });
+        }
+        await updateTender(client, ctx, id, { ...body, outcome });
         const after = await loadTender(client, ctx, id);
         const diff = changes(
-          { title: t.title, customerName: t.customer_name, objectName: t.object_name, status: t.status },
-          { title: after.title, customerName: after.customer_name, objectName: after.object_name, status: after.status },
+          { title: t.title, customerName: t.customer_name, objectName: t.object_name, status: t.status, outcome: t.outcome },
+          { title: after.title, customerName: after.customer_name, objectName: after.object_name, status: after.status, outcome: after.outcome },
         );
         return {
           status: 200,

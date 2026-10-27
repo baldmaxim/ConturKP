@@ -11,6 +11,7 @@ export interface ITenderRow {
   customer_name: string | null;
   object_name: string | null;
   status: 'active' | 'archived';
+  outcome: 'won' | 'lost' | null;
   row_version: number;
   created_at: Date;
   updated_at: Date;
@@ -18,7 +19,7 @@ export interface ITenderRow {
 }
 
 const SELECT_TENDER = `
-  SELECT t.id, t.code, t.title, t.customer_name, t.object_name, t.status, t.row_version,
+  SELECT t.id, t.code, t.title, t.customer_name, t.object_name, t.status, t.outcome, t.row_version,
          t.created_at, t.updated_at,
          CASE WHEN m.member_role = ANY($2::text[]) THEN m.member_role END AS member_role
     FROM tender t
@@ -66,6 +67,7 @@ export interface ITenderPatch {
   customerName?: string | null | undefined;
   objectName?: string | null | undefined;
   status?: 'active' | 'archived' | undefined;
+  outcome?: 'won' | 'lost' | null | undefined;
 }
 
 // Поле, отсутствующее в patch, не меняется; null явно очищает необязательное поле.
@@ -76,6 +78,7 @@ export const updateTender = async (db: Queryable, _ctx: IAccessContext, id: stri
             customer_name = CASE WHEN $4 THEN $5 ELSE customer_name END,
             object_name = CASE WHEN $6 THEN $7 ELSE object_name END,
             status = CASE WHEN $8 THEN $9 ELSE status END,
+            outcome = CASE WHEN $10 THEN $11 ELSE outcome END,
             updated_at = now(), row_version = row_version + 1
       WHERE id = $1`,
     [
@@ -84,6 +87,7 @@ export const updateTender = async (db: Queryable, _ctx: IAccessContext, id: stri
       p.customerName !== undefined, p.customerName ?? null,
       p.objectName !== undefined, p.objectName ?? null,
       p.status !== undefined, p.status ?? null,
+      p.outcome !== undefined, p.outcome ?? null,
     ],
   );
 };

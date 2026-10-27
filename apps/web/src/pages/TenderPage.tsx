@@ -5,7 +5,7 @@ import type { ITender } from '../api/types';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
 import { PageHeader } from '../components/PageHeader';
-import { StatusBadge } from '../components/StatusBadge';
+import { TenderStatusBadge } from '../components/TenderStatusBadge';
 import { Tabs, tabId, tabPanelId, type ITab } from '../components/Tabs';
 import { useApiResource } from '../hooks/useApiResource';
 import { useAuth } from '../hooks/useAuth';
@@ -87,7 +87,7 @@ export const TenderPage: FC = () => {
         subtitle={
           <>
             <span className={styles.code}>{tender.code}</span>
-            <StatusBadge status={tender.status} />
+            <TenderStatusBadge status={tender.status} outcome={tender.outcome} />
           </>
         }
       />

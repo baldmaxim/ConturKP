@@ -9,7 +9,7 @@ import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
 import type { TMenuEntry } from '../components/menuTypes';
 import { PageHeader } from '../components/PageHeader';
-import { StatusBadge } from '../components/StatusBadge';
+import { TenderStatusBadge } from '../components/TenderStatusBadge';
 import { useApiResource } from '../hooks/useApiResource';
 import { useAppNavigate } from '../hooks/useAppNavigate';
 import { useAuth } from '../hooks/useAuth';
@@ -143,7 +143,7 @@ export const TendersPage: FC = () => {
                   <td>{tender.objectName ?? absent}</td>
                   <td>{roleText(tender)}</td>
                   <td>
-                    <StatusBadge status={tender.status} />
+                    <TenderStatusBadge status={tender.status} outcome={tender.outcome} />
                   </td>
                   <td className={list.num}>{formatDateTime(tender.updatedAt)}</td>
                 </tr>
@@ -158,7 +158,7 @@ export const TendersPage: FC = () => {
                 <AppLink className={list.rowLink} to={`/tenders/${tender.id}`}>
                   {tender.title}
                 </AppLink>
-                <StatusBadge status={tender.status} />
+                <TenderStatusBadge status={tender.status} outcome={tender.outcome} />
               </div>
               <dl className={list.meta}>
                 <dt>Код</dt>

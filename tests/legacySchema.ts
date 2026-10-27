@@ -65,12 +65,20 @@ export const dropClosureTables = async (migratorUrl: string): Promise<void> => {
 // и не fallback продукта. Охранники старой схемы не заменяются; перед настоящей 0054
 // временная модель удаляется без CASCADE. Маркер не позволяет удалить реальный каталог.
 const ROLE_FIXTURE_MARKER = 'kontur-test-legacy-role-read-model';
+const OUTCOME_FIXTURE_MARKER = 'kontur-test-legacy-outcome-read-model';
 export const addRoleCatalog = async (migratorUrl: string): Promise<void> => {
   const url = new URL(migratorUrl);
   if (!url.pathname.startsWith('/kontur_kp_test_')) throw new Error('Каталог совместимости — только тестовая БД');
   const db = new pg.Client({ connectionString: migratorUrl });
   await db.connect();
   try {
+    // HEAD читает outcome при подготовке исторических данных. Это только временная
+    // колонка тестовой БД: настоящая 0055 и её CHECK применяются после её удаления.
+    const outcome = await db.query("SELECT 1 FROM pg_attribute WHERE attrelid='tender'::regclass AND attname='outcome' AND NOT attisdropped");
+    if (outcome.rowCount === 0) {
+      await db.query('ALTER TABLE tender ADD COLUMN outcome text');
+      await db.query("COMMENT ON COLUMN tender.outcome IS 'kontur-test-legacy-outcome-read-model'");
+    }
     if ((await db.query("SELECT to_regclass('portal_role') AS role")).rows[0]!.role) return;
     await db.query("CREATE TABLE portal_role(code text PRIMARY KEY,name text NOT NULL,base_role text NOT NULL,status text NOT NULL DEFAULT 'active',permissions text[] NOT NULL)");
     await db.query("COMMENT ON TABLE portal_role IS 'kontur-test-legacy-role-read-model'");
@@ -89,6 +97,11 @@ export const dropRoleCatalog = async (migratorUrl: string): Promise<void> => {
   const db = new pg.Client({ connectionString: migratorUrl });
   await db.connect();
   try {
+    const outcomeMarker = (await db.query("SELECT col_description(attrelid,attnum) AS marker FROM pg_attribute WHERE attrelid='tender'::regclass AND attname='outcome' AND NOT attisdropped")).rows[0]?.marker;
+    if (outcomeMarker === OUTCOME_FIXTURE_MARKER) {
+      if ((await db.query('SELECT 1 FROM tender WHERE outcome IS NOT NULL LIMIT 1')).rowCount) throw new Error('Временный outcome содержит данные: удаление запрещено');
+      await db.query('ALTER TABLE tender DROP COLUMN outcome');
+    }
     const marker = (await db.query("SELECT obj_description(to_regclass('portal_role')) AS marker")).rows[0]!.marker;
     if (marker !== ROLE_FIXTURE_MARKER) return;
     await db.query('DROP FUNCTION has_role_permission(uuid,text)');

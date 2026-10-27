@@ -3,6 +3,7 @@
 export type TGlobalRole = 'admin' | 'manager' | 'engineer';
 export type TMemberRole = 'engineer' | 'manager';
 export type TTenderStatus = 'active' | 'archived';
+export type TTenderOutcome = 'won' | 'lost';
 export type TStageStatus = 'active' | 'archived';
 export type TUserStatus = 'active' | 'disabled';
 export type TPrincipalKind = 'human' | 'model_via_mcp' | 'integration' | 'system' | 'anonymous';
@@ -68,6 +69,7 @@ export interface ITender {
   customerName: string | null;
   objectName: string | null;
   status: TTenderStatus;
+  outcome: TTenderOutcome | null;
   rowVersion: number;
   createdAt: string;
   updatedAt: string;
@@ -87,6 +89,7 @@ export interface ITenderPatch {
   customerName?: string | null;
   objectName?: string | null;
   status?: TTenderStatus;
+  outcome?: TTenderOutcome | null;
 }
 
 export interface IUserRef {

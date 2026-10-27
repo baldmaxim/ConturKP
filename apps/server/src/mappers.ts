@@ -21,6 +21,7 @@ export const toTender = (ctx: IAccessContext, t: ITenderRow): ITender => ({
   customerName: t.customer_name,
   objectName: t.object_name,
   status: t.status,
+  outcome: t.outcome,
   rowVersion: t.row_version,
   createdAt: t.created_at.toISOString(),
   updatedAt: t.updated_at.toISOString(),

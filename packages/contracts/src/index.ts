@@ -46,6 +46,7 @@ export const PatchTenderRequest = z
     customerName: optionalText(500),
     objectName: optionalText(500),
     status: z.enum(['active', 'archived']).optional(),
+    outcome: z.enum(['won', 'lost']).nullable().optional(),
   })
   .strict();
 
@@ -312,6 +313,7 @@ export interface ITender {
   customerName: string | null;
   objectName: string | null;
   status: 'active' | 'archived';
+  outcome: 'won' | 'lost' | null;
   rowVersion: number;
   createdAt: string;
   updatedAt: string;

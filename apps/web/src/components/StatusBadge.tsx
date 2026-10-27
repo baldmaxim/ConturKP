@@ -13,7 +13,7 @@ export const StatusBadge: FC<IStatusBadgeProps> = ({ status, outcome }) =>
     <Badge
       tone={outcome === 'won' ? 'success' : outcome === 'lost' ? 'danger' : 'muted'}
       icon="archive"
-      label="В архиве"
+      label={outcome === 'won' ? 'В архиве · Выиграно' : outcome === 'lost' ? 'В архиве · Проиграно' : 'В архиве'}
       title={outcome === 'won' ? 'В архиве · Выиграно' : outcome === 'lost' ? 'В архиве · Проиграно' : 'В архиве'}
     />
   );

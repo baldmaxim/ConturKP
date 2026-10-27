@@ -29,6 +29,9 @@ describe('списки тендеров', () => {
   });
   it('архив показывает выигранные и проигранные со своими результатами и возвратом', () => {
     const html = view('/?status=archived');
+    const visibleText = html.replace(/<[^>]*>/g, ' ');
+    expect(visibleText).toContain('Выиграно');
+    expect(visibleText).toContain('Проиграно');
     expect(html).not.toContain('Текущий тендер');
     expect(html).toContain('ЖК WAVE 2 очередь');
     expect(html).toContain('Проигранный тендер');

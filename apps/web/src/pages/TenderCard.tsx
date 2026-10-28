@@ -7,12 +7,12 @@ import { Button } from '../components/Button';
 import { ConflictDialog, type IConflictRow } from '../components/ConflictDialog';
 import { Notice } from '../components/Notice';
 import { SelectField } from '../components/SelectField';
-import { TenderStatusBadge } from '../components/TenderStatusBadge';
+import { StatusBadge } from '../components/StatusBadge';
 import { TextField } from '../components/TextField';
 import { useToast } from '../hooks/useToast';
 import { useUnsavedChanges } from '../hooks/unsavedChanges';
 import { formatDateTime } from '../utils/datetime';
-import { MEMBER_ROLE_LABELS } from '../utils/labels';
+import { MEMBER_ROLE_LABELS, TENDER_OUTCOME_LABELS } from '../utils/labels';
 import form from '../styles/form.module.css';
 
 interface ITenderForm {
@@ -24,7 +24,6 @@ interface ITenderForm {
 }
 
 const STATUS_LABELS: Record<TTenderStatus, string> = { active: 'Действующий', archived: 'В архиве' };
-const OUTCOME_LABELS: Record<TTenderOutcome, string> = { won: 'Выигран', lost: 'Проигран' };
 
 const toForm = (tender: ITender): ITenderForm => ({
   title: tender.title,
@@ -155,7 +154,7 @@ export const TenderCard: FC<ITenderCardProps> = ({ tender, onChanged }) => {
         { label: 'Заказчик', mine: values.customerName.trim(), current: conflict.current.customerName ?? '' },
         { label: 'Объект', mine: values.objectName.trim(), current: conflict.current.objectName ?? '' },
         { label: 'Статус', mine: STATUS_LABELS[values.status], current: STATUS_LABELS[conflict.current.status] },
-        { label: 'Результат', mine: values.outcome ? OUTCOME_LABELS[values.outcome] : 'Не указан', current: conflict.current.outcome ? OUTCOME_LABELS[conflict.current.outcome] : 'Не указан' },
+        { label: 'Результат', mine: values.outcome ? TENDER_OUTCOME_LABELS[values.outcome] : 'Не указан', current: conflict.current.outcome ? TENDER_OUTCOME_LABELS[conflict.current.outcome] : 'Не указан' },
       ]
     : [];
 
@@ -206,7 +205,7 @@ export const TenderCard: FC<ITenderCardProps> = ({ tender, onChanged }) => {
                 required
                 value={values.outcome}
                 placeholder="Выберите результат"
-                options={[{ value: 'won', label: OUTCOME_LABELS.won }, { value: 'lost', label: OUTCOME_LABELS.lost }]}
+                options={[{ value: 'won', label: TENDER_OUTCOME_LABELS.won }, { value: 'lost', label: TENDER_OUTCOME_LABELS.lost }]}
                 onValueChange={(value) => set('outcome', value === 'won' || value === 'lost' ? value : '')}
                 error={errors.outcome}
               />
@@ -243,7 +242,7 @@ export const TenderCard: FC<ITenderCardProps> = ({ tender, onChanged }) => {
           <dd>{tender.objectName ?? absent}</dd>
           <dt>Статус</dt>
           <dd>
-            <TenderStatusBadge status={tender.status} outcome={tender.outcome} />
+            <StatusBadge status={tender.status} outcome={tender.outcome} />
           </dd>
           <dt>Моя роль</dt>
           <dd>{tender.myRole ? MEMBER_ROLE_LABELS[tender.myRole] : 'Не участник'}</dd>

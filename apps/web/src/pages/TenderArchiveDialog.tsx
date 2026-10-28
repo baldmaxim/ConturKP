@@ -7,6 +7,7 @@ import { Dialog } from '../components/Dialog';
 import { Notice } from '../components/Notice';
 import { SelectField } from '../components/SelectField';
 import form from '../styles/form.module.css';
+import { TENDER_OUTCOME_LABELS } from '../utils/labels';
 
 interface ITenderArchiveDialogProps {
   tender: ITender;
@@ -44,8 +45,8 @@ export const TenderArchiveDialog: FC<ITenderArchiveDialogProps> = ({ tender, onC
         <p>Тендер сохранится со всеми документами и будет доступен в архиве.</p>
         {error ? <Notice tone="danger">{error}</Notice> : null}
         <SelectField label="Результат тендера" required value={outcome} placeholder="Выберите результат" options={[
-          { value: 'won', label: 'Выиграно' },
-          { value: 'lost', label: 'Проиграно' },
+          { value: 'won', label: TENDER_OUTCOME_LABELS.won },
+          { value: 'lost', label: TENDER_OUTCOME_LABELS.lost },
         ]} onValueChange={(value) => setOutcome(value === 'won' || value === 'lost' ? value : '')} disabled={saving || stale} />
       </div>
     </Dialog>

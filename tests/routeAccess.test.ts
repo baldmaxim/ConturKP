@@ -5,8 +5,9 @@
 //   инженер тендера на действиях руководителя — 403;
 //   после всех проходов данные БД (кроме журнала отказов) и хранилище не изменились.
 import { randomUUID } from 'node:crypto';
-import { readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve, sep } from 'node:path';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../apps/server/src/app.ts';
@@ -16,8 +17,8 @@ import { ROUTE_INVENTORY } from './routeInventory.ts';
 
 vi.setConfig({ testTimeout: 300_000, hookTimeout: 900_000 });
 
-// Открытые точки: проверка готовности и вход.
-const PUBLIC = new Set(['GET /api/v1/health', 'GET /api/v1/ready', 'POST /api/v1/auth/login', 'GET /api/ui-version']);
+// Открытые точки: готовность, вход и фиксированные файлы обновления интерфейса.
+const PUBLIC = new Set(['GET /api/v1/health', 'GET /api/v1/ready', 'POST /api/v1/auth/login', 'GET /api/ui-version', 'GET /api/ui-update', 'GET /api/ui-update.js', 'GET /api/ui-update.css', 'GET /api/ui-update-shell']);
 // Действия над собственной сессией — в проходах с сессией не участвуют (клиент разлогинился бы посреди прохода).
 const OWN_SESSION = new Set(['POST /api/v1/auth/logout', 'POST /api/v1/me/password', 'POST /api/v1/me/api-tokens']);
 
@@ -87,10 +88,13 @@ const enumerate = (app: unknown): string[] => {
     for (const l of stack) {
       if (l.route) {
         // Запасной маршрут интерфейса (RegExp) — не API.
-        if (typeof l.route.path !== 'string') continue;
+        const paths = Array.isArray(l.route.path) ? l.route.path : [l.route.path];
         // Парсер большого JSON перед основным роутером продолжает цепочку; конечной точкой API не является.
         if (l.route.stack?.length && l.route.stack.every((layer) => layer.handle?.name === 'jsonParser')) continue;
-        for (const m of Object.keys(l.route.methods)) out.push(`${m.toUpperCase()} ${prefix}${l.route.path}`);
+        for (const path of paths) {
+          if (typeof path !== 'string') continue;
+          for (const m of Object.keys(l.route.methods)) out.push(`${m.toUpperCase()} ${prefix}${path}`);
+        }
         continue;
       }
       if (Array.isArray(l.handle?.stack)) {
@@ -206,8 +210,34 @@ describe('инвентарь маршрутов', () => {
     expect(new Set(routes).size).toBe(routes.length);
     expect([...routes].filter((r) => !ROUTE_INVENTORY.includes(r))).toEqual([]);
     expect([...ROUTE_INVENTORY].filter((r) => !routes.includes(r))).toEqual([]);
-    for (const known of ['GET /api/v1/ready', 'POST /api/v1/release-candidates/:id/approve', 'GET /api/v1/admin/operations', 'GET /api/v1/integrations/status']) expect(routes).toContain(known);
+    for (const known of ['GET /api/v1/ready', 'POST /api/v1/release-candidates/:id/approve', 'GET /api/v1/admin/operations', 'GET /api/v1/integrations/status', 'GET /api/ui-update', 'GET /api/ui-update.js', 'GET /api/ui-update.css', 'GET /api/ui-update-shell']) expect(routes).toContain(known);
   });
+  it('четыре файла обновления открыты без входа и не устанавливают сессию', async () => {
+    const root = resolve(tmpdir());
+    const dist = mkdtempSync(join(root, 'kontur-public-routes-'));
+    const files = [
+      ['/api/ui-update', 'app-update.html', '<!doctype html><p>public-update</p>'],
+      ['/api/ui-update.js', 'app-update.js', '/* public-update-script */'],
+      ['/api/ui-update.css', 'app-update.css', '/* public-update-style */'],
+      ['/api/ui-update-shell', 'index.html', '<!doctype html><p>public-shell</p>'],
+    ] as const;
+    try {
+      for (const [, filename, text] of files) writeFileSync(join(dist, filename), text);
+      const publicApp = createApp({ config: { ...s.st.e.config, webDistDir: dist }, pool: s.st.db.pool, clock: new Clock().read, logError: () => undefined });
+      for (const [path, , text] of files) for (const bearer of [false, true]) {
+        const req = request(publicApp).get(path);
+        if (bearer) req.set('Authorization', 'Bearer public-route-probe');
+        const response = await req.expect(200);
+        expect(response.text).toBe(text);
+        expect(response.headers['cache-control']).toBe('no-store');
+        expect(response.headers['set-cookie']).toBeUndefined();
+      }
+    } finally {
+      if (!resolve(dist).startsWith(root + sep)) throw new Error('Unexpected fixture cleanup path');
+      rmSync(dist, { recursive: true, force: true });
+    }
+  });
+
 });
 
 describe('проходы прав по всем маршрутам', () => {

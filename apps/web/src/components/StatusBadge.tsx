@@ -1,5 +1,6 @@
 import type { FC } from 'react';
 import { Badge } from './Badge';
+import { TENDER_OUTCOME_LABELS } from '../utils/labels';
 
 interface IStatusBadgeProps {
   status: 'active' | 'archived';
@@ -13,7 +14,7 @@ export const StatusBadge: FC<IStatusBadgeProps> = ({ status, outcome }) =>
     <Badge
       tone={outcome === 'won' ? 'success' : outcome === 'lost' ? 'danger' : 'muted'}
       icon="archive"
-      label={outcome === 'won' ? 'В архиве · Выиграно' : outcome === 'lost' ? 'В архиве · Проиграно' : 'В архиве'}
-      title={outcome === 'won' ? 'В архиве · Выиграно' : outcome === 'lost' ? 'В архиве · Проиграно' : 'В архиве'}
+      label={outcome ? `В архиве · ${TENDER_OUTCOME_LABELS[outcome]}` : 'В архиве'}
+      title={outcome ? `В архиве · ${TENDER_OUTCOME_LABELS[outcome]}` : 'В архиве'}
     />
   );

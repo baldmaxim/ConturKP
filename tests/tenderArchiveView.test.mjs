@@ -30,13 +30,13 @@ describe('списки тендеров', () => {
   it('архив показывает выигранные и проигранные со своими результатами и возвратом', () => {
     const html = view('/?status=archived');
     const visibleText = html.replace(/<[^>]*>/g, ' ');
-    expect(visibleText).toContain('Выиграно');
-    expect(visibleText).toContain('Проиграно');
+    expect(visibleText).toContain('Выигран');
+    expect(visibleText).toContain('Проигран');
     expect(html).not.toContain('Текущий тендер');
     expect(html).toContain('ЖК WAVE 2 очередь');
     expect(html).toContain('Проигранный тендер');
-    expect(html).toContain('Выиграно');
-    expect(html).toContain('Проиграно');
+    expect(html).toContain('Выигран');
+    expect(html).toContain('Проигран');
     expect(html).toContain('Вернуть');
     expect(html).toContain('id="tabpanel-archived"');
   });

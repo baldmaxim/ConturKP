@@ -1,11 +1,12 @@
 {
-  "status": "PREPARED_REQUIRES_OWNER_LIFT_OF_MODEL_REQUEST_BAN",
+  "status": "EXECUTED_CONTEXT_PASS_SEMANTIC_FAIL",
   "createdOn": "2026-10-29",
   "approvalRestriction": {
     "source": "docs/ops/18-acceptance-status-20261027.md",
-    "quote": "Новые запросы LM Studio в рамках этого продолжения запрещены владельцем и не выполнялись."
+    "quote": "Новые запросы LM Studio в рамках этого продолжения запрещены владельцем и не выполнялись.",
+    "liftedByOwnerOn": "2026-10-29"
   },
-  "modelRequestsIssued": 0,
+  "modelRequestsIssued": 5,
   "model": "qwen3-4b-instruct-2507",
   "endpointOrigin": "http://127.0.0.1:1234",
   "profileChange": {
@@ -87,5 +88,7 @@
   "apiOperations": [
     "POST /api/v1/dialogs",
     "POST /api/v1/dialogs/{newDialogId}/messages"
-  ]
+  ],
+  "questionsExecuted": 4,
+  "executionResult": "docs/ops/18-s18-32-technical-replay-20261029.json"
 }

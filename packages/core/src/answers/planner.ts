@@ -2,7 +2,7 @@
 // без выбора проекта по формулировке — область задаёт сервер по правам и контексту диалога (D-019). Правило, не модель.
 import type { VersionPolicy } from './claimChecks.ts';
 
-export const PLANNER_VERSION = 'rules/1-kontur';
+export const PLANNER_VERSION = 'rules/2-answer-focus';
 
 export type AnswerIntent = 'fact' | 'compare' | 'find_document' | 'follow_up' | 'overview';
 
@@ -39,10 +39,26 @@ const ENTITY_PATTERNS: [string, RegExp][] = [
 
 // \b в JavaScript только ASCII даже с флагом u, поэтому границы кириллических слов — через обходы Unicode.
 const HISTORICAL_VERSION = /первоначальн|изначальн|исходн\p{L}*\s+редакци|до\s+(?:подписания\s+|заключения\s+)?(?:доп\p{L}*\.?\s*соглашени|дс(?![\p{L}\p{N}]))|в\s+редакции\s+договора|старая\s+редакция|прежн\p{L}*\s+(?:редакци|услови)/iu;
-const ALL_VERSIONS = /истори\p{L}*\s+изменени|все\s+редакции|как\s+менял|изменени\p{L}*\s+(?:по|всех)\s+(?:доп\p{L}*\.?\s*соглашени|дс(?![\p{L}\p{N}]))/iu;
+const ALL_VERSIONS = /истори\p{L}*\s+(?:изменени|стоимост|цен)|проследи[\s\S]{0,100}изменени|между\s+редакци|все\s+редакции|как\s+менял|изменени\p{L}*\s+(?:по|всех)\s+(?:доп\p{L}*\.?\s*соглашени|дс(?![\p{L}\p{N}]))/iu;
 const COMPARE = /сравн|разниц|отлича|чем\s+отлича/iu;
 const FIND_DOCUMENT = /(?:найди|покажи|где)\s+(?:документ|файл|договор|акт|письм|смет)|какой\s+документ|в\s+каком\s+(?:документе|файле)/iu;
 const DATE = /\b\d{2}\.\d{2}\.\d{4}\b/g;
+
+// Частичные даты относятся к явно названному году; без года его не выдумываем.
+export const questionDates = (question: string): string[] => {
+  const years = [...new Set((question.match(DATE) ?? []).map(d => d.slice(-4)))];
+  if (years.length !== 1) return [...new Set(question.match(DATE) ?? [])];
+  const result: string[] = [];
+  for (const m of question.matchAll(/\b(\d{2})(?:[–—-](\d{2}))?\.(\d{2})(?:\.(\d{4}))?(?!\d)/gu)) {
+    const first=Number(m[1]), last=Number(m[2] ?? m[1]), month=Number(m[3]), year=Number(m[4] ?? years[0]);
+    if (last < first || last-first > 30) continue;
+    for (let day=first;day<=last;day++) {
+      const date=new Date(Date.UTC(year,month-1,day));
+      if (date.getUTCMonth()===month-1 && date.getUTCDate()===day) result.push(`${String(day).padStart(2,'0')}.${m[3]}.${year}`);
+    }
+  }
+  return [...new Set(result)];
+};
 
 const normalizeIntentText = (value = ''): string =>
   String(value || '')
@@ -141,7 +157,7 @@ export const planQuestion = (question: string, turns: readonly IHistoryTurn[] = 
     entities: own.length ? own : inherited,
     versionPolicy: versionPolicy(question),
     followUp,
-    dates: question.match(DATE) ?? [],
+    dates: questionDates(question),
     needsClarification: words(question).length === 0,
   };
 };

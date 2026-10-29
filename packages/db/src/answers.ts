@@ -1,7 +1,7 @@
 // Диалоги и прогоны ответа (этап 08a, D-019, D-027): данные в PostgreSQL, вторая линия — охранники миграции 0022.
 // Вопрос, прогон поиска, прогон ответа и задание — одной транзакцией; пакет, утверждения, сообщение ответа и итог —
 // одной транзакцией завершения под арендой задания. Непроверенный текст модели сюда не передаётся.
-import type { AnswerStatus, IncompleteReason, IPacketCandidate } from '@kontur/core';
+import { answerRetrievalPatterns, type AnswerStatus, type IncompleteReason, type IPacketCandidate } from '@kontur/core';
 import type { IAccessContext } from './access.ts';
 import { enqueueJob } from './jobs.ts';
 import type { Queryable } from './pool.ts';
@@ -296,15 +296,24 @@ interface ICandidateRow {
   tender_id: string | null;
   contract_id: string | null;
   document_id: string | null;
+  document_title: string | null;
+  source_part: string | null;
+  page_index: number | null;
+  ordinal: number | null;
+  part_index: number;
+  part_total: number;
   mail_message_revision_id: string | null;
   transcript_revision_id: string | null;
   qa_item_revision_id: string | null;
 }
 
-const CANDIDATE_SELECT = `SELECT f.id, f.text, f.origin, f.source_unit_id, f.tender_id, f.contract_id, dr.document_id, f.mail_message_revision_id,
+const CANDIDATE_SELECT = `SELECT f.id, f.text, f.origin, f.source_unit_id, f.tender_id, f.contract_id, dr.document_id, d.title AS document_title, coalesce(nullif(f.locator->>'sheet',''),p.sheet_label) AS source_part,
+       f.page_index, f.ordinal, f.part_index, f.part_total, f.mail_message_revision_id,
        f.transcript_revision_id, f.qa_item_revision_id
   FROM evidence_fragment f
-  LEFT JOIN document_revision dr ON dr.id = f.document_revision_id`;
+  LEFT JOIN document_revision dr ON dr.id = f.document_revision_id
+  LEFT JOIN document d ON d.id = dr.document_id
+  LEFT JOIN recognition_page p ON p.run_id=f.run_id AND p.page_index=f.page_index`;
 
 const toCandidate = (row: ICandidateRow, rank: number, reason: string): IPacketCandidate => ({
   fragmentId: row.id,
@@ -312,6 +321,9 @@ const toCandidate = (row: ICandidateRow, rank: number, reason: string): IPacketC
   origin: row.origin,
   sourceUnitId: row.source_unit_id,
   documentKey: row.document_id ?? row.mail_message_revision_id ?? row.transcript_revision_id ?? row.qa_item_revision_id ?? row.source_unit_id,
+  ...(row.document_title ? { documentTitle: row.document_title } : {}),
+  ...(row.source_part ? {sourcePart:row.source_part}:{}),
+  ...(Number.isInteger(row.page_index) && Number.isInteger(row.ordinal) ? {sourceOrder:{page:row.page_index!,ordinal:row.ordinal!,part:row.part_index ?? 0,total:row.part_total ?? 1}}:{}),
   ownerKey: row.contract_id ? `contract:${row.contract_id}` : `tender:${row.tender_id ?? ''}`,
   rank,
   reason,
@@ -327,6 +339,24 @@ export const searchCandidates = async (db: Queryable, searchRunId: string, allow
     const row = byId.get(h.fragment_id);
     return row ? [toCandidate(row, h.rank, `search:${h.rank}`)] : [];
   });
+};
+
+// Дополнительный предметный поиск в ТОЙ ЖЕ области. Большой вопрос не сводится к единственному top-20
+// семантического поиска; перед моделью применяются те же readableFragments/unitsNotPermitted.
+export const answerTopicCandidates = async (db: Queryable, question: string, allowedUnits: readonly string[]): Promise<IPacketCandidate[]> => {
+  const patterns=answerRetrievalPatterns(question);
+  if (!patterns || !allowedUnits.length) return [];
+  const rows=await db.query<ICandidateRow>(`WITH matches AS (
+    ${CANDIDATE_SELECT} WHERE f.source_unit_id = ANY($1::uuid[])
+      AND (f.text ~* $2 OR ($3 <> '' AND d.title ~* $3))
+  ), ranked AS (
+    SELECT matches.*, row_number() OVER (PARTITION BY source_unit_id ORDER BY
+      (CASE WHEN text ~* $4 THEN 16 ELSE 0 END
+       + CASE WHEN text ~ '[0-9]([[:space:]]*[(][^)]*[)])?[[:space:]]*%' THEN 8 ELSE 0 END
+       + CASE WHEN text ~* 'вправе|обязан|предостав|перечисл|составля|стоимост|возврат|отделоч' THEN 4 ELSE 0 END) DESC,
+      length(text), id) AS unit_rank FROM matches
+  ) SELECT * FROM ranked WHERE unit_rank <= 24 ORDER BY unit_rank, source_unit_id, id LIMIT 600`,[[...allowedUnits],patterns.text,patterns.title,patterns.primary]);
+  return rows.rows.map((r,i)=>toCandidate(r,i,`topic:${i}`));
 };
 
 // Фрагменты фактов запланированных типов (граф D-018, донор `factsForPlan`) — в пределах области хода, в заданном порядке.

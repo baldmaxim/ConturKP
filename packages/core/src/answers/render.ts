@@ -6,6 +6,7 @@ import { extractQuantities } from './claimNumbers.ts';
 import type { IClaimCheck, IDraftClaim, IPacketItem } from './claimChecks.ts';
 import type { IAnswerPlan } from './planner.ts';
 import type { IClaimVerdict } from './verifier.ts';
+import { answerFocus, sourceFamily } from './grounding.ts';
 
 export const INSUFFICIENT_ANSWER = 'Не удалось подтвердить ответ по имеющимся документам.';
 
@@ -41,6 +42,9 @@ export interface IRendered {
   sources: IPacketItem[];
   claims: IRenderedClaim[];
   conflictCitations: number[];
+  missingDates: string[];
+  missingDocuments: number;
+  partial: boolean;
 }
 
 const VALUE_KINDS = new Set(['amount', 'percentage', 'date', 'period']);
@@ -48,7 +52,7 @@ const VALUE_KINDS = new Set(['amount', 'percentage', 'date', 'period']);
 // AD-08a-8 (в): вопрос об одном значении, а показанные утверждения одного вида называют разные величины из разных
 // документов — это расхождение оснований. Обзор и сравнение не проверяются: там разные значения ожидаемы.
 const valueConflictLabels = (kept: readonly { claim: IDraftClaim }[], plan: IAnswerPlan | null, byLabel: ReadonlyMap<string, IPacketItem>): string[] => {
-  if (!plan || plan.intent === 'overview' || plan.intent === 'compare' || plan.entities.length > 1) return [];
+  if (!plan || plan.intent === 'overview' || plan.intent === 'compare' || plan.versionPolicy === 'all' || plan.entities.length > 1) return [];
   const groups = new Map<string, { value: string; documents: Set<string>; labels: string[] }[]>();
   for (const { claim } of kept) {
     if (!VALUE_KINDS.has(claim.kind)) continue;
@@ -82,6 +86,8 @@ export const renderVerifiedAnswer = (o: {
   items: readonly IPacketItem[];
   level: VerificationLevel;
   plan?: IAnswerPlan | null;
+  question?: string;
+  openQuestions?: number;
 }): IRendered => {
   const verdicts = o.verdicts ?? new Map<string, IClaimVerdict>();
   const byLabel = new Map(o.items.map((item) => [item.label, item]));
@@ -109,7 +115,9 @@ export const renderVerifiedAnswer = (o: {
     const narrowed = (verdict?.supportedBy ?? []).filter((label) => claim.evidenceIds.includes(label));
     const labels = narrowed.length ? narrowed : claim.evidenceIds;
     const numbers = labels.map(cite).filter((n): n is number => n !== null);
-    return { claimId: claim.claimId, text: `${claim.text.replace(/[.;\s]+$/u, '')}. ${citationList(numbers)}`.trim(), numbers };
+    const title = o.question && answerFocus(o.question).strict ? [...new Set(labels.map(l=>byLabel.get(l) ? `${byLabel.get(l)!.documentTitle??''}${byLabel.get(l)!.sourcePart ? `, лист «${byLabel.get(l)!.sourcePart}»` : ''}` : undefined).filter(Boolean))].join('; ') : '';
+    const body=o.question && answerFocus(o.question).strict ? `«${claim.text.trim()}»` : `${claim.text.replace(/[.;\s]+$/u, '')}.`;
+    return { claimId: claim.claimId, text: `${title ? `«${title}»: ` : ''}${body} ${citationList(numbers)}`.trim(), numbers };
   });
 
   // Расхождение: основания с пометкой правила (AD-08a-1), конфликты проверяющего и расхождение величин (AD-08a-8).
@@ -129,6 +137,21 @@ export const renderVerifiedAnswer = (o: {
   const conflictNumbers = [...conflictLabels].map(cite).filter((n): n is number => n !== null);
 
   const dropped = reviewed.length - kept.length;
+  const keptItems = [...new Set(kept.flatMap(k=>k.claim.evidenceIds))].map(l=>byLabel.get(l)).filter((i):i is IPacketItem=>Boolean(i));
+  const sourceText=keptItems.map(i=>`${i.documentTitle ?? ''}\n${i.text}`).join('\n');
+  const history=o.plan?.versionPolicy==='all';
+  const missingDates=history ? (o.plan?.dates ?? []).filter(d=>!sourceText.includes(d)) : [];
+  const focus=o.question ? answerFocus(o.question) : null;
+  const identity=(i:IPacketItem)=>`${i.documentKey}:${i.sourceUnitId}:${i.sourcePart??''}`;
+  const coveredDocuments=new Set(keptItems.map(identity));
+  const missingItems=focus?.strict && (focus.history || focus.compareSources)
+    ? o.items.filter(i=>!coveredDocuments.has(identity(i))) : [];
+  const missingDocuments=new Set(missingItems.map(identity)).size;
+  // Название в сообщении зависит от прав на источник так же, как сама цитата. Существующий API
+  // скрывает производный ответ при потере доступа к любой из coverage.citations.
+  const missingSourceNotes=kept.length ? [...new Map(missingItems.map(i=>[identity(i),`${i.documentTitle ?? 'Источник без названия'}${i.sourcePart ? `, лист «${i.sourcePart}»` : ''} ${citationList([cite(i.label)!])}`])).values()] : [];
+  const missingSide=Boolean(focus?.compareSources && (!keptItems.some(i=>sourceFamily(i.documentTitle,i.text)==='proposal') || !keptItems.some(i=>sourceFamily(i.documentTitle,i.text)==='contract')));
+  const partial=Boolean((o.openQuestions ?? 0)>0 || missingDates.length || missingDocuments || missingSide || (focus?.strict && dropped));
   let answer: string;
   let outcome: IRendered['outcome'];
   if (!kept.length) {
@@ -139,8 +162,14 @@ export const renderVerifiedAnswer = (o: {
     const notes: string[] = [];
     if (conflictNumbers.length >= 2) notes.push(`В документах есть расхождение по этому вопросу: сравните ${citationList(conflictNumbers)}.`);
     if (dropped) notes.push(`Не показано утверждений, не подтверждённых документами: ${dropped}.`);
+    if (partial) notes.push('Ответ частичный: не все части вопроса подтверждены основаниями.');
+    if (missingDates.length) notes.push(`Не подтверждены запрошенные подачи: ${missingDates.join(', ')}.`);
+    if (missingSourceNotes.length) notes.push(`Нет подтверждённых выводов по выбранным источникам: ${missingSourceNotes.slice(0,6).join('; ')}${missingSourceNotes.length>6 ? `; ещё ${missingSourceNotes.length-6}` : ''}.`);
+    if (missingSide) notes.push('Для сравнения не хватает подтверждённых условий одной из сторон: КП и договор должны иметь собственные основания.');
+    if(history && o.question && answerFocus(o.question).history && !kept.some(k=>/причин|вследств|в связи|из-за|обусловл/iu.test(k.claim.text)))notes.push('Причина изменения по этим выдержкам не установлена.');
+    if (history && o.question && answerFocus(o.question).history) notes.push('Дата в названии документа сама по себе не подтверждает дату отправки.');
     answer = [body, ...notes].join('\n\n');
-    outcome = conflictNumbers.length >= 2 ? 'conflict' : 'confirmed';
+    outcome = partial ? 'insufficient' : conflictNumbers.length >= 2 ? 'conflict' : 'confirmed';
   }
 
   return {
@@ -148,6 +177,9 @@ export const renderVerifiedAnswer = (o: {
     outcome,
     sources,
     conflictCitations: conflictNumbers.length >= 2 ? conflictNumbers : [],
+    missingDates,
+    missingDocuments,
+    partial,
     claims: reviewed.map(({ claim, check, verdict, status }) => ({
       claimId: claim.claimId,
       kind: claim.kind,

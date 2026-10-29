@@ -31,6 +31,7 @@ export interface IBlockSpec {
 }
 
 export interface IPageSpec {
+  sheetLabel?: string;
   stamp?: string;
   blocks: (string | IBlockSpec)[];
 }
@@ -90,7 +91,7 @@ export const seedEvidenceRun = async (pool: Pool, revisionId: string, spec: IRun
     pool,
     runId,
     [
-      ...spec.pages.map((_, i) => ({ pageIndex: i, pageLabel: String(i + 1), sheetLabel: null, widthPx: 2480, heightPx: 3508, rotation: 0, status: 'recognized' as const })),
+      ...spec.pages.map((page, i) => ({ pageIndex: i, pageLabel: String(i + 1), sheetLabel: page.sheetLabel ?? null, widthPx: 2480, heightPx: 3508, rotation: 0, status: 'recognized' as const })),
       ...Array.from({ length: spec.missingPages ?? 0 }, (_, k) => ({
         pageIndex: spec.pages.length + k,
         pageLabel: String(spec.pages.length + k + 1),

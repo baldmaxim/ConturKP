@@ -10,6 +10,7 @@ import {
   configHash,
   DraftParseError,
   draftSystemPrompt,
+  draftQuoteChoices,
   draftUserContent,
   factsForPlan,
   markVersions,
@@ -32,6 +33,7 @@ import {
 } from '@kontur/core';
 import {
   completeAnswerRun,
+  answerTopicCandidates,
   degradeIfExpired,
   failAnswerRun,
   fragmentCandidates,
@@ -76,7 +78,7 @@ const placeOf = (d: Awaited<ReturnType<typeof hitDetails>> extends Map<string, i
 };
 
 const packetHash = (items: readonly IPacketItem[]): string =>
-  sha(['kontur.answer_packet.v1', ...items.map((i) => `${i.label}:${i.fragmentId}:${sha(i.text)}:${i.versionNote}`)].join('\n'));
+  sha(['kontur.answer_packet.v2', ...items.map((i) => `${i.label}:${i.fragmentId}:${sha(i.text)}:${i.versionNote}:${sha(JSON.stringify({title:i.documentTitle??null,part:i.sourcePart??null,order:i.sourceOrder??null}))}`)].join('\n'));
 
 const feedbackFor = (draft: IDraft, checks: ReadonlyMap<string, IClaimCheck>, verdicts: ReadonlyMap<string, IClaimVerdict>): IDraftFeedback[] =>
   draft.claims.flatMap((claim) => {
@@ -149,7 +151,10 @@ export const answerGenerateHandler: IJobHandlerSpec = {
     const scopeFacts = await scopeFactGraph(ctx.pool, search.allowed_source_unit_ids);
     const factHits = factsForPlan(plan, scopeFacts);
     const factCandidates = await fragmentCandidates(ctx.pool, factHits, search.allowed_source_unit_ids, -factHits.length);
-    const candidates = [...factCandidates, ...found.filter((f) => !factCandidates.some((c) => c.fragmentId === f.fragmentId))];
+    const targeted = await answerTopicCandidates(ctx.pool, question, search.allowed_source_unit_ids);
+    const byFragment = new Map<string, (typeof found)[number]>();
+    for (const c of [...factCandidates, ...targeted, ...found]) if (!byFragment.has(c.fragmentId)) byFragment.set(c.fragmentId,c);
+    const candidates = [...byFragment.values()];
     const readable = access ? await readableFragments(ctx.pool, access, candidates.map((c) => c.fragmentId)) : new Set<string>();
     const permitted = candidates.filter((c) => readable.has(c.fragmentId) && allowedUnits.includes(c.sourceUnitId));
     const counts = scope.counts as { unitsNotIndexed?: number; revisionsWithoutRun?: number; chunksWithoutVectors?: number };
@@ -174,7 +179,7 @@ export const answerGenerateHandler: IJobHandlerSpec = {
       for (const id of f.fragmentIds) factsByFragment.set(id, [...(factsByFragment.get(id) ?? []), fact]);
     }
     const marks = markVersions(permitted, factsByFragment);
-    const items = buildPacket(permitted, marks, ctx.config.answer.packetLimit, factsByFragment);
+    const items = buildPacket(permitted, marks, ctx.config.answer.packetLimit, factsByFragment, { question });
     const evidence = items.map((i, n) => ({ label: i.label, ordinal: n + 1, fragmentId: i.fragmentId, origin: i.origin, versionNote: i.versionNote, reason: i.reason }));
     Object.assign(coverage, {
       packet: items.length,
@@ -184,8 +189,10 @@ export const answerGenerateHandler: IJobHandlerSpec = {
     });
     const withPacket = { evidence, coverage, inputSha256: packetHash(items) };
 
+    if (!items.length) return finish(incomplete('insufficient_evidence'), { ...withPacket, answerText: 'В выбранных источниках нет оснований, соответствующих предмету вопроса. Это не доказывает отсутствие условия в документах.' });
+
     if (!chat) return finish(incomplete('model_disabled'), withPacket);
-    const system = draftSystemPrompt(plan);
+    const system = draftSystemPrompt(plan, question);
     if (sha256Hex(system) !== run.prompt_sha256) {
       await ctx.complete(async (client) => failAnswerRun(client, run.id, 'prompt_changed'));
       return;
@@ -201,6 +208,7 @@ export const answerGenerateHandler: IJobHandlerSpec = {
     // ---- Черновик (модель) — проверки (правило) — проверяющий (модель) — исправление.
     const details = await hitDetails(ctx.pool, items.map((i) => i.fragmentId));
     const places = new Map(items.map((i) => [i.label, details.get(i.fragmentId) ? placeOf(details.get(i.fragmentId)!) : '']));
+    const quoteChoices=new Map(draftQuoteChoices(items,question).map(q=>[q.id,q]));
     const labelByFragment = new Map(items.map((i) => [i.fragmentId, i.label]));
     // R08a-02: история — с текущими правами автора (скрытый ответ — отметкой), до обращения к модели.
     const history = boundedHistory(await previousTurns(ctx.pool, access, run.dialog_id, run.seq));
@@ -219,7 +227,7 @@ export const answerGenerateHandler: IJobHandlerSpec = {
         if (!res.ok) return { draft: null, failed: { retryable: res.error.retryable, code: `model_${res.error.code.toLowerCase()}`, message: res.error.message } };
         draftSha = sha(res.value.content);
         try {
-          return { draft: parseDraft(res.value.content, labelByFragment), failed: null };
+          return { draft: parseDraft(res.value.content, labelByFragment, quoteChoices), failed: null };
         } catch (error) {
           if (!(error instanceof DraftParseError)) throw error;
         }
@@ -232,7 +240,7 @@ export const answerGenerateHandler: IJobHandlerSpec = {
     if (!draft) return finish(incomplete('draft_invalid'), { ...withPacket, ...model, draftSha256: draftSha });
 
     const byLabel = new Map(items.map((i) => [i.label, i]));
-    const context = { evidenceById: byLabel, allowedSourceUnitIds: new Set(allowedUnits), versionPolicy: plan.versionPolicy };
+    const context = { evidenceById: byLabel, allowedSourceUnitIds: new Set(allowedUnits), versionPolicy: plan.versionPolicy, question };
     let repairs = 0;
     let checks = new Map<string, IClaimCheck>();
     let verdict: IVerdict | null = null;
@@ -266,7 +274,7 @@ export const answerGenerateHandler: IJobHandlerSpec = {
 
     // ---- Отрисовка (правило) и запись хода.
     const level = verdict ? 'model' : 'hard_checks';
-    const rendered = renderVerifiedAnswer({ claims: draft.claims, checks, verdicts: verdict?.verdicts, conflicts: verdict?.conflicts, items, level, plan });
+    const rendered = renderVerifiedAnswer({ claims: draft.claims, checks, verdicts: verdict?.verdicts, conflicts: verdict?.conflicts, items, level, plan, question, openQuestions: draft.openQuestions });
     const outcome: IOutcome =
       rendered.outcome === 'confirmed'
         ? { answerStatus: 'confirmed_by_citations', incompleteReason: null, answerText: rendered.answer }
@@ -301,6 +309,10 @@ export const answerGenerateHandler: IJobHandlerSpec = {
         claims: { total: claims.length, shown: claims.filter((c) => c.shown).length, dropped: claims.filter((c) => !c.shown).length },
         verifier: { mode: run.verifier_mode, status: verifierStatus, overall: verdict?.overall ?? null },
         openQuestions: draft.openQuestions,
+        missingDates: rendered.missingDates,
+        // В coverage выдаются только счётчики: имена источников остаются в защищённом тексте ответа.
+        missingDocuments: rendered.missingDocuments,
+        partial: rendered.partial,
         citations: rendered.sources.map((s) => s.label),
         conflictCitations: rendered.conflictCitations,
       },

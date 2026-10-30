@@ -219,7 +219,7 @@ export const parseDraft = (text: string, labelByFragment: ReadonlyMap<string, st
   if (payload.open_questions !== undefined && !Array.isArray(payload.open_questions)) throw new DraftParseError('open_questions is not an array');
   const seen = new Set<string>();
   const claims: IDraftClaim[] = [];
-  let clipped=false;
+  let clipped = payload.claims.length > MAX_DRAFT_CLAIMS;
   for (const raw of payload.claims.slice(0, MAX_DRAFT_CLAIMS) as Record<string, unknown>[]) {
     if(claims.length>=MAX_DRAFT_CLAIMS){clipped=true;break;}
     const selected=String(raw.text).trim();
@@ -257,5 +257,9 @@ export const parseDraft = (text: string, labelByFragment: ReadonlyMap<string, st
       evidenceIds,
     });
   }
-  return { claims, openQuestions: clipped ? 1 : Array.isArray(payload.open_questions) ? payload.open_questions.filter((q) => typeof q === 'string' && q.trim()).slice(0, 3).length : 0 };
+  const openQuestions = Array.isArray(payload.open_questions)
+    ? payload.open_questions.filter((q) => typeof q === 'string' && q.trim()).length
+    : 0;
+  // Обрезка оставляет непокрытую часть ответа, но не уменьшает число вопросов модели.
+  return { claims, openQuestions: Math.max(openQuestions, Number(clipped)) };
 };

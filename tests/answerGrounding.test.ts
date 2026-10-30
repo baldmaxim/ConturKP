@@ -207,14 +207,19 @@ describe('S18-32: частичный ответ сохраняет полезн�
   });
 
   it('разные цены в последовательных подачах — история, а не конфликт',()=>{
-    const first=item('E1','Стоимость предложения составляет 60 рублей.','КП 12.04.2027.pdf');
-    const second=item('E2','Стоимость предложения составляет 70 рублей.','КП 19.04.2027.pdf');
+    const first=item('E1','Предложение направлено 12.04.2027. Стоимость предложения составляет 60 рублей.','КП 12.04.2027.pdf');
+    const second=item('E2','Предложение направлено 19.04.2027. Стоимость предложения составляет 70 рублей.','КП 19.04.2027.pdf');
     const evidenceById=new Map([['E1',first],['E2',second]]);
-    const claims=[first,second].map((e,i)=>({claimId:`c${i}`,text:e.text,kind:'amount' as const,evidenceIds:[e.label]}));
+    const claims=[first,second].map((e,i)=>({claimId:`c${i}`,text:e.text.slice(e.text.indexOf('Стоимость')),kind:'amount' as const,evidenceIds:[e.label]}));
     const checks=new Map(claims.map(c=>[c.claimId,checkClaim(c,{evidenceById,allowedSourceUnitIds:null,versionPolicy:'all'})]));
+    // Контроль сохраняет смысл сценария: те же одиночные суммы в текущем значении конфликтуют.
+    const current=renderVerifiedAnswer({claims,checks,items:[first,second],level:'hard_checks',plan:planQuestion('Какова стоимость?'),question:'Какова стоимость?'});
+    expect(current.outcome).toBe('conflict');
+    expect(current.conflictCitations).toHaveLength(2);
     const question='Проследи историю стоимости КП 12.04.2027 и 19.04.2027.';
     const result=renderVerifiedAnswer({claims,checks,items:[first,second],level:'hard_checks',plan:planQuestion(question),question});
     expect(result.outcome).toBe('confirmed');
+    expect(result.missingDates).toEqual([]);
     expect(result.answer).not.toMatch(/расхождение/iu);
   });
 

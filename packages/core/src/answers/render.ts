@@ -138,7 +138,8 @@ export const renderVerifiedAnswer = (o: {
 
   const dropped = reviewed.length - kept.length;
   const keptItems = [...new Set(kept.flatMap(k=>k.claim.evidenceIds))].map(l=>byLabel.get(l)).filter((i):i is IPacketItem=>Boolean(i));
-  const sourceText=keptItems.map(i=>`${i.documentTitle ?? ''}\n${i.text}`).join('\n');
+  // Название файла участвует в ранжировании, но не подтверждает дату в ответе.
+  const sourceText = keptItems.map(item => item.text).join('\n');
   const history=o.plan?.versionPolicy==='all';
   const missingDates=history ? (o.plan?.dates ?? []).filter(d=>!sourceText.includes(d)) : [];
   const focus=o.question ? answerFocus(o.question) : null;
@@ -163,7 +164,7 @@ export const renderVerifiedAnswer = (o: {
     if (conflictNumbers.length >= 2) notes.push(`В документах есть расхождение по этому вопросу: сравните ${citationList(conflictNumbers)}.`);
     if (dropped) notes.push(`Не показано утверждений, не подтверждённых документами: ${dropped}.`);
     if (partial) notes.push('Ответ частичный: не все части вопроса подтверждены основаниями.');
-    if (missingDates.length) notes.push(`Не подтверждены запрошенные подачи: ${missingDates.join(', ')}.`);
+    if (missingDates.length) notes.push(`Не подтверждены данные по запрошенным датам: ${missingDates.join(', ')}.`);
     if (missingSourceNotes.length) notes.push(`Нет подтверждённых выводов по выбранным источникам: ${missingSourceNotes.slice(0,6).join('; ')}${missingSourceNotes.length>6 ? `; ещё ${missingSourceNotes.length-6}` : ''}.`);
     if (missingSide) notes.push('Для сравнения не хватает подтверждённых условий одной из сторон: КП и договор должны иметь собственные основания.');
     if(history && o.question && answerFocus(o.question).history && !kept.some(k=>/причин|вследств|в связи|из-за|обусловл/iu.test(k.claim.text)))notes.push('Причина изменения по этим выдержкам не установлена.');

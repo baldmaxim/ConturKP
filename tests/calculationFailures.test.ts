@@ -282,5 +282,5 @@ describe('выгрузка по сроку подачи из TenderHub (ADR-007 
     const rev = (await s.eng1.get(`/calculation-revisions/${auto.revisionId}`)).body;
     expect(rev.kind).toBe('provisional');
     expect(await worker.scheduleCalculationCaptures()).toBe(0);
-  });
+  }, 60_000); // Реальные 10 с ожидания срока плюс две выгрузки; остальные тесты сохраняют 30 с.
 });

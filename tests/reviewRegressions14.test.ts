@@ -1,3 +1,4 @@
+import { restrictManagerPermissions } from './roleFixtures.ts';
 // Регрессии Review 14-1 на настоящей БД и worker (сценарии ревью). R14-01: в выпуске принят риск по замечанию с
 // основанием из закрытого письма; инженер 2 видит комплект, но не письмо и не причину риска — манифест выпуска ему
 // закрыт (409). Внутренний набор назначения содержит манифест выпуска — разместить его может только тот, кто сейчас
@@ -110,25 +111,31 @@ describe('R14-01: внутренний манифест выпуска не вы
   });
 
   it('права отозваны между заказом и выполнением: worker отказывает RESTRICTED_BASIS до записи; повтор без прав — 409, с правами — размещено', async () => {
-    const r = await place(s().manager, releaseId, 'Внутренний набор для отдела');
-    expect(r.status, r.text).toBe(201);
-    await setMailAccess(s().admin, box, s().ids.manager, []);
-    await runDeliveries(st, deliveryWorker(st, fs));
-    let d = (await allOf(internal.id))!;
-    expect(d).toMatchObject({ status: 'failed', fileSet: 'all', lastError: { code: 'RESTRICTED_BASIS' } });
-    expect(d.attempts).toHaveLength(1);
-    expect(files(internal.current.rootPath).filter((p) => !p.startsWith('.kontur-staging'))).toEqual([]);
-    // Инженер 2 повторить не может; действие ему не предлагается.
-    expect((await deliveryOf(s().eng2, d.id)).actions.retry).toBe(false);
-    expect((await act(s().eng2, d, 'retry', 'Повтор без права на основания')).body.current.reason).toBe('restricted_basis');
-    // Доступ возвращён — руководитель повторяет, набор размещён целиком.
-    await setMailAccess(s().admin, box, s().ids.manager, ['mail.read', 'mail.import', 'mail.link']);
-    d = (await allOf(internal.id))!;
-    expect((await act(s().manager, d, 'retry', 'Доступ к ящику восстановлен')).status).toBe(200);
-    await runDeliveries(st, deliveryWorker(st, fs));
-    d = (await allOf(internal.id))!;
-    expect(d.status).toBe('delivered');
-    expect(manifestsIn(internal.current.rootPath)).toHaveLength(1);
+    const restorePermissions = await restrictManagerPermissions(s().admin, s().ids.manager, ['mail.read.all']);
+    try {
+      const r = await place(s().manager, releaseId, 'Внутренний набор для отдела');
+      expect(r.status, r.text).toBe(201);
+      await setMailAccess(s().admin, box, s().ids.manager, []);
+      await runDeliveries(st, deliveryWorker(st, fs));
+      let d = (await allOf(internal.id))!;
+      expect(d).toMatchObject({ status: 'failed', fileSet: 'all', lastError: { code: 'RESTRICTED_BASIS' } });
+      expect(d.attempts).toHaveLength(1);
+      expect(files(internal.current.rootPath).filter((p) => !p.startsWith('.kontur-staging'))).toEqual([]);
+      // Инженер 2 повторить не может; действие ему не предлагается.
+      expect((await deliveryOf(s().eng2, d.id)).actions.retry).toBe(false);
+      expect((await act(s().eng2, d, 'retry', 'Повтор без права на основания')).body.current.reason).toBe('restricted_basis');
+      // Доступ возвращён — руководитель повторяет, набор размещён целиком.
+      await setMailAccess(s().admin, box, s().ids.manager, ['mail.read', 'mail.import', 'mail.link']);
+      d = (await allOf(internal.id))!;
+      expect((await act(s().manager, d, 'retry', 'Доступ к ящику восстановлен')).status).toBe(200);
+      await runDeliveries(st, deliveryWorker(st, fs));
+      d = (await allOf(internal.id))!;
+      expect(d.status).toBe('delivered');
+      expect(manifestsIn(internal.current.rootPath)).toHaveLength(1);
+    } finally {
+      await setMailAccess(s().admin, box, s().ids.manager, ['mail.read', 'mail.import', 'mail.link']);
+      await restorePermissions();
+    }
   });
 
   it('перенаправление на внутреннюю версию назначения — та же проверка права', async () => {

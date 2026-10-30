@@ -263,20 +263,24 @@ describe('идентичность тендера и сверка агрегат
 describe('выгрузка по сроку подачи из TenderHub (ADR-007 §7)', () => {
   it('наступил наблюдённый срок — одна выгрузка trigger=deadline; ревизия остаётся provisional; повторно не ставится', async () => {
     const stage = await freshStage();
-    const deadline = new Date(Date.now() + 1500);
+    // Выгрузка выполняется до проверки «до срока»: 1,5 с с округлением вниз давали гонку под нагрузкой.
+    // Целая будущая секунда и запас не меняют ни SQL, ни ожидаемое поведение планировщика.
+    const deadline = new Date(Math.ceil((Date.now() + 10_000) / 1000) * 1000);
     const pg = `${deadline.toISOString().slice(0, 19).replace('T', ' ')}+00`;
     hub.tenders.get(TH.tender)!.submission_deadline = pg;
     const first = await captureNow(db, worker, s.eng1, stage);
     expect(first.sourceObserved.submissionDeadline).toBe(new Date(Math.floor(deadline.getTime() / 1000) * 1000).toISOString());
+    expect(Date.now(), 'подготовка должна закончиться до наблюдённого срока').toBeLessThan(deadline.getTime());
     expect(await worker.scheduleCalculationCaptures()).toBe(0);
-    await new Promise((r) => setTimeout(r, 1800));
+    await new Promise((r) => setTimeout(r, Math.max(0, deadline.getTime() - Date.now()) + 100));
     expect(await worker.scheduleCalculationCaptures()).toBeGreaterThanOrEqual(1);
     await runCaptures(db, worker);
     const caps = (await s.eng1.get(`/stages/${stage}/calculation-captures`)).body.items;
+    expect(caps.filter((c: { trigger: string }) => c.trigger === 'deadline')).toHaveLength(1);
     const auto = caps.find((c: { trigger: string }) => c.trigger === 'deadline');
     expect(auto).toMatchObject({ status: 'complete', requestedBy: null });
     const rev = (await s.eng1.get(`/calculation-revisions/${auto.revisionId}`)).body;
     expect(rev.kind).toBe('provisional');
     expect(await worker.scheduleCalculationCaptures()).toBe(0);
-  });
+  }, 60_000); // Реальные 10 с ожидания срока плюс две выгрузки; остальные тесты сохраняют 30 с.
 });

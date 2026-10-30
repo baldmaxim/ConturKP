@@ -2,21 +2,20 @@ import { useState, type FC } from 'react';
 import { updateUser } from '../api/endpoints';
 import { conflictCurrent, describeError, fieldErrorsOf, hasCode } from '../api/errors';
 import { isUser } from '../api/guards';
-import type { IUser, IUserPatch, TGlobalRole, TUserStatus } from '../api/types';
+import type { IUser, IUserPatch, TUserStatus } from '../api/types';
 import { Button } from '../components/Button';
 import { CheckboxGroup } from '../components/CheckboxGroup';
 import { Dialog } from '../components/Dialog';
 import { Notice } from '../components/Notice';
 import { SelectField } from '../components/SelectField';
 import { TextField } from '../components/TextField';
+import { useRoleCatalog } from '../hooks/useRoleCatalog';
 import { useUnsavedChanges } from '../hooks/unsavedChanges';
-import { GLOBAL_ROLES, GLOBAL_ROLE_LABELS, globalRoleLabel } from '../utils/labels';
+import { globalRoleLabel } from '../utils/labels';
 import form from '../styles/form.module.css';
 
-const ROLE_OPTIONS = GLOBAL_ROLES.map((role) => ({ value: role, label: GLOBAL_ROLE_LABELS[role] }));
 const STATUS_LABELS: Record<TUserStatus, string> = { active: 'Активен', disabled: 'Отключён' };
 
-const toRoles = (values: string[]): TGlobalRole[] => GLOBAL_ROLES.filter((role) => values.includes(role));
 const sameRoles = (a: string[], b: string[]): boolean => a.length === b.length && a.every((role) => b.includes(role));
 
 interface IUserEditDialogProps {
@@ -32,6 +31,7 @@ export const UserEditDialog: FC<IUserEditDialogProps> = ({ user, isSelf, onClose
   const [base, setBase] = useState<IUser>(user);
   const [displayName, setDisplayName] = useState(user.displayName);
   const [roles, setRoles] = useState<string[]>(user.roles);
+  const roleCatalog = useRoleCatalog(roles);
   const [status, setStatus] = useState<TUserStatus>(user.status);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -43,7 +43,7 @@ export const UserEditDialog: FC<IUserEditDialogProps> = ({ user, isSelf, onClose
     patch.displayName = displayName.trim();
   }
   if (!sameRoles(roles, base.roles)) {
-    patch.roles = toRoles(roles);
+    patch.roles = roles;
   }
   if (status !== base.status) {
     patch.status = status;
@@ -103,7 +103,7 @@ export const UserEditDialog: FC<IUserEditDialogProps> = ({ user, isSelf, onClose
           <Button variant="ghost" onClick={onClose} disabled={saving}>
             Отмена
           </Button>
-          <Button variant="primary" type="submit" loading={saving} disabled={!dirty || conflict !== null}>
+          <Button variant="primary" type="submit" loading={saving} disabled={!dirty || conflict !== null || roleCatalog.loading || Boolean(roleCatalog.error)}>
             Сохранить
           </Button>
         </>
@@ -126,7 +126,7 @@ export const UserEditDialog: FC<IUserEditDialogProps> = ({ user, isSelf, onClose
               <dt>Имя сейчас</dt>
               <dd>{conflict.current.displayName}</dd>
               <dt>Роли сейчас</dt>
-              <dd>{conflict.current.roles.map(globalRoleLabel).join(', ') || 'без ролей'}</dd>
+              <dd>{(conflict.current.roleNames ?? conflict.current.roles.map(globalRoleLabel)).join(', ') || 'без ролей'}</dd>
               <dt>Статус сейчас</dt>
               <dd>{STATUS_LABELS[conflict.current.status]}</dd>
             </dl>
@@ -138,7 +138,8 @@ export const UserEditDialog: FC<IUserEditDialogProps> = ({ user, isSelf, onClose
       {formError ? <Notice tone="danger">{formError}</Notice> : null}
       <TextField label="Логин" value={user.login} onValueChange={() => undefined} readOnly hint="Логин не меняется." />
       <TextField label="Имя для отображения" required value={displayName} onValueChange={setDisplayName} error={errors.displayName} />
-      <CheckboxGroup legend="Роли" required options={ROLE_OPTIONS} selected={roles} onChange={setRoles} error={errors.roles} />
+      <CheckboxGroup legend="Роли" required options={roleCatalog.options} selected={roles} onChange={setRoles} error={errors.roles} />
+      {roleCatalog.error ? <Notice tone="danger">Не удалось загрузить роли. Закройте окно и повторите.</Notice> : <Notice tone="info">Права выбранных ролей объединяются. Настройка доступна в разделе «Роли и права».</Notice>}
       <SelectField
         label="Статус"
         value={status}

@@ -1,4 +1,4 @@
-import type { TAuditOutcome, TGlobalRole, TMemberRole, TPrincipalKind } from '../api/types';
+import type { TAuditOutcome, TGlobalRole, TMemberRole, TPrincipalKind, TTenderOutcome } from '../api/types';
 
 export const GLOBAL_ROLE_LABELS: Record<TGlobalRole, string> = {
   admin: 'Администратор',
@@ -11,6 +11,11 @@ export const GLOBAL_ROLES: TGlobalRole[] = ['engineer', 'manager', 'admin'];
 export const MEMBER_ROLE_LABELS: Record<TMemberRole, string> = {
   engineer: 'Инженер',
   manager: 'Руководитель тендера',
+};
+
+export const TENDER_OUTCOME_LABELS: Record<TTenderOutcome, string> = {
+  won: 'Выигран',
+  lost: 'Проигран',
 };
 
 export const PRINCIPAL_LABELS: Record<TPrincipalKind, string> = {

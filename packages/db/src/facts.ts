@@ -5,7 +5,7 @@ import {
   classifyDocument,
   computeFactGraph,
   documentKindOf,
-  extractDocumentFacts,
+  extractProfiledDocumentFacts,
   FACT_RULES_VERSION,
   type FactDecisionKind,
   type FactType,
@@ -32,6 +32,16 @@ export interface IFactOwner {
 }
 export const ownerKeyOf = (o: IFactOwner): string => (o.contractId ? `contract:${o.contractId}` : `tender:${o.tenderId}`);
 const ownerColumn = (o: IFactOwner): { col: 'tender_id' | 'contract_id'; id: string } => (o.contractId ? { col: 'contract_id', id: o.contractId } : { col: 'tender_id', id: o.tenderId! });
+
+// Новая версия фактов получает новые идентификаторы. Решения по прежним фактам не переносим молча.
+export const assertFactRulesUpgrade = async (db: Queryable, owner: IFactOwner): Promise<void> => {
+  const { col, id } = ownerColumn(owner);
+  const old = await db.query(`SELECT 1 FROM fact_decision d
+    JOIN evidence_fact f ON f.id = d.fact_id OR f.id = d.other_fact_id
+    JOIN fact_extraction_run x ON x.id = f.extraction_run_id
+    WHERE x.${col} = $1 AND x.rules_version <> $2 LIMIT 1`, [id, FACT_RULES_VERSION]);
+  if (old.rows.length) throw new Error('fact_rules_upgrade_requires_decision_review');
+};
 
 // ---------------------------------------------------------------- Постановка и извлечение
 
@@ -70,17 +80,19 @@ export const extractRunFacts = async (db: Queryable, runId: string): Promise<{ c
   const done = await db.query('SELECT 1 FROM fact_extraction_run WHERE recognition_run_id = $1 AND rules_version = $2', [runId, FACT_RULES_VERSION]);
   if (done.rows[0]) return { created: false, owner: null, facts: 0 };
   const run = (
-    await db.query<{ status: string; document_revision_id: string; document_id: string; tender_id: string | null; contract_id: string | null; mail_attachment_id: string | null; title: string }>(
-      `SELECT rr.status, rr.document_revision_id, v.document_id, d.tender_id, d.contract_id, d.mail_attachment_id, d.title
+    await db.query<{ status: string; document_revision_id: string; document_id: string; tender_id: string | null; contract_id: string | null; mail_attachment_id: string | null; title: string; fact_input_profile: string | null }>(
+      `SELECT rr.status, rr.document_revision_id, v.document_id, d.tender_id, d.contract_id, d.mail_attachment_id, d.title, rr.recognizer->'config'->>'factInputProfile' AS fact_input_profile
          FROM recognition_run rr JOIN document_revision v ON v.id = rr.document_revision_id JOIN document d ON d.id = v.document_id
         WHERE rr.id = $1`,
       [runId],
     )
   ).rows[0];
   if (!run || run.mail_attachment_id || !['complete', 'partial'].includes(run.status)) return { created: false, owner: null, facts: 0 };
+  await assertFactRulesUpgrade(db, { tenderId: run.tender_id, contractId: run.contract_id });
   const fragments = (
-    await db.query<{ id: string; text: string; origin: string; page_index: number | null; locator_kind: string | null }>(
-      `SELECT id, text, origin, page_index, locator ->> 'kind' AS locator_kind FROM evidence_fragment
+    await db.query<{ id: string; text: string; origin: string; page_index: number | null; locator_kind: string | null; table_scope: string | null }>(
+      `SELECT id, text, origin, page_index, locator ->> 'kind' AS locator_kind,
+              coalesce(locator ->> 'sheet', locator ->> 'tableIndex', page_index::text) AS table_scope FROM evidence_fragment
         WHERE run_id = $1 ORDER BY page_index NULLS LAST, ordinal NULLS LAST, part_index, id`,
       [runId],
     )
@@ -88,8 +100,10 @@ export const extractRunFacts = async (db: Queryable, runId: string): Promise<{ c
   const documentary = fragments.filter((f) => DOCUMENTARY.includes(f.origin));
   const firstPage = documentary.filter((f) => f.page_index === (documentary[0]?.page_index ?? null)).map((f) => f.text);
   const cls = classifyDocument({ firstPage, documentTitle: run.title });
-  const spans: IFactSpan[] = documentary.map((f) => ({ fragmentId: f.id, text: f.text, tableRow: TABLE_LOCATORS.includes(f.locator_kind ?? '') }));
-  const facts = extractDocumentFacts(spans);
+  const spans: IFactSpan[] = documentary.map((f) => ({ fragmentId: f.id, text: f.text, tableRow: TABLE_LOCATORS.includes(f.locator_kind ?? ''), tableScope: f.table_scope ?? '' }));
+  if (run.fact_input_profile && !run.contract_id) throw new Error('Contract fact profile requires a contract');
+  const profiled = extractProfiledDocumentFacts(spans, run.fact_input_profile);
+  const facts = profiled.facts;
   const byType: Record<string, number> = {};
   for (const f of facts) byType[f.factType] = (byType[f.factType] ?? 0) + 1;
   const x = await db.query<{ id: string }>(
@@ -100,7 +114,7 @@ export const extractRunFacts = async (db: Queryable, runId: string): Promise<{ c
       runId, run.document_revision_id, run.document_id, run.tender_id, run.contract_id, FACT_RULES_VERSION, cls.kind, cls.number.slice(0, 200),
       cls.documentDate, cls.parentRef?.number.slice(0, 200) ?? null, cls.parentRef?.numberKey.slice(0, 200) ?? null, cls.parentRef?.date ?? null,
       cls.method.slice(0, 60), documentary.length, facts.length,
-      JSON.stringify({ fragments: fragments.length, documentary: documentary.length, otherOrigins: fragments.length - documentary.length, byType }),
+      JSON.stringify({ fragments: fragments.length, documentary: documentary.length, otherOrigins: fragments.length - documentary.length, byType, ...(run.fact_input_profile ? { inputProfile: run.fact_input_profile, excludedCandidates: profiled.excluded } : {}) }),
     ],
   );
   for (const f of facts) {

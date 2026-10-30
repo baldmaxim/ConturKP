@@ -1,7 +1,7 @@
 import { useMemo, useState, type FC } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { describeError, hasCode } from '../../api/errors';
-import { getMailbox, listMailboxes, listMailboxMessages, updateMailbox } from '../../api/mailEndpoints';
+import { getMailbox, listMailboxes, updateMailbox } from '../../api/mailEndpoints';
 import type { IMailbox } from '../../api/mailTypes';
 import { Button } from '../../components/Button';
 import { ErrorState } from '../../components/ErrorState';
@@ -16,7 +16,7 @@ import { useToast } from '../../hooks/useToast';
 import form from '../../styles/form.module.css';
 import { MailboxAccessPanel } from './MailboxAccessPanel';
 import { MailImportPanel } from './MailImportPanel';
-import { MailMessagesList } from './MailMessagesList';
+import { MailboxMessages } from './MailboxMessages';
 
 const tabsFor = (m: IMailbox, admin: boolean): ITab[] => {
   const tabs: ITab[] = [];
@@ -25,13 +25,6 @@ const tabsFor = (m: IMailbox, admin: boolean): ITab[] => {
   if (admin) tabs.push({ id: 'access', label: 'Доступ', icon: 'key-round' });
   if (admin || m.capabilities.includes('mail.manage')) tabs.push({ id: 'settings', label: 'Ящик', icon: 'pencil' });
   return tabs;
-};
-
-const MessagesTab: FC<{ mailbox: IMailbox; version: number }> = ({ mailbox, version }) => {
-  const res = useApiResource((signal) => listMailboxMessages(mailbox.id, signal), `messages:${mailbox.id}:${version}`);
-  if (res.loading && !res.data) return <LoadingState />;
-  if (res.error) return <ErrorState error={res.error} onRetry={res.reload} />;
-  return <MailMessagesList items={res.data?.items ?? []} emptyTitle="Писем пока нет" emptyText="Импортируйте файлы EML на вкладке «Импорт EML»." />;
 };
 
 const SettingsTab: FC<{ mailbox: IMailbox; onChanged: (m: IMailbox) => void }> = ({ mailbox, onChanged }) => {
@@ -92,7 +85,7 @@ export const MailboxPage: FC = () => {
         <>
           <Tabs tabs={tabs} active={active} onChange={(id) => setSearchParams({ tab: id }, { replace: true })} label="Разделы ящика" />
           <div role="tabpanel" id={tabPanelId(active)} aria-labelledby={tabId(active)}>
-            {active === 'messages' ? <MessagesTab mailbox={mailbox} version={version} /> : null}
+            {active === 'messages' ? <MailboxMessages mailbox={mailbox} version={version} /> : null}
             {active === 'imports' ? <MailImportPanel mailbox={mailbox} onImported={() => setVersion((v) => v + 1)} /> : null}
             {active === 'access' ? <MailboxAccessPanel mailbox={mailbox} onMailboxChanged={res.reload} /> : null}
             {active === 'settings' ? <SettingsTab mailbox={mailbox} onChanged={(m) => res.setData(m)} /> : null}

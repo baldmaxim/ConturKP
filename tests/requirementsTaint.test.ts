@@ -1,3 +1,4 @@
+import { restrictManagerPermissions } from './roleFixtures.ts';
 // R08-02 (Review 08-1): отрицательный security-тест производного текста. Открытое supports + закрытое clarifies,
 // формулировка содержит уникальный секрет из clarifies: пользователь без права на источник clarifies не видит
 // секрета ни в реестре, ни в карточке, ни в ревизиях, кандидатах, правках, решениях, допущениях, вопросах,
@@ -27,6 +28,8 @@ beforeAll(async () => {
   db = await createTestDb();
   st = await buildStage08(db, config);
   const { s } = st;
+  // Ограниченный профиль проверяет выдачи; общий просмотр manager проверяется отдельно.
+  await restrictManagerPermissions(s.admin, s.ids.manager, ['contract.read.all']);
   await grantCreator(s.admin, s.ids.manager);
   ids.contract = await createContract(s.manager, 'Д-08-R2');
   await setAccess(s.admin, ids.contract, s.ids.manager, ['contract.read', 'contract.link', 'contract.manage']);

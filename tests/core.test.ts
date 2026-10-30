@@ -2,6 +2,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   canSeeTenderCard,
+  effectiveContractCapabilities,
+  effectiveMailCapabilities,
+  tenderAuditScope,
   formatEtag,
   globalCapabilities,
   hashPassword,
@@ -79,6 +82,17 @@ describe('возможности', () => {
       'audit.read',
     ]);
   });
+  it('руководитель без назначения получает только чтение и журнал', () => {
+    expect(tenderCapabilities(roles('manager'), null)).toEqual(['tender.read', 'requirement.read', 'fact.read', 'audit.read']);
+    expect(canSeeTenderCard(roles('manager'), null)).toBe(true);
+    expect(tenderAuditScope(roles('manager'), null)).toEqual({ kind: 'all' });
+    expect(effectiveContractCapabilities(roles('manager'), undefined)).toEqual(['contract.read']);
+    expect(effectiveMailCapabilities(roles('manager'), undefined)).toEqual(['mail.read']);
+    expect(effectiveContractCapabilities(roles('engineer'), undefined)).toEqual([]);
+    expect(effectiveMailCapabilities(roles('admin'), undefined)).toEqual([]);
+    expect(effectiveContractCapabilities(roles('manager'), new Set(['contract.manage']))).toEqual(['contract.read', 'contract.manage']);
+    expect(effectiveMailCapabilities(roles('manager'), new Set(['mail.link']))).toEqual(['mail.read', 'mail.link']);
+  });
   it('назначение без соответствующей глобальной роли не действует', () => {
     expect(tenderCapabilities(roles('engineer'), 'manager')).toEqual([]);
     expect(canSeeTenderCard(roles('engineer'), 'manager')).toBe(false);
@@ -86,10 +100,10 @@ describe('возможности', () => {
   it('администратор без назначения: только администрирование и журнал, без содержимого', () => {
     expect(tenderCapabilities(roles('admin'), null)).toEqual(['audit.read', 'admin.tender']);
     expect(canSeeTenderCard(roles('admin'), null)).toBe(true);
-    expect(globalCapabilities(roles('admin'))).toEqual(['admin.users', 'admin.tender', 'admin.audit', 'admin.intake', 'admin.contract', 'admin.mailbox', 'admin.delivery']);
-    // Этап 11 (D-031 В-11-3): шаблоны компании и формулировки — роль «руководитель», без доступа к содержимому тендеров.
-    expect(globalCapabilities(roles('manager', 'engineer'))).toEqual(['admin.templates', 'wording.approve']);
-    expect(globalCapabilities(roles('engineer'))).toEqual([]);
+    expect(globalCapabilities(roles('admin'))).toEqual(['admin.users', 'admin.tender', 'admin.audit', 'admin.intake', 'admin.contract', 'admin.mailbox', 'admin.delivery', 'admin.roles', 'office.read', 'history.manage']);
+    // Политика 0053–0054: общий просмотр руководителя не даёт административных прав.
+    expect(globalCapabilities(roles('manager', 'engineer'))).toEqual(['admin.templates', 'wording.approve', 'office.read', 'templates.read', 'tender.read.all', 'contract.read.all', 'mail.read.all', 'history.read', 'history.write']);
+    expect(globalCapabilities(roles('engineer'))).toEqual(['templates.read', 'history.read', 'history.write']);
   });
 });
 

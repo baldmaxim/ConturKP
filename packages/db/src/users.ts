@@ -9,16 +9,23 @@ export interface IUserRow {
   login: string;
   display_name: string;
   status: 'active' | 'disabled';
-  roles: Role[];
+  roles: string[];
+  role_names: string[];
+  effective_roles: Role[];
+  role_permissions: string[];
   row_version: number;
   created_at: Date;
 }
 
 const SELECT_USER = `
   SELECT u.id, u.login, u.display_name, u.status, u.row_version, u.created_at,
-         coalesce(array_agg(r.role ORDER BY r.role) FILTER (WHERE r.role IS NOT NULL), '{}') AS roles
+         coalesce(array_agg(r.role ORDER BY r.role) FILTER (WHERE r.role IS NOT NULL), '{}') AS roles,
+         coalesce(array_agg(pr.name ORDER BY r.role) FILTER (WHERE r.role IS NOT NULL), '{}') AS role_names,
+         ARRAY(SELECT er.role FROM effective_user_role er WHERE er.user_id = u.id ORDER BY er.role) AS effective_roles,
+         user_role_permissions(u.id) AS role_permissions
     FROM app_user u
-    LEFT JOIN user_role r ON r.user_id = u.id`;
+    LEFT JOIN user_role r ON r.user_id = u.id
+    LEFT JOIN portal_role pr ON pr.code = r.role`;
 
 export const listUsers = async (db: Queryable, _ctx: IAccessContext): Promise<IUserRow[]> => {
   const r = await db.query<IUserRow>(`${SELECT_USER} WHERE u.kind = 'human' GROUP BY u.id ORDER BY u.login`);
@@ -54,7 +61,7 @@ export interface INewUser {
   login: string;
   displayName: string;
   passwordHash: string;
-  roles: Role[];
+  roles: string[];
 }
 
 // grantedBy = null только для bootstrap с консоли сервера.
@@ -68,7 +75,7 @@ export const insertUser = async (db: Queryable, u: INewUser, grantedBy: string |
   return id;
 };
 
-export const setRoles = async (db: Queryable, userId: string, roles: Role[], grantedBy: string | null): Promise<void> => {
+export const setRoles = async (db: Queryable, userId: string, roles: string[], grantedBy: string | null): Promise<void> => {
   await db.query('DELETE FROM user_role WHERE user_id = $1 AND NOT (role = ANY($2::text[]))', [userId, roles]);
   await db.query(
     `INSERT INTO user_role (user_id, role, granted_by)
@@ -111,8 +118,8 @@ export const lockAdminSet = async (db: Queryable): Promise<void> => {
 
 export const countActiveAdmins = async (db: Queryable): Promise<number> => {
   const r = await db.query<{ n: number }>(
-    `SELECT count(*) AS n FROM app_user u JOIN user_role r ON r.user_id = u.id
-      WHERE r.role = 'admin' AND u.status = 'active' AND u.kind = 'human'`,
+    `SELECT count(*) AS n FROM app_user u WHERE u.status = 'active' AND u.kind = 'human'
+      AND has_role_permission(u.id, 'admin.users') AND has_role_permission(u.id, 'admin.roles')`,
   );
   return r.rows[0]?.n ?? 0;
 };

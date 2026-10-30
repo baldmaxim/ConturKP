@@ -127,7 +127,7 @@ export const dialogsRouter = (pool: Pool, config: IAppConfig, clock: () => Date)
           plan: plan as unknown as Record<string, unknown>,
           plannerVersion: PLANNER_VERSION,
           promptVersion: DRAFT_PROMPT_VERSION,
-          promptSha256: sha256Hex(draftSystemPrompt(plan)),
+          promptSha256: sha256Hex(draftSystemPrompt(plan, body.text)),
           verifierMode: config.answer.verifierMode,
         });
         return {

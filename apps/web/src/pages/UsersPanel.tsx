@@ -57,7 +57,7 @@ export const UsersPanel: FC = () => {
       <Badge tone="muted" icon="user-x" label="Отключён" />
     );
 
-  const rolesText = (user: IUser): string => user.roles.map(globalRoleLabel).join(', ') || 'без ролей';
+  const rolesText = (user: IUser): string => (user.roleNames ?? user.roles.map(globalRoleLabel)).join(', ') || 'без ролей';
 
   const actions = (user: IUser): ReactNode => (
     <div className={list.rowActions}>

@@ -1,10 +1,12 @@
 // Схемы запросов и ответов API этапа 02 (docs/contracts/portal-api.md §2.1–2.2).
 import { z } from 'zod';
+import { ROLE_PERMISSION_CATALOG } from '@kontur/core';
 
 const text = (max: number) => z.string().trim().min(1).max(max);
 const optionalText = (max: number) => z.string().trim().max(max).nullable().optional().transform((v) => (v === '' ? null : v));
 
 export const ROLE = z.enum(['admin', 'manager', 'engineer']);
+export const ROLE_CODE = z.string().min(1).max(64).regex(/^[a-z][a-z0-9_-]*$/);
 export const MEMBER_ROLE = z.enum(['engineer', 'manager']);
 export const LOGIN = z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9._-]{1,62}$/, 'логин: латиница, цифры, . _ -, от 2 символов');
 const ISO_UTC = z.iso.datetime({ offset: true });
@@ -19,7 +21,7 @@ export const CreateUserRequest = z
   .object({
     login: LOGIN,
     displayName: text(200),
-    roles: z.array(ROLE).min(1).max(3),
+    roles: z.array(ROLE_CODE).min(1).max(30),
     password: z.string().min(12).max(1024),
   })
   .strict();
@@ -28,7 +30,7 @@ export const PatchUserRequest = z
   .object({
     displayName: text(200).optional(),
     status: z.enum(['active', 'disabled']).optional(),
-    roles: z.array(ROLE).max(3).optional(),
+    roles: z.array(ROLE_CODE).max(30).optional(),
   })
   .strict();
 
@@ -44,6 +46,7 @@ export const PatchTenderRequest = z
     customerName: optionalText(500),
     objectName: optionalText(500),
     status: z.enum(['active', 'archived']).optional(),
+    outcome: z.enum(['won', 'lost']).nullable().optional(),
   })
   .strict();
 
@@ -259,6 +262,12 @@ export const PatchMailboxRequest = z
 
 export const PutMailAccessRequest = z.object({ capabilities: z.array(MAIL_CAPABILITY).max(4) }).strict();
 
+export const MailMessagesQuery = z.object({
+  q: z.string().trim().max(500).default(''),
+  page: z.coerce.number().int().min(1).max(1_000_000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(50),
+});
+
 // Параметры импорта EML в строке запроса; имя файла — параметр name. Связь с тендером при импорте —
 // необязательна и требует mail.link (OD-07-7: связь подтверждает человек).
 export const MailImportQuery = z.object({
@@ -276,6 +285,9 @@ export const ManifestImportQuery = z.object({ stageId: z.uuid().optional() });
 // ---- ответы
 
 export interface IMe {
+  tendersAvailable?: boolean;
+  accessVersion?: string;
+  assignedRoles?: string[];
   id: string;
   login: string;
   displayName: string;
@@ -290,6 +302,7 @@ export interface IMe {
 }
 
 export interface IUser {
+  roleNames?: string[];
   id: string;
   login: string;
   displayName: string;
@@ -306,6 +319,7 @@ export interface ITender {
   customerName: string | null;
   objectName: string | null;
   status: 'active' | 'archived';
+  outcome: 'won' | 'lost' | null;
   rowVersion: number;
   createdAt: string;
   updatedAt: string;
@@ -436,3 +450,8 @@ export * from './release.ts';
 export * from './delivery.ts';
 export * from './send.ts';
 export * from './mcp.ts';
+export * from './tenderHistory.ts';
+
+export const RolePermissions = z.array(z.enum(ROLE_PERMISSION_CATALOG.map(p => p.code))).max(100);
+export const CreateRoleRequest = z.object({ name: text(80), description: z.string().trim().max(500).default(''), baseRole: ROLE, permissions: RolePermissions }).strict();
+export const PatchRoleRequest = z.object({ name: text(80), description: z.string().trim().max(500), baseRole: ROLE, permissions: RolePermissions, status: z.enum(['active', 'disabled']) }).strict();

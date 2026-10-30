@@ -11,6 +11,7 @@ import { ApiTokensDialog } from '../pages/mcp/ApiTokensDialog';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { cx } from '../utils/cx';
+import { OfficeButton } from '../pages/admin/office/OfficeButton';
 import styles from './Header.module.css';
 
 const MENU_ID = 'app-mobile-menu';
@@ -24,17 +25,20 @@ export const Header: FC = () => {
   const [tokensOpen, setTokensOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  const showAdmin = can('admin.users') || can('admin.audit') || can('admin.contract');
+  const showAdmin = can('admin.users') || can('admin.roles') || can('admin.audit') || can('admin.contract') || can('admin.delivery');
   const showContracts = me?.contractsAvailable ?? false;
   const showMail = me?.mailAvailable ?? false;
   // Этап 11: шаблоны и формулировки — пользователям с содержательной ролью (D-031 В-11-3).
-  const showForms = (me?.roles ?? []).some((r) => r === 'manager' || r === 'engineer');
+  const showForms = can('templates.read');
   const path = location.pathname;
   const tendersActive = path === '/' || path.startsWith('/tenders') || path.startsWith('/stages');
   const contractsActive = path.startsWith('/contracts') || path.startsWith('/contract-documents');
   const adminActive = path.startsWith('/admin');
   const mailActive = path.startsWith('/mail') || path.startsWith('/mailboxes');
   const formsActive = path.startsWith('/forms');
+  const historyActive = path.startsWith('/history');
+  const showOffice = can('office.read');
+  const officeActive = path === '/office';
 
   useEffect(() => {
     setMenuOpen(false);
@@ -75,10 +79,16 @@ export const Header: FC = () => {
 
   const navLinks = (
     <>
-      <AppLink to="/" className={cx(styles.navLink, tendersActive && styles.active)} aria-current={tendersActive ? 'page' : undefined}>
+      {can('history.read') ? (
+        <AppLink to="/history" className={cx(styles.navLink, historyActive && styles.active)} aria-current={historyActive ? 'page' : undefined}>
+          <Icon name="scroll-text" />
+          <span>Хронология</span>
+        </AppLink>
+      ) : null}
+      {me?.tendersAvailable !== false ? (<AppLink to="/" className={cx(styles.navLink, tendersActive && styles.active)} aria-current={tendersActive ? 'page' : undefined}>
         <Icon name="briefcase" />
         <span>Тендеры</span>
-      </AppLink>
+      </AppLink>) : null}
       {showContracts ? (
         <AppLink to="/contracts" className={cx(styles.navLink, contractsActive && styles.active)} aria-current={contractsActive ? 'page' : undefined}>
           <Icon name="file-signature" />
@@ -115,6 +125,7 @@ export const Header: FC = () => {
         <nav className={styles.nav} aria-label="Разделы портала">
           {navLinks}
         </nav>
+        {showOffice ? <div className={styles.office}><OfficeButton active={officeActive} /></div> : null}
         <div className={styles.actions}>
           <span className={styles.user} title={me?.login}>
             {me?.displayName}

@@ -3,13 +3,14 @@
 export type TGlobalRole = 'admin' | 'manager' | 'engineer';
 export type TMemberRole = 'engineer' | 'manager';
 export type TTenderStatus = 'active' | 'archived';
+export type TTenderOutcome = 'won' | 'lost';
 export type TStageStatus = 'active' | 'archived';
 export type TUserStatus = 'active' | 'disabled';
 export type TPrincipalKind = 'human' | 'model_via_mcp' | 'integration' | 'system' | 'anonymous';
 export type TAuditOutcome = 'allowed' | 'denied' | 'failed';
 
 /** Глобальные возможности пользователя. */
-export type TGlobalCapability = 'admin.users' | 'admin.tender' | 'admin.audit' | 'admin.intake' | 'admin.contract' | 'admin.mailbox' | 'admin.delivery' | 'admin.templates' | 'wording.approve';
+export type TGlobalCapability = 'office.read' | 'templates.read' | 'admin.roles' | 'tender.read.all' | 'contract.read.all' | 'mail.read.all' | 'admin.users' | 'admin.tender' | 'admin.audit' | 'admin.intake' | 'admin.contract' | 'admin.mailbox' | 'admin.delivery' | 'admin.templates' | 'wording.approve';
 
 /** Возможности пользователя в конкретном тендере. */
 export type TTenderCapability =
@@ -49,7 +50,10 @@ export interface IMe {
   id: string;
   login: string;
   displayName: string;
-  roles: TGlobalRole[];
+  roles: string[];
+  assignedRoles?: string[];
+  tendersAvailable?: boolean;
+  accessVersion?: string;
   capabilities: string[];
   memberships: IMembership[];
   /** Раздел «Договоры»: администратор договоров, право создавать договоры или выдача по договору. */
@@ -65,6 +69,7 @@ export interface ITender {
   customerName: string | null;
   objectName: string | null;
   status: TTenderStatus;
+  outcome: TTenderOutcome | null;
   rowVersion: number;
   createdAt: string;
   updatedAt: string;
@@ -84,6 +89,7 @@ export interface ITenderPatch {
   customerName?: string | null;
   objectName?: string | null;
   status?: TTenderStatus;
+  outcome?: TTenderOutcome | null;
 }
 
 export interface IUserRef {
@@ -159,6 +165,7 @@ export interface IUser {
   displayName: string;
   status: TUserStatus;
   roles: string[];
+  roleNames?: string[];
   rowVersion: number;
   createdAt: string;
 }
@@ -166,14 +173,14 @@ export interface IUser {
 export interface IUserCreateInput {
   login: string;
   displayName: string;
-  roles: TGlobalRole[];
+  roles: string[];
   password: string;
 }
 
 export interface IUserPatch {
   displayName?: string;
   status?: TUserStatus;
-  roles?: TGlobalRole[];
+  roles?: string[];
 }
 
 export interface IListResponse<T> {

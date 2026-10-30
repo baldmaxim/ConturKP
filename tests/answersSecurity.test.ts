@@ -1,3 +1,4 @@
+import { restrictManagerPermissions } from './roleFixtures.ts';
 // Этап 08a: права ответного ядра (D-027 AD-08a-4). Диалог видит только автор — чужой и администратор получают 404;
 // контекст — с правами поиска 05; права на основания перепроверяются в задании (после вопроса) и при каждом чтении:
 // текст ответа по основанию, право на которое отозвано, не выдаётся, а сообщение ответа скрывается.
@@ -16,6 +17,7 @@ const SECRET = 'Неустойка подрядчика составляет 0,7
 beforeAll(async () => {
   db = await createTestDb();
   st = await buildAnswerStage(db, config, { 'ТЗ.pdf': { pages: [{ blocks: ['Фасад облицовывается керамогранитом толщиной 10 мм.'] }] } });
+  await restrictManagerPermissions(st.s.admin, st.s.ids.manager, ['contract.read.all']);
   // Договор, связанный с тендером, в рабочем составе этапа: его основание читает только держатель contract.read.
   await grantCreator(st.s.admin, st.s.ids.manager);
   contractId = await createContract(st.s.manager, 'Д-СЕКРЕТ');

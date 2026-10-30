@@ -9,12 +9,21 @@ import { LocalRecognitionError } from './types.ts';
 const require = createRequire(import.meta.url);
 const pdfjsRoot = dirname(require.resolve('pdfjs-dist/package.json'));
 
+// Included in the PDF recognizer identity: scans decoded with the bundled codecs
+// must get a new run instead of reusing an earlier blank/partial result.
+export const PDF_RENDERING_VERSION = 'bundled-codecs-v1';
+
 // Каталог стандартных шрифтов pdf.js. Адрес обязан заканчиваться «/» (pdf.js проверяет это до открытия документа), а
 // шрифт читается `fs.readFile(адрес + имя файла)`: значит, нужен путь с прямыми разделителями — Windows их принимает.
 // Прежде на конце стоял системный разделитель: на Windows `\`, и pdf.js отказывал «must include trailing slash» — PDF
 // не открывался ни для текстового слоя, ни для OCR (R08-04).
 export const standardFontDataUrl = (root: string = pdfjsRoot, p: Pick<PlatformPath, 'join' | 'sep'> = path): string =>
   `${p.join(root, 'standard_fonts').split(p.sep).join('/')}/`;
+
+// pdf.js 5 also loads JBIG2/CCITT, JPEG2000 and colour codecs from this local
+// directory. Without it an image can disappear while page.render still succeeds.
+export const wasmDataUrl = (root: string = pdfjsRoot, p: Pick<PlatformPath, 'join' | 'sep'> = path): string =>
+  `${p.join(root, 'wasm').split(p.sep).join('/')}/`;
 
 export const pdfjsVersion = (): string => (require('pdfjs-dist/package.json') as { version: string }).version;
 
@@ -27,6 +36,7 @@ export const openPdf = async (bytes: Uint8Array): Promise<PDFDocumentProxy> => {
     disableFontFace: true,
     stopAtErrors: false,
     standardFontDataUrl: standardFontDataUrl(),
+    wasmUrl: wasmDataUrl(),
   });
   try {
     return await task.promise;

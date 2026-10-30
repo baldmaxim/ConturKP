@@ -20,6 +20,7 @@ import { formatBytes, RECOGNITION_STATUS } from '../../utils/sourceLabels';
 import form from '../../styles/form.module.css';
 import list from '../../styles/list.module.css';
 import styles from './Contracts.module.css';
+import { ContractHistoryPanel } from './ContractHistoryPanel';
 
 interface IContractDocumentsPanelProps {
   contract: IContract;
@@ -48,7 +49,7 @@ const runBadge = (doc: IContractDocument) => {
  * Документы договора (T06A-2): основной договор, допсоглашения и приложения — самостоятельные документы
  * со ссылкой на основной. Файл хранится всегда; распознаётся только PDF по экспорту RDWeb (D-022 OD-4).
  */
-export const ContractDocumentsPanel: FC<IContractDocumentsPanelProps> = ({ contract }) => {
+const UploadedContractDocumentsPanel: FC<IContractDocumentsPanelProps> = ({ contract }) => {
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const docsRes = useApiResource((signal) => listContractDocuments(contract.id, signal), contract.id);
@@ -115,7 +116,7 @@ export const ContractDocumentsPanel: FC<IContractDocumentsPanelProps> = ({ contr
         </Notice>
       ) : null}
       {docs.length === 0 ? (
-        <EmptyState icon="files" title="Документов пока нет" text="У договора ещё нет загруженных документов." />
+        <EmptyState icon="files" title="Загруженных вручную файлов пока нет" text="Здесь отображаются дополнительные файлы, загруженные через портал." />
       ) : (
         <ul className={styles.cards}>
           {docs.map((doc) => (
@@ -143,3 +144,14 @@ export const ContractDocumentsPanel: FC<IContractDocumentsPanelProps> = ({ contr
     </div>
   );
 };
+
+/** Archive files belong in Documents too, including existing bookmarked ?tab=documents links. */
+export const ContractDocumentsPanel: FC<IContractDocumentsPanelProps> = ({ contract }) => (
+  <div className={form.stack}>
+    <ContractHistoryPanel contractId={contract.id} />
+    <details>
+      <summary>Загрузить дополнительные файлы и посмотреть загруженные</summary>
+      <UploadedContractDocumentsPanel contract={contract} />
+    </details>
+  </div>
+);

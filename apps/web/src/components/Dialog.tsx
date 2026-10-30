@@ -11,10 +11,12 @@ interface IDialogProps {
   onSubmit?: () => void;
   /** Нельзя закрыть (идёт запрос к серверу). */
   busy?: boolean;
+  wide?: boolean;
+  id?: string;
 }
 
 /** Модальный диалог на нативном <dialog>: фокус внутри, Esc закрывает. На смартфоне — нижний лист. */
-export const Dialog: FC<IDialogProps> = ({ title, onClose, children, footer, onSubmit, busy = false }) => {
+export const Dialog: FC<IDialogProps> = ({ title, onClose, children, footer, onSubmit, busy = false, wide = false, id }) => {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const busyRef = useRef(busy);
@@ -60,7 +62,7 @@ export const Dialog: FC<IDialogProps> = ({ title, onClose, children, footer, onS
   );
 
   return (
-    <dialog ref={ref} className={styles.dialog} aria-labelledby={titleId}>
+    <dialog ref={ref} id={id} className={`${styles.dialog} ${wide ? styles.wide : ''}`} aria-labelledby={titleId}>
       <div className={styles.header}>
         <h2 id={titleId} className={styles.title}>
           {title}

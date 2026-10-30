@@ -82,8 +82,8 @@ export const DraftWizard: FC<IDraftWizardProps> = ({ draftId, canAskCustomer, on
   const report = d.migrationReport;
 
   return (
-    <div className={form.stack}>
-      <section className={form.section} aria-labelledby="draft-title">
+    <div className={styles.wizard}>
+      <section className={`${form.section} ${styles.wizardSection}`} aria-labelledby="draft-title">
         <div className={form.sectionHead}>
           <h3 id="draft-title" className={form.sectionTitle}>
             {d.title}
@@ -162,7 +162,7 @@ export const DraftWizard: FC<IDraftWizardProps> = ({ draftId, canAskCustomer, on
         </div>
       </section>
       <div className={styles.layout}>
-        <section className={form.section} aria-label="Разделы приложения">
+        <section className={`${form.section} ${styles.wizardSection} ${styles.fieldSection}`} aria-label="Разделы приложения">
           <nav className={styles.steps} aria-label="Шаги">
             {d.sections.map((s, i) => (
               <button key={s.key} type="button" className={styles.step} aria-current={i === step ? 'step' : undefined} onClick={() => setStep(i)}>
@@ -172,7 +172,7 @@ export const DraftWizard: FC<IDraftWizardProps> = ({ draftId, canAskCustomer, on
             ))}
           </nav>
           {section.help ? <p className={styles.muted}>{section.help}</p> : null}
-          <div className={styles.fields}>
+          <div className={styles.fieldGrid}>
             {section.fields.map((f) => (
               <FieldCard key={`${f.fieldId}:${f.version}`} draftId={d.id} tenderId={d.tenderId} field={f} canFill={canFill} canAskCustomer={canAskCustomer} onChanged={reload} />
             ))}
@@ -186,7 +186,7 @@ export const DraftWizard: FC<IDraftWizardProps> = ({ draftId, canAskCustomer, on
             </Button>
           </div>
         </section>
-        <section className={form.section} aria-labelledby="draft-issues">
+        <section className={`${form.section} ${styles.wizardSection}`} aria-labelledby="draft-issues">
           <h3 id="draft-issues" className={form.sectionTitle}>
             Незавершённые пункты
           </h3>

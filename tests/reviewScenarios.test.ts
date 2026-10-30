@@ -3,6 +3,7 @@
 // комплексная расценка (A05), неопределённость ПД (A06), количества и дубли (В-09-6). Расчёт — поддельный TenderHub
 // (VERIFIED_FIXTURE), модель — поддельная: проверяется механизм, а не качество (D-029 В-09-5).
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { REVIEW_RULES_VERSION } from '../packages/core/src/index.ts';
 import { createTestDb, idem, testConfig, type ITestDb } from './helpers.ts';
 import {
   buildStage09,
@@ -47,7 +48,7 @@ afterAll(async () => {
 describe('прогон проверки: закреплённые входы и исходы', () => {
   it('входы закреплены: снимок, реестр, ревизия расчёта, приоритет, версии правил и модели', () => {
     expect(run.status).toBe('completed_with_gaps');
-    expect(run.inputs).toMatchObject({ evidenceScopeId: st.scopeId, registryId: st.registryId, calculationRevisionId: st.calcRevisionId, rulesVersion: 'rules/09-1' });
+    expect(run.inputs).toMatchObject({ evidenceScopeId: st.scopeId, registryId: st.registryId, calculationRevisionId: st.calcRevisionId, rulesVersion: REVIEW_RULES_VERSION });
     expect(run.checks).toHaveLength(12);
     expect(run.checks.every((c) => c.outcome !== null)).toBe(true);
     // Реестр не пройден — неполнота, а не «всё проверено» (A44, I18).

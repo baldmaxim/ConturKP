@@ -8,7 +8,7 @@ import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { tenderCapabilities } from '../packages/core/src/index.ts';
 import { createPool, dropDatabase, MIGRATIONS_DIR, migrate, setupDatabase } from '../packages/db/src/index.ts';
-import { ADMIN_URL, auditRows, buildScenario, createTestDb, makeApp, TestClient, type IScenario, type ITestDb } from './helpers.ts';
+import { ADMIN_URL, auditRows, buildScenario, createTestDb, createUser, makeApp, TestClient, type IScenario, type ITestDb } from './helpers.ts';
 
 let db: ITestDb;
 let app: ReturnType<typeof makeApp>;
@@ -202,7 +202,13 @@ describe('обновление схемы 0039 → 0040', () => {
     try {
       expect(await migrateTo(39)).toBe(39);
       const old: ITestDb = { name, appUrl: urlFor('kontur_app'), migratorUrl: urlFor('kontur_migrator'), pool, drop: async () => undefined };
-      const before = await buildScenario(old, makeApp(old));
+      // Исторические данные создаются на 0039 напрямую: новый API требует каталог ролей 0054.
+      const adminId = await createUser(pool, 'admin', ['admin']);
+      const engId = await createUser(pool, 'eng1', ['engineer']);
+      const tender = (await pool.query<{ id: string }>("INSERT INTO tender(code,title,created_by) VALUES('MCP-39','Исторический тендер',$1) RETURNING id", [adminId])).rows[0]!;
+      await pool.query("INSERT INTO tender_member(tender_id,user_id,member_role,assigned_by) VALUES($1,$2,'engineer',$3)", [tender.id, engId, adminId]);
+      await pool.query("INSERT INTO audit_event(actor_user_id,principal_kind,action,tender_id,outcome) VALUES($1,'human','tender.create',$2,'allowed')", [adminId, tender.id]);
+      const before = { tenderA: tender.id, ids: { eng1: engId } };
       const caps = async (user: string) => (await pool.query<{ caps: string[] }>('SELECT tender_capabilities($1, $2) AS caps', [user, before.tenderA])).rows[0]!.caps;
       expect(await caps(before.ids.eng1)).not.toContain('mcp.propose');
       const auditBefore = Number((await pool.query<{ n: string }>('SELECT count(*) AS n FROM audit_event')).rows[0]!.n);
@@ -211,6 +217,7 @@ describe('обновление схемы 0039 → 0040', () => {
       expect(remaining).toBeGreaterThanOrEqual(1);
       expect(await migrateTo(9999)).toBe(remaining);
       expect(await caps(before.ids.eng1)).toContain('mcp.propose');
+      expect((await pool.query('SELECT title FROM tender WHERE id=$1', [tender.id])).rows[0]!.title).toBe('Исторический тендер');
       expect(Number((await pool.query<{ n: string }>('SELECT count(*) AS n FROM audit_event')).rows[0]!.n)).toBe(auditBefore);
       const status = await pool.query<{ system: string; status: string }>("SELECT system, status FROM integration_status WHERE system IN ('mcp', 'codex', 'cursor') ORDER BY system");
       expect(status.rows).toEqual([{ system: 'codex', status: 'NOT_IMPLEMENTED' }, { system: 'cursor', status: 'NOT_IMPLEMENTED' }, { system: 'mcp', status: 'VERIFIED_FIXTURE' }]);

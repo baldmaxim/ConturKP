@@ -42,6 +42,9 @@ export interface IEnqueueInput {
 // Приоритет по умолчанию (ADR-004 §7a): импорт, разбор, приём распознавания и сканы каналов — 50,
 // выше фоновой индексации (10) и удаления выведенных версий (0), ниже смыслового запроса (100).
 export const DEFAULT_JOB_PRIORITY = 50;
+// Ожидание повышает эффективный приоритет: непрерывная индексация не вытесняет
+// почту, проверку файлов и распознавание. Отложенный повтор стареет с run_after.
+export const JOB_AGING_SECONDS = 10;
 
 // Постановка в транзакции доменной команды. При активном задании с тем же dedupe_key новое не создаётся.
 export const enqueueJob = async (db: Queryable, j: IEnqueueInput): Promise<{ id: string; created: boolean }> => {
@@ -94,9 +97,10 @@ export const claimJob = async (pool: pg.Pool, o: IClaimOptions): Promise<IJobRow
         WHERE status = 'queued' AND run_after <= now()
           AND ($1::boolean OR resource_class <> 'gpu')
           AND ($2::text[] IS NULL OR kind = ANY($2::text[]))
-        ORDER BY priority DESC, run_after, created_at
+        ORDER BY priority + floor(greatest(0, extract(epoch FROM (now() - run_after))) / $3::int) DESC,
+                 priority DESC, run_after, created_at, id
         LIMIT 1 FOR UPDATE SKIP LOCKED`,
-      [gpuFree, o.kinds ?? null],
+      [gpuFree, o.kinds ?? null, JOB_AGING_SECONDS],
     );
     const row = pick.rows[0];
     if (!row) {
@@ -110,7 +114,7 @@ export const claimJob = async (pool: pg.Pool, o: IClaimOptions): Promise<IJobRow
     const r = await client.query<IJobRow>(
       `UPDATE job SET status = 'running', lease_token = gen_random_uuid(), locked_by = $2,
               locked_until = now() + make_interval(secs => $3::double precision / 1000),
-              attempts = attempts + 1, updated_at = now()
+              attempts = attempts + 1, updated_at = now(), progress = NULL
         WHERE id = $1 RETURNING *`,
       [row.id, o.workerId, o.leaseMs],
     );
@@ -145,6 +149,21 @@ export interface IHeartbeat {
 const OWNS_JOB = `j.id = $1 AND j.lease_token = $2 AND j.status = 'running'
     AND (j.resource_class <> 'gpu'
          OR EXISTS (SELECT 1 FROM resource_slot s WHERE s.slot_key = 'gpu' AND s.holder_job_id = j.id AND s.lease_token = j.lease_token))`;
+
+export interface IJobProgress {
+  phase: 'preparing' | 'processing' | 'saving';
+  completed: number;
+  total: number | null;
+  unit: 'files' | 'pages' | 'sheets' | 'documents' | 'chunks';
+}
+
+// Вызывается внутри withLease: соблюдает порядок блокировок GPU → job.
+export const reportJobProgress = async (db: Queryable, id: string, token: string, progress: IJobProgress): Promise<boolean> => {
+  if (!['preparing', 'processing', 'saving'].includes(progress.phase) || !['files', 'pages', 'sheets', 'documents', 'chunks'].includes(progress.unit)
+    || !Number.isSafeInteger(progress.completed) || progress.completed < 0 || (progress.total !== null && (!Number.isSafeInteger(progress.total) || progress.total <= 0 || progress.completed > progress.total))) throw new Error('invalid_job_progress');
+  const result = await db.query(`UPDATE job j SET progress = $3::jsonb WHERE ${OWNS_JOB} AND NOT j.cancel_requested`, [id, token, JSON.stringify(progress)]);
+  return (result.rowCount ?? 0) === 1;
+};
 
 const isGpuJob = async (db: Queryable, id: string): Promise<boolean> => {
   const r = await db.query<{ resource_class: ResourceClass }>('SELECT resource_class FROM job WHERE id = $1', [id]);

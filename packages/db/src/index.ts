@@ -10,6 +10,7 @@ export * from './idempotency.ts';
 export * from './heartbeat.ts';
 export * from './backup.ts';
 export * from './integrations.ts';
+export * from './office.ts';
 export * from './stageEvents.ts';
 export * from './jobs.ts';
 export * from './sources.ts';
@@ -64,3 +65,11 @@ export * from './sends.ts';
 export * from './releaseComparisons.ts';
 export * from './apiTokens.ts';
 export * from './mcpProposals.ts';
+export * from './mailhub.ts';
+export * from './tenderHistory.ts';
+export * from './historyContent.ts';
+
+export * from './contractHistory.ts';
+export * from './contractHistoryPlan.ts';
+
+export * from './roles.ts';

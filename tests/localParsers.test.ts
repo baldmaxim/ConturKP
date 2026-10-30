@@ -67,6 +67,23 @@ describe('XLSX', () => {
     expect(await failure(parseXlsx(fx.smetaStromynkaXlsx(), { ...DEFAULT_LOCAL_LIMITS, maxInputBytes: 100 }))).toBe('too_large');
   });
 
+  it('пустое оформление не расходует бюджет данных, формулы без кеша расходуют', async () => {
+    const bytes = buildXlsx([{ name: 'Смета', cells: [
+      ...Array.from({ length: 80 }, (_, i) => ({ ref: `A${i + 1}`, style: 'int' as const })),
+      { ref: 'B1', v: 'Работы' }, { ref: 'C1', v: 0 }, { ref: 'D1', f: 'SUM(C1:C2)' },
+    ] }]);
+    const parsed = await parseXlsx(bytes, { ...DEFAULT_LOCAL_LIMITS, maxCells: 3 });
+    expect(parsed.skipped.emptyCells).toBe(80);
+    expect(parsed.fragments[0]?.text).toBe('Работы | 0');
+    expect(parsed.units[0]?.issues).toContain('formula_without_value');
+    expect(await failure(parseXlsx(bytes, { ...DEFAULT_LOCAL_LIMITS, maxCells: 2 }))).toBe('too_large');
+  });
+
+  it('бюджет заполненных ячеек общий для всех листов', async () => {
+    const bytes = buildXlsx([{ name: 'Первый', cells: [{ ref: 'A1', v: 1 }] }, { name: 'Второй', cells: [{ ref: 'A1', v: 2 }] }]);
+    expect(await failure(parseXlsx(bytes, { ...DEFAULT_LOCAL_LIMITS, maxCells: 1 }))).toBe('too_large');
+  });
+
   it('повреждённый, небезопасный, zip-бомба — явный отказ (тест 16, A38)', async () => {
     expect(await failure(parseXlsx(fx.smetaStromynkaXlsx().subarray(0, 200), DEFAULT_LOCAL_LIMITS))).toBe('file_corrupt');
     expect(await failure(parseXlsx(fx.traversalXlsx(), DEFAULT_LOCAL_LIMITS))).toBe('unsafe_package');

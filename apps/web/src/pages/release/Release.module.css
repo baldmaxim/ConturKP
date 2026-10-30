@@ -171,7 +171,7 @@
 
 .previewCanvas {
   overflow: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
   max-height: 80dvh;
   border: 1px solid var(--border-subtle);

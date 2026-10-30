@@ -1,0 +1,94 @@
+{
+  "status": "EXECUTED_CONTEXT_PASS_SEMANTIC_FAIL",
+  "createdOn": "2026-10-29",
+  "approvalRestriction": {
+    "source": "docs/ops/18-acceptance-status-20261027.md",
+    "quote": "Новые запросы LM Studio в рамках этого продолжения запрещены владельцем и не выполнялись.",
+    "liftedByOwnerOn": "2026-10-29"
+  },
+  "modelRequestsIssued": 5,
+  "model": "qwen3-4b-instruct-2507",
+  "endpointOrigin": "http://127.0.0.1:1234",
+  "profileChange": {
+    "inspectCurrentFirst": true,
+    "suggestedMinimumContext": 16384,
+    "raiseOnlyIfLower": true,
+    "snapshotBeforeChange": true,
+    "onlyTargetModelWhenIdle": true,
+    "unloadOtherModels": false
+  },
+  "portalConfigChange": false,
+  "outputTokenLimit": 4096,
+  "largestRecordedPromptTokens": 3932,
+  "largestRecordedInitialBudget": 8028,
+  "reserveAtSuggestedContext": 8356,
+  "context": {
+    "kind": "tender",
+    "tenderId": "0f391d61-271c-4b95-ae02-9b9fcf8f0ba7",
+    "stageId": "3c930104-1c24-4b34-9e59-2f01571ea767",
+    "mode": "review",
+    "evidenceScopeId": "b6910f6c-4d25-4ade-af33-94705e03d2b4"
+  },
+  "freshTechnicalDialogs": true,
+  "humanPilot": false,
+  "referenceContentsSentToModel": false,
+  "execution": {
+    "sequential": true,
+    "queue": "normal portal answer jobs / existing GPU slot",
+    "stopRemainingOnContextOrTruncationError": true,
+    "builtInSchemaAndRepairRetriesRemainEnabled": true,
+    "logActualModelCallCount": true,
+    "builtInConservativeCallUpperBoundForFourQuestions": 48,
+    "upperBoundAssumptions": "three job attempts * two draft parses * initial plus one repair * four questions; verifier off"
+  },
+  "acceptance": [
+    "new runs retain all old runs",
+    "record prompt/config/input hashes and actual token counters",
+    "compare new input hashes with old packet hashes; disclose any selection drift",
+    "require useful shown claims with valid source references",
+    "check question relevance and primary source coverage",
+    "JSON validity alone does not close S18-32",
+    "do not close stage 18 or count technical runs as human pilot"
+  ],
+  "runs": [
+    {
+      "topic": "advance",
+      "originalRunId": "6fcc5397-394e-4003-a09c-6932448023d1",
+      "originalDialogId": "76c71afc-5476-4674-a96a-ff8c8ee02f83",
+      "originalInputSha256": "9cacb14ccb443bfeeb8ec57623d245efdaa7ae9123b9ff12e0567505b13444bc",
+      "questionSha256": "d9e79f95943b7b4b2b1a179baec48a2a5dd5d7db4c13429f220a1286aec2f32d",
+      "recordedPromptTokens": 2033
+    },
+    {
+      "topic": "retention",
+      "originalRunId": "79dd8a0a-a859-415e-babc-89e2e46887cb",
+      "originalDialogId": "7409cf47-1073-4292-ba60-671c3db0214f",
+      "originalInputSha256": "626e8e98a445991d36f43116be371cd7e31c30548e372addf0148d8d8ede28fd",
+      "questionSha256": "87029595f9f1d887e7e04861e8d03378c01b3cc5daa3e276f7fbeb283bd7bd17",
+      "recordedPromptTokens": 3533
+    },
+    {
+      "topic": "award",
+      "originalRunId": "935f60f1-3902-4fca-889d-630882041d44",
+      "originalDialogId": "45b7aa0e-3916-4a7a-abc8-ac75bd111a2a",
+      "originalInputSha256": "07f6911f91a52c98fc37d9ab696dbc97c3e995db7065033ac8219efd5ee9be1b",
+      "questionSha256": "b2b245dbf8858902a757c2d35efc9f41897e7db08eb96ec8880d621d0d782e9e",
+      "recordedPromptTokens": 3769
+    },
+    {
+      "topic": "price-history",
+      "originalRunId": "4d4662c8-5497-491e-885a-56f17de98347",
+      "originalDialogId": "b78ce5eb-d0af-4395-8503-85e2df723c96",
+      "originalInputSha256": "9f33435e3eb8d94c97b7cab3ab7d8d5125e15c8570138da92d4e0a649f522746",
+      "questionSha256": "09c6bad1d8b0af2508ce0bdc96cb08bf0e5bbb222714b54867b6077d9439e432",
+      "recordedPromptTokens": 3932
+    }
+  ],
+  "privatePayloads": "runtime/s18-32-20261029/replay-plan.private.json",
+  "apiOperations": [
+    "POST /api/v1/dialogs",
+    "POST /api/v1/dialogs/{newDialogId}/messages"
+  ],
+  "questionsExecuted": 4,
+  "executionResult": "docs/ops/18-s18-32-technical-replay-20261029.json"
+}

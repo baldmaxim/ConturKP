@@ -1,5 +1,6 @@
 // Регрессии по ревью 02-1 (docs/reviews/02-review-1.md): R02-01…R02-04.
 import argon2 from 'argon2';
+import { restrictManagerPermissions } from './roleFixtures.ts';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ADMIN_AUDIT_ACTIONS, hashPassword, needsRehash, verifyPassword } from '../packages/core/src/index.ts';
@@ -25,6 +26,8 @@ const userEtag = async (admin: TestClient, id: string): Promise<string> => {
 describe('R02-01: повтор по ключу идемпотентности не обходит отзыв доступа', () => {
   it('после снятия назначения повтор создания этапа — 404 без сохранённых данных, отказ в журнале', async () => {
     const mgrId = await createUser(db.pool, 'mgr.replay', ['manager']);
+    // Этот сценарий проверяет полную потерю видимости; стандартный manager теперь читает всё.
+    await restrictManagerPermissions(s.admin, mgrId, ['tender.read.all']);
     const mgr = new TestClient(app);
     await mgr.login('mgr.replay');
     const t = await s.admin.get(`/tenders/${s.tenderB}`);
@@ -46,6 +49,27 @@ describe('R02-01: повтор по ключу идемпотентности н
     expect(JSON.stringify(replay.body)).not.toContain('Закрытый этап для повтора');
     const denied = await auditRows(db.pool, "actor_user_id = $1 AND action = 'stage.create' AND outcome = 'denied'", [mgrId]);
     expect(denied).toHaveLength(1);
+  });
+
+  it('стандартный руководитель после снятия назначения читает этап, но повтор команды не получает', async () => {
+    const mgrId = await createUser(db.pool, 'mgr.global.replay', ['manager']);
+    const mgr = new TestClient(app);
+    await mgr.login('mgr.global.replay');
+    const tender = await s.admin.get(`/tenders/${s.tenderB}`);
+    const assigned = await s.admin.put(`/tenders/${s.tenderB}/members/${mgrId}`, { memberRole: 'manager' }, { headers: { 'If-Match': tender.headers.etag } });
+    expect(assigned.status).toBe(200);
+    const headers = idem();
+    const body = { title: 'Команда до снятия назначения' };
+    const created = await mgr.post(`/tenders/${s.tenderB}/stages`, body, { headers });
+    expect(created.status).toBe(201);
+    const removed = await s.admin.delete(`/tenders/${s.tenderB}/members/${mgrId}`, { headers: { 'If-Match': assigned.headers.etag } });
+    expect(removed.status).toBe(200);
+    expect((await mgr.get(`/stages/${created.body.id}`)).status).toBe(200);
+    const replay = await mgr.post(`/tenders/${s.tenderB}/stages`, body, { headers });
+    expect(replay.status).toBe(403);
+    expect(replay.headers['idempotent-replayed']).toBeUndefined();
+    expect(JSON.stringify(replay.body)).not.toContain(body.title);
+    expect(await auditRows(db.pool, "actor_user_id = $1 AND action = 'stage.create' AND outcome = 'denied'", [mgrId])).toHaveLength(1);
   });
 
   it('после снятия глобальной роли повтор — 404', async () => {

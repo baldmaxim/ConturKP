@@ -1,3 +1,4 @@
+import { dropRoleCatalog } from './legacySchema.ts';
 // Этап 16, передача 16-2 (Review 16-1, R16-01; находка S16-12): происхождение вопроса заказчику. Вопрос из принятого
 // предложения чата наследует закрытость цитат предложения — при чтении, правке, отправке и ответе; ссылка на
 // предложение неизменна. Отвязка требования наследование не снимает. Вторая линия — миграция 0041: принятое
@@ -16,6 +17,7 @@ import { buildMailScope, MARK, setMailAccess, type IMailScope } from './mailFixt
 import { callTool, issueToken, mcpClient, startMcp, type IMcpEndpoint } from './mcpFixtures.ts';
 import { buildStage08, confirm, propose, supports, type IStage08 } from './requirementFixtures.ts';
 import { fixScope, fragmentIdOf, seedEvidenceRun, setWorkingSet, uploadDocument } from './searchFixtures.ts';
+import { buildLegacy40QuestionStage, type ILegacy40QuestionStage } from './questionOriginLegacy40Fixture.ts';
 
 vi.setConfig({ testTimeout: 300_000, hookTimeout: 300_000 });
 
@@ -84,7 +86,8 @@ const buildChatStage = async (db: ITestDb): Promise<IChatStage> => {
   return { db, s, mail, endpoint: await startMcp(app), mailFragment, docFragment, proposer: await issueToken(s.eng1, { propose: true }) };
 };
 
-const proposeVia = async (st: IChatStage, tool: string, args: Record<string, unknown>): Promise<string> => {
+type IProposalStage = Pick<IChatStage, 's' | 'endpoint' | 'proposer'>;
+const proposeVia = async (st: IProposalStage, tool: string, args: Record<string, unknown>): Promise<string> => {
   const c = await mcpClient(st.endpoint.url, st.proposer.token);
   try {
     const r = await callTool(c, tool, { tenderId: st.s.tenderA, stageId: st.s.stageA, ...args });
@@ -94,9 +97,9 @@ const proposeVia = async (st: IChatStage, tool: string, args: Record<string, unk
     await c.close();
   }
 };
-const proposalEtag = async (st: IChatStage, id: string): Promise<string> =>
+const proposalEtag = async (st: IProposalStage, id: string): Promise<string> =>
   ((await st.s.manager.get(`/stages/${st.s.stageA}/mcp-proposals`)).body.items as { id: string; etag: string }[]).find((p) => p.id === id)!.etag;
-const accept = async (st: IChatStage, id: string, body: Record<string, unknown> = {}, headers = idem()) =>
+const accept = async (st: IProposalStage, id: string, body: Record<string, unknown> = {}, headers = idem()) =>
   st.s.manager.post(`/mcp-proposals/${id}/accept`, body, { headers: { ...headers, 'If-Match': await proposalEtag(st, id) } });
 
 describe('R16-01: вопрос из предложения чата наследует закрытость цитат', () => {
@@ -339,10 +342,11 @@ describe('обновление схемы 0040 → последняя мигра
     };
     await setupDatabase(ADMIN_URL, name);
     const up: ITestDb = { name, appUrl: urlFor('kontur_app'), migratorUrl: urlFor('kontur_migrator'), pool: createPool(urlFor('kontur_app'), 5), drop: async () => undefined };
-    let st: IChatStage | undefined;
+    let st: ILegacy40QuestionStage | undefined;
     try {
       expect(await migrateTo(40)).toBe(40);
-      st = await buildChatStage(up);
+      expect((await up.pool.query<{t:string|null}>("SELECT to_regclass('mailhub_message')::text AS t")).rows[0]!.t).toBeNull();
+      st = await buildLegacy40QuestionStage(up);
       const { s } = st;
       const closed = await proposeVia(st, 'propose_question', { text: `Подтвердите условие ${SECRET}`, citedFragmentIds: [st.mailFragment], requestId: 'upgrade-private-question-01' });
       const open = await proposeVia(st, 'propose_question', { text: 'Уточните срок поставки окон', requestId: 'upgrade-open-question-01' });
@@ -366,6 +370,7 @@ describe('обновление схемы 0040 → последняя мигра
       const openQuestion = await acceptLegacy(open, 'Уточните срок поставки окон');
       const plain = (await up.pool.query<{ id: string }>("INSERT INTO customer_question (tender_id, stage_id, text, created_by, updated_by) VALUES ($1, $2, 'Обычный вопрос', $3, $3) RETURNING id", [s.tenderA, s.stageA, s.ids.eng1])).rows[0]!.id;
 
+      await dropRoleCatalog(up.migratorUrl);
       expect(await migrateTo(LATEST)).toBe(LATEST - 40);
 
       const rows = await up.pool.query<{ id: string; source_proposal_id: string | null; row_version: string }>('SELECT id, source_proposal_id, row_version FROM customer_question WHERE stage_id = $1', [s.stageA]);

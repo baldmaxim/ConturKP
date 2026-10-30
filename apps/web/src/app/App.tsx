@@ -15,10 +15,12 @@ import { MailMessagePage } from '../pages/mail/MailMessagePage';
 import { MailPage } from '../pages/mail/MailPage';
 import { NegotiationSessionPage } from '../pages/communications/NegotiationSessionPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
+import { OfficePage } from '../pages/OfficePage';
 import { StagePage } from '../pages/StagePage';
 import { RequirementPage } from '../pages/requirements/RequirementPage';
 import { TenderPage } from '../pages/TenderPage';
-import { TendersPage } from '../pages/TendersPage';
+import { HistoryPage } from '../pages/history/HistoryPage';
+import { HomePage } from './HomePage';
 import { AppLayout } from './AppLayout';
 import { AuthProvider } from './AuthProvider';
 import { RequireAuth } from './RequireAuth';
@@ -41,7 +43,8 @@ export const App: FC = () => {
               </RequireAuth>
             }
           >
-            <Route index element={<TendersPage />} />
+            <Route index element={<HomePage />} />
+            <Route path="history" element={<HistoryPage />} />
             <Route path="tenders/:tenderId" element={<TenderPage />} />
             <Route path="stages/:stageId" element={<StagePage />} />
             <Route path="requirements/:requirementId" element={<RequirementPage />} />
@@ -57,6 +60,7 @@ export const App: FC = () => {
             <Route path="negotiation-sessions/:sessionId" element={<NegotiationSessionPage />} />
             <Route path="forms" element={<FormsLibraryPage />} />
             <Route path="admin" element={<AdminPage />} />
+            <Route path="office" element={<OfficePage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>

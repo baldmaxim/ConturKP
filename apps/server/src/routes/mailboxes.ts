@@ -3,8 +3,8 @@
 // Невидимый ящик — 404, видимый без нужной возможности — 403. Автоматического чтения MailHub нет (X-03):
 // штатный путь — ручной импорт EML в конкретный ящик; разбирает worker.
 import type { IAppConfig } from '@kontur/config';
-import { CreateMailboxRequest, MailImportQuery, PatchMailboxRequest, PutMailAccessRequest } from '@kontur/contracts';
-import { formatEtag, globalCapabilities, hasContentRole, type MailCapability, type Role } from '@kontur/core';
+import { CreateMailboxRequest, MailImportQuery, MailMessagesQuery, PatchMailboxRequest, PutMailAccessRequest } from '@kontur/contracts';
+import { formatEtag, globalCapabilities, hasContentRole, resolveAccessRoles, type MailCapability, type Role } from '@kontur/core';
 import {
   bumpMailboxVersion,
   communicationIntegrations,
@@ -17,7 +17,7 @@ import {
   insertBlob,
   listMailAccess,
   listMailboxes,
-  listMailboxMessages,
+  listMailboxMessagePage,
   listMailImports,
   mailCaps,
   setMailAccess,
@@ -188,7 +188,7 @@ export const mailboxesRouter = (pool: Pool, store: BlobStore, config: IAppConfig
         if (wanted.length > 0) {
           const user = await getUser(client, userId);
           if (!user) throw notFound({ entityType: 'app_user', entityId: userId });
-          if (user.status !== 'active' || !hasContentRole(new Set(user.roles as Role[]))) {
+          if (user.status !== 'active' || !hasContentRole(resolveAccessRoles(user.effective_roles, user.role_permissions))) {
             throw new HttpError(409, 'STATE_CONFLICT', 'выдача по ящику действует только у активного инженера или руководителя', {}, { ...target(id), details: { mailboxId: id, userId } });
           }
         }
@@ -216,7 +216,8 @@ export const mailboxesRouter = (pool: Pool, store: BlobStore, config: IAppConfig
     query(pool, 'mail.message.list', 'mailbox', async (ctx, req, res) => {
       const m = await loadMailbox(pool, ctx, uuidParam(req, 'id', 'mailbox'));
       requireMailCap(ctx, m.id, 'mail.read', target(m.id));
-      res.json({ items: (await listMailboxMessages(pool, m.id)).map(toMailMessage) });
+      const result = await listMailboxMessagePage(pool, m.id, parseBody(MailMessagesQuery, req.query));
+      res.json({ ...result, items: result.items.map(toMailMessage) });
     }),
   );
 

@@ -1,3 +1,4 @@
+import { restrictManagerPermissions } from './roleFixtures.ts';
 // Этап 15: закрытость письма-основания (OD-07-3, R13-02) и вторая линия БД для отправок и нарушений (миграция 0039;
 // проект §12, §15), удержания после отправки (state-machines §1.1 п. 4) и обновление схемы 0038 → 0039. Прямые записи
 // роли приложения в обход команд должны получать отказ. Данные — поддельные (sendFixtures).
@@ -105,13 +106,19 @@ describe('закрытость письма-основания', () => {
     await notApplicable(st, unsent.candidate.id, 'Наше исходящее письмо');
     const d = await registerByMail(st, unsent.releaseId, letter.revisionId);
     expect(d.body).toMatchObject({ status: 'disputed', check: { extrasOnly: true } });
-    await setMailAccess(st.e.s.admin, st.mailbox, st.e.s.ids.manager, []);
-    const view = (await sends(st, unsent.releaseId, st.e.s.manager)).items[0]!;
-    expect(view.evidence.mail!.restricted).toBe(true);
-    expect(view.actions.acceptExtras).toBe(false);
-    const no = await st.e.s.manager.post(`/send-events/${d.body.id}/accept-extras`, { reason: 'Записка к комплекту не относится' }, { headers: { 'If-Match': d.body.etag, ...idem() } });
-    expect(no.status).toBe(409);
-    expect(no.body.current).toMatchObject({ reason: 'restricted_mail' });
+    const restorePermissions = await restrictManagerPermissions(st.e.s.admin, st.e.s.ids.manager, ['mail.read.all']);
+    try {
+      await setMailAccess(st.e.s.admin, st.mailbox, st.e.s.ids.manager, []);
+      const view = (await sends(st, unsent.releaseId, st.e.s.manager)).items[0]!;
+      expect(view.evidence.mail!.restricted).toBe(true);
+      expect(view.actions.acceptExtras).toBe(false);
+      const no = await st.e.s.manager.post(`/send-events/${d.body.id}/accept-extras`, { reason: 'Записка к комплекту не относится' }, { headers: { 'If-Match': d.body.etag, ...idem() } });
+      expect(no.status).toBe(409);
+      expect(no.body.current).toMatchObject({ reason: 'restricted_mail' });
+      } finally {
+      await setMailAccess(st.e.s.admin, st.mailbox, st.e.s.ids.manager, ['mail.read']);
+      await restorePermissions();
+    }
     await setMailAccess(st.e.s.admin, st.mailbox, st.e.s.ids.manager, ['mail.read']);
   });
 

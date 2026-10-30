@@ -19,6 +19,7 @@ export interface IXmlNode {
 
 // Переходные и строгие (ISO) URI OOXML → канонический префикс.
 const KNOWN_NS: Readonly<Record<string, string>> = {
+  'http://schemas.openxmlformats.org/package/2006/metadata/core-properties': 'cp',
   'http://schemas.openxmlformats.org/wordprocessingml/2006/main': 'w',
   'http://purl.oclc.org/ooxml/wordprocessingml/main': 'w',
   'http://schemas.openxmlformats.org/spreadsheetml/2006/main': 'x',

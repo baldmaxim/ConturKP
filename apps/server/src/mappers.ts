@@ -9,6 +9,7 @@ export const toUser = (u: IUserRow): IUser => ({
   displayName: u.display_name,
   status: u.status,
   roles: u.roles,
+  roleNames: u.role_names,
   rowVersion: u.row_version,
   createdAt: u.created_at.toISOString(),
 });
@@ -20,6 +21,7 @@ export const toTender = (ctx: IAccessContext, t: ITenderRow): ITender => ({
   customerName: t.customer_name,
   objectName: t.object_name,
   status: t.status,
+  outcome: t.outcome,
   rowVersion: t.row_version,
   createdAt: t.created_at.toISOString(),
   updatedAt: t.updated_at.toISOString(),

@@ -179,6 +179,11 @@ export interface IAppConfig {
   limits: IImportLimits;
   // Наблюдаемые папки допускаются только внутри этих корней (проверка realpath при каждом скане).
   intakeRoots: string[];
+  contractHistoryRoot?: string | null;
+  contractHistoryProxyPort?: number | null;
+  contractHistoryProxyKey?: string | null;
+  historyReportPaths?: string[];
+  historyWatchRoots?: string[];
   intakeStabilitySeconds: number;
   jobLeaseSeconds: number;
   gpuTakeoverGraceSeconds: number;
@@ -197,6 +202,7 @@ export interface IAppConfig {
   tenderhub: ITenderHubConfig;
   localRecognition: ILocalRecognitionConfig;
   mail: IMailConfig;
+  mailhub?: { baseUrl: string; token: string };
   chatModel: IChatModelConfig;
   answer: IAnswerConfig;
   office: IOfficeConfig;
@@ -537,7 +543,12 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
       .split(';')
       .map((s) => s.trim())
       .filter(Boolean),
+    contractHistoryRoot: env.CONTRACT_HISTORY_ROOT?.trim() || null,
+    contractHistoryProxyPort: env.CONTRACT_HISTORY_PROXY_PORT ? intFrom(env, 'CONTRACT_HISTORY_PROXY_PORT', 0, problems) : null,
+    contractHistoryProxyKey: env.CONTRACT_HISTORY_PROXY_KEY?.trim() || null,
     intakeStabilitySeconds: intFrom(env, 'INTAKE_STABILITY_SECONDS', 10, problems),
+    historyReportPaths: (env.HISTORY_REPORT_PATHS ?? '').split(';').map(s=>s.trim()).filter(Boolean),
+    historyWatchRoots: (env.HISTORY_WATCH_ROOTS ?? '').split(';').map(s=>s.trim()).filter(Boolean),
     jobLeaseSeconds: intFrom(env, 'JOB_LEASE_SECONDS', 60, problems),
     gpuTakeoverGraceSeconds: intFrom(env, 'GPU_TAKEOVER_GRACE_SECONDS', 180, problems),
     shutdownGraceSeconds: intFrom(env, 'SHUTDOWN_GRACE_SECONDS', 20, problems),
@@ -568,6 +579,7 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
       maxEmlBytes: intFrom(env, 'MAIL_MAX_EML_MB', 50, problems) * MIB,
       maxAttachmentBytes: intFrom(env, 'MAIL_MAX_ATTACHMENT_MB', 25, problems) * MIB,
     },
+    ...(env.MAILHUB_URL && env.MAILHUB_TOKEN ? { mailhub: { baseUrl: env.MAILHUB_URL, token: env.MAILHUB_TOKEN } } : {}),
     chatModel: chatModelFrom(env, problems),
     answer: answerFrom(env, problems),
     office: { sofficePath: env.SOFFICE_PATH?.trim() || null, convertTimeoutMs: intFrom(env, 'OFFICE_CONVERT_TIMEOUT_SECONDS', 120, problems) * 1000 },
@@ -581,7 +593,17 @@ export const loadConfig = (env: Env = process.env): IAppConfig => {
   for (const root of config.intakeRoots) {
     if (!isAbsolute(root)) problems.push(`INTAKE_ROOTS: «${root}» должен быть абсолютным путём`);
   }
+  if (config.contractHistoryRoot && !isAbsolute(config.contractHistoryRoot)) problems.push('CONTRACT_HISTORY_ROOT должен быть абсолютным путём');
+  if (Boolean(config.contractHistoryProxyPort) !== Boolean(config.contractHistoryProxyKey) || (config.contractHistoryProxyPort && (config.contractHistoryProxyPort < 1024 || config.contractHistoryProxyPort > 65535)) || (config.contractHistoryProxyKey && !/^[a-f0-9]{64}$/u.test(config.contractHistoryProxyKey))) problems.push('CONTRACT_HISTORY_PROXY_PORT и CONTRACT_HISTORY_PROXY_KEY должны быть заданы вместе; нужен порт 1024–65535 и ключ из 64 hex-символов');
   const e = config.embedding;
+  if (Boolean(env.MAILHUB_URL) !== Boolean(env.MAILHUB_TOKEN)) problems.push('MAILHUB_URL и MAILHUB_TOKEN задаются вместе');
+  if (config.mailhub) {
+    try {
+      const u = new URL(config.mailhub.baseUrl);
+      if (u.username || u.password || u.search || u.hash || u.pathname !== '/' ||
+          !(u.protocol === 'https:' || (u.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname)))) throw new Error();
+    } catch { problems.push('MAILHUB_URL: нужен HTTPS origin, HTTP допустим только на loopback'); }
+  }
   if (e.provider === 'openai_compatible') {
     if (!e.baseUrl) problems.push('EMBEDDING_BASE_URL обязателен для EMBEDDING_PROVIDER=openai_compatible');
     else if (!isLocalUrl(e.baseUrl)) problems.push('EMBEDDING_BASE_URL: только loopback или LAN, облачного пути нет (D-013)');

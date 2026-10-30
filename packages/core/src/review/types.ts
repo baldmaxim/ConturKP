@@ -3,7 +3,7 @@
 import { canonicalJson } from '../requirements.ts';
 import { sha256Hex } from '../search.ts';
 
-export const REVIEW_RULES_VERSION = 'rules/09-1';
+export const REVIEW_RULES_VERSION = 'rules/09-2';
 
 export const REVIEW_CHECKS = [
   'processing',

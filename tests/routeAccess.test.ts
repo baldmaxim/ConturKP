@@ -5,8 +5,9 @@
 //   инженер тендера на действиях руководителя — 403;
 //   после всех проходов данные БД (кроме журнала отказов) и хранилище не изменились.
 import { randomUUID } from 'node:crypto';
-import { readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve, sep } from 'node:path';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../apps/server/src/app.ts';
@@ -16,13 +17,14 @@ import { ROUTE_INVENTORY } from './routeInventory.ts';
 
 vi.setConfig({ testTimeout: 300_000, hookTimeout: 900_000 });
 
-// Открытые точки: проверка готовности и вход.
-const PUBLIC = new Set(['GET /api/v1/health', 'GET /api/v1/ready', 'POST /api/v1/auth/login']);
+// Открытые точки: готовность, вход и фиксированные файлы обновления интерфейса.
+const PUBLIC = new Set(['GET /api/v1/health', 'GET /api/v1/ready', 'POST /api/v1/auth/login', 'GET /api/ui-version', 'GET /api/ui-update', 'GET /api/ui-update.js', 'GET /api/ui-update.css', 'GET /api/ui-update-shell']);
 // Действия над собственной сессией — в проходах с сессией не участвуют (клиент разлогинился бы посреди прохода).
 const OWN_SESSION = new Set(['POST /api/v1/auth/logout', 'POST /api/v1/me/password', 'POST /api/v1/me/api-tokens']);
 
 // Объекты тендера: путь с таким сегментом перед первым параметром принадлежит тендеру.
 const TENDER_SCOPED = new Set([
+  'history-tasks',
   'tenders', 'stages', 'requirement-registries', 'releases', 'release-candidates', 'calculation-revisions', 'application-drafts', 'comparisons',
   'deliveries', 'requirement-candidates', 'findings', 'fact-candidates', 'document-revisions', 'requirements', 'send-events', 'release-comparisons',
   'release-comparison-items', 'recognition-runs', 'model-suggestions', 'mcp-proposals', 'intake-channels', 'field-suggestions', 'facts', 'documents',
@@ -30,10 +32,12 @@ const TENDER_SCOPED = new Set([
   'requirement-revisions', 'reason-runs', 'qa-threads', 'negotiation-sessions', 'jobs', 'imports', 'import-items', 'holds', 'field-suggestion-runs',
   'evidence', 'evidence-scopes', 'evidence-facts', 'customer-questions', 'compliance-incidents', 'candidate-files', 'calculation-captures',
   'approvals', 'answer-runs', 'analysis-runs', 'dialogs',
+  'form-packets', 'form-packet-files', 'form-packet-sources',
 ]);
 
 // Сегмент пути → таблица (исключения из правила «множественное → единственное»).
 const TABLE: Record<string, string> = {
+  'history-tasks': 'tender_history_task',
   stages: 'tender_stage',
   evidence: 'evidence_fragment',
   imports: 'import_batch',
@@ -55,6 +59,9 @@ const singular = (seg: string): string => {
 
 // Действия руководителя тендера: инженер тендера получает 403 (I13, A25).
 const MANAGER_ONLY = [
+  'PUT /api/v1/tenders/:id/history-watch',
+  'PUT /api/v1/tenders/:id/history-sync',
+  'POST /api/v1/tenders/:id/history-import',
   'POST /api/v1/tenders/:id/stages',
   'POST /api/v1/stages/:id/requirement-registries',
   'POST /api/v1/requirement-registries/:id/reviews',
@@ -76,13 +83,18 @@ const MANAGER_ONLY = [
 const enumerate = (app: unknown): string[] => {
   const out: string[] = [];
   const MOUNTS = ['/api/v1', '/mcp', '/api'];
-  type Layer = { route?: { path: unknown; methods: Record<string, boolean> }; handle?: { stack?: Layer[] }; slash?: boolean; matchers?: Array<(p: string) => { path: string } | false> };
+  type Layer = { route?: { path: unknown; methods: Record<string, boolean>; stack?: { handle?: { name?: string } }[] }; handle?: { stack?: Layer[] }; slash?: boolean; matchers?: Array<(p: string) => { path: string } | false> };
   const walk = (stack: Layer[], prefix: string): void => {
     for (const l of stack) {
       if (l.route) {
         // Запасной маршрут интерфейса (RegExp) — не API.
-        if (typeof l.route.path !== 'string') continue;
-        for (const m of Object.keys(l.route.methods)) out.push(`${m.toUpperCase()} ${prefix}${l.route.path}`);
+        const paths = Array.isArray(l.route.path) ? l.route.path : [l.route.path];
+        // Парсер большого JSON перед основным роутером продолжает цепочку; конечной точкой API не является.
+        if (l.route.stack?.length && l.route.stack.every((layer) => layer.handle?.name === 'jsonParser')) continue;
+        for (const path of paths) {
+          if (typeof path !== 'string') continue;
+          for (const m of Object.keys(l.route.methods)) out.push(`${m.toUpperCase()} ${prefix}${path}`);
+        }
         continue;
       }
       if (Array.isArray(l.handle?.stack)) {
@@ -174,6 +186,21 @@ beforeAll(async () => {
   tenderA = s.st.e.s.tenderA;
   app = createApp({ config: s.st.e.config, pool: s.st.db.pool, clock: new Clock().read, logError: () => undefined });
   routes = enumerate(app);
+  await s.st.db.pool.query(
+    'INSERT INTO tender_history_task(tender_id,title,created_by,updated_by) VALUES($1,$2,$3,$3)',
+    [tenderA, 'Задача для проверки изоляции', s.st.e.s.ids.eng1],
+  );
+  // Реальные объекты новых маршрутов: чужой инженер проверяется на существующем комплекте и его файлах.
+  const eng = s.st.e.s.eng1, stage = s.st.e.s.stageA;
+  const packet = await eng.post(`/stages/${stage}/form-packets`, { title: 'ACL-комплект' }, { headers: idem() });
+  expect(packet.status, packet.text).toBe(201);
+  const input = { definition: { schema: { schemaVersion: 'forms/1', title: 'ACL', sections: [{ key: 'main', title: 'Условия', fields: [{ key: 'text', label: 'Текст', type: 'text' }] }] }, recipes: {}, outputs: [] }, values: {} };
+  const saved = await eng.put(`/form-packets/${packet.body.id}`, input, { headers: { 'If-Match': packet.body.etag } });
+  expect(saved.status, saved.text).toBe(200);
+  const source = await eng.post(`/form-packets/${packet.body.id}/sources?name=acl-reference.txt`, Buffer.from('ACL reference'), { headers: { ...idem(), 'Content-Type': 'application/octet-stream' } });
+  expect(source.status, source.text).toBe(201);
+  const built = await eng.post(`/form-packets/${packet.body.id}/build`, { previewPdf: false }, { headers: { ...idem(), 'If-Match': saved.body.etag } });
+  expect(built.status, built.text).toBe(201);
 });
 afterAll(async () => closeStage14(s));
 
@@ -183,8 +210,34 @@ describe('инвентарь маршрутов', () => {
     expect(new Set(routes).size).toBe(routes.length);
     expect([...routes].filter((r) => !ROUTE_INVENTORY.includes(r))).toEqual([]);
     expect([...ROUTE_INVENTORY].filter((r) => !routes.includes(r))).toEqual([]);
-    for (const known of ['GET /api/v1/ready', 'POST /api/v1/release-candidates/:id/approve', 'GET /api/v1/admin/operations', 'GET /api/v1/integrations/status']) expect(routes).toContain(known);
+    for (const known of ['GET /api/v1/ready', 'POST /api/v1/release-candidates/:id/approve', 'GET /api/v1/admin/operations', 'GET /api/v1/integrations/status', 'GET /api/ui-update', 'GET /api/ui-update.js', 'GET /api/ui-update.css', 'GET /api/ui-update-shell']) expect(routes).toContain(known);
   });
+  it('четыре файла обновления открыты без входа и не устанавливают сессию', async () => {
+    const root = resolve(tmpdir());
+    const dist = mkdtempSync(join(root, 'kontur-public-routes-'));
+    const files = [
+      ['/api/ui-update', 'app-update.html', '<!doctype html><p>public-update</p>'],
+      ['/api/ui-update.js', 'app-update.js', '/* public-update-script */'],
+      ['/api/ui-update.css', 'app-update.css', '/* public-update-style */'],
+      ['/api/ui-update-shell', 'index.html', '<!doctype html><p>public-shell</p>'],
+    ] as const;
+    try {
+      for (const [, filename, text] of files) writeFileSync(join(dist, filename), text);
+      const publicApp = createApp({ config: { ...s.st.e.config, webDistDir: dist }, pool: s.st.db.pool, clock: new Clock().read, logError: () => undefined });
+      for (const [path, , text] of files) for (const bearer of [false, true]) {
+        const req = request(publicApp).get(path);
+        if (bearer) req.set('Authorization', 'Bearer public-route-probe');
+        const response = await req.expect(200);
+        expect(response.text).toBe(text);
+        expect(response.headers['cache-control']).toBe('no-store');
+        expect(response.headers['set-cookie']).toBeUndefined();
+      }
+    } finally {
+      if (!resolve(dist).startsWith(root + sep)) throw new Error('Unexpected fixture cleanup path');
+      rmSync(dist, { recursive: true, force: true });
+    }
+  });
+
 });
 
 describe('проходы прав по всем маршрутам', () => {

@@ -1,7 +1,11 @@
-import { useCallback, useMemo, type FC } from 'react';
+import { useCallback, useMemo, useState, type FC } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { getTender, listTenderAudit } from '../api/endpoints';
+import { getTender, listTenderAudit, updateTender } from '../api/endpoints';
 import type { ITender } from '../api/types';
+import { describeError } from '../api/errors';
+import { Button } from '../components/Button';
+import { useToast } from '../hooks/useToast';
+import { TenderArchiveDialog } from './TenderArchiveDialog';
 import { ErrorState } from '../components/ErrorState';
 import { LoadingState } from '../components/LoadingState';
 import { PageHeader } from '../components/PageHeader';
@@ -10,6 +14,7 @@ import { Tabs, tabId, tabPanelId, type ITab } from '../components/Tabs';
 import { useApiResource } from '../hooks/useApiResource';
 import { useAuth } from '../hooks/useAuth';
 import { AuditLog } from './AuditLog';
+import { AppLink } from '../components/AppLink';
 import { ReleaseComparisonPanel } from './comparison/ReleaseComparisonPanel';
 import { TenderMailPanel } from './communications/TenderMailPanel';
 import { TenderNegotiationsPanel } from './communications/TenderNegotiationsPanel';
@@ -49,6 +54,9 @@ const tabsFor = (tender: ITender, canAdminIntake: boolean): ITab[] => {
 
 export const TenderPage: FC = () => {
   const { tenderId = '' } = useParams();
+  const toast = useToast();
+  const [archiving, setArchiving] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const { can } = useAuth();
   const { data: tender, error, loading, reload, setData } = useApiResource((signal) => getTender(tenderId, signal), tenderId);
@@ -78,19 +86,28 @@ export const TenderPage: FC = () => {
   }
 
   const caps = tender.capabilities;
+  const restore = async (): Promise<void> => {
+    if (restoring) return;
+    setRestoring(true);
+    try { setData(await updateTender(tender.id, tender.rowVersion, { status: 'active', outcome: null })); toast.push({ kind: 'success', text: 'Тендер возвращён в действующие.' }); }
+    catch (reason) { toast.push({ kind: 'error', text: describeError(reason) }); reload(); }
+    finally { setRestoring(false); }
+  };
 
   return (
     <>
       <PageHeader
-        back={{ to: '/', label: 'Тендеры' }}
+        back={{ to: tender.status === 'archived' ? '/?status=archived' : '/', label: 'Тендеры' }}
         title={tender.title}
+        actions={<>{caps.includes('tender.read') ? <AppLink to={'/history?tender='+tender.id}>Хронология тендера →</AppLink> : null}{caps.includes('admin.tender') ? <Button icon={tender.status === 'active' ? 'archive' : 'undo-2'} loading={restoring} onClick={() => tender.status === 'active' ? setArchiving(true) : void restore()}>{tender.status === 'active' ? 'В архив' : 'Вернуть в действующие'}</Button> : null}</>}
         subtitle={
           <>
             <span className={styles.code}>{tender.code}</span>
-            <StatusBadge status={tender.status} />
+            <StatusBadge status={tender.status} outcome={tender.outcome} />
           </>
         }
       />
+      {archiving ? <TenderArchiveDialog tender={tender} onClose={() => { setArchiving(false); reload(); }} onSaved={(next) => { setData(next); setArchiving(false); toast.push({ kind: 'success', text: 'Тендер перенесён в архив.' }); }} /> : null}
       <Tabs tabs={tabs} active={active} onChange={selectTab} label="Разделы тендера" />
       <div className={styles.panel} role="tabpanel" id={tabPanelId(active)} aria-labelledby={tabId(active)}>
         {active === 'stages' ? <StagesPanel tenderId={tender.id} canManage={caps.includes('stage.manage')} /> : null}

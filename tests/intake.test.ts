@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildScenario, createTestDb, drain, idem, makeApp, makeWorker, removeLink, testConfig, type IScenario, type ITestDb } from './helpers.ts';
-import { fakePdf } from './zip.ts';
+import { buildZip, fakePdf } from './zip.ts';
 
 let db: ITestDb;
 let s: IScenario;
@@ -136,13 +136,22 @@ describe('скан папки', () => {
     expect(Buffer.from(content.body).toString('utf8').endsWith('%%EOF\n')).toBe(true);
   });
 
-  it('ZIP в наблюдаемой папке не распаковывается — отказ с исходом', async () => {
-    writeFileSync(join(dir, 'пакет.zip'), Buffer.from([0x50, 0x4b, 0x05, 0x06, ...new Array(18).fill(0)]));
+  it('ZIP автоматически принимается с происхождением до архива; повтор не дублируется, опасный член отклоняется', async () => {
+    const archive = buildZip([{ name: 'раздел/из-архива.pdf', data: fakePdf('новый документ из архива') }, { name: '../выход.pdf', data: fakePdf('выход') }]);
+    writeFileSync(join(dir, 'пакет.zip'), archive);
     await scan(ch.id);
     await sleep(1200);
     await scan(ch.id);
-    const item = await db.pool.query("SELECT status, reject_reason FROM import_item WHERE member_path = 'пакет.zip'");
-    expect(item.rows[0]).toEqual({ status: 'rejected', reject_reason: 'type_not_allowed' });
+    const item = await db.pool.query("SELECT status FROM import_item WHERE member_path = 'раздел/из-архива.pdf'");
+    expect(item.rows[0]).toEqual({ status: 'registered' });
+    const occurrence = await db.pool.query("SELECT source_locator,intake_channel_id FROM document_occurrence WHERE observed_name='из-архива.pdf'");
+    expect(occurrence.rows).toEqual([{ source_locator: `${dir}/пакет.zip!/раздел/из-архива.pdf`, intake_channel_id: ch.id }]);
+    expect((await db.pool.query("SELECT reject_reason FROM import_item WHERE observed_name='выход.pdf'")).rows[0]?.reject_reason).toBe('path_traversal');
+    const before=(await batchesOf(ch.id)).length;
+    await scan(ch.id);
+    expect(await batchesOf(ch.id)).toHaveLength(before);
+    expect((await db.pool.query("SELECT 1 FROM document_occurrence WHERE observed_name='из-архива.pdf'")).rowCount).toBe(1);
+    expect(existsSync(join(dir, 'пакет.zip'))).toBe(true);
   });
 
   it('ссылка (junction) внутри папки не открывается — отказ path_traversal', async () => {

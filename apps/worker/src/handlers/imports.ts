@@ -187,7 +187,7 @@ export const handleImportRegister = async (ctx: IJobContext): Promise<void> => {
       const channel = batch.intake_channel_id ? await getChannel(client, batch.intake_channel_id) : null;
       const isArchive = batch.source_kind === 'upload' && batch.upload_name !== item.member_path;
       const locator =
-        batch.source_kind === 'upload' ? `upload:${batch.id}/${item.member_path}` : `${channel?.locator ?? ''}/${item.member_path}`;
+        batch.source_kind === 'upload' ? `upload:${batch.id}/${item.member_path}` : `${channel?.locator ?? ''}/${batch.upload_blob_sha256 ? `${batch.upload_name}!/` : ''}${item.member_path}`;
       await registerItem(client, item, {
         sourceKind: occurrenceKindOf(batch.source_kind, channel?.origin ?? null, isArchive),
         locator,

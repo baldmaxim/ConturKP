@@ -9,8 +9,9 @@
 import { crossDocumentCounterparts } from '../facts/graph.ts';
 import type { IItemFact, IPacketItem, VersionNote } from './claimChecks.ts';
 import type { IAnswerPlan } from './planner.ts';
+import { answerExcerpt, rankAnswerCandidates } from './grounding.ts';
 
-export const PACKET_VERSION = 'evidence/2-facts';
+export const PACKET_VERSION = 'evidence/4-source-context';
 export const DEFAULT_PACKET_LIMIT = 12;
 
 export interface IPacketCandidate {
@@ -20,6 +21,9 @@ export interface IPacketCandidate {
   sourceUnitId: string;
   // Документ (или письмо, редакция транскрипции): расхождение величин ищется между разными документами.
   documentKey: string;
+  documentTitle?: string;
+  sourcePart?: string;
+  sourceOrder?: { page: number; ordinal: number; part: number; total?: number };
   // Владелец (тендер или договор).
   ownerKey: string;
   rank: number;
@@ -115,14 +119,15 @@ export const buildPacket = (
   limit = DEFAULT_PACKET_LIMIT,
   // Факты фрагментов по графу области хода; без карты элементы пакета сведений о фактах не несут.
   factsByFragment?: ReadonlyMap<string, readonly IItemFact[]>,
+  context?: { question: string },
 ): IPacketItem[] => {
-  const ordered = [...candidates].sort((a, b) => a.rank - b.rank);
+  const ordered = (context ? rankAnswerCandidates(candidates, context.question) : [...candidates]).sort((a, b) => a.rank - b.rank);
   const stale = (c: IPacketCandidate): boolean => !c.factHit && marks.get(c.fragmentId)?.note === 'superseded';
   const seenIds = new Set<string>();
   const seenTexts = new Set<string>();
   const items: IPacketItem[] = [];
   for (const c of [...ordered.filter((c) => !stale(c)), ...ordered.filter(stale)]) {
-    const textKey = `${c.documentKey}|${c.text.replace(/\s+/g, ' ').trim().toLowerCase()}`;
+    const textKey = `${c.documentKey}|${c.sourceUnitId}|${c.sourcePart??''}|${c.text.replace(/\s+/g, ' ').trim().toLowerCase()}`;
     if (seenIds.has(c.fragmentId) || seenTexts.has(textKey)) continue;
     seenIds.add(c.fragmentId);
     seenTexts.add(textKey);
@@ -130,10 +135,13 @@ export const buildPacket = (
     items.push({
       label: `E${items.length + 1}`,
       fragmentId: c.fragmentId,
-      text: c.text,
+      text: context ? answerExcerpt(c.text, context.question) : c.text,
       origin: c.origin,
       sourceUnitId: c.sourceUnitId,
       documentKey: c.documentKey,
+      ...(c.documentTitle ? { documentTitle: c.documentTitle } : {}),
+      ...(c.sourcePart ? {sourcePart:c.sourcePart}:{}),
+      ...(c.sourceOrder ? {sourceOrder:c.sourceOrder}:{}),
       versionNote: m?.note ?? 'current',
       // Не длиннее 200 символов (`answer_evidence.reason`).
       reason: [m ? `${c.reason}:${m.reason}` : c.reason, ...factsReason(factsByFragment?.get(c.fragmentId))].join(';').slice(0, 200),

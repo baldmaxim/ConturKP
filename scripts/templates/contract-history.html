@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>История договоров</title>
+<style>
+:root{color-scheme:light;--ink:#172b40;--muted:#607184;--line:#dce4ed;--blue:#1260ab;--bg:#f3f6fa}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",Arial,sans-serif}button,input,select{font:inherit}button{cursor:pointer}header{padding:28px 36px 24px;background:#fff;border-bottom:1px solid var(--line)}h1{font-size:29px;letter-spacing:-.6px;margin:0 0 5px}h2{font-size:20px;margin:0 0 5px}p{margin:0 0 10px}.muted{color:var(--muted)}.eyebrow{font-size:12px;color:var(--blue);letter-spacing:1px;text-transform:uppercase;margin-bottom:5px}.stats{display:flex;flex-wrap:wrap;gap:12px;margin-top:20px}.stat{padding:10px 18px;background:var(--bg);border-radius:8px;min-width:140px}.stat strong{font-size:23px;display:block}.stat span{font-size:12px;color:var(--muted)}.notice{padding:13px 18px;border:1px solid #e5d3a7;background:#fff9ea;border-radius:8px;margin:20px 28px 0;font-size:13px}.layout{display:grid;grid-template-columns:285px minmax(0,1fr);gap:20px;padding:20px 28px}aside,.panel{background:#fff;border:1px solid var(--line);border-radius:10px}aside{padding:14px;align-self:start;max-height:78vh;overflow:auto;position:sticky;top:15px}.group{display:block;width:100%;text-align:left;background:transparent;border:0;border-radius:7px;padding:10px;margin-bottom:3px;color:var(--ink)}.group:hover{background:#f1f6fc}.group[aria-current=true]{background:#e8f1fb;color:#084e94}.group small{display:block;color:var(--muted);font-size:12px}.panel{padding:22px;min-height:400px}.toolbar{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 12px}.toolbar input{flex:1;min-width:200px}.toolbar input,.toolbar select{border:1px solid #bdcbd9;background:#fff;border-radius:7px;padding:9px 11px;color:var(--ink)}.check{display:flex;gap:6px;align-items:center;font-size:13px}.tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-top:18px;padding-bottom:10px;flex-wrap:wrap}.tabs button,.more,.copy{border:1px solid var(--line);border-radius:6px;padding:7px 11px;background:#fff;color:var(--ink)}.tabs button[aria-selected=true]{background:var(--blue);border-color:var(--blue);color:#fff}.row{padding:16px 0;border-bottom:1px solid #e9edf2;display:grid;grid-template-columns:110px minmax(0,1fr);gap:16px}.date{font-size:14px;font-weight:600}.date small{font-size:11px;font-weight:400;display:block;color:var(--muted)}.title{font-weight:600;overflow-wrap:anywhere}.path{font-size:12px;color:var(--muted);overflow-wrap:anywhere;margin:5px 0}.tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}.tag{border-radius:4px;background:#eff3f7;padding:2px 6px;font-size:11px}.tag.warn{background:#fff0d6;color:#80540b}.tag.good{background:#e9f5ef;color:#276044}.details{font-size:12px;margin-top:8px}.details summary{color:var(--blue);cursor:pointer}.details dl{display:grid;grid-template-columns:170px minmax(0,1fr);gap:4px 10px}.details dt{color:var(--muted)}.details dd{margin:0;overflow-wrap:anywhere}.copy{font-size:12px;margin-top:8px}.empty{padding:40px 8px;color:var(--muted)}.more{margin-top:18px}.footer{padding:0 28px 24px;color:var(--muted);font-size:12px}.status{font-size:12px;min-height:20px}.count{font-size:12px;color:var(--muted)}.screen-reader{position:absolute;left:-10000px}.error-list{font-size:12px;overflow-wrap:anywhere}
+@media(max-width:850px){header{padding:22px}.layout{grid-template-columns:1fr;padding:16px}.notice{margin:16px 16px 0}aside{position:static;max-height:210px}.row{grid-template-columns:90px minmax(0,1fr);gap:10px}.panel{padding:16px}.details dl{grid-template-columns:1fr}.footer{padding:0 16px 20px}}
+.toolbar .check input{flex:none;min-width:0;width:16px;height:16px;padding:0;margin:0}
+</style>
+</head>
+<body>
+<header><div class="eyebrow">Реестр и хронология документов</div><h1>История договоров</h1><p class="muted" id="observed"></p><div class="stats" id="stats"></div></header>
+<div class="notice" id="notice"></div>
+<div class="layout">
+<aside aria-label="Объекты и общие подборки" id="groups"></aside>
+<main class="panel">
+<h2 id="project-title">Все объекты</h2><p class="muted" id="project-info"></p>
+<div class="toolbar">
+<label class="screen-reader" for="query">Поиск по имени и пути</label><input id="query" type="search" placeholder="Договор, ДС, название или путь">
+<label class="screen-reader" for="kind">Вид документа</label><select id="kind"><option value="">Все виды</option><option value="contract">Договоры</option><option value="addendum">Допсоглашения</option><option value="appendix">Приложения, графики, сметы</option><option value="act">Акты</option><option value="other">Прочие</option></select>
+<label class="check"><input id="technical" type="checkbox">Служебные файлы</label>
+</div>
+<div class="tabs" role="tablist" aria-label="Представление истории">
+<button type="button" data-view="dates" role="tab" aria-selected="true">Даты в названиях</button>
+<button type="button" data-view="files" role="tab" aria-selected="false">Все файлы</button>
+<button type="button" data-view="changes" role="tab" aria-selected="false">Изменения между снимками</button>
+</div>
+<p class="count" id="count"></p><div id="rows" aria-live="polite"></div><button class="more" id="more" type="button" hidden>Показать ещё 100</button>
+<p class="status" id="copy-status" role="status"></p>
+</main>
+</div>
+<footer class="footer"><p>Даты документов и признаки подписания извлечены из названий и требуют проверки. Размеры и время изменения файлов не подтверждают неизменность содержимого. Реестр сохраняет пути к оригиналам; копии документов в этот отчёт не включены.</p><details id="coverage"><summary>Полнота обхода и происхождение</summary><p id="coverage-text"></p><ul id="errors" class="error-list"></ul></details></footer>
+<script type="application/json" id="history-data">__DATA_JSON__</script>
+<script>
+"use strict";
+const data=JSON.parse(document.getElementById("history-data").textContent);
+const byId=new Map(data.files.map(f=>[f.id,f]));
+const groupMap=new Map(data.projects.map(p=>[p.id,p]));
+const labels={contract:"Договор",addendum:"Допсоглашение",appendix:"Приложение / график / смета",act:"Акт",other:"Прочее"};
+const state={group:"",view:"dates",limit:100};
+const fmt=new Intl.NumberFormat("ru-RU");
+const time=value=>value?new Intl.DateTimeFormat("ru-RU",{dateStyle:"short",timeStyle:"short",timeZone:"Europe/Moscow"}).format(new Date(value)):"—";
+const day=value=>value?value.split("-").reverse().join("."):"Без даты";
+const size=value=>value>=1e9?(value/1e9).toFixed(2)+" ГБ":value>=1e6?(value/1e6).toFixed(1)+" МБ":fmt.format(value)+" Б";
+function el(tag,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;}
+function badge(parent,text,cls){parent.append(el("span",text,"tag"+(cls?" "+cls:"")));}
+document.getElementById("observed").textContent="Снимок "+time(data.observedAt)+" МСК · исходные документы остаются в сетевой папке";
+[[data.summary.files,"файлов"],[data.summary.groups,"групп и подборок"],[data.summary.dateCandidates,"файлов с датой в имени"],[size(data.summary.sizeBytes),"объём оригиналов"]].forEach(pair=>{const n=el("div",undefined,"stat");n.append(el("strong",typeof pair[0]==="number"?fmt.format(pair[0]):pair[0]),el("span",pair[1]));document.getElementById("stats").append(n);});
+document.getElementById("notice").textContent=data.changes.status==="baseline"?"Первый снимок. Хронология ниже построена по датам в названиях документов. Предыдущие версии файлов, даты подписания и события до начала наблюдения этим снимком не установлены.":"Есть сравнение с предыдущим снимком. Изменение метаданных показано отдельно от дат документов; содержимое оригиналов по хэшам не сверялось.";
+function selectGroup(id){state.group=id;state.limit=100;document.querySelectorAll(".group").forEach(n=>n.setAttribute("aria-current",String(n.dataset.id===id)));render();}
+function groupButton(id,title,description){const n=el("button",undefined,"group");n.type="button";n.dataset.id=id;n.setAttribute("aria-current",String(state.group===id));n.append(el("span",title),el("small",description));n.addEventListener("click",()=>selectGroup(id));document.getElementById("groups").append(n);}
+groupButton("","Все объекты",fmt.format(data.files.length)+" файлов");
+data.projects.forEach(p=>groupButton(p.id,p.title,fmt.format(p.files)+" файлов · "+(p.groupType==="completed"?"завершённый объект":p.groupType==="collection"?"общая подборка":p.groupType==="unassigned"?"без привязки":"папка объекта")));
+function detailLine(dl,title,value){dl.append(el("dt",title),el("dd",value));}
+async function copyPath(file){
+const path=data.sourceRoot+"\\"+file.relativePath;
+try{if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(path);}else{const n=el("textarea",path);document.body.append(n);n.select();const ok=document.execCommand("copy");n.remove();if(!ok)throw new Error("copy");}document.getElementById("copy-status").textContent="Путь скопирован: "+file.name;}
+catch{document.getElementById("copy-status").textContent="Не удалось скопировать. Полный путь: "+path;}}
+function fileRow(file,change){
+const row=el("article",undefined,"row");const date=el("div",file.documentDateCandidate?day(file.documentDateCandidate):"Без даты","date");date.append(el("small",file.documentDateCandidate?"дата в имени":"дата не определена"));
+const body=el("div");body.append(el("div",file.name,"title"),el("div",file.relativePath,"path"));
+const tags=el("div",undefined,"tags");badge(tags,labels[file.kind]);badge(tags,size(file.sizeBytes));
+if(file.documentDateCandidate)badge(tags,"Дату проверить","warn");
+if(file.statusHints.includes("signed_or_edo_in_path"))badge(tags,"Подписано / ЭДО в названии","good");
+if(file.statusHints.includes("draft_or_review_in_path"))badge(tags,"Проект / редакция в пути","warn");
+if(file.locus){badge(tags,file.locus.cacheAvailable?"Текст Locus найден":"Кеш Locus по прежнему пути не найден",file.locus.cacheAvailable?"good":"warn");if(file.locus.sourceMatch==="different_metadata")badge(tags,"Оригинал отличается от записи Locus","warn");if(file.locus.ocrLimited)badge(tags,"OCR ограничен","warn");}
+if(change)badge(tags,{new_path_observed:"Новый путь",metadata_changed:"Изменились метаданные",path_not_observed:"Путь не обнаружен"}[change.kind]||change.kind,"warn");
+body.append(tags);
+const details=el("details",undefined,"details");details.append(el("summary","Даты, распознавание и происхождение"));const dl=el("dl");
+detailLine(dl,"Объект / подборка",groupMap.get(file.projectId)?.title||"—");
+detailLine(dl,"Изменение файла",time(file.modifiedAt)+" МСК — свойство файловой системы");
+detailLine(dl,"Наблюдение",time(data.observedAt)+" МСК");
+detailLine(dl,"Основание даты",file.dateBasis==="filename_after_ot"?"Дата после «от» в имени; не подтверждена":file.dateBasis?"Дата в имени; не подтверждена":"Нет однозначной даты в имени");
+if(file.dateCandidates.length>1)detailLine(dl,"Все даты в имени",file.dateCandidates.map(d=>day(d.date)).join(", "));
+if(file.locus){detailLine(dl,"Индексация Locus",time(file.locus.indexedAt)+" МСК");detailLine(dl,"Распознавание",String(file.locus.method||"—")+"; страниц: "+String(file.locus.pages||"не указано"));detailLine(dl,"Качество по Locus",String(file.locus.qualityStatus||"—")+"; оценка: "+String(file.locus.qualityScore??"—"));detailLine(dl,"Сверка с оригиналом",file.locus.sourceMatch==="same_metadata"?"Размер и дата совпадают; байты не проверены":"Размер или дата отличаются");}
+detailLine(dl,"Содержимое", "SHA-256 оригинала не вычислялся; прежние редакции не закреплены");
+if(change?.before)detailLine(dl,"Предыдущие метаданные",size(change.before.sizeBytes)+"; "+time(change.before.modifiedAt)+" МСК");
+details.append(dl);const copy=el("button","Скопировать путь","copy");copy.type="button";copy.addEventListener("click",()=>copyPath(file));details.append(copy);body.append(details);row.append(date,body);return row;
+}
+function render(){
+const project=groupMap.get(state.group);document.getElementById("project-title").textContent=project?project.title:"Все объекты";
+document.getElementById("project-info").textContent=project?(project.groupType==="collection"?"Общая подборка. Принадлежность копий конкретным договорам ещё не подтверждена.":"Группа по папке. Внутри могут находиться несколько договоров; связи документов требуют проверки."):"Выберите объект или найдите договор по названию и номеру.";
+const q=document.getElementById("query").value.trim().toLocaleLowerCase("ru");const kind=document.getElementById("kind").value;const technical=document.getElementById("technical").checked;
+let candidates=state.view==="changes"?data.changes.items.map(c=>({file:byId.get(c.fileId)||c.previousFile,change:c})).filter(x=>x.file):data.files.map(file=>({file,change:null}));
+candidates=candidates.filter(({file:f})=>(!state.group||f.projectId===state.group)&&(!kind||f.kind===kind)&&(technical||!f.technical)&&(!q||f.relativePath.toLocaleLowerCase("ru").includes(q))&&(state.view!=="dates"||f.documentDateCandidate));
+candidates.sort((a,b)=>(b.file.documentDateCandidate||"").localeCompare(a.file.documentDateCandidate||"")||b.file.modifiedAt.localeCompare(a.file.modifiedAt)||a.file.relativePath.localeCompare(b.file.relativePath,"ru"));
+const rows=document.getElementById("rows");rows.replaceChildren();
+document.getElementById("count").textContent="Найдено: "+fmt.format(candidates.length)+(state.view==="dates"?" · даты в названиях требуют подтверждения":"");
+if(!candidates.length){rows.append(el("p",state.view==="changes"&&data.changes.status==="baseline"?"Это первый снимок. Изменения будут доступны после следующего обхода.":"Нет записей по выбранным условиям.","empty"));}
+candidates.slice(0,state.limit).forEach(x=>rows.append(fileRow(x.file,x.change)));document.getElementById("more").hidden=candidates.length<=state.limit;
+}
+document.querySelectorAll("[data-view]").forEach(button=>button.addEventListener("click",()=>{state.view=button.dataset.view;state.limit=100;document.querySelectorAll("[data-view]").forEach(n=>n.setAttribute("aria-selected",String(n===button)));render();}));
+["query","kind","technical"].forEach(id=>document.getElementById(id).addEventListener(id==="query"?"input":"change",()=>{state.limit=100;render();}));
+document.getElementById("more").addEventListener("click",()=>{state.limit+=100;render();});
+document.getElementById("coverage-text").textContent="Начало: "+time(data.observationStartedAt)+" МСК. Завершение: "+time(data.observedAt)+" МСК. Обход: "+(data.complete?"полный":"неполный")+". Ошибок / пропусков: "+data.errors.length+". Чтение содержимого: не выполнялось. Оригиналы не копировались. Данные Locus использованы как сведения прежнего распознавания. Снимок: "+data.snapshotId+".";
+data.errors.forEach(error=>document.getElementById("errors").append(el("li",error.path+": "+error.kind)));
+render();
+</script>
+</body>
+</html>

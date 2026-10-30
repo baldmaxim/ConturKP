@@ -4,7 +4,7 @@
 // файлов и временные каталоги сюда не входят. Отпечаток и хэш конфигурации считает БД (миграция 0014).
 import { NUMBER_RENDERING_VERSION } from './numberFormat.ts';
 import { OCR_LANGUAGES, type ILocalOcrEngineFactory } from './ocr.ts';
-import { pdfjsVersion } from './pdf.ts';
+import { PDF_RENDERING_VERSION, pdfjsVersion } from './pdf.ts';
 import { QUALITY_GATE } from './quality.ts';
 import type { ILocalLimits, LocalInputFormat, LocalProcessing } from './types.ts';
 
@@ -38,7 +38,7 @@ export const describeLocalRecognizer = async (format: LocalInputFormat, s: ILoca
         parser: format,
         maxReplacementRatio: QUALITY_GATE.maxReplacementRatio,
         maxFragmentChars: s.limits.maxFragmentChars,
-        ...(format === 'xlsx' ? { numbers: NUMBER_RENDERING_VERSION } : {}),
+        ...(format === 'xlsx' ? { numbers: NUMBER_RENDERING_VERSION, parserVersion: 2 } : {}),
       },
     };
   }
@@ -49,6 +49,7 @@ export const describeLocalRecognizer = async (format: LocalInputFormat, s: ILoca
     languages: ocr ? [...OCR_LANGUAGES] : [],
     config: {
       pdfjs: pdfjsVersion(),
+      renderingVersion: PDF_RENDERING_VERSION,
       gate: { ...QUALITY_GATE },
       maxFragmentChars: s.limits.maxFragmentChars,
       ...(ocr ? { ocr: { ...ocr, dpi: s.ocrDpi } } : { dpi: s.ocrDpi }),

@@ -1,0 +1,147 @@
+{
+  "at": "2026-10-29T06:29:44.082Z",
+  "status": "CONTEXT_PASS_SEMANTIC_FAIL",
+  "humanPilot": false,
+  "sourceCodeChanged": false,
+  "portalConfigChanged": false,
+  "oldResultsPreserved": true,
+  "technicalSessionsRevoked": 2,
+  "evidenceScope": {
+    "id": "b6910f6c-4d25-4ade-af33-94705e03d2b4",
+    "contentHash": "d28f3ebedd2d675372a72905d4d5409cd758777c4b3855997686223ebddcbea2",
+    "items": 214
+  },
+  "modelCalls": 5,
+  "contextLength": 16384,
+  "embeddingContextLength": 8192,
+  "s1832": "OPEN",
+  "g7": "FAIL",
+  "oldSnapshotSha256": "8762623c0b5eae898e3b99478998a47757d77c6bf763592693ebb5aa6fef5df6",
+  "oldSnapshotAfterSha256": "8762623c0b5eae898e3b99478998a47757d77c6bf763592693ebb5aa6fef5df6",
+  "modelLogWindowSha256": "6ef2e96a26485c4f6553a50564c9e01c0f06f102ce236dc858ebdb39b611bd5b",
+  "persistentPresetChangeClaimed": false,
+  "runs": [
+    {
+      "topic": "advance",
+      "originalRunId": "6fcc5397-394e-4003-a09c-6932448023d1",
+      "dialogId": "184c12c2-1b3a-4279-b027-5cb62fb3d73f",
+      "runId": "eb3bafe8-550e-468b-86b9-cd443f80abaf",
+      "answerStatus": "incomplete_processing",
+      "shownClaims": 0,
+      "droppedClaims": 0,
+      "repairs": 1,
+      "inputSha256": "9cacb14ccb443bfeeb8ec57623d245efdaa7ae9123b9ff12e0567505b13444bc",
+      "packetMatchesOld": true,
+      "promptMatchesOld": true,
+      "configMatchesOld": true,
+      "questionSha256": "d9e79f95943b7b4b2b1a179baec48a2a5dd5d7db4c13429f220a1286aec2f32d",
+      "calls": [
+        {
+          "at": "2026-10-29T06:25:41+00:00",
+          "maxTokens": 4096,
+          "promptTokens": 2033,
+          "completionTokens": 84,
+          "finishReason": "stop",
+          "contextLength": 16384,
+          "requestedBudget": 6129,
+          "reserve": 10255
+        },
+        {
+          "at": "2026-10-29T06:25:49+00:00",
+          "maxTokens": 4096,
+          "promptTokens": 2079,
+          "completionTokens": 107,
+          "finishReason": "stop",
+          "contextLength": 16384,
+          "requestedBudget": 6175,
+          "reserve": 10209
+        }
+      ],
+      "semanticReview": "FAIL: no shown claims; packet contains project documentation instead of advance terms"
+    },
+    {
+      "topic": "retention",
+      "originalRunId": "79dd8a0a-a859-415e-babc-89e2e46887cb",
+      "dialogId": "2668851e-b00d-467a-9521-e6c5b661090d",
+      "runId": "76f2a709-5554-49d7-a071-6e52538ce88f",
+      "answerStatus": "confirmed_by_citations",
+      "shownClaims": 5,
+      "droppedClaims": 1,
+      "repairs": 0,
+      "inputSha256": "626e8e98a445991d36f43116be371cd7e31c30548e372addf0148d8d8ede28fd",
+      "packetMatchesOld": true,
+      "promptMatchesOld": true,
+      "configMatchesOld": true,
+      "questionSha256": "87029595f9f1d887e7e04861e8d03378c01b3cc5daa3e276f7fbeb283bd7bd17",
+      "calls": [
+        {
+          "at": "2026-10-29T06:26:15+00:00",
+          "maxTokens": 4096,
+          "promptTokens": 3533,
+          "completionTokens": 510,
+          "finishReason": "stop",
+          "contextLength": 16384,
+          "requestedBudget": 7629,
+          "reserve": 8755
+        }
+      ],
+      "semanticReview": "FAIL: requested rates/work boundaries absent; equality of KP and DGP asserted using KP-only citations"
+    },
+    {
+      "topic": "award",
+      "originalRunId": "935f60f1-3902-4fca-889d-630882041d44",
+      "dialogId": "48c6e5a1-ac70-4dc6-9818-800b74204774",
+      "runId": "b65f2f63-1f79-477a-a0bc-82273882b689",
+      "answerStatus": "confirmed_by_citations",
+      "shownClaims": 5,
+      "droppedClaims": 0,
+      "repairs": 0,
+      "inputSha256": "07f6911f91a52c98fc37d9ab696dbc97c3e995db7065033ac8219efd5ee9be1b",
+      "packetMatchesOld": true,
+      "promptMatchesOld": true,
+      "configMatchesOld": true,
+      "questionSha256": "b2b245dbf8858902a757c2d35efc9f41897e7db08eb96ec8880d621d0d782e9e",
+      "calls": [
+        {
+          "at": "2026-10-29T06:26:50+00:00",
+          "maxTokens": 4096,
+          "promptTokens": 3769,
+          "completionTokens": 408,
+          "finishReason": "stop",
+          "contextLength": 16384,
+          "requestedBudget": 7865,
+          "reserve": 8519
+        }
+      ],
+      "semanticReview": "FAIL: acceptance act misrepresented as tender committee protocol; contractor/payment/date misrepresented as award result"
+    },
+    {
+      "topic": "price-history",
+      "originalRunId": "4d4662c8-5497-491e-885a-56f17de98347",
+      "dialogId": "6e865367-df55-4f37-9168-65278480c6fd",
+      "runId": "58343f48-e4c3-46f4-951f-dd2429b0a399",
+      "answerStatus": "confirmed_by_citations",
+      "shownClaims": 1,
+      "droppedClaims": 4,
+      "repairs": 0,
+      "inputSha256": "9f33435e3eb8d94c97b7cab3ab7d8d5125e15c8570138da92d4e0a649f522746",
+      "packetMatchesOld": true,
+      "promptMatchesOld": true,
+      "configMatchesOld": true,
+      "questionSha256": "09c6bad1d8b0af2508ce0bdc96cb08bf0e5bbb222714b54867b6077d9439e432",
+      "calls": [
+        {
+          "at": "2026-10-29T06:28:01+00:00",
+          "maxTokens": 4096,
+          "promptTokens": 3932,
+          "completionTokens": 473,
+          "finishReason": "stop",
+          "contextLength": 16384,
+          "requestedBudget": 8028,
+          "reserve": 8356
+        }
+      ],
+      "semanticReview": "PARTIAL_FAIL: one supported submission amount; requested chronology and split offers absent"
+    }
+  ]
+}

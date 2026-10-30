@@ -229,8 +229,9 @@ const calcObjectTexts = async (db: Queryable, requirements: readonly IReviewRequ
 const positionsOf = async (db: Queryable, calcRevisionId: string | null): Promise<IReviewPosition[]> =>
   calcRevisionId
     ? (
-        await db.query<{ external_position_id: string; name: string; unit_code: string | null; section_number: string | null; volume: string | null; total: string | null; is_section: boolean }>(
+        await db.query<{ external_position_id: string; name: string; unit_code: string | null; section_number: string | null; hierarchy_level: number | null; parent_external_position_id: string | null; volume: string | null; total: string | null; is_section: boolean }>(
           `SELECT p.external_position_id, coalesce(p.work_name, p.position_name, '') AS name, p.unit_code, p.section_number,
+                  p.hierarchy_level, p.parent_external_position_id,
                   coalesce(p.manual_volume, p.volume)::text AS volume, coalesce(p.commercial_total, p.base_total)::text AS total, coalesce(p.is_section, false) AS is_section
              FROM calculation_revision r JOIN calculation_position p ON p.content_id = r.content_id
             WHERE r.id = $1 ORDER BY p.position_number NULLS LAST, p.external_position_id`,
@@ -241,6 +242,8 @@ const positionsOf = async (db: Queryable, calcRevisionId: string | null): Promis
         name: p.name,
         unit: p.unit_code,
         section: p.section_number,
+        hierarchyLevel: p.hierarchy_level,
+        parentExternalPositionId: p.parent_external_position_id,
         volume: p.volume === null ? null : Number(p.volume),
         total: p.total === null ? null : Number(p.total),
         isSection: p.is_section,

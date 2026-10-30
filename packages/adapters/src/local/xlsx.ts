@@ -50,11 +50,12 @@ interface ISheetScan {
   merges: string[];
   issues: Set<string>;
   cells: number;
+  emptyCells: number;
 }
 
 // Лист читается потоково: миллион ячеек не строит дерево в памяти.
 const scanSheet = (xml: string, ctx: { sst: string[]; styles: IStyles; date1904: boolean; cellBudget: number }): ISheetScan => {
-  const out: ISheetScan = { rows: new Map(), merges: [], issues: new Set(), cells: 0 };
+  const out: ISheetScan = { rows: new Map(), merges: [], issues: new Set(), cells: 0, emptyCells: 0 };
   let rowNo = 0;
   let col = 0;
   let cell: { col: number; t: string; s: number; hasFormula: boolean; value: string | null; inline: string } | null = null;
@@ -76,8 +77,6 @@ const scanSheet = (xml: string, ctx: { sst: string[]; styles: IStyles; date1904:
         col = m ? columnNumber(m[1]!) : col + 1;
         if (m && Number(m[2]) !== rowNo) out.issues.add('cell_outside_row');
         cell = { col, t: attrs.t ?? 'n', s: Number(attrs.s ?? 0) || 0, hasFormula: false, value: null, inline: '' };
-        out.cells += 1;
-        if (out.cells > ctx.cellBudget) throw new LocalRecognitionError('too_large', 'ячеек в книге больше предела разбора');
       } else if (cell && name === 'x:f') {
         cell.hasFormula = true;
       } else if (cell && name === 'x:v') {
@@ -97,9 +96,15 @@ const scanSheet = (xml: string, ctx: { sst: string[]; styles: IStyles; date1904:
       else if (name === 'x:c' && cell) {
         const c = cell;
         cell = null;
+        // Excel сохраняет сотни тысяч пустых ячеек только ради оформления. Они не создают
+        // фрагментов и не расходуют бюджет данных. Объём XML по-прежнему ограничен OOXML-контуром.
+        // Формула без кеша тоже данные: её учитываем и отмечаем для проверки.
+        if (!c.hasFormula && !(c.value?.trim()) && !c.inline.trim()) { out.emptyCells++; return; }
+        out.cells += 1;
+        if (out.cells > ctx.cellBudget) throw new LocalRecognitionError('too_large', 'ячеек с данными в книге больше предела разбора');
         let text = '';
         if (c.t === 's') {
-          const idx = Number(c.value);
+          const idx = c.value?.trim() ? Number(c.value) : NaN;
           const str = Number.isInteger(idx) ? ctx.sst[idx] : undefined;
           if (str === undefined) out.issues.add('bad_shared_string');
           text = str ?? '';
@@ -133,7 +138,7 @@ const intersects = (ref: string, row: number): boolean => {
   return Number(ma[2]) <= row && row <= Number(mb[2]);
 };
 
-export const parseXlsx = async (bytes: Buffer, limits: ILocalLimits): Promise<ILocalResult> => {
+export const parseXlsx = async (bytes: Buffer, limits: ILocalLimits, hooks?: { throwIfStopped: () => void; onProgress?: (completed: number, total: number, unit: 'sheets') => Promise<void> }): Promise<ILocalResult> => {
   if (bytes.length > limits.maxInputBytes) throw new LocalRecognitionError('too_large', `файл ${bytes.length} байт больше предела ${limits.maxInputBytes}`);
   const pkg = await openOoxmlPackage(bytes, limits);
   try {
@@ -160,7 +165,12 @@ export const parseXlsx = async (bytes: Buffer, limits: ILocalLimits): Promise<IL
     let hidden = 0;
     const sheetList = elements(elements(wb, 'x:sheets')[0] ?? wb, 'x:sheet');
     if (sheetList.length === 0) throw new LocalRecognitionError('unsupported_structure', 'в книге нет листов');
+    let processed = 0;
+    await hooks?.onProgress?.(0, sheetList.length, 'sheets');
     for (const sheet of sheetList) {
+      hooks?.throwIfStopped();
+      // Считаем и пустые/пропущенные листы: это тоже законченная проверка.
+      try {
       const rel = byId.get(sheet.attrs['r:id'] ?? '');
       const type = rel?.type.split('/').pop() ?? '';
       if (!rel || rel.external) {
@@ -181,6 +191,7 @@ export const parseXlsx = async (bytes: Buffer, limits: ILocalLimits): Promise<IL
         throw err;
       }
       cellBudget -= scan.cells;
+      if (scan.emptyCells) skipped.emptyCells = (skipped.emptyCells ?? 0) + scan.emptyCells;
       if (scan.rows.size === 0) {
         bump('emptySheets');
         continue;
@@ -239,6 +250,9 @@ export const parseXlsx = async (bytes: Buffer, limits: ILocalLimits): Promise<IL
         metrics: { ...metrics, ocrConfidence: null, nativeChars: null },
         issues,
       });
+      } finally {
+        await hooks?.onProgress?.(++processed, sheetList.length, 'sheets');
+      }
     }
     return { units, fragments, skipped, warnings: [], facts: { sheets: sheetList.length, hiddenSheets: hidden, date1904 } };
   } finally {

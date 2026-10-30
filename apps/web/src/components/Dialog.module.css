@@ -81,6 +81,8 @@
     animation-name: dialog-in;
   }
 
+  .wide { width: min(1240px, calc(100% - 48px)); max-height: calc(100dvh - 48px); }
+
   .footer {
     padding-bottom: var(--space-3);
   }

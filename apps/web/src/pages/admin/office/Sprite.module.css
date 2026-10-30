@@ -1,0 +1,208 @@
+/* Человечки «Офиса»: рисунок, цвета деталей и движение. Порт спрайтов iPhoneMonitor на модульные классы; цвета — только
+   токены `--office-*` (index.css), рубашку задаёт стол через `--office-shirt`. Анимации — фоновые ступенчатые циклы по
+   `transform` и `opacity`; на несвежих данных и при «меньше движения» их гасит Office.module.css, позы при этом
+   различаются без движения — облачками, значками и содержимым экрана. */
+
+/* --- рисунок ----------------------------------------------------------------- */
+
+.sprite {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: hidden;
+}
+
+.skin { fill: var(--office-skin); }
+.hair { fill: var(--office-hair); }
+.shirt { fill: var(--office-shirt); }
+.deskTop { fill: var(--office-desk); }
+.monitor { fill: var(--office-monitor); }
+.screen { fill: var(--office-screen); }
+.keyboard { fill: var(--office-monitor); }
+.chair { fill: var(--office-chair); }
+.pants { fill: var(--office-pants); }
+.cup { fill: var(--office-cup); }
+.sofa { fill: var(--office-sofa); }
+.phone { fill: var(--office-monitor); }
+.phoneGlow { fill: var(--office-screen-glow); }
+.screenInk rect { fill: var(--office-screen-glow); }
+.screenInk .dim { opacity: 0.45; }
+
+.bubbleBg { fill: var(--office-bubble); }
+.bubbleInk rect { fill: var(--office-bubble-ink); }
+.bang rect { fill: var(--warning); }
+.snore rect { fill: var(--muted); }
+
+/* Отдыхающий: голова чуть опущена у телефона и на диване. */
+.bow { transform: translateY(1px); }
+
+/* Части, нужные только в своей позе. */
+.handUp { display: none; }
+.poseWait .handUp { display: inline; }
+.poseWait .arm { display: none; }
+.poseWait .person { transform: translateY(-2px); }
+
+/* Простой: голова опущена, фигура приглушена. */
+.poseIdle .person { opacity: 0.6; }
+.poseIdle .head { transform: translateY(2px); }
+
+/* SVG-части вращаются и двигаются вокруг своего центра. */
+.head,
+.globe {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+
+.globe { transform-origin: 50% 50%; }
+
+/* --- движение (фоновые циклы) ---------------------------------------------------- */
+
+@keyframes type {
+  from { transform: translateY(0); }
+  to { transform: translateY(1px); }
+}
+
+@keyframes line {
+  0% { opacity: 0; }
+  25%, 100% { opacity: 1; }
+}
+
+@keyframes kfScroll {
+  from { transform: translateY(0); }
+  to { transform: translateY(-4px); }
+}
+
+@keyframes blink {
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes pulse {
+  from { transform: scale(1); opacity: 1; }
+  to { transform: scale(1.18); opacity: 0.55; }
+}
+
+@keyframes tilt {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-6deg); }
+}
+
+@keyframes float {
+  from { transform: translateY(0); }
+  to { transform: translateY(-1px); }
+}
+
+@keyframes dotFade {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
+@keyframes wave {
+  from { transform: translateX(0); }
+  to { transform: translateX(1px); }
+}
+
+@keyframes zzz {
+  0% { transform: translateY(1px); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: translateY(-3px); opacity: 0; }
+}
+
+@keyframes bob {
+  from { transform: translateY(0); }
+  to { transform: translateY(-1px); }
+}
+
+.poseEdit .arm,
+.poseRun .arm {
+  animation: type 0.4s steps(1, end) infinite alternate;
+}
+
+.poseWork .arm {
+  animation: type 0.9s steps(1, end) infinite alternate;
+}
+
+.sprite .armB {
+  animation-delay: 0.2s;
+}
+
+.lines rect {
+  animation: line 2.4s steps(1, end) infinite;
+}
+
+.poseWork .lines rect {
+  animation-duration: 4.8s;
+}
+
+.lines rect:nth-child(2) { animation-delay: 0.4s; }
+.lines rect:nth-child(3) { animation-delay: 0.8s; }
+.lines rect:nth-child(4) { animation-delay: 1.2s; }
+
+.scroll {
+  animation: kfScroll 1.6s steps(4, end) infinite;
+}
+
+.poseRead .head {
+  animation: tilt 1.6s steps(1, end) infinite alternate;
+}
+
+.cursor {
+  animation: blink 1s steps(1, end) infinite;
+}
+
+.globe {
+  animation: pulse 1.2s steps(3, end) infinite alternate;
+}
+
+.bubble {
+  animation: float 1.6s steps(1, end) infinite alternate;
+}
+
+.dot {
+  animation: dotFade 1.2s steps(1, end) infinite;
+}
+
+.dot2 { animation-delay: 0.3s; }
+.dot3 { animation-delay: 0.6s; }
+
+.poseWait .handUp {
+  animation: wave 0.5s steps(1, end) infinite alternate;
+}
+
+.z {
+  animation: zzz 2.4s steps(4, end) infinite;
+}
+
+.z2 {
+  animation-delay: 1.2s;
+}
+
+/* Отдых: каждое занятие — свой цикл; шаги по клеткам, в пределах своего холста. */
+@keyframes kfSip {
+  from { transform: translateY(0); }
+  to { transform: translateY(-2px); }
+}
+
+@keyframes kfStretch {
+  from { transform: translateY(2px); }
+  to { transform: translateY(-1px); }
+}
+
+@keyframes pace {
+  from { transform: translateX(-6px); }
+  to { transform: translateX(6px); }
+}
+
+@keyframes step {
+  from { transform: translateX(-1px); }
+  to { transform: translateX(1px); }
+}
+
+.sip { animation: kfSip 1.6s steps(2, end) infinite alternate; }
+.steam { animation: zzz 2s steps(4, end) infinite; }
+.stretch { animation: kfStretch 2.4s steps(3, end) infinite alternate; }
+.walker { animation: pace 5s steps(12, end) infinite alternate; }
+.walker .legA { animation: step 0.4s steps(1, end) infinite alternate; }
+.walker .legB { animation: step 0.4s steps(1, end) infinite alternate-reverse; }
+.loungeSofa .bow { animation: bob 1.6s steps(1, end) infinite alternate; }
+.phoneGlow { animation: blink 1.4s steps(1, end) infinite; }

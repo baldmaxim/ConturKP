@@ -4,7 +4,7 @@
 // факта (D-018). Повторяемый отказ провайдера (недоступен, таймаут, 429, 5xx) — повтор задания, после
 // исчерпания попыток прогон failed; детерминированный (невалидный ответ — отказ пачки без повтора; 401/403,
 // нарушение протокола — отказ прогона). Модель ничего не подтверждает: пишутся только кандидаты.
-import { FACT_BASIS_ORIGINS, modelUserContent, parseFactOutput, parseRequirementOutput, sha256Hex, systemPrompt } from '@kontur/core';
+import { configHash, FACT_BASIS_ORIGINS, modelUserContent, parseFactOutput, parseRequirementOutput, sha256Hex, systemPrompt } from '@kontur/core';
 import {
   analysisRunInputs,
   enqueueAnalysisBatch,
@@ -43,7 +43,7 @@ interface ICoverage {
 
 // Пачки по порядку входа: сумма текста не больше предела; фрагмент длиннее предела — один в пачке, усечённым
 // (это отмечается как пробел охвата, а не молча).
-export const splitBatches = (inputs: readonly IInput[], maxChars: number): IBatch[] => {
+const legacyBatches = (inputs: readonly IInput[], maxChars: number): IBatch[] => {
   const out: IBatch[] = [];
   let cur: IBatch = { fragments: [], truncated: 0 };
   let size = 0;
@@ -67,11 +67,61 @@ export const splitBatches = (inputs: readonly IInput[], maxChars: number): IBatc
   return out;
 };
 
+// v2: бюджет всего сериализованного входа, включая ID и JSON; длинный текст передаётся
+// целиком несколькими частями с исходным fragmentId. Источник и цитата не подменяются.
+export const splitBatches = (inputs: readonly IInput[], maxChars: number): IBatch[] => {
+  const out: IBatch[] = [];
+  let current: IInput[] = [];
+  for (const input of inputs) {
+    let rest = input.text;
+    do {
+      if (modelUserContent([...current, { ...input, text: rest }]).length <= maxChars) {
+        current.push({ ...input, text: rest });
+        break;
+      }
+      if (current.length) {
+        out.push({ fragments: current, truncated: 0 });
+        current = [];
+        continue;
+      }
+      let low = 0;
+      let high = rest.length;
+      while (low < high) {
+        const mid = Math.ceil((low + high) / 2);
+        if (modelUserContent([{ ...input, text: rest.slice(0, mid) }]).length <= maxChars) low = mid;
+        else high = mid - 1;
+      }
+      if (!low) throw new Error('analysis input budget cannot fit fragment metadata');
+      // Не разрываем суррогатную пару Unicode.
+      if (low < rest.length && /[\uD800-\uDBFF]/u.test(rest[low - 1]!)) low -= 1;
+      if (!low) throw new Error('analysis input budget cannot fit one code point');
+      const boundary = rest.slice(0, low).search(/\s+\S*$/u);
+      if (boundary > low / 2) low = boundary + 1;
+      out.push({ fragments: [{ ...input, text: rest.slice(0, low) }], truncated: 0 });
+      rest = rest.slice(low);
+    } while (rest.length);
+  }
+  if (current.length) out.push({ fragments: current, truncated: 0 });
+  return out;
+};
+
+export const splitTruncatedBatch = (batch: IBatch): IBatch[] | null => {
+  if (batch.fragments.length > 1) {
+    const mid = Math.ceil(batch.fragments.length / 2);
+    return [batch.fragments.slice(0, mid), batch.fragments.slice(mid)].map((fragments) => ({ fragments, truncated: 0 }));
+  }
+  const f = batch.fragments[0];
+  if (!f || f.text.length <= 128) return null;
+  let mid = Math.ceil(f.text.length / 2);
+  if (/[\uD800-\uDBFF]/u.test(f.text[mid - 1]!)) mid -= 1;
+  return [f.text.slice(0, mid), f.text.slice(mid)].map((text) => ({ fragments: [{ ...f, text }], truncated: 0 }));
+};
+
 const coverageOf = (run: IAnalysisRunRow, fragments: number, batches: number): ICoverage => {
   const c = run.coverage as Partial<ICoverage>;
   return {
     fragmentsTotal: fragments,
-    batchesTotal: batches,
+    batchesTotal: c.batchesTotal ?? batches,
     batchesProcessed: c.batchesProcessed ?? 0,
     batchesFailed: c.batchesFailed ?? 0,
     candidatesSaved: c.candidatesSaved ?? 0,
@@ -102,8 +152,10 @@ export const analysisExtractHandler: IJobHandlerSpec = {
     const kinds = run.task === 'fact_extraction' ? await factKindCodes(ctx.pool) : [];
     const system = systemPrompt(run.task, kinds);
     if (sha256Hex(system) !== run.prompt_sha256) return finishWith(ctx, run.id, 'prompt_changed', run.coverage);
+    const { batchingVersion, ...pinnedConfig } = run.inference_config;
+    if (configHash(pinnedConfig) !== configHash(chat.inferenceConfig)) return finishWith(ctx, run.id, 'model_config_changed', run.coverage);
     const inputs = await analysisRunInputs(ctx.pool, run.id);
-    const batches = splitBatches(inputs, chat.maxInputChars);
+    const batches = (batchingVersion === 2 ? splitBatches : legacyBatches)(inputs, chat.maxInputChars);
     const coverage = coverageOf(run, inputs.length, batches.length);
     const result = { batches: [...(((run.result as { batches?: unknown[] } | null)?.batches) ?? [])] as unknown[] };
     if (run.status === 'queued') await ctx.withLease((client) => startAnalysisRun(client, run.id));
@@ -114,17 +166,28 @@ export const analysisExtractHandler: IJobHandlerSpec = {
       });
       return;
     }
-    const batch = batches[index]!;
+    const pending = (run.progress.pending as IBatch[] | undefined) ?? [batches[index]!];
+    const batch = pending[0]!;
     ctx.throwIfStopped();
     const res = await chat.complete({ task: run.task, system, user: modelUserContent(batch.fragments), signal: ctx.signal });
     if (!res.ok) {
       const code = `model_${res.error.code.toLowerCase()}`;
       if (res.error.retryable) throw new RetryableJobError(code, res.error.message);
-      return finishWith(ctx, run.id, code, { ...coverage });
+      if (res.error.code !== 'TRUNCATED' || batchingVersion !== 2) return finishWith(ctx, run.id, code, { ...coverage });
+      const smaller = splitTruncatedBatch(batch);
+      if (smaller) {
+        coverage.batchesTotal += 1;
+        result.batches.push({ index, outcome: 'model_truncated_split', inputSha256: sha256Hex(modelUserContent(batch.fragments)) });
+        await ctx.complete(
+          async (client) => void (await updateAnalysisProgress(client, run.id, { batch: index, pending: [...smaller, ...pending.slice(1)] }, { ...coverage }, result)),
+          async (client) => void (await enqueueAnalysisBatch(client, run)),
+        );
+        return;
+      }
     }
     const allowed = new Set(batch.fragments.map((f) => f.id));
     const origins = new Map(batch.fragments.map((f) => [f.id, f.origin]));
-    const parsed =
+    const parsed = !res.ok ? { ok: false as const, reason: 'model_truncated' } :
       run.task === 'requirement_extraction'
         ? parseRequirementOutput(res.value.content, allowed)
         : parseFactOutput(res.value.content, allowed, new Set(kinds), (id) => FACT_BASIS_ORIGINS.includes(origins.get(id) ?? ''));
@@ -133,9 +196,10 @@ export const analysisExtractHandler: IJobHandlerSpec = {
     const entry: Record<string, unknown> = {
       index,
       fragments: batch.fragments.length,
-      startedAt: res.value.startedAt.toISOString(),
-      finishedAt: res.value.finishedAt.toISOString(),
-      raw: res.value.content.slice(0, 200_000),
+      inputSha256: sha256Hex(modelUserContent(batch.fragments)),
+      startedAt: res.ok ? res.value.startedAt.toISOString() : null,
+      finishedAt: res.ok ? res.value.finishedAt.toISOString() : null,
+      raw: res.ok ? res.value.content.slice(0, 200_000) : null,
     };
     if (!parsed.ok) {
       coverage.batchesFailed += 1;
@@ -147,7 +211,8 @@ export const analysisExtractHandler: IJobHandlerSpec = {
       entry.dropped = parsed.dropped;
     }
     result.batches.push(entry);
-    const next = index + 1;
+    const remaining = pending.slice(1);
+    const next = remaining.length ? index : index + 1;
     await ctx.complete(
       async (client) => {
         if (parsed.ok) {
@@ -157,7 +222,7 @@ export const analysisExtractHandler: IJobHandlerSpec = {
               : await insertModelFactCandidates(client, run, parsed.items as Parameters<typeof insertModelFactCandidates>[2]);
         }
         if (next < batches.length) {
-          await updateAnalysisProgress(client, run.id, { batch: next }, { ...coverage }, result);
+          await updateAnalysisProgress(client, run.id, { batch: next, ...(remaining.length ? { pending: remaining } : {}) }, { ...coverage }, result);
         } else {
           const gaps = coverage.batchesFailed > 0 || coverage.truncatedFragments > 0;
           await finishAnalysisRun(client, run.id, { status: gaps ? 'completed_with_gaps' : 'completed', failureCode: null, coverage: { ...coverage }, result });

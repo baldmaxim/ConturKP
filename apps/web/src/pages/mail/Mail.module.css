@@ -85,6 +85,162 @@
   overflow-wrap: anywhere;
 }
 
+.searchForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.searchForm > .actions {
+  padding-top: 1.6rem;
+}
+
+.historyToolbar, .pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.historyToolbar .actions, .pagination .actions, .pageJump {
+  align-items: end;
+}
+
+.pageCount {
+  align-self: center;
+  padding: var(--space-2);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pageJump {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.pageJump input {
+  width: 7rem;
+}
+
+.envelope, .readingPane {
+  padding: clamp(1rem, 2.5vw, 2rem);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--surface);
+}
+
+.subject {
+  margin-bottom: var(--space-3);
+}
+
+.subject h2 {
+  margin: 0;
+  font-size: clamp(1.2rem, 2vw, 1.65rem);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.mailLabel {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.envelope {
+  padding-block: var(--space-4);
+}
+
+.envelopeMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+}
+
+.envelopeMeta > div {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.envelopeMeta dt {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.envelopeMeta dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.recipientDetails {
+  margin-top: var(--space-2);
+}
+
+.recipientDetails summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.875rem;
+  padding: var(--space-1) 0;
+}
+
+.recipientDetails dl {
+  margin-top: var(--space-3);
+}
+
+.messageText {
+  max-width: 85ch;
+  margin: var(--space-4) 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.75;
+  font-size: 1rem;
+}
+
+.signature {
+  font-size: 0.875rem;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.signature aside {
+  margin-top: var(--space-3);
+  white-space: pre-wrap;
+}
+
+.previousMessages, .sourceDetails, .signature {
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-3);
+  color: var(--muted);
+}
+
+.previousMessages summary, .sourceDetails summary, .signature summary {
+  cursor: pointer;
+  font-size: 0.875rem;
+  padding: var(--space-2) 0;
+}
+
+.previousMessages blockquote {
+  max-width: 85ch;
+  margin: var(--space-3) 0;
+  padding-left: var(--space-4);
+  border-left: 3px solid var(--border);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+}
+
+@media (max-width: 600px) {
+  .searchForm { grid-template-columns: 1fr; }
+  .searchForm > .actions { padding-top: 0; }
+  .pagination, .historyToolbar { align-items: stretch; }
+}
+
 @media (min-width: 768px) {
   .cards {
     display: grid;

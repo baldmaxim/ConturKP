@@ -485,22 +485,22 @@ export const getScopedFragment = async (db: Queryable, ctx: IAccessContext, id: 
             ts.speaker_label, ts.segment_kind, ts.t_start_ms, ts.t_end_ms,
             qi.item_no AS qa_item_no, qr.seq AS qa_revision_seq, qt.title AS qa_thread_title
        FROM evidence_fragment f
-       LEFT JOIN document_revision dr ON dr.id = f.document_revision_id
-       LEFT JOIN document d ON d.id = dr.document_id
-       LEFT JOIN blob b ON b.sha256 = dr.blob_sha256
-       LEFT JOIN recognition_run r ON r.id = f.run_id
-       LEFT JOIN recognition_page p ON p.run_id = f.run_id AND p.page_index = f.page_index
-       LEFT JOIN mail_message_revision mr ON mr.id = f.mail_message_revision_id
-       LEFT JOIN mail_message m ON m.id = mr.message_id
-       LEFT JOIN mail_attachment a ON a.id = d.mail_attachment_id
-       LEFT JOIN mail_message_revision amr ON amr.id = a.revision_id
-       LEFT JOIN mail_message am ON am.id = amr.message_id
-       LEFT JOIN transcript_revision tr ON tr.id = f.transcript_revision_id
-       LEFT JOIN negotiation_session ns ON ns.id = tr.session_id
-       LEFT JOIN transcript_segment ts ON ts.id = f.transcript_segment_id
-       LEFT JOIN qa_item_revision qr ON qr.id = f.qa_item_revision_id
-       LEFT JOIN qa_item qi ON qi.id = qr.item_id
-       LEFT JOIN qa_thread qt ON qt.id = qi.thread_id
+       LEFT JOIN LATERAL (SELECT one.* FROM document_revision one WHERE one.id = f.document_revision_id LIMIT 1) dr ON true
+       LEFT JOIN LATERAL (SELECT one.* FROM document one WHERE one.id = dr.document_id LIMIT 1) d ON true
+       LEFT JOIN LATERAL (SELECT one.* FROM blob one WHERE one.sha256 = dr.blob_sha256 LIMIT 1) b ON true
+       LEFT JOIN LATERAL (SELECT one.* FROM recognition_run one WHERE one.id = f.run_id LIMIT 1) r ON true
+       LEFT JOIN LATERAL (SELECT one.* FROM recognition_page one WHERE one.run_id = f.run_id AND one.page_index = f.page_index LIMIT 1) p ON true
+       LEFT JOIN LATERAL (SELECT one.* FROM mail_message_revision one WHERE one.id = f.mail_message_revision_id LIMIT 1) mr ON true
+       LEFT JOIN LATERAL (SELECT one.* FROM mail_message one WHERE one.id = mr.message_id LIMIT 1) m ON true
+       LEFT JOIN LATERAL (SELECT one.* FROM mail_attachment one WHERE one.id = d.mail_attachment_id LIMIT 1) a ON true
+       LEFT JOIN LATERAL (SELECT one.* FROM mail_message_revision one WHERE one.id = a.revision_id LIMIT 1) amr ON true
+       LEFT JOIN LATERAL (SELECT one.* FROM mail_message one WHERE one.id = amr.message_id LIMIT 1) am ON true
+       LEFT JOIN LATERAL (SELECT one.* FROM transcript_revision one WHERE one.id = f.transcript_revision_id LIMIT 1) tr ON true
+       LEFT JOIN LATERAL (SELECT one.* FROM negotiation_session one WHERE one.id = tr.session_id LIMIT 1) ns ON true
+       LEFT JOIN LATERAL (SELECT one.* FROM transcript_segment one WHERE one.id = f.transcript_segment_id LIMIT 1) ts ON true
+       LEFT JOIN LATERAL (SELECT one.* FROM qa_item_revision one WHERE one.id = f.qa_item_revision_id LIMIT 1) qr ON true
+       LEFT JOIN LATERAL (SELECT one.* FROM qa_item one WHERE one.id = qr.item_id LIMIT 1) qi ON true
+       LEFT JOIN LATERAL (SELECT one.* FROM qa_thread one WHERE one.id = qi.thread_id LIMIT 1) qt ON true
       WHERE f.id = $1
         AND (f.tender_id = ANY($2::uuid[]) OR f.contract_id = ANY($3::uuid[])
              OR coalesce(m.mailbox_id, am.mailbox_id) = ANY($4::uuid[])

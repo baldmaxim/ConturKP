@@ -10,6 +10,7 @@
 // R13-04: согласование и выпуск по устаревшему показанному составу (риски, решения по удержаниям) — 409.
 // Данные вымышленные.
 import type pg from 'pg';
+import { restrictManagerPermissions } from './roleFixtures.ts';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { drain, idem, type TestClient } from './helpers.ts';
 import { createMailbox, eml, importEml, linkMail, setMailAccess } from './mailFixtures.ts';
@@ -246,16 +247,19 @@ describe('R13-02 — причины решений наследуют закры
     await letter('r13-02-c@example.test', 'Третье вымышленное условие R13-02');
     const c = await assembled(st);
     const holds = await openHolds(st, c.id);
+    const restorePermissions = await restrictManagerPermissions(st.e.s.admin, st.e.s.ids.manager, ['mail.read.all']);
     await setMailAccess(st.e.s.admin, box, st.e.s.ids.manager, []);
     try {
       const blind = await st.e.s.manager.post(`/release-candidates/${c.id}/holds/resolve`, { holdIds: holds.map((h) => h.id), resolution: 'not_applicable', reason: 'Решение без чтения письма' }, { headers: idem() });
       expect(blind.status, blind.text).toBe(409);
       expect(blind.body.current.reason).toBe('restricted_event');
       expect((await openHolds(st, c.id)).length).toBe(holds.length);
+      await setMailAccess(st.e.s.admin, box, st.e.s.ids.manager, MAIL);
+      expect(await notApplicable(st, c.id, 'Письмо прочитано: комплект не меняет')).toBe(holds.length);
     } finally {
       await setMailAccess(st.e.s.admin, box, st.e.s.ids.manager, MAIL);
+      await restorePermissions();
     }
-    expect(await notApplicable(st, c.id, 'Письмо прочитано: комплект не меняет')).toBe(holds.length);
   });
 });
 

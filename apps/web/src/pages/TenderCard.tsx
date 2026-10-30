@@ -2,7 +2,7 @@ import { useState, type FC } from 'react';
 import { getTender, updateTender } from '../api/endpoints';
 import { conflictCurrent, describeError, fieldErrorsOf, hasCode } from '../api/errors';
 import { isTender } from '../api/guards';
-import type { ITender, ITenderPatch, TTenderStatus } from '../api/types';
+import type { ITender, ITenderPatch, TTenderOutcome, TTenderStatus } from '../api/types';
 import { Button } from '../components/Button';
 import { ConflictDialog, type IConflictRow } from '../components/ConflictDialog';
 import { Notice } from '../components/Notice';
@@ -12,7 +12,7 @@ import { TextField } from '../components/TextField';
 import { useToast } from '../hooks/useToast';
 import { useUnsavedChanges } from '../hooks/unsavedChanges';
 import { formatDateTime } from '../utils/datetime';
-import { MEMBER_ROLE_LABELS } from '../utils/labels';
+import { MEMBER_ROLE_LABELS, TENDER_OUTCOME_LABELS } from '../utils/labels';
 import form from '../styles/form.module.css';
 
 interface ITenderForm {
@@ -20,6 +20,7 @@ interface ITenderForm {
   customerName: string;
   objectName: string;
   status: TTenderStatus;
+  outcome: TTenderOutcome | '';
 }
 
 const STATUS_LABELS: Record<TTenderStatus, string> = { active: 'Действующий', archived: 'В архиве' };
@@ -29,6 +30,7 @@ const toForm = (tender: ITender): ITenderForm => ({
   customerName: tender.customerName ?? '',
   objectName: tender.objectName ?? '',
   status: tender.status,
+  outcome: tender.outcome ?? '',
 });
 
 const buildPatch = (base: ITender, values: ITenderForm): ITenderPatch => {
@@ -46,6 +48,10 @@ const buildPatch = (base: ITender, values: ITenderForm): ITenderPatch => {
   }
   if (values.status !== base.status) {
     patch.status = values.status;
+  }
+  const outcome = values.status === 'archived' ? values.outcome || null : null;
+  if (outcome !== base.outcome) {
+    patch.outcome = outcome;
   }
   return patch;
 };
@@ -95,8 +101,11 @@ export const TenderCard: FC<ITenderCardProps> = ({ tender, onChanged }) => {
     if (!base) {
       return;
     }
-    if (!values.title.trim()) {
-      setErrors({ title: 'Укажите название.' });
+    const nextErrors: Record<string, string> = {};
+    if (!values.title.trim()) nextErrors.title = 'Укажите название.';
+    if (values.status === 'archived' && !values.outcome) nextErrors.outcome = 'Выберите: выигран или проигран.';
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
       return;
     }
     const patch = buildPatch(base, values);
@@ -145,6 +154,7 @@ export const TenderCard: FC<ITenderCardProps> = ({ tender, onChanged }) => {
         { label: 'Заказчик', mine: values.customerName.trim(), current: conflict.current.customerName ?? '' },
         { label: 'Объект', mine: values.objectName.trim(), current: conflict.current.objectName ?? '' },
         { label: 'Статус', mine: STATUS_LABELS[values.status], current: STATUS_LABELS[conflict.current.status] },
+        { label: 'Результат', mine: values.outcome ? TENDER_OUTCOME_LABELS[values.outcome] : 'Не указан', current: conflict.current.outcome ? TENDER_OUTCOME_LABELS[conflict.current.outcome] : 'Не указан' },
       ]
     : [];
 
@@ -186,9 +196,20 @@ export const TenderCard: FC<ITenderCardProps> = ({ tender, onChanged }) => {
                 { value: 'active', label: STATUS_LABELS.active },
                 { value: 'archived', label: STATUS_LABELS.archived },
               ]}
-              onValueChange={(value) => set('status', value === 'archived' ? 'archived' : 'active')}
+              onValueChange={(value) => setValues((prev) => ({ ...prev, status: value === 'archived' ? 'archived' : 'active', outcome: value === 'archived' ? prev.outcome : '' }))}
               error={errors.status}
             />
+            {values.status === 'archived' ? (
+              <SelectField
+                label="Результат тендера"
+                required
+                value={values.outcome}
+                placeholder="Выберите результат"
+                options={[{ value: 'won', label: TENDER_OUTCOME_LABELS.won }, { value: 'lost', label: TENDER_OUTCOME_LABELS.lost }]}
+                onValueChange={(value) => set('outcome', value === 'won' || value === 'lost' ? value : '')}
+                error={errors.outcome}
+              />
+            ) : null}
             <div className={form.wide}>
               <TextField label="Название" required value={values.title} onValueChange={(v) => set('title', v)} error={errors.title} />
             </div>
@@ -221,7 +242,7 @@ export const TenderCard: FC<ITenderCardProps> = ({ tender, onChanged }) => {
           <dd>{tender.objectName ?? absent}</dd>
           <dt>Статус</dt>
           <dd>
-            <StatusBadge status={tender.status} />
+            <StatusBadge status={tender.status} outcome={tender.outcome} />
           </dd>
           <dt>Моя роль</dt>
           <dd>{tender.myRole ? MEMBER_ROLE_LABELS[tender.myRole] : 'Не участник'}</dd>

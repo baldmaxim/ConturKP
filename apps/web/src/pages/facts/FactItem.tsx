@@ -1,27 +1,33 @@
 import type { FC } from 'react';
-import type { IGraphFact } from '../../api/factTypes';
-import { AppLink } from '../../components/AppLink';
+import { Badge } from '../../components/Badge';
 import { decidedByBadge, factStateBadge } from '../../utils/factLabels';
+import { factValue } from '../../utils/factPresentation';
+import { factSourceLabel, type IFactValueGroup } from '../../utils/factGroups';
 import styles from './Facts.module.css';
 
-/** Факт графа: значение, состояние (правило или человек), документ и пункт, срок действия, цитата оригинала. */
-export const FactItem: FC<{ fact: IGraphFact; documentTitle: string; replacedBy: IGraphFact | null }> = ({ fact, documentTitle, replacedBy }) => (
+/** Stable selector: expanded content lives below the complete list of facts. */
+export const FactItem: FC<{ group: IFactValueGroup; expanded: boolean; controlsId: string; onToggle: () => void }> = ({ group, expanded, controlsId, onToggle }) => {
+  const fact = group.facts[0]!;
+  const conflict = group.facts.some((f) => f.state?.status === 'conflict');
+  const superseded = group.facts.filter((f) => f.state?.status === 'superseded');
+  const unknown = group.facts.some((f) => !f.state);
+  const human = group.facts.find((f) => f.state?.decidedBy === 'human');
+  return (
   <li className={styles.fact}>
-    <div className={styles.headLine}>
-      <span className={styles.value}>{fact.display}</span>
-      {factStateBadge(fact.state)}
-      {decidedByBadge(fact.state)}
-    </div>
-    <p className={styles.muted}>
-      {[documentTitle, fact.clauseRef ? `п. ${fact.clauseRef}` : null, fact.state?.validFrom ? `с ${fact.state.validFrom}` : null, fact.state?.validTo ? `по ${fact.state.validTo}` : null, replacedBy ? `заменено значением «${replacedBy.display}»` : null]
-        .filter(Boolean)
-        .join(' · ')}
-    </p>
-    <p className={styles.quote}>{fact.rawValue}</p>
-    {fact.fragmentIds[0] ? (
-      <AppLink className={styles.open} to={`/evidence/${fact.fragmentIds[0]}`}>
-        Открыть цитату
-      </AppLink>
-    ) : null}
+    <button type="button" className={`${styles.factSummary} ${expanded ? styles.factSelected : ''}`} aria-haspopup="dialog" aria-expanded={expanded} aria-controls={expanded ? controlsId : undefined} onClick={onToggle} title={`${fact.title} · ${factSourceLabel(group)}`}>
+        <span className={styles.factLabel}>{fact.title}</span>
+        <span className={styles.value}>{factValue(fact)}</span>
+        {group.facts.length > 1 ? <span className={styles.sourceCount}>{factSourceLabel(group)}</span> : null}
+        <span className={styles.factStatus}>
+          {fact.retired ? <Badge tone="muted" icon="clock-alert" label="Прежняя редакция" /> : <>
+            {conflict ? <Badge tone="warning" icon="file-exclamation-point" label="Конфликт" /> : null}
+            {superseded.length ? superseded.length === group.facts.length ? factStateBadge(superseded[0]!.state) : <Badge tone="muted" icon="clock-alert" label="Есть прежние условия" /> : null}
+            {unknown ? <Badge tone="muted" icon="hourglass" label="Есть факты без состояния" /> : null}
+          </>}
+          {decidedByBadge(human?.state ?? null)}
+        </span>
+        <span className={styles.factChevron} aria-hidden="true">{expanded ? '⌃' : '⌄'}</span>
+    </button>
   </li>
-);
+  );
+};

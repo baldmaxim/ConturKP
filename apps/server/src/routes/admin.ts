@@ -19,6 +19,7 @@ import {
 import { Router } from 'express';
 import { command, parseBody, query, requireIfMatch, uuidParam, versionConflict } from '../http/command.ts';
 import { forbidden, HttpError, notFound } from '../http/errors.ts';
+import { validateAssignedRoles } from './roles.ts';
 import { toAuditEvent, toUser } from '../mappers.ts';
 
 const requireGlobal = (ctx: IAccessContext, cap: GlobalCapability, entityType: string, entityId: string | null = null): void => {
@@ -52,7 +53,9 @@ export const adminRouter = (pool: Pool, clock: () => Date): Router => {
       run: async (client, ctx, req) => {
         requireGlobal(ctx, 'admin.users', 'app_user');
         const body = parseBody(CreateUserRequest, req.body);
+        await lockAdminSet(client);
         const roles = [...new Set(body.roles)];
+        await validateAssignedRoles(client, roles);
         const id = await insertUser(
           client,
           { login: body.login, displayName: body.displayName, passwordHash: await hashPassword(body.password), roles },
@@ -84,12 +87,10 @@ export const adminRouter = (pool: Pool, clock: () => Date): Router => {
         if (requireIfMatch(req, id) !== u.row_version) throw versionConflict(toUser(u));
         const body = parseBody(PatchUserRequest, req.body);
         const roles = body.roles ? [...new Set(body.roles)] : u.roles;
-        const losesAdmin = u.roles.includes('admin') && u.status === 'active' && (!roles.includes('admin') || body.status === 'disabled');
-        if (losesAdmin && (await countActiveAdmins(client)) <= 1) {
-          throw new HttpError(409, 'STATE_CONFLICT', 'нельзя снять последнего активного администратора', {}, { entityId: id });
-        }
+        if (body.roles) await validateAssignedRoles(client, roles);
         if (body.roles) await setRoles(client, id, roles, ctx.principal.userId);
         await updateUser(client, id, { displayName: body.displayName, status: body.status });
+        if ((await countActiveAdmins(client)) === 0) throw new HttpError(409, 'STATE_CONFLICT', 'нельзя снять последнего активного администратора', {}, { entityId: id });
         if (body.status === 'disabled' && u.status !== 'disabled') await revokeUserSessions(client, id, clock(), 'user_disabled');
         const after = await loadUser(client, id);
         return {

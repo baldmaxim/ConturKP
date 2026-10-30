@@ -10,7 +10,7 @@ import { useApiResource } from '../../hooks/useApiResource';
 import { useIdempotencyKey } from '../../hooks/useIdempotencyKey';
 import { usePolling } from '../../hooks/usePolling';
 import { useToast } from '../../hooks/useToast';
-import { formatDecimal } from '../../utils/calculationLabels';
+import { formatAmount } from '../../utils/calculationLabels';
 import { COMPONENT_LABEL, FACTOR_LABEL, signed } from '../../utils/economicsLabels';
 import form from '../../styles/form.module.css';
 import { LineagePanel } from './LineagePanel';
@@ -90,7 +90,7 @@ export const ComparisonView: FC<IComparisonViewProps> = ({ comparisonId, caps })
           <div key={m} className={styles.tableWrap}>
             <table className={styles.table}>
               <caption className={form.sectionTitle}>
-                {`${m === 'cost' ? 'Себестоимость' : 'Коммерческая стоимость'}: ${formatDecimal(c.totals?.[m].left ?? null)} → ${formatDecimal(c.totals?.[m].right ?? null)} ₽ (${signed(c.totals?.[m].delta ?? null)})`}
+                {`${m === 'cost' ? 'Себестоимость' : 'Коммерческая стоимость'}: ${formatAmount(c.totals?.[m].left ?? null)} → ${formatAmount(c.totals?.[m].right ?? null)} ₽ (${signed(c.totals?.[m].delta ?? null)})`}
               </caption>
               <thead>
                 <tr>

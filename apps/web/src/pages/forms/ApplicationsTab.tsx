@@ -12,6 +12,7 @@ import { useIdempotencyKey } from '../../hooks/useIdempotencyKey';
 import { useToast } from '../../hooks/useToast';
 import form from '../../styles/form.module.css';
 import { DraftWizard } from './DraftWizard';
+import { FormPacketsPanel } from './FormPacketsPanel';
 import styles from './Forms.module.css';
 
 interface IApplicationsTabProps {
@@ -58,6 +59,7 @@ export const ApplicationsTab: FC<IApplicationsTabProps> = ({ stageId, tenderId, 
 
   return (
     <div className={form.stack}>
+      <FormPacketsPanel stageId={stageId} />
       <section className={form.section} aria-labelledby="apps-title">
         <div className={form.sectionHead}>
           <h3 id="apps-title" className={form.sectionTitle}>

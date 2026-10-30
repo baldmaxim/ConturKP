@@ -60,6 +60,9 @@ export interface IReviewPosition {
   name: string;
   unit: string | null;
   section: string | null;
+  // Вход упорядочен по position_number; для старых снимков поля могут отсутствовать.
+  hierarchyLevel?: number | null;
+  parentExternalPositionId?: string | null;
   volume: number | null;
   total: number | null;
   isSection: boolean;

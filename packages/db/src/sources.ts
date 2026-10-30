@@ -13,9 +13,21 @@ export const insertBlob = async (
   db: Queryable,
   b: { sha256: string; sizeBytes: number; mediaType: string; storageKey: string },
 ): Promise<void> => {
-  await db.query(
-    'INSERT INTO blob (sha256, size_bytes, media_type, storage_key) VALUES ($1, $2, $3, $4) ON CONFLICT (sha256) DO NOTHING',
+  const inserted = await db.query(
+    'INSERT INTO blob (sha256, size_bytes, media_type, storage_key) VALUES ($1, $2, $3, $4) ON CONFLICT (sha256) DO NOTHING RETURNING sha256',
     [b.sha256, b.sizeBytes, b.mediaType, b.storageKey],
+  );
+  if (inserted.rowCount || b.mediaType === 'application/octet-stream') return;
+  // У нового или уже конкретного blob формат задан исходной записью. Уточнение
+  // нужно только при повторной регистрации байтов, впервые принятых с общим MIME.
+  const generic = await db.query("SELECT 1 FROM blob WHERE sha256=$1 AND media_type='application/octet-stream'", [b.sha256]);
+  if (!generic.rowCount) return;
+  // Образец мог первым сохранить те же байты с общим MIME. Подтверждённый конкретным
+  // путём регистрации формат дописывается отдельно: исходная строка blob неизменна.
+  await db.query(
+    `INSERT INTO blob_format_declaration(blob_sha256,media_type)
+     SELECT $1,$2 WHERE local_input_format($2) IS NOT NULL ON CONFLICT DO NOTHING`,
+    [b.sha256,b.mediaType],
   );
 };
 

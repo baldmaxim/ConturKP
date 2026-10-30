@@ -8,6 +8,7 @@ import { execFile } from 'node:child_process';
 import { hostname } from 'node:os';
 import { buildId } from '../../packages/config/src/index.ts';
 import { BackupError } from '../../packages/storage/src/index.ts';
+import { pruneBackupPoints } from '../../packages/storage/src/backupRetention.ts';
 import { hasFlag } from '../cli.ts';
 import { runBackup } from './backup-lib.ts';
 import { findPgTools } from './pgTools.ts';
@@ -36,12 +37,20 @@ const main = async (): Promise<void> => {
     return;
   }
   log(`инструмент: ${tool.version} (${tool.mode === 'docker' ? `контейнер ${tool.container}` : 'локально'})`);
+  let completed = false;
   try {
     const r = await runBackup({ backupUrl: env[urlKey]!, storageRoot: env.STORAGE_ROOT!, backupRoot: env.BACKUP_ROOT!, tool, host: hostname(), build: buildId(), log, preUpdate });
     log(`копия завершена: ${r.dir}`);
     log(`схема ${r.manifest.schema.version}; дамп ${r.manifest.dump.sizeBytes} байт, SHA-256 ${r.manifest.dump.sha256}; файлов ${r.manifest.files.count} (${r.manifest.files.totalBytes} байт), перечень ${r.manifest.files.listSha256}`);
+    completed = true;
+    if ((hasFlag('retention') || env.BACKUP_RETENTION_CONFIG) && !preUpdate) {
+      if (!env.BACKUP_RETENTION_CONFIG) throw new BackupError('backup_retention', 'для --retention нужен BACKUP_RETENTION_CONFIG');
+      const result = await pruneBackupPoints({ policyFile: env.BACKUP_RETENTION_CONFIG, backupRoot: env.BACKUP_ROOT!, storageRoot: env.STORAGE_ROOT!, completedPoint: r.dir.split(/[\\/]/u).at(-1)!, apply: true, freshlyVerifiedManifest: r.manifest, log });
+      log(`очистка: удалено ${result.removed.length}, оставлено ${result.keep.length}, служебных папок ${result.ignored.length}`);
+    }
   } catch (err) {
-    log(err instanceof BackupError ? `копия не снята (${err.code}): ${err.message}` : `копия не снята: ${err instanceof Error ? err.message : 'неизвестная ошибка'}`);
+    const stage = completed ? 'копия сохранена; очистка не завершена' : 'копия не снята';
+    log(err instanceof BackupError ? `${stage} (${err.code}): ${err.message}` : `${stage}: ${err instanceof Error ? err.message : 'неизвестная ошибка'}`);
     process.exitCode = 1;
   }
 };

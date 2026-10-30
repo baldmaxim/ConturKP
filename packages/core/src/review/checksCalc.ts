@@ -131,9 +131,20 @@ export const checkQuantities = (input: IReviewInput): { result: ICheckResult; fi
   }
   // Дубли позиций и нулевые объёмы — по закреплённой ревизии расчёта.
   const groups = new Map<string, IReviewPosition[]>();
+  const sections: IReviewPosition[] = [];
+  const scopeByPosition = new Map<string, string | null>();
   for (const p of input.positions) {
-    if (p.isSection || !p.name.trim()) continue;
-    const key = [normalizeMatchText(p.name), normalizeUnit(p.unit) ?? '', normalizeMatchText(p.section ?? '')].join('|');
+    if (p.hierarchyLevel == null) sections.length = 0;
+    else while (sections.length && sections.at(-1)!.hierarchyLevel! >= p.hierarchyLevel) sections.pop();
+    const parent = p.parentExternalPositionId;
+    const scope = parent ? `parent:${parent}` : sections.length ? `header:${sections.at(-1)!.externalPositionId}|${p.section?.trim() ?? ''}` : p.section?.trim() ? `section:${p.section.trim()}` : null;
+    scopeByPosition.set(p.externalPositionId, scope);
+    if (p.isSection) {
+      if (p.hierarchyLevel != null) sections.push(p);
+      continue;
+    }
+    if (!p.name.trim()) continue;
+    const key = [normalizeMatchText(p.name), normalizeUnit(p.unit) ?? '', scope ?? 'unknown'].join('|');
     groups.set(key, [...(groups.get(key) ?? []), p]);
     if (p.volume !== null && p.volume <= 0 && (p.total ?? 0) > 0) {
       findings.push(
@@ -153,14 +164,15 @@ export const checkQuantities = (input: IReviewInput): { result: ICheckResult; fi
   let duplicates = 0;
   for (const [key, ps] of groups) {
     if (ps.length < 2) continue;
+    const knownScope = scopeByPosition.get(ps[0]!.externalPositionId) != null;
     duplicates += 1;
     findings.push(
       draft({
         key: findingKey('duplicate_position', key),
         kind: 'duplicate_position',
-        title: `Позиция «${ps[0]!.name}» повторяется ${ps.length} раза в одном разделе`,
-        detail: null,
-        confidence: 'high',
+        title: knownScope ? `Позиция «${ps[0]!.name}» повторяется ${ps.length} раза в одном разделе` : `Похожие позиции «${ps[0]!.name}»: раздел не установлен`,
+        detail: knownScope ? null : 'Номер раздела, родитель и иерархия отсутствуют. Совпадение названия и единицы не доказывает двойной учёт.',
+        confidence: knownScope ? 'high' : 'low',
         action: 'Проверить, не учтена ли работа дважды',
         suggestedSide: null,
         evidence: ps.map((p) => ({ side: 'right' as const, objectType: 'calculation_object' as const, calculationRevisionId: input.calculationRevisionId!, externalPositionId: p.externalPositionId, externalItemId: null })),

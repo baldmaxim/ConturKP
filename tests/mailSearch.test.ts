@@ -1,3 +1,4 @@
+import { restrictManagerPermissions } from './roleFixtures.ts';
 // Этап 07: обязательные тесты утечки через поиск (D-025, AD-07-1a). Поиск один: exact, FTS и vector
 // работают с ревизией письма и документом вложения. Результат письма допустим только при одновременно:
 // единица в области, mail.read на ящик, связь с тендером контекста, доступ к тендеру. Проверка — до
@@ -63,6 +64,8 @@ const attachmentFragmentId = async (): Promise<string> =>
 beforeAll(async () => {
   db = await createTestDb();
   s = await buildScenario(db, makeApp(db, undefined, config));
+  // Ограниченный профиль проверяет выдачи; общий просмотр manager проверяется отдельно.
+  await restrictManagerPermissions(s.admin, s.ids.manager, ['mail.read.all']);
   worker = makeWorker(db, config, 'mail-search-worker', fake);
   m = await buildMailScope(
     s,

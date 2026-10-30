@@ -1,0 +1,30 @@
+.stage { --voxel-shirt: var(--office-shirt, var(--accent)); position: relative; display: inline-block; width: 44px; height: 46px; flex: none; perspective: 180px; }
+.model { position: absolute; inset: 0; transform-style: preserve-3d; transform: translate(5px, 1px) rotateX(-12deg) rotateY(-28deg); transform-origin: 50% 55%; transition: transform var(--duration-fast) var(--ease-out); }
+.stage:hover .model { transform: translate(5px, 1px) rotateX(-12deg) rotateY(-10deg); }
+.shadow { position: absolute; left: 12px; bottom: 0; width: 26px; height: 6px; border-radius: 50%; background: color-mix(in srgb, var(--text) 14%, transparent); }
+.cube { position: absolute; top: 0; left: 0; width: var(--w); height: var(--h); transform-style: preserve-3d; transform: translate3d(calc(var(--x) - var(--w) / 2), calc(var(--y) - var(--h) / 2), var(--z)); }
+.cube > span { position: absolute; display: block; backface-visibility: hidden; background: var(--voxel-color); }
+.front, .back { width: var(--w); height: var(--h); }
+.front { transform: translateZ(calc(var(--d) / 2)); }
+.back { transform: rotateY(180deg) translateZ(calc(var(--d) / 2)); }
+.left, .right { top: 0; left: calc((var(--w) - var(--d)) / 2); width: var(--d); height: var(--h); background: color-mix(in srgb, var(--voxel-color) 75%, var(--office-screen)) !important; }
+.left { transform: rotateY(-90deg) translateZ(calc(var(--w) / 2)); }
+.right { transform: rotateY(90deg) translateZ(calc(var(--w) / 2)); }
+.top, .bottom { top: calc((var(--h) - var(--d)) / 2); width: var(--w); height: var(--d); }
+.top { transform: rotateX(90deg) translateZ(calc(var(--h) / 2)); background: color-mix(in srgb, var(--voxel-color) 86%, var(--office-cup)) !important; }
+.bottom { transform: rotateX(-90deg) translateZ(calc(var(--h) / 2)); }
+.eyes { position: absolute; left: 3px; top: 6px; width: 2px; height: 2px; background: var(--office-screen); box-shadow: 6px 0 var(--office-screen); }
+.mouth { position: absolute; left: 6px; top: 10px; width: 3px; height: 1px; background: var(--office-hair); }
+.alert { position: absolute; right: -1px; top: 0; display: grid; place-items: center; min-width: 13px; height: 15px; border-radius: 4px; background: var(--warning-soft); color: var(--warning); font-size: var(--text-xs); line-height: var(--leading-xs); font-weight: 600; }
+.stage[data-status='working'] .leftArm, .stage[data-status='working'] .leftHand { animation: type-left 650ms steps(2, end) infinite; }
+.stage[data-status='working'] .rightArm, .stage[data-status='working'] .rightHand { animation: type-left 650ms steps(2, end) infinite reverse; }
+.stage[data-status='error'] .rightArm { --y: 14px !important; }
+.stage[data-status='error'] .rightHand { --y: 7px !important; }
+.paper { display: none; }
+.stage[data-pose='read'][data-status='working'] .paper { display: block; }
+.stage[data-pose='read'] .leftArm, .stage[data-pose='read'] .rightArm, .stage[data-pose='read'] .leftHand, .stage[data-pose='read'] .rightHand, .stage[data-pose='think'] .leftArm, .stage[data-pose='think'] .rightArm, .stage[data-pose='think'] .leftHand, .stage[data-pose='think'] .rightHand { animation: none; }
+.thought { position: absolute; top: -3px; right: -5px; padding: 0 3px; background: var(--office-bubble); color: var(--office-bubble-ink); border-radius: 4px; font-size: var(--text-xs); line-height: var(--leading-xs); }
+.stage[data-status='loading'], .stage[data-status='stale'], .frozen { filter: grayscale(1); opacity: .65; }
+.frozen *, .stage[data-status='stale'] * { animation: none !important; transition: none !important; }
+@keyframes type-left { 50% { translate: 0 -2px; } }
+@media (prefers-reduced-motion: reduce) { .stage *, .stage { animation: none !important; transition: none !important; } }

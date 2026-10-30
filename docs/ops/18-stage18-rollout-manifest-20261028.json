@@ -1,0 +1,1191 @@
+{
+  "schemaVersion": 1,
+  "preparedAt": "2026-10-28T07:49:28.623Z",
+  "status": "PREPARED_NOT_INSTALLED",
+  "source": {
+    "commit": "29234a36b2ddf60e70674a110d04395372470f0d",
+    "tree": "5aaf0892a6e854e55322283e71042c225bf1f18a",
+    "codeCommit": "65084160688ba4386522dca7b0324ee76acb896b",
+    "independentReview": "PASS reported by owner for 29234a3 (code 6508416)",
+    "basisOnly": "c04a1e8 is reviewed ancestor, not deployment file source"
+  },
+  "installationRoot": "D:/ConturKP/app",
+  "migrations": {
+    "new": 0,
+    "checked": 56,
+    "allEqualAfterLf": true,
+    "runMigrations": false
+  },
+  "launch": {
+    "mode": "Node24 native TypeScript",
+    "executable": "C:\\Program Files\\nodejs\\node.exe",
+    "serverEntry": "apps/server/src/main.ts",
+    "workerEntry": "apps/worker/src/main.ts",
+    "cwd": "D:/ConturKP/app",
+    "compiledServerArtifacts": [],
+    "tsx": false
+  },
+  "node": {
+    "version": "v24.13.0",
+    "execPath": "C:\\Program Files\\nodejs\\node.exe",
+    "arch": "x64",
+    "platform": "win32",
+    "sha256": "d14ba95cdce1ef7dc9ad3ac74949ca5db38b27378ee30f30a23cf26f9e875a11"
+  },
+  "sourceAudit": {
+    "path": "runtime/rollout-preflight-20261028/installation-source-audit.json",
+    "sha256": "ff59f51d0e776a51b5c4798fd0b5e7124c4f7ff6b5b3b5c2703d5882d0a6fe09",
+    "checkedPaths": 858,
+    "preserveAfterLf": 840,
+    "preserveTrailingWhitespaceOnly": 2
+  },
+  "extraSourceCheck": {
+    "path": "runtime/rollout-preflight-20261028/extra-source-inventory.json",
+    "sha256": "f0075f2f90281d42decbac75449bf24bb0d392052831bc8dba3315e8ee490981",
+    "scope": [
+      "apps/web/src",
+      "packages/*/src"
+    ],
+    "installedCount": 582,
+    "gitCount": 582,
+    "extraCount": 0,
+    "directoryLinks": 0,
+    "repeatBeforeWrite": true
+  },
+  "fileOperations": [
+    {
+      "path": "apps/server/src/app.ts",
+      "operation": "replace",
+      "expectedInstalledSha256": "d19cb07fa501843d2c9a747443ef332b919426628df3aae646dbfb2bfbe63762",
+      "expectedAbsent": false,
+      "sourceCommit": "29234a36b2ddf60e70674a110d04395372470f0d",
+      "sourceGitBlob": "d6deeceeaa29134cd2073b1c30f58ba1f05ff504",
+      "payloadSha256": "3626e72b4f63c9078cc08a7fa7f367b3f5590b7a60c2cddaece0f2aee2cb3a8f",
+      "payloadBytes": 9606,
+      "payload": "runtime/rollout-preflight-20261028/payload/apps/server/src/app.ts",
+      "rollbackPayload": "runtime/rollout-preflight-20261028/rollback-source/apps/server/src/app.ts",
+      "rollbackSha256": "d19cb07fa501843d2c9a747443ef332b919426628df3aae646dbfb2bfbe63762",
+      "rollbackBytes": 9670
+    },
+    {
+      "path": "apps/server/src/routes/tenders.ts",
+      "operation": "replace",
+      "expectedInstalledSha256": "a723213e9338f3b93125e3d13ce48f07368c59277bfa7def80df6beb8c271703",
+      "expectedAbsent": false,
+      "sourceCommit": "29234a36b2ddf60e70674a110d04395372470f0d",
+      "sourceGitBlob": "e387d0cb317582defe143f9b9aa77f703b8cc16d",
+      "payloadSha256": "09e0a404b49d60af794eb7d82e7665d96352465baffcbab2c82a2762e88c7e1e",
+      "payloadBytes": 10708,
+      "payload": "runtime/rollout-preflight-20261028/payload/apps/server/src/routes/tenders.ts",
+      "rollbackPayload": "runtime/rollout-preflight-20261028/rollback-source/apps/server/src/routes/tenders.ts",
+      "rollbackSha256": "a723213e9338f3b93125e3d13ce48f07368c59277bfa7def80df6beb8c271703",
+      "rollbackBytes": 10841
+    },
+    {
+      "path": "apps/web/src/app/Header.module.css",
+      "operation": "replace",
+      "expectedInstalledSha256": "e9c6d9981e0f1a7e26acd48b06c0392cd1ff97e5a5e5e7c4efb4398dbea92be2",
+      "expectedAbsent": false,
+      "sourceCommit": "29234a36b2ddf60e70674a110d04395372470f0d",
+      "sourceGitBlob": "d456a8d03b54fea7b3f68ad4492cab7934f9e628",
+      "payloadSha256": "b2884f901f4e533f3c3a206268edd057b28d57afaf672c87f146e86b793d2830",
+      "payloadBytes": 4187,
+      "payload": "runtime/rollout-preflight-20261028/payload/apps/web/src/app/Header.module.css",
+      "rollbackPayload": "runtime/rollout-preflight-20261028/rollback-source/apps/web/src/app/Header.module.css",
+      "rollbackSha256": "e9c6d9981e0f1a7e26acd48b06c0392cd1ff97e5a5e5e7c4efb4398dbea92be2",
+      "rollbackBytes": 4187
+    },
+    {
+      "path": "apps/web/src/components/StatusBadge.tsx",
+      "operation": "replace",
+      "expectedInstalledSha256": "9346e96133e7ce3922098f0cf3e285a323de44d45c45cdfd572c976dfe718cc0",
+      "expectedAbsent": false,
+      "sourceCommit": "29234a36b2ddf60e70674a110d04395372470f0d",
+      "sourceGitBlob": "394609af12f5f7d676355983a7a3820aa63d2fb8",
+      "payloadSha256": "d46b28de596b3e74326b6bba336a7cd425a1cb6d9cdcf5431ec22521d7f70c62",
+      "payloadBytes": 739,
+      "payload": "runtime/rollout-preflight-20261028/payload/apps/web/src/components/StatusBadge.tsx",
+      "rollbackPayload": "runtime/rollout-preflight-20261028/rollback-source/apps/web/src/components/StatusBadge.tsx",
+      "rollbackSha256": "9346e96133e7ce3922098f0cf3e285a323de44d45c45cdfd572c976dfe718cc0",
+      "rollbackBytes": 669
+    },
+    {
+      "path": "apps/web/src/pages/TenderArchiveDialog.tsx",
+      "operation": "replace",
+      "expectedInstalledSha256": "0c828cbbf48e3061ac9194974a0673adef810f0aa3b8ebcdbc496dc7490f4520",
+      "expectedAbsent": false,
+      "sourceCommit": "29234a36b2ddf60e70674a110d04395372470f0d",
+      "sourceGitBlob": "1ed594f116606882ec7a5a3f835943315107ecb8",
+      "payloadSha256": "10827d4f4fb866c18747ce1100e4d9410a23c4f5e21425187baf8d1034ad2430",
+      "payloadBytes": 2647,
+      "payload": "runtime/rollout-preflight-20261028/payload/apps/web/src/pages/TenderArchiveDialog.tsx",
+      "rollbackPayload": "runtime/rollout-preflight-20261028/rollback-source/apps/web/src/pages/TenderArchiveDialog.tsx",
+      "rollbackSha256": "0c828cbbf48e3061ac9194974a0673adef810f0aa3b8ebcdbc496dc7490f4520",
+      "rollbackBytes": 2577
+    },
+    {
+      "path": "apps/web/src/pages/TenderCard.tsx",
+      "operation": "replace",
+      "expectedInstalledSha256": "f76f9fbfd484e1efb37296af84e3b4cb41d7a839754c662aab78bc7a9a4ec089",
+      "expectedAbsent": false,
+      "sourceCommit": "29234a36b2ddf60e70674a110d04395372470f0d",
+      "sourceGitBlob": "13734e5f79029af53f12d0c7d7c1b5501340c053",
+      "payloadSha256": "dc1a68832c5e55e940691cd3771af9e740404d8876ecb95fcfb4c21d45b0ca24",
+      "payloadBytes": 10366,
+      "payload": "runtime/rollout-preflight-20261028/payload/apps/web/src/pages/TenderCard.tsx",
+      "rollbackPayload": "runtime/rollout-preflight-20261028/rollback-source/apps/web/src/pages/TenderCard.tsx",
+      "rollbackSha256": "f76f9fbfd484e1efb37296af84e3b4cb41d7a839754c662aab78bc7a9a4ec089",
+      "rollbackBytes": 10107
+    },
+    {
+      "path": "apps/web/src/utils/labels.ts",
+      "operation": "replace",
+      "expectedInstalledSha256": "cf92ec42c98d145714a8c069eb33b2f409170f6aa8ba9c6f8e41a41830be86ce",
+      "expectedAbsent": false,
+      "sourceCommit": "29234a36b2ddf60e70674a110d04395372470f0d",
+      "sourceGitBlob": "ab4bac116c3e1a08673ce023c24fa00d9cee22bd",
+      "payloadSha256": "2feb1d89aa5b2c6333c6d536dc09955f0c5010e4df6eb07b696c2e4aedfde834",
+      "payloadBytes": 1454,
+      "payload": "runtime/rollout-preflight-20261028/payload/apps/web/src/utils/labels.ts",
+      "rollbackPayload": "runtime/rollout-preflight-20261028/rollback-source/apps/web/src/utils/labels.ts",
+      "rollbackSha256": "cf92ec42c98d145714a8c069eb33b2f409170f6aa8ba9c6f8e41a41830be86ce",
+      "rollbackBytes": 1310
+    },
+    {
+      "path": "package.json",
+      "operation": "replace",
+      "expectedInstalledSha256": "83ceb92e1ea4551c50f72e8dd0784364c1f63b548213a604606a763dde73bc04",
+      "expectedAbsent": false,
+      "sourceCommit": "29234a36b2ddf60e70674a110d04395372470f0d",
+      "sourceGitBlob": "caeef83e224cf62e5e773c61c0faa815cecb0131",
+      "payloadSha256": "22d0dce9633ded980197ba15321495017d6c2b8bc014f2863a0a4d865c442696",
+      "payloadBytes": 3245,
+      "payload": "runtime/rollout-preflight-20261028/payload/package.json",
+      "rollbackPayload": "runtime/rollout-preflight-20261028/rollback-source/package.json",
+      "rollbackSha256": "83ceb92e1ea4551c50f72e8dd0784364c1f63b548213a604606a763dde73bc04",
+      "rollbackBytes": 3079
+    },
+    {
+      "path": "packages/contracts/src/index.ts",
+      "operation": "replace",
+      "expectedInstalledSha256": "18cb3940d7a8afc0d1540ce359104d213aad80f4398c5ae6506eee9847759bb0",
+      "expectedAbsent": false,
+      "sourceCommit": "29234a36b2ddf60e70674a110d04395372470f0d",
+      "sourceGitBlob": "da33bd5d4cc53cca573b2049ab453e8536b8c335",
+      "payloadSha256": "5b0705cca9457966e4a294b683d9bfa899798d1c993a9fd501cb4701da4ab063",
+      "payloadBytes": 18821,
+      "payload": "runtime/rollout-preflight-20261028/payload/packages/contracts/src/index.ts",
+      "rollbackPayload": "runtime/rollout-preflight-20261028/rollback-source/packages/contracts/src/index.ts",
+      "rollbackSha256": "18cb3940d7a8afc0d1540ce359104d213aad80f4398c5ae6506eee9847759bb0",
+      "rollbackBytes": 19247
+    },
+    {
+      "path": "packages/core/src/capabilities.ts",
+      "operation": "replace",
+      "expectedInstalledSha256": "e28170878a6673390a836ab922cb11c5040d703ceb56938d6d2cdf7ca9963488",
+      "expectedAbsent": false,
+      "sourceCommit": "29234a36b2ddf60e70674a110d04395372470f0d",
+      "sourceGitBlob": "e565a4f0401be479878e645629f9e670dc872523",
+      "payloadSha256": "89e9dfc43fc14d53320832c7a0ae2daeb7b1f8f64827a4e13ead00f8f8c5b109",
+      "payloadBytes": 15158,
+      "payload": "runtime/rollout-preflight-20261028/payload/packages/core/src/capabilities.ts",
+      "rollbackPayload": "runtime/rollout-preflight-20261028/rollback-source/packages/core/src/capabilities.ts",
+      "rollbackSha256": "e28170878a6673390a836ab922cb11c5040d703ceb56938d6d2cdf7ca9963488",
+      "rollbackBytes": 15233
+    },
+    {
+      "path": "packages/db/src/tenders.ts",
+      "operation": "replace",
+      "expectedInstalledSha256": "d03e2ea7c7f50bbb40c8634fbaf11b6ae770754792bc09c1fcb7df696c3690b2",
+      "expectedAbsent": false,
+      "sourceCommit": "29234a36b2ddf60e70674a110d04395372470f0d",
+      "sourceGitBlob": "83758ae237125ca226b61f95a836899e40cea409",
+      "payloadSha256": "b9104a7288ef847088516ff4c370955fe1e098104a1e001f4d9d9afd302a3ea3",
+      "payloadBytes": 8898,
+      "payload": "runtime/rollout-preflight-20261028/payload/packages/db/src/tenders.ts",
+      "rollbackPayload": "runtime/rollout-preflight-20261028/rollback-source/packages/db/src/tenders.ts",
+      "rollbackSha256": "d03e2ea7c7f50bbb40c8634fbaf11b6ae770754792bc09c1fcb7df696c3690b2",
+      "rollbackBytes": 9145
+    },
+    {
+      "path": "packages/storage/src/index.ts",
+      "operation": "replace",
+      "expectedInstalledSha256": "29105a4c9d78c1e6a95a603ecac76f1fdd30e835f5ff961cb489f185016c1ca2",
+      "expectedAbsent": false,
+      "sourceCommit": "29234a36b2ddf60e70674a110d04395372470f0d",
+      "sourceGitBlob": "52d7805378e1f2d408e5c1a5a56b8af0802978ae",
+      "payloadSha256": "1ecc08be4395725071f01377178d5473e0a8495e9d0714a1cde6b81db13685e0",
+      "payloadBytes": 9998,
+      "payload": "runtime/rollout-preflight-20261028/payload/packages/storage/src/index.ts",
+      "rollbackPayload": "runtime/rollout-preflight-20261028/rollback-source/packages/storage/src/index.ts",
+      "rollbackSha256": "29105a4c9d78c1e6a95a603ecac76f1fdd30e835f5ff961cb489f185016c1ca2",
+      "rollbackBytes": 9997
+    },
+    {
+      "path": "scripts/lib/locus-fragment-insert.mjs",
+      "operation": "add",
+      "expectedInstalledSha256": null,
+      "expectedAbsent": true,
+      "sourceCommit": "29234a36b2ddf60e70674a110d04395372470f0d",
+      "sourceGitBlob": "eefaca6765699d48348b0a9bb4cc7e44ce36b76a",
+      "payloadSha256": "20966f9931127fb0a103e4beca65445f0134aa8378b0dbd6e12fdc5c82b72e59",
+      "payloadBytes": 764,
+      "payload": "runtime/rollout-preflight-20261028/payload/scripts/lib/locus-fragment-insert.mjs",
+      "rollbackAction": "Remove only if file still matches installed payload SHA"
+    },
+    {
+      "path": "scripts/lib/locus-pages.mjs",
+      "operation": "add",
+      "expectedInstalledSha256": null,
+      "expectedAbsent": true,
+      "sourceCommit": "29234a36b2ddf60e70674a110d04395372470f0d",
+      "sourceGitBlob": "0837665f61b193d44702ec4e4af015c8813d914c",
+      "payloadSha256": "8979f2c8f3c32fde72988dd8058d333a3649cf6238776fdc8132ea4480adc9ed",
+      "payloadBytes": 4696,
+      "payload": "runtime/rollout-preflight-20261028/payload/scripts/lib/locus-pages.mjs",
+      "rollbackAction": "Remove only if file still matches installed payload SHA"
+    },
+    {
+      "path": "scripts/prepare-contract-history.py",
+      "operation": "add",
+      "expectedInstalledSha256": null,
+      "expectedAbsent": true,
+      "sourceCommit": "29234a36b2ddf60e70674a110d04395372470f0d",
+      "sourceGitBlob": "fd7effc71773b9cfecfac4dacb7e0553bbf09cbe",
+      "payloadSha256": "351c140118cd4449b110bb19059c66d14d8573cfdf11a7bcd31857d06152f73f",
+      "payloadBytes": 14145,
+      "payload": "runtime/rollout-preflight-20261028/payload/scripts/prepare-contract-history.py",
+      "rollbackAction": "Remove only if file still matches installed payload SHA"
+    },
+    {
+      "path": "scripts/templates/contract-history.html",
+      "operation": "add",
+      "expectedInstalledSha256": null,
+      "expectedAbsent": true,
+      "sourceCommit": "29234a36b2ddf60e70674a110d04395372470f0d",
+      "sourceGitBlob": "e77187402255a8ca23fee95f6dee881aed317b0f",
+      "payloadSha256": "1ab2baf423cf95512ca2a78e3e804d7ea605e3480c6fae2b94b0673441fd0674",
+      "payloadBytes": 17248,
+      "payload": "runtime/rollout-preflight-20261028/payload/scripts/templates/contract-history.html",
+      "rollbackAction": "Remove only if file still matches installed payload SHA"
+    }
+  ],
+  "webDist": {
+    "target": "apps/web/dist",
+    "releaseConfig": "runtime/rollout-preflight-20261028/vite.release.config.mts",
+    "releaseConfigSha256": "085ff8099a8bdfb978580a4cdd537f2c69ae900bb9815ca5ce7e83f467841e05",
+    "expectedInstalledVersion": "c343c464-5627-4c7d-b4d8-ff7072dd6892",
+    "publishedVersion": "29234a3-rollout-20261028",
+    "versionsMustDiffer": true,
+    "expectedInstalledFiles": [
+      {
+        "path": "app-update.css",
+        "bytes": 773,
+        "sha256": "7f7f6b740992475aa2b8e5d3909054f6108a0552e50062b0005c489fe87eaf8c"
+      },
+      {
+        "path": "app-update.html",
+        "bytes": 853,
+        "sha256": "3444407261fb035c549aa6a0762810017aae707f70fdeedf5892aef683587df2"
+      },
+      {
+        "path": "app-update.js",
+        "bytes": 2670,
+        "sha256": "9143047bc65e20b8d8810edf63c8e764137739a0e37baf0c6d8d255c4e3c23a6"
+      },
+      {
+        "path": "apple-touch-icon-120.png",
+        "bytes": 541,
+        "sha256": "4534cb588cd2f41fe4743088a180ed21d6a1ccfe61f16fefa90ff185ae24a14c"
+      },
+      {
+        "path": "apple-touch-icon-152.png",
+        "bytes": 648,
+        "sha256": "7d2e238ff6ad720b2537405e2b957444ea96e896cb52067c7399f7f4727661bf"
+      },
+      {
+        "path": "apple-touch-icon-167.png",
+        "bytes": 728,
+        "sha256": "aefdeb5dfb4333efd8c4823fd0ef782cfa1208dc682c75a50108d2ce416faa73"
+      },
+      {
+        "path": "apple-touch-icon.png",
+        "bytes": 829,
+        "sha256": "7f115197149f8867e0a0bbed48cdbe2652f2abdcc4f991b642b423ebdef3940e"
+      },
+      {
+        "path": "assets/index-AMYjamqx.css",
+        "bytes": 151997,
+        "sha256": "7c16ce029a7bb653ecdb91496e947697e6880d27ec169034045959dc17f96e3b"
+      },
+      {
+        "path": "assets/index-BL-_q_6a.js",
+        "bytes": 1066154,
+        "sha256": "0fe7d74cdb8b8fbdae703e097914830c400c3d49ca6a4fde3e4e9c00c93c82d0"
+      },
+      {
+        "path": "assets/index-BNuNNUBR.js",
+        "bytes": 1062993,
+        "sha256": "3d788f91bd452e60627033f9d87efa3a799eb94e53cab1ca4183952bdd452083"
+      },
+      {
+        "path": "assets/index-C_RxziEd.js",
+        "bytes": 1057563,
+        "sha256": "7ffe234b1ab015d9283d41c039c8bb31173891d61bdc1eddc621c86f799830bb"
+      },
+      {
+        "path": "assets/index-CAxC6uRf.js",
+        "bytes": 1063026,
+        "sha256": "ddc80e998752cddf49564d1c89a482caac60a0d57354f8d238b33e33a4ba57cb"
+      },
+      {
+        "path": "assets/index-CI924OoI.css",
+        "bytes": 154119,
+        "sha256": "5ffeb877e1e89a7c244baa921bb678287477d079086075f2ba0ca39e2fe923b0"
+      },
+      {
+        "path": "assets/index-CSOk-6op.js",
+        "bytes": 1066218,
+        "sha256": "b194f09e0f7f31d57231cb3ece09217facefd2900e123ad30d80d40140204788"
+      },
+      {
+        "path": "assets/index-D0WSncHA.css",
+        "bytes": 154185,
+        "sha256": "39cd78aefcee69214e6a8e15ba9d1b90aad330827fa8a69f30e2514c91fdb8b9"
+      },
+      {
+        "path": "assets/index-Ddwa-0OT.js",
+        "bytes": 1065731,
+        "sha256": "da15ab45de1808a3f90e3f88be5e96fabc3ed20dfe5b8063621884907550246d"
+      },
+      {
+        "path": "assets/index-DNDZMcSQ.js",
+        "bytes": 1066154,
+        "sha256": "1dd6399662b26984171d3e3573de55c29bc189900638e306313744463a0dd254"
+      },
+      {
+        "path": "assets/index-Dsdtmot5.css",
+        "bytes": 157499,
+        "sha256": "5ce817c8a685199300fc7c8b32206bf8d52eb86082341690648570ed6e0eef62"
+      },
+      {
+        "path": "assets/index-g7uLpgGm.js",
+        "bytes": 1069081,
+        "sha256": "d111bb0b5260b1a7527d8c3c0b54fd778aac49bd1a5a7d4d1dfc6a2ebe5d1f37"
+      },
+      {
+        "path": "assets/index-ijuHZMAt.css",
+        "bytes": 153246,
+        "sha256": "ac9ddcfb63257f5b526fe95ef9520ca4db58a873168103a88bedf4f03171d4bf"
+      },
+      {
+        "path": "assets/index-kNSJ8ONC.css",
+        "bytes": 154357,
+        "sha256": "9119de1003a6c58edc285d86832a26777df9fbbf840233e03285908bae3c9844"
+      },
+      {
+        "path": "assets/officeSceneRenderer-B2_6pw7m.js",
+        "bytes": 539868,
+        "sha256": "9b9ac9f5bcbcaa04c1925a3589b38b6032d35f012ff97e445c0a5a6dc4a8da8a"
+      },
+      {
+        "path": "assets/officeSceneRenderer-COS5zooU.js",
+        "bytes": 539868,
+        "sha256": "6a6eb6577e0603ba42746402747eefd8074e2d23ccd469f1fba03f5e9832785d"
+      },
+      {
+        "path": "assets/officeSceneRenderer-D4mEl7Et.js",
+        "bytes": 539868,
+        "sha256": "011d23c7d97d4a3a42bd5b91622a992127ac941bfed009a43dd145d410e021d6"
+      },
+      {
+        "path": "assets/officeSceneRenderer-DD4CRjTQ.js",
+        "bytes": 539868,
+        "sha256": "0990b8fab8486a138c8d195ceb49f1a4118a48a74e47e6d840453270f0677421"
+      },
+      {
+        "path": "assets/officeSceneRenderer-DJGCES3x.js",
+        "bytes": 539868,
+        "sha256": "34ba3122cf29716656ec52035a8ec0c26546caf73e445fc5f519c29c296c3d2f"
+      },
+      {
+        "path": "assets/officeSceneRenderer-DYgazR8O.js",
+        "bytes": 539868,
+        "sha256": "be06d4aea3553af8055d9e4e09cfd87813d36ccd561c929e167aafd96fbd3d53"
+      },
+      {
+        "path": "assets/officeSceneRenderer-gdZYTBiP.js",
+        "bytes": 539868,
+        "sha256": "d5b8427a36e3371cb1122dc51f99e20d065ddde3ded2efa130dbbd4759d1de07"
+      },
+      {
+        "path": "assets/officeSceneRenderer-X8mNTT01.js",
+        "bytes": 539868,
+        "sha256": "64b8889116c6807681767951ac442833918358a77cf3985db688189453abc56f"
+      },
+      {
+        "path": "assets/pdf-B1ASX9G3.js",
+        "bytes": 409764,
+        "sha256": "b04c772877d084b5acda4b4b49ee659b62aa389497e09df51b20e0322a5a5fce"
+      },
+      {
+        "path": "assets/pdf-B87bCL1f.js",
+        "bytes": 409764,
+        "sha256": "27b7699bc52e0d012067b0fd99c885982d8c90dd6542e17e11d06d19d3ebee98"
+      },
+      {
+        "path": "assets/pdf-BKKmeB5w.js",
+        "bytes": 409764,
+        "sha256": "68d3477ba463a7eb8df2469031aceaf37a5571a2143b714b3078d0f15351e18c"
+      },
+      {
+        "path": "assets/pdf-BYgMs1OL.js",
+        "bytes": 409764,
+        "sha256": "5653e280769ec0bbd5dae8c5505cef84cb2c6c56484a5c73e76e8d42cbea8960"
+      },
+      {
+        "path": "assets/pdf-C_rdzOmf.js",
+        "bytes": 409764,
+        "sha256": "1447775d418f0eb96ef46cb3f5b57b086f54900b4d2f5301fe4440a6876533be"
+      },
+      {
+        "path": "assets/pdf-CI3DnItQ.js",
+        "bytes": 409764,
+        "sha256": "b07187959252bc50eb5fc8095b2550b76cbbfab8e11dd7715d0ee733a17c6184"
+      },
+      {
+        "path": "assets/pdf-jGPVn-Zd.js",
+        "bytes": 409764,
+        "sha256": "df09cd4352a03d345d3dff2fa85cd3aa83bddcddff1e667166d309219fd3c995"
+      },
+      {
+        "path": "assets/pdf-q4YihiEo.js",
+        "bytes": 409764,
+        "sha256": "e8a8863c563480c8d7bb6d1c80119e30b6bd3f9b209a4aaf8f725659597e84d1"
+      },
+      {
+        "path": "assets/pdf.worker.min-iDqQPrd3.mjs",
+        "bytes": 1232303,
+        "sha256": "52fadd5b81b6abd1eb665bab0c3749a8ad6a293fcb6ee9d9e0309f29d4f82619"
+      },
+      {
+        "path": "assets/workbox-window.prod.es5-Bd17z0YL.js",
+        "bytes": 5653,
+        "sha256": "17bcc17d60dc78f927834b880c39649b03af46fd1f5cdbb8c42c5ae2b515dce9"
+      },
+      {
+        "path": "favicon-32.png",
+        "bytes": 176,
+        "sha256": "ed368d54b51ff60665cfff74be5e7caa4af1928fe1b05e213af22a82e1f81245"
+      },
+      {
+        "path": "favicon.svg",
+        "bytes": 816,
+        "sha256": "401a29c6622d520bdbc5ea5a5ea60807ce7b6f01e9df3104397b0e25411f7b69"
+      },
+      {
+        "path": "icon-192.png",
+        "bytes": 619,
+        "sha256": "40ebcd7d2c8a1651cbe8e5909a4aea9b660dcb786524eb1942914aa0300bd165"
+      },
+      {
+        "path": "icon-512-maskable.png",
+        "bytes": 2692,
+        "sha256": "cca243a2fe772c398879697f8d09996d2a74e1cde0dd1d51570d6b288359969f"
+      },
+      {
+        "path": "icon-512.png",
+        "bytes": 2692,
+        "sha256": "cca243a2fe772c398879697f8d09996d2a74e1cde0dd1d51570d6b288359969f"
+      },
+      {
+        "path": "index.html",
+        "bytes": 1884,
+        "sha256": "7cad8e202eed4008329d33dd71447ced6b8f78be45573e542f8a24781234a3f4"
+      },
+      {
+        "path": "kontur-kp-favicon.svg",
+        "bytes": 814,
+        "sha256": "6e89c01ba7f2a1e0ccf1bda29e23f32de8fdb3c3ba44f4bccdd0422d1b88ad7f"
+      },
+      {
+        "path": "kontur-kp-logo-dark.svg",
+        "bytes": 3393,
+        "sha256": "87faf3def8798d53bc9e55fe9c38fd884d438b4c006498e1a7608ce658769ff6"
+      },
+      {
+        "path": "kontur-kp-logo-light.svg",
+        "bytes": 3395,
+        "sha256": "27c408d13f5b9112d8e07725e1c3458a87986485f36ad3e190b2d856518f3560"
+      },
+      {
+        "path": "manifest.json",
+        "bytes": 829,
+        "sha256": "63e04dbe19a408fdc21f0384da2f86fbb45971c45f603da26b81836a43faccaa"
+      },
+      {
+        "path": "sw.js",
+        "bytes": 2382,
+        "sha256": "f52a84b05d0cd93eecd3bbd2ceb4283badc2f81ce313c1cff3556e8e219f6129"
+      },
+      {
+        "path": "theme-init.js",
+        "bytes": 882,
+        "sha256": "ecfce6fedd8e7939e020936131ec9373f61b6cf78659a74450ff983241dbfa63"
+      },
+      {
+        "path": "version.json",
+        "bytes": 50,
+        "sha256": "ca2b5ebdef72a9cfd2f899649b3bb5aee1f418117057cade5b90a0fcb0c8d016"
+      },
+      {
+        "path": "workbox-abeb32eb.js",
+        "bytes": 15507,
+        "sha256": "0e233ad26e783cbcff92534dd4768acec2ad6827a53a0246bcc682c391c2644b"
+      }
+    ],
+    "publishDirectory": "runtime/rollout-preflight-20261028/publish-dist",
+    "publishFiles": [
+      {
+        "path": "app-update.css",
+        "bytes": 773,
+        "sha256": "7f7f6b740992475aa2b8e5d3909054f6108a0552e50062b0005c489fe87eaf8c"
+      },
+      {
+        "path": "app-update.html",
+        "bytes": 853,
+        "sha256": "3444407261fb035c549aa6a0762810017aae707f70fdeedf5892aef683587df2"
+      },
+      {
+        "path": "app-update.js",
+        "bytes": 2670,
+        "sha256": "9143047bc65e20b8d8810edf63c8e764137739a0e37baf0c6d8d255c4e3c23a6"
+      },
+      {
+        "path": "apple-touch-icon-120.png",
+        "bytes": 541,
+        "sha256": "4534cb588cd2f41fe4743088a180ed21d6a1ccfe61f16fefa90ff185ae24a14c"
+      },
+      {
+        "path": "apple-touch-icon-152.png",
+        "bytes": 648,
+        "sha256": "7d2e238ff6ad720b2537405e2b957444ea96e896cb52067c7399f7f4727661bf"
+      },
+      {
+        "path": "apple-touch-icon-167.png",
+        "bytes": 728,
+        "sha256": "aefdeb5dfb4333efd8c4823fd0ef782cfa1208dc682c75a50108d2ce416faa73"
+      },
+      {
+        "path": "apple-touch-icon.png",
+        "bytes": 829,
+        "sha256": "7f115197149f8867e0a0bbed48cdbe2652f2abdcc4f991b642b423ebdef3940e"
+      },
+      {
+        "path": "assets/index-AMYjamqx.css",
+        "bytes": 151997,
+        "sha256": "7c16ce029a7bb653ecdb91496e947697e6880d27ec169034045959dc17f96e3b"
+      },
+      {
+        "path": "assets/index-BL-_q_6a.js",
+        "bytes": 1066154,
+        "sha256": "0fe7d74cdb8b8fbdae703e097914830c400c3d49ca6a4fde3e4e9c00c93c82d0"
+      },
+      {
+        "path": "assets/index-BNuNNUBR.js",
+        "bytes": 1062993,
+        "sha256": "3d788f91bd452e60627033f9d87efa3a799eb94e53cab1ca4183952bdd452083"
+      },
+      {
+        "path": "assets/index-C_RxziEd.js",
+        "bytes": 1057563,
+        "sha256": "7ffe234b1ab015d9283d41c039c8bb31173891d61bdc1eddc621c86f799830bb"
+      },
+      {
+        "path": "assets/index-C3RstowH.js",
+        "bytes": 1069187,
+        "sha256": "01245b4ea0a5afe2b03ed5a9bcf324c5c87563d03defc13f0300a6647dc4f225"
+      },
+      {
+        "path": "assets/index-CAxC6uRf.js",
+        "bytes": 1063026,
+        "sha256": "ddc80e998752cddf49564d1c89a482caac60a0d57354f8d238b33e33a4ba57cb"
+      },
+      {
+        "path": "assets/index-CI924OoI.css",
+        "bytes": 154119,
+        "sha256": "5ffeb877e1e89a7c244baa921bb678287477d079086075f2ba0ca39e2fe923b0"
+      },
+      {
+        "path": "assets/index-CSOk-6op.js",
+        "bytes": 1066218,
+        "sha256": "b194f09e0f7f31d57231cb3ece09217facefd2900e123ad30d80d40140204788"
+      },
+      {
+        "path": "assets/index-D0WSncHA.css",
+        "bytes": 154185,
+        "sha256": "39cd78aefcee69214e6a8e15ba9d1b90aad330827fa8a69f30e2514c91fdb8b9"
+      },
+      {
+        "path": "assets/index-DBRocmxU.css",
+        "bytes": 157789,
+        "sha256": "425cabf4fbbe7f3f8cbc1a1b71a924db7bade312adb85f0b3d4e3b5c95c3f16a"
+      },
+      {
+        "path": "assets/index-Ddwa-0OT.js",
+        "bytes": 1065731,
+        "sha256": "da15ab45de1808a3f90e3f88be5e96fabc3ed20dfe5b8063621884907550246d"
+      },
+      {
+        "path": "assets/index-DNDZMcSQ.js",
+        "bytes": 1066154,
+        "sha256": "1dd6399662b26984171d3e3573de55c29bc189900638e306313744463a0dd254"
+      },
+      {
+        "path": "assets/index-Dsdtmot5.css",
+        "bytes": 157499,
+        "sha256": "5ce817c8a685199300fc7c8b32206bf8d52eb86082341690648570ed6e0eef62"
+      },
+      {
+        "path": "assets/index-g7uLpgGm.js",
+        "bytes": 1069081,
+        "sha256": "d111bb0b5260b1a7527d8c3c0b54fd778aac49bd1a5a7d4d1dfc6a2ebe5d1f37"
+      },
+      {
+        "path": "assets/index-ijuHZMAt.css",
+        "bytes": 153246,
+        "sha256": "ac9ddcfb63257f5b526fe95ef9520ca4db58a873168103a88bedf4f03171d4bf"
+      },
+      {
+        "path": "assets/index-kNSJ8ONC.css",
+        "bytes": 154357,
+        "sha256": "9119de1003a6c58edc285d86832a26777df9fbbf840233e03285908bae3c9844"
+      },
+      {
+        "path": "assets/officeSceneRenderer-B2_6pw7m.js",
+        "bytes": 539868,
+        "sha256": "9b9ac9f5bcbcaa04c1925a3589b38b6032d35f012ff97e445c0a5a6dc4a8da8a"
+      },
+      {
+        "path": "assets/officeSceneRenderer-COS5zooU.js",
+        "bytes": 539868,
+        "sha256": "6a6eb6577e0603ba42746402747eefd8074e2d23ccd469f1fba03f5e9832785d"
+      },
+      {
+        "path": "assets/officeSceneRenderer-D4mEl7Et.js",
+        "bytes": 539868,
+        "sha256": "011d23c7d97d4a3a42bd5b91622a992127ac941bfed009a43dd145d410e021d6"
+      },
+      {
+        "path": "assets/officeSceneRenderer-D54uJhaw.js",
+        "bytes": 539868,
+        "sha256": "e0dc91cab66a69706985d7ecb89a164c5b7eb67f00139eb7c113f4c5d2472672"
+      },
+      {
+        "path": "assets/officeSceneRenderer-DD4CRjTQ.js",
+        "bytes": 539868,
+        "sha256": "0990b8fab8486a138c8d195ceb49f1a4118a48a74e47e6d840453270f0677421"
+      },
+      {
+        "path": "assets/officeSceneRenderer-DJGCES3x.js",
+        "bytes": 539868,
+        "sha256": "34ba3122cf29716656ec52035a8ec0c26546caf73e445fc5f519c29c296c3d2f"
+      },
+      {
+        "path": "assets/officeSceneRenderer-DYgazR8O.js",
+        "bytes": 539868,
+        "sha256": "be06d4aea3553af8055d9e4e09cfd87813d36ccd561c929e167aafd96fbd3d53"
+      },
+      {
+        "path": "assets/officeSceneRenderer-gdZYTBiP.js",
+        "bytes": 539868,
+        "sha256": "d5b8427a36e3371cb1122dc51f99e20d065ddde3ded2efa130dbbd4759d1de07"
+      },
+      {
+        "path": "assets/officeSceneRenderer-X8mNTT01.js",
+        "bytes": 539868,
+        "sha256": "64b8889116c6807681767951ac442833918358a77cf3985db688189453abc56f"
+      },
+      {
+        "path": "assets/pdf-B1ASX9G3.js",
+        "bytes": 409764,
+        "sha256": "b04c772877d084b5acda4b4b49ee659b62aa389497e09df51b20e0322a5a5fce"
+      },
+      {
+        "path": "assets/pdf-B87bCL1f.js",
+        "bytes": 409764,
+        "sha256": "27b7699bc52e0d012067b0fd99c885982d8c90dd6542e17e11d06d19d3ebee98"
+      },
+      {
+        "path": "assets/pdf-BKKmeB5w.js",
+        "bytes": 409764,
+        "sha256": "68d3477ba463a7eb8df2469031aceaf37a5571a2143b714b3078d0f15351e18c"
+      },
+      {
+        "path": "assets/pdf-BYgMs1OL.js",
+        "bytes": 409764,
+        "sha256": "5653e280769ec0bbd5dae8c5505cef84cb2c6c56484a5c73e76e8d42cbea8960"
+      },
+      {
+        "path": "assets/pdf-C_rdzOmf.js",
+        "bytes": 409764,
+        "sha256": "1447775d418f0eb96ef46cb3f5b57b086f54900b4d2f5301fe4440a6876533be"
+      },
+      {
+        "path": "assets/pdf-CI3DnItQ.js",
+        "bytes": 409764,
+        "sha256": "b07187959252bc50eb5fc8095b2550b76cbbfab8e11dd7715d0ee733a17c6184"
+      },
+      {
+        "path": "assets/pdf-CKXOrkBA.js",
+        "bytes": 409764,
+        "sha256": "bec126fd4f4df5230d2f4b21dd11f00ba7afe69b22c8d09967f3e3e31daf17ee"
+      },
+      {
+        "path": "assets/pdf-jGPVn-Zd.js",
+        "bytes": 409764,
+        "sha256": "df09cd4352a03d345d3dff2fa85cd3aa83bddcddff1e667166d309219fd3c995"
+      },
+      {
+        "path": "assets/pdf-q4YihiEo.js",
+        "bytes": 409764,
+        "sha256": "e8a8863c563480c8d7bb6d1c80119e30b6bd3f9b209a4aaf8f725659597e84d1"
+      },
+      {
+        "path": "assets/pdf.worker.min-iDqQPrd3.mjs",
+        "bytes": 1232303,
+        "sha256": "52fadd5b81b6abd1eb665bab0c3749a8ad6a293fcb6ee9d9e0309f29d4f82619"
+      },
+      {
+        "path": "assets/workbox-window.prod.es5-Bd17z0YL.js",
+        "bytes": 5653,
+        "sha256": "17bcc17d60dc78f927834b880c39649b03af46fd1f5cdbb8c42c5ae2b515dce9"
+      },
+      {
+        "path": "favicon-32.png",
+        "bytes": 176,
+        "sha256": "ed368d54b51ff60665cfff74be5e7caa4af1928fe1b05e213af22a82e1f81245"
+      },
+      {
+        "path": "favicon.svg",
+        "bytes": 826,
+        "sha256": "0eac22e2b88468a8786d1db887052bb695c629990f5810129167be2a20255dcc"
+      },
+      {
+        "path": "icon-192.png",
+        "bytes": 619,
+        "sha256": "40ebcd7d2c8a1651cbe8e5909a4aea9b660dcb786524eb1942914aa0300bd165"
+      },
+      {
+        "path": "icon-512-maskable.png",
+        "bytes": 2692,
+        "sha256": "cca243a2fe772c398879697f8d09996d2a74e1cde0dd1d51570d6b288359969f"
+      },
+      {
+        "path": "icon-512.png",
+        "bytes": 2692,
+        "sha256": "cca243a2fe772c398879697f8d09996d2a74e1cde0dd1d51570d6b288359969f"
+      },
+      {
+        "path": "index.html",
+        "bytes": 1901,
+        "sha256": "e1670ad26e7bb6ed95be53e0bd1fc9e146b9698e936d7a984860f36cd1e06517"
+      },
+      {
+        "path": "kontur-kp-favicon.svg",
+        "bytes": 824,
+        "sha256": "814ebdaa4e5c19038f01735e6905bae848a3f685a38523a5cc3f65d7e0ad2e0d"
+      },
+      {
+        "path": "kontur-kp-logo-dark.svg",
+        "bytes": 3407,
+        "sha256": "5bba0387cd3d43d932b40f092e2b6c925730b6223696661b68b7e20ba2626c66"
+      },
+      {
+        "path": "kontur-kp-logo-light.svg",
+        "bytes": 3409,
+        "sha256": "850b6b084b0f8f5e7007a1b204e7a8766862ed894b039fa962cb54f435d9db0f"
+      },
+      {
+        "path": "manifest.json",
+        "bytes": 866,
+        "sha256": "0b83da8cc278e710c49b7c81e273419e5f0c4bc055c743c485fa63fe1b504309"
+      },
+      {
+        "path": "sw.js",
+        "bytes": 2365,
+        "sha256": "147be2c60e4d02750a3ca34baf248640160d9294b7741bdde0d851a7c5215542"
+      },
+      {
+        "path": "theme-init.js",
+        "bytes": 902,
+        "sha256": "96ed426713b0b414df63a4550a431ec367d371fece5b7da83531fe099d1b4c1b"
+      },
+      {
+        "path": "version.json",
+        "bytes": 153,
+        "sha256": "b3258dbd93bdd2431055866de62e3ca66a2fd9f6a63b09cc2464ea581e8f875f"
+      },
+      {
+        "path": "workbox-98f7a950.js",
+        "bytes": 15421,
+        "sha256": "88acfaf2e6002d02e23ab85ef645056d8d44f9d16c6e377074cc952e50f07434"
+      },
+      {
+        "path": "workbox-abeb32eb.js",
+        "bytes": 15507,
+        "sha256": "0e233ad26e783cbcff92534dd4768acec2ad6827a53a0246bcc682c391c2644b"
+      }
+    ],
+    "rollbackSnapshotDirectory": "runtime/rollout-preflight-20261028/installed-dist-snapshot",
+    "rollbackDirectory": "runtime/rollout-preflight-20261028/rollback-dist",
+    "rollbackFiles": [
+      {
+        "path": "app-update.css",
+        "bytes": 773,
+        "sha256": "7f7f6b740992475aa2b8e5d3909054f6108a0552e50062b0005c489fe87eaf8c"
+      },
+      {
+        "path": "app-update.html",
+        "bytes": 853,
+        "sha256": "3444407261fb035c549aa6a0762810017aae707f70fdeedf5892aef683587df2"
+      },
+      {
+        "path": "app-update.js",
+        "bytes": 2670,
+        "sha256": "9143047bc65e20b8d8810edf63c8e764137739a0e37baf0c6d8d255c4e3c23a6"
+      },
+      {
+        "path": "apple-touch-icon-120.png",
+        "bytes": 541,
+        "sha256": "4534cb588cd2f41fe4743088a180ed21d6a1ccfe61f16fefa90ff185ae24a14c"
+      },
+      {
+        "path": "apple-touch-icon-152.png",
+        "bytes": 648,
+        "sha256": "7d2e238ff6ad720b2537405e2b957444ea96e896cb52067c7399f7f4727661bf"
+      },
+      {
+        "path": "apple-touch-icon-167.png",
+        "bytes": 728,
+        "sha256": "aefdeb5dfb4333efd8c4823fd0ef782cfa1208dc682c75a50108d2ce416faa73"
+      },
+      {
+        "path": "apple-touch-icon.png",
+        "bytes": 829,
+        "sha256": "7f115197149f8867e0a0bbed48cdbe2652f2abdcc4f991b642b423ebdef3940e"
+      },
+      {
+        "path": "assets/index-AMYjamqx.css",
+        "bytes": 151997,
+        "sha256": "7c16ce029a7bb653ecdb91496e947697e6880d27ec169034045959dc17f96e3b"
+      },
+      {
+        "path": "assets/index-BL-_q_6a.js",
+        "bytes": 1066154,
+        "sha256": "0fe7d74cdb8b8fbdae703e097914830c400c3d49ca6a4fde3e4e9c00c93c82d0"
+      },
+      {
+        "path": "assets/index-BNuNNUBR.js",
+        "bytes": 1062993,
+        "sha256": "3d788f91bd452e60627033f9d87efa3a799eb94e53cab1ca4183952bdd452083"
+      },
+      {
+        "path": "assets/index-C_RxziEd.js",
+        "bytes": 1057563,
+        "sha256": "7ffe234b1ab015d9283d41c039c8bb31173891d61bdc1eddc621c86f799830bb"
+      },
+      {
+        "path": "assets/index-C3RstowH.js",
+        "bytes": 1069187,
+        "sha256": "01245b4ea0a5afe2b03ed5a9bcf324c5c87563d03defc13f0300a6647dc4f225"
+      },
+      {
+        "path": "assets/index-CAxC6uRf.js",
+        "bytes": 1063026,
+        "sha256": "ddc80e998752cddf49564d1c89a482caac60a0d57354f8d238b33e33a4ba57cb"
+      },
+      {
+        "path": "assets/index-CI924OoI.css",
+        "bytes": 154119,
+        "sha256": "5ffeb877e1e89a7c244baa921bb678287477d079086075f2ba0ca39e2fe923b0"
+      },
+      {
+        "path": "assets/index-CSOk-6op.js",
+        "bytes": 1066218,
+        "sha256": "b194f09e0f7f31d57231cb3ece09217facefd2900e123ad30d80d40140204788"
+      },
+      {
+        "path": "assets/index-D0WSncHA.css",
+        "bytes": 154185,
+        "sha256": "39cd78aefcee69214e6a8e15ba9d1b90aad330827fa8a69f30e2514c91fdb8b9"
+      },
+      {
+        "path": "assets/index-DBRocmxU.css",
+        "bytes": 157789,
+        "sha256": "425cabf4fbbe7f3f8cbc1a1b71a924db7bade312adb85f0b3d4e3b5c95c3f16a"
+      },
+      {
+        "path": "assets/index-Ddwa-0OT.js",
+        "bytes": 1065731,
+        "sha256": "da15ab45de1808a3f90e3f88be5e96fabc3ed20dfe5b8063621884907550246d"
+      },
+      {
+        "path": "assets/index-DNDZMcSQ.js",
+        "bytes": 1066154,
+        "sha256": "1dd6399662b26984171d3e3573de55c29bc189900638e306313744463a0dd254"
+      },
+      {
+        "path": "assets/index-Dsdtmot5.css",
+        "bytes": 157499,
+        "sha256": "5ce817c8a685199300fc7c8b32206bf8d52eb86082341690648570ed6e0eef62"
+      },
+      {
+        "path": "assets/index-g7uLpgGm.js",
+        "bytes": 1069081,
+        "sha256": "d111bb0b5260b1a7527d8c3c0b54fd778aac49bd1a5a7d4d1dfc6a2ebe5d1f37"
+      },
+      {
+        "path": "assets/index-ijuHZMAt.css",
+        "bytes": 153246,
+        "sha256": "ac9ddcfb63257f5b526fe95ef9520ca4db58a873168103a88bedf4f03171d4bf"
+      },
+      {
+        "path": "assets/index-kNSJ8ONC.css",
+        "bytes": 154357,
+        "sha256": "9119de1003a6c58edc285d86832a26777df9fbbf840233e03285908bae3c9844"
+      },
+      {
+        "path": "assets/officeSceneRenderer-B2_6pw7m.js",
+        "bytes": 539868,
+        "sha256": "9b9ac9f5bcbcaa04c1925a3589b38b6032d35f012ff97e445c0a5a6dc4a8da8a"
+      },
+      {
+        "path": "assets/officeSceneRenderer-COS5zooU.js",
+        "bytes": 539868,
+        "sha256": "6a6eb6577e0603ba42746402747eefd8074e2d23ccd469f1fba03f5e9832785d"
+      },
+      {
+        "path": "assets/officeSceneRenderer-D4mEl7Et.js",
+        "bytes": 539868,
+        "sha256": "011d23c7d97d4a3a42bd5b91622a992127ac941bfed009a43dd145d410e021d6"
+      },
+      {
+        "path": "assets/officeSceneRenderer-D54uJhaw.js",
+        "bytes": 539868,
+        "sha256": "e0dc91cab66a69706985d7ecb89a164c5b7eb67f00139eb7c113f4c5d2472672"
+      },
+      {
+        "path": "assets/officeSceneRenderer-DD4CRjTQ.js",
+        "bytes": 539868,
+        "sha256": "0990b8fab8486a138c8d195ceb49f1a4118a48a74e47e6d840453270f0677421"
+      },
+      {
+        "path": "assets/officeSceneRenderer-DJGCES3x.js",
+        "bytes": 539868,
+        "sha256": "34ba3122cf29716656ec52035a8ec0c26546caf73e445fc5f519c29c296c3d2f"
+      },
+      {
+        "path": "assets/officeSceneRenderer-DYgazR8O.js",
+        "bytes": 539868,
+        "sha256": "be06d4aea3553af8055d9e4e09cfd87813d36ccd561c929e167aafd96fbd3d53"
+      },
+      {
+        "path": "assets/officeSceneRenderer-gdZYTBiP.js",
+        "bytes": 539868,
+        "sha256": "d5b8427a36e3371cb1122dc51f99e20d065ddde3ded2efa130dbbd4759d1de07"
+      },
+      {
+        "path": "assets/officeSceneRenderer-X8mNTT01.js",
+        "bytes": 539868,
+        "sha256": "64b8889116c6807681767951ac442833918358a77cf3985db688189453abc56f"
+      },
+      {
+        "path": "assets/pdf-B1ASX9G3.js",
+        "bytes": 409764,
+        "sha256": "b04c772877d084b5acda4b4b49ee659b62aa389497e09df51b20e0322a5a5fce"
+      },
+      {
+        "path": "assets/pdf-B87bCL1f.js",
+        "bytes": 409764,
+        "sha256": "27b7699bc52e0d012067b0fd99c885982d8c90dd6542e17e11d06d19d3ebee98"
+      },
+      {
+        "path": "assets/pdf-BKKmeB5w.js",
+        "bytes": 409764,
+        "sha256": "68d3477ba463a7eb8df2469031aceaf37a5571a2143b714b3078d0f15351e18c"
+      },
+      {
+        "path": "assets/pdf-BYgMs1OL.js",
+        "bytes": 409764,
+        "sha256": "5653e280769ec0bbd5dae8c5505cef84cb2c6c56484a5c73e76e8d42cbea8960"
+      },
+      {
+        "path": "assets/pdf-C_rdzOmf.js",
+        "bytes": 409764,
+        "sha256": "1447775d418f0eb96ef46cb3f5b57b086f54900b4d2f5301fe4440a6876533be"
+      },
+      {
+        "path": "assets/pdf-CI3DnItQ.js",
+        "bytes": 409764,
+        "sha256": "b07187959252bc50eb5fc8095b2550b76cbbfab8e11dd7715d0ee733a17c6184"
+      },
+      {
+        "path": "assets/pdf-CKXOrkBA.js",
+        "bytes": 409764,
+        "sha256": "bec126fd4f4df5230d2f4b21dd11f00ba7afe69b22c8d09967f3e3e31daf17ee"
+      },
+      {
+        "path": "assets/pdf-jGPVn-Zd.js",
+        "bytes": 409764,
+        "sha256": "df09cd4352a03d345d3dff2fa85cd3aa83bddcddff1e667166d309219fd3c995"
+      },
+      {
+        "path": "assets/pdf-q4YihiEo.js",
+        "bytes": 409764,
+        "sha256": "e8a8863c563480c8d7bb6d1c80119e30b6bd3f9b209a4aaf8f725659597e84d1"
+      },
+      {
+        "path": "assets/pdf.worker.min-iDqQPrd3.mjs",
+        "bytes": 1232303,
+        "sha256": "52fadd5b81b6abd1eb665bab0c3749a8ad6a293fcb6ee9d9e0309f29d4f82619"
+      },
+      {
+        "path": "assets/workbox-window.prod.es5-Bd17z0YL.js",
+        "bytes": 5653,
+        "sha256": "17bcc17d60dc78f927834b880c39649b03af46fd1f5cdbb8c42c5ae2b515dce9"
+      },
+      {
+        "path": "favicon-32.png",
+        "bytes": 176,
+        "sha256": "ed368d54b51ff60665cfff74be5e7caa4af1928fe1b05e213af22a82e1f81245"
+      },
+      {
+        "path": "favicon.svg",
+        "bytes": 816,
+        "sha256": "401a29c6622d520bdbc5ea5a5ea60807ce7b6f01e9df3104397b0e25411f7b69"
+      },
+      {
+        "path": "icon-192.png",
+        "bytes": 619,
+        "sha256": "40ebcd7d2c8a1651cbe8e5909a4aea9b660dcb786524eb1942914aa0300bd165"
+      },
+      {
+        "path": "icon-512-maskable.png",
+        "bytes": 2692,
+        "sha256": "cca243a2fe772c398879697f8d09996d2a74e1cde0dd1d51570d6b288359969f"
+      },
+      {
+        "path": "icon-512.png",
+        "bytes": 2692,
+        "sha256": "cca243a2fe772c398879697f8d09996d2a74e1cde0dd1d51570d6b288359969f"
+      },
+      {
+        "path": "index.html",
+        "bytes": 1884,
+        "sha256": "7cad8e202eed4008329d33dd71447ced6b8f78be45573e542f8a24781234a3f4"
+      },
+      {
+        "path": "kontur-kp-favicon.svg",
+        "bytes": 814,
+        "sha256": "6e89c01ba7f2a1e0ccf1bda29e23f32de8fdb3c3ba44f4bccdd0422d1b88ad7f"
+      },
+      {
+        "path": "kontur-kp-logo-dark.svg",
+        "bytes": 3393,
+        "sha256": "87faf3def8798d53bc9e55fe9c38fd884d438b4c006498e1a7608ce658769ff6"
+      },
+      {
+        "path": "kontur-kp-logo-light.svg",
+        "bytes": 3395,
+        "sha256": "27c408d13f5b9112d8e07725e1c3458a87986485f36ad3e190b2d856518f3560"
+      },
+      {
+        "path": "manifest.json",
+        "bytes": 829,
+        "sha256": "63e04dbe19a408fdc21f0384da2f86fbb45971c45f603da26b81836a43faccaa"
+      },
+      {
+        "path": "sw.js",
+        "bytes": 2382,
+        "sha256": "f52a84b05d0cd93eecd3bbd2ceb4283badc2f81ce313c1cff3556e8e219f6129"
+      },
+      {
+        "path": "theme-init.js",
+        "bytes": 882,
+        "sha256": "ecfce6fedd8e7939e020936131ec9373f61b6cf78659a74450ff983241dbfa63"
+      },
+      {
+        "path": "version.json",
+        "bytes": 50,
+        "sha256": "ca2b5ebdef72a9cfd2f899649b3bb5aee1f418117057cade5b90a0fcb0c8d016"
+      },
+      {
+        "path": "workbox-98f7a950.js",
+        "bytes": 15421,
+        "sha256": "88acfaf2e6002d02e23ab85ef645056d8d44f9d16c6e377074cc952e50f07434"
+      },
+      {
+        "path": "workbox-abeb32eb.js",
+        "bytes": 15507,
+        "sha256": "0e233ad26e783cbcff92534dd4768acec2ad6827a53a0246bcc682c391c2644b"
+      }
+    ],
+    "retainedOldImmutableAssets": [
+      "assets/index-AMYjamqx.css",
+      "assets/index-BL-_q_6a.js",
+      "assets/index-BNuNNUBR.js",
+      "assets/index-C_RxziEd.js",
+      "assets/index-CAxC6uRf.js",
+      "assets/index-CI924OoI.css",
+      "assets/index-CSOk-6op.js",
+      "assets/index-D0WSncHA.css",
+      "assets/index-Ddwa-0OT.js",
+      "assets/index-DNDZMcSQ.js",
+      "assets/index-Dsdtmot5.css",
+      "assets/index-g7uLpgGm.js",
+      "assets/index-ijuHZMAt.css",
+      "assets/index-kNSJ8ONC.css",
+      "assets/officeSceneRenderer-B2_6pw7m.js",
+      "assets/officeSceneRenderer-COS5zooU.js",
+      "assets/officeSceneRenderer-D4mEl7Et.js",
+      "assets/officeSceneRenderer-DD4CRjTQ.js",
+      "assets/officeSceneRenderer-DJGCES3x.js",
+      "assets/officeSceneRenderer-DYgazR8O.js",
+      "assets/officeSceneRenderer-gdZYTBiP.js",
+      "assets/officeSceneRenderer-X8mNTT01.js",
+      "assets/pdf-B1ASX9G3.js",
+      "assets/pdf-B87bCL1f.js",
+      "assets/pdf-BKKmeB5w.js",
+      "assets/pdf-BYgMs1OL.js",
+      "assets/pdf-C_rdzOmf.js",
+      "assets/pdf-CI3DnItQ.js",
+      "assets/pdf-jGPVn-Zd.js",
+      "assets/pdf-q4YihiEo.js",
+      "workbox-abeb32eb.js"
+    ],
+    "retainedNewImmutableAssets": [
+      "assets/index-C3RstowH.js",
+      "assets/index-DBRocmxU.css",
+      "assets/officeSceneRenderer-D54uJhaw.js",
+      "assets/pdf-CKXOrkBA.js",
+      "workbox-98f7a950.js"
+    ],
+    "cleanupRetainedAssets": "Do not remove during rollout/rollback; separate cleanup after client adoption and rollback window",
+    "clientRecovery": "automatic version difference detection, explicit Update click, no manual cache clearing or forced silent reload",
+    "rollbackVerified": true,
+    "proof": "runtime/rollout-preflight-20261028/rollback-receipt.json",
+    "proofSha256": "7f3e34323b0cd939eaec159f22496a321643b9993b41cde36ce0a52a33689007"
+  },
+  "writeGates": [
+    "Repeat complete current file set and raw SHA checks, including dist and service XML / Node binary",
+    "Verify rollback backup before any installation write",
+    "Stop intake and wait for active jobs and file writes; never depend on forced 30-second kill",
+    "Stop services through their normal manager before source/dist writes",
+    "Install only listed file operations and prepared dist; no DB migrations or config replacement",
+    "Read-only real smoke and persisted installation receipt before claiming installation"
+  ],
+  "stage18pcModified": false,
+  "installationModified": false,
+  "rollbackSourcePrepared": true
+}

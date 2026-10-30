@@ -27,6 +27,7 @@ export interface ILocalRunOptions {
   ocrDpi: number;
   ocrPageTimeoutMs: number;
   throwIfStopped: () => void;
+  onProgress?: (completed: number, total: number, unit: 'pages' | 'sheets') => Promise<void>;
 }
 
 const OCR_MAX_CONSECUTIVE_FAILURES = 3;
@@ -88,6 +89,7 @@ const recognizePdf = async (o: ILocalRunOptions): Promise<ILocalResult> => {
   let consecutiveFailures = 0;
   try {
     if (doc.numPages > o.limits.maxPages) throw new LocalRecognitionError('too_large', `в PDF ${doc.numPages} страниц, предел — ${o.limits.maxPages}`);
+    await o.onProgress?.(0, doc.numPages, 'pages');
     for (let n = 1; n <= doc.numPages; n += 1) {
       o.throwIfStopped();
       const page = await doc.getPage(n);
@@ -151,6 +153,7 @@ const recognizePdf = async (o: ILocalRunOptions): Promise<ILocalResult> => {
           unit.issues = ['ocr_unavailable'];
         }
         units.push(unit);
+        await o.onProgress?.(n, doc.numPages, 'pages');
       } finally {
         page.cleanup();
       }
@@ -167,7 +170,7 @@ export const recognizeLocal = async (o: ILocalRunOptions): Promise<ILocalResult>
     case 'docx':
       return parseDocx(o.bytes, o.limits);
     case 'xlsx':
-      return parseXlsx(o.bytes, o.limits);
+      return parseXlsx(o.bytes, o.limits, { throwIfStopped: o.throwIfStopped, onProgress: o.onProgress });
     case 'csv':
       return parseCsv(o.bytes, o.limits);
     case 'pdf':

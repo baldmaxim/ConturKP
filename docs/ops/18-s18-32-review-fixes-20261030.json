@@ -1,0 +1,163 @@
+{
+  "date": "2026-10-30",
+  "baseCommit": "c31e04e252784538122ac52ffb0e93be80c781e1",
+  "branch": "codex/s18-32-review-fixes-20261030",
+  "reviewedBaseCode": "PASS_WITH_NON_BLOCKING_COMMENTS",
+  "followupCode": "READY_FOR_INDEPENDENT_REVIEW",
+  "s1832": "OPEN",
+  "g7": "NOT_ACCEPTED",
+  "stage18": "INCOMPLETE",
+  "defects": [
+    "S18-35",
+    "S18-36",
+    "S18-37"
+  ],
+  "red": {
+    "failed": 6,
+    "passed": 3,
+    "total": 9,
+    "logSha256": "e2200e7d14d6fb06d3f7f9ff1b4328c5dc6010e2f95084c420033d450fc74690"
+  },
+  "green": {
+    "tests": 9,
+    "logSha256": "aeb19e8c47caf2da3a3f0b087bac5a571bf6d682045dde574e6fb3052f93540b"
+  },
+  "full": {
+    "command": "npm run test:all",
+    "maxWorkers": 1,
+    "fileParallelism": false,
+    "vitestFiles": 229,
+    "vitestTests": 2073,
+    "vitestSkipped": 0,
+    "nodeTests": 39,
+    "nodeFailed": 0,
+    "nodeSkipped": 0,
+    "globalTestTimeoutMs": 30000,
+    "tenderHubDeadlineTimeoutMs": 60000,
+    "globalTimeoutOverride": false,
+    "logSha256": "50ecf886a72b49f11f8f018416d0bee82e7180bf2e59a756d436fe69c646628d"
+  },
+  "extraChecks": [
+    {
+      "name": "typecheck",
+      "exitCode": 0,
+      "logSha256": "1334b977bfb5d59cc31268f509551b902cd52a29bdfe3d64a25b8e66819642e2"
+    },
+    {
+      "name": "build",
+      "exitCode": 0,
+      "logSha256": "08d36486512ae9a14fd0c17876f817d8aa5dcd88286bc8ed224d13001c16b446"
+    }
+  ],
+  "sourceFilesWindows": {
+    "packages/core/src/answers/draft.ts": "bd9f1a38c5c416aa45c5b20d0c06b6302a4ccade908cb0f7a29d6a68ae24a683",
+    "packages/core/src/answers/render.ts": "ae4529fed3e4f2a3c13a536ee72eae8f584f8d6bbba68f8f144a5c740c2f649c",
+    "tests/calculationFailures.test.ts": "de25ce4493409549a9d5586154b88a2a3568cc21d3bfd71efa580c69275454db",
+    "tests/answerReview.test.ts": "5f0c7a3274b484949293c0b4ac4d765189e55eb9909601dc885966209ebd3bfb",
+    "tests/answerGrounding.test.ts": "b20e84d5979eca7659716e95ecf63c33c2ffbf90829c8205bd41185f8ad55519",
+    "vitest.config.ts": "257383f1e670ca69142ca631e9d1d5e836b4327cfe3ea37e981fd2cba3accdf8",
+    "package.json": "42c68b0ee69587cdc8e57366113f9a32981fbb48b5e783b2796958e63700bdf5"
+  },
+  "sourceUnchangedDuringValidation": true,
+  "offlineSavedResponseRecheck": {
+    "status": "PASS",
+    "kind": "saved-response-parser-renderer-recheck",
+    "modelCalls": 0,
+    "liveApi": false,
+    "currentAccessRechecked": false,
+    "rows": [
+      {
+        "topic": "advance",
+        "shownBefore": 11,
+        "shownAfter": 11,
+        "missingDatesBefore": 0,
+        "missingDatesAfter": 0,
+        "partial": true,
+        "openQuestions": 1
+      },
+      {
+        "topic": "retention",
+        "shownBefore": 10,
+        "shownAfter": 10,
+        "missingDatesBefore": 0,
+        "missingDatesAfter": 0,
+        "partial": true,
+        "openQuestions": 3
+      },
+      {
+        "topic": "award",
+        "shownBefore": 7,
+        "shownAfter": 7,
+        "missingDatesBefore": 0,
+        "missingDatesAfter": 0,
+        "partial": true,
+        "openQuestions": 2
+      },
+      {
+        "topic": "price-history",
+        "shownBefore": 12,
+        "shownAfter": 12,
+        "missingDatesBefore": 4,
+        "missingDatesAfter": 6,
+        "partial": true,
+        "openQuestions": 2
+      }
+    ]
+  },
+  "oldProtectedFiles": 18,
+  "oldResultsPreserved": true,
+  "productionTouched": false,
+  "stage18PcTouched": false,
+  "newModelCalls": 0,
+  "humanPilot": false,
+  "knownLimitations": {
+    "strictThemes": [
+      "advance",
+      "retention",
+      "award",
+      "price-history"
+    ],
+    "largeScopeSearchPerformanceMeasured": false,
+    "denseFormattingDeferred": true
+  },
+  "priorFullAttempt": {
+    "vitestPassed": 2072,
+    "vitestFailed": 1,
+    "exitCode": 1,
+    "logSha256": "edffd6b8178b67fe433255b46c8ab4cdb98864078746fc9867ed4780919ea4ef",
+    "failure": "old history comparison fixture had dates only in titles",
+    "productionCodeUnchangedAfterFailure": true,
+    "fixtureCorrection": "sending dates only in sources; atomic price claims preserved; old assertions kept; missingDates and current-price conflict controls added"
+  },
+  "fixtureValidation": {
+    "files": 2,
+    "tests": 42,
+    "logSha256": "8a664cd79ecf7cb179641f01207225539253b009837650035da9a3e44a20e0c4"
+  },
+  "versions": {
+    "node": "v24.13.0",
+    "postgresTools": "pg_ctl (PostgreSQL) 18.6",
+    "vitest": "5.0.1",
+    "typescript": "7.0.2"
+  },
+  "priorInterruptedAttempt": {
+    "status": "INTERRUPTED",
+    "reason": "date also entered the price claim and bypassed single-value conflict gate; corrected only fixture, added positive conflict control",
+    "logSha256": "def6eac18f094b633678d56bbc03e2dce0fe3de97d9d5594fea438f2a2584228",
+    "exitCode": 4294967295,
+    "productionCodeUnchanged": true,
+    "countedAsPass": false
+  },
+  "fixtureHistory": {
+    "firstBaseGitLF": "b8eff131665e5d75d9ea408ecbbc1268d85c5cd29b73035efe6eb69e8339c9fc",
+    "interruptedTestedRaw": "422e424272abdc1f7c85141961a97eed3eabe231b11a2b71d3137908000e6417",
+    "finalTestedRaw": "b20e84d5979eca7659716e95ecf63c33c2ffbf90829c8205bd41185f8ad55519",
+    "interruptedSourceReconstructedFromRecordedPatchAndVerifiedAgainstPreRunHash": true,
+    "finalSourceMatchesPreRunHash": true
+  },
+  "testCluster": {
+    "port": 55454,
+    "status": "STOPPED",
+    "dataRetained": true
+  }
+}

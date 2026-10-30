@@ -5,6 +5,7 @@
 // подтверждают только письменные основания (AD-08a-7).
 import { mentionedFactTypes } from '../facts/types.ts';
 import { compareQuantities, DURATION_UNITS, extractQuantities, type IQuantity, type QuantityUnit } from './claimNumbers.ts';
+import { groundingIssues } from './grounding.ts';
 
 export const CLAIM_KINDS = ['fact', 'amount', 'percentage', 'date', 'period', 'condition', 'comparison'] as const;
 export type ClaimKind = (typeof CLAIM_KINDS)[number];
@@ -32,6 +33,9 @@ export interface IPacketItem {
   origin: string;
   sourceUnitId: string;
   documentKey: string;
+  documentTitle?: string;
+  sourcePart?: string;
+  sourceOrder?: { page: number; ordinal: number; part: number; total?: number };
   versionNote: VersionNote;
   reason: string;
   // Факты фрагмента по графу области хода; `undefined` — сведений о фактах нет (решает `versionNote`).
@@ -55,7 +59,12 @@ export type ClaimIssueCode =
   | 'unit_mismatch'
   | 'ambiguous_number'
   | 'superseded_evidence'
-  | 'type_mismatch';
+  | 'type_mismatch'
+  | 'source_type_mismatch'
+  | 'unsupported_relation'
+  | 'unsupported_absence'
+  | 'not_source_quote'
+  | 'off_topic';
 
 export interface IClaimIssue {
   code: ClaimIssueCode;
@@ -123,6 +132,7 @@ export interface IClaimContext {
   // Единицы источника области прогона (allowed_source_unit_ids); null — проверка области не нужна.
   allowedSourceUnitIds: ReadonlySet<string> | null;
   versionPolicy: VersionPolicy;
+  question?: string;
 }
 
 // Утверждение использует значение факта, если называет и его величину, и его условие (R08a-04): величина совпадает
@@ -149,7 +159,7 @@ const usesValue = (text: string, fact: IItemFact): boolean => {
 const currentText = (item: IPacketItem): string =>
   (item.facts ?? []).filter((f) => f.status === 'superseded').reduce((text, f) => text.split(f.rawValue).join(' … '), item.text);
 
-export const checkClaim = (claim: IDraftClaim, { evidenceById, allowedSourceUnitIds, versionPolicy }: IClaimContext): IClaimCheck => {
+export const checkClaim = (claim: IDraftClaim, { evidenceById, allowedSourceUnitIds, versionPolicy, question }: IClaimContext): IClaimCheck => {
   const issues: IClaimIssue[] = [];
   const evidenceIds = Array.isArray(claim.evidenceIds) ? claim.evidenceIds : [];
   if (!evidenceIds.length) issues.push({ code: 'missing_evidence', detail: 'claim cites no evidence' });
@@ -193,6 +203,7 @@ export const checkClaim = (claim: IDraftClaim, { evidenceById, allowedSourceUnit
     }
   }
   issues.push(...typeIssues(claim));
+  issues.push(...groundingIssues(claim, documentary, question, [...evidenceById.values()]));
 
   const contradicting = issues.some((issue) => CONTRADICTING_ISSUES.has(issue.code));
   // Конфликт — по фактам, значения которых утверждение использует; без сведений о фактах — по пометке фрагмента.

@@ -10,8 +10,11 @@ import { deliveryPlaceHandler, deliveryProbeHandler } from './delivery.ts';
 import { factExtractHandler } from './facts.ts';
 import { importExpandHandler, importRegisterHandler } from './imports.ts';
 import { intakeScanHandler } from './intake.ts';
+import { historySyncHandler } from './tenderHistory.ts';
+import { historyScanHandler,historyVerifyHandler } from './historyWatch.ts';
 import { localRecognitionHandler } from './localRecognition.ts';
 import { mailImportHandler } from './mail.ts';
+import { mailhubFetchHandler,mailhubSyncHandler } from './mailhub.ts';
 import { MODEL_PROBE_KIND, modelProbeHandler } from './modelProbe.ts';
 import { recognitionImportHandler } from './recognition.ts';
 import { reviewModelHandler, reviewRunHandler, stageInvalidateHandler } from './review.ts';
@@ -21,6 +24,9 @@ export const HANDLERS: Record<string, JobHandler> = {
   'import.expand': importExpandHandler,
   'import.register': importRegisterHandler,
   'intake.scan': intakeScanHandler,
+  'history.sync': historySyncHandler,
+  'history.scan': historyScanHandler,
+  'history.verify': historyVerifyHandler,
   'recognition.import': recognitionImportHandler,
   'recognition.local': localRecognitionHandler,
   'index.build': indexBuildHandler,
@@ -29,6 +35,8 @@ export const HANDLERS: Record<string, JobHandler> = {
   'search.semantic': searchSemanticHandler,
   'calculation.capture': calculationCaptureHandler,
   'mail.import': mailImportHandler,
+  'mailhub.sync': mailhubSyncHandler,
+  'mailhub.fetch': mailhubFetchHandler,
   'analysis.extract': analysisExtractHandler,
   'analysis.rules': analysisRulesHandler,
   'answer.generate': answerGenerateHandler,

@@ -1,21 +1,18 @@
 import { useState, type FC } from 'react';
 import { createUser } from '../api/endpoints';
 import { describeError, fieldErrorsOf, hasCode } from '../api/errors';
-import type { IUser, IUserCreateInput, TGlobalRole } from '../api/types';
+import type { IUser, IUserCreateInput } from '../api/types';
 import { Button } from '../components/Button';
 import { CheckboxGroup } from '../components/CheckboxGroup';
 import { Dialog } from '../components/Dialog';
 import { Notice } from '../components/Notice';
 import { TextField } from '../components/TextField';
 import { useIdempotencyKey } from '../hooks/useIdempotencyKey';
+import { useRoleCatalog } from '../hooks/useRoleCatalog';
 import { useUnsavedChanges } from '../hooks/unsavedChanges';
-import { GLOBAL_ROLES, GLOBAL_ROLE_LABELS } from '../utils/labels';
 import { MIN_PASSWORD_LENGTH } from '../utils/constants';
 
-const ROLE_OPTIONS = GLOBAL_ROLES.map((role) => ({ value: role, label: GLOBAL_ROLE_LABELS[role] }));
 
-const toRoles = (values: string[]): TGlobalRole[] =>
-  GLOBAL_ROLES.filter((role) => values.includes(role));
 
 interface IUserCreateDialogProps {
   onClose: () => void;
@@ -26,6 +23,7 @@ export const UserCreateDialog: FC<IUserCreateDialogProps> = ({ onClose, onCreate
   const [login, setLogin] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [roles, setRoles] = useState<string[]>(['engineer']);
+  const roleCatalog = useRoleCatalog(roles);
   const [password, setPassword] = useState('');
   const [repeat, setRepeat] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -60,7 +58,7 @@ export const UserCreateDialog: FC<IUserCreateDialogProps> = ({ onClose, onCreate
     const input: IUserCreateInput = {
       login: login.trim(),
       displayName: displayName.trim(),
-      roles: toRoles(roles),
+      roles: roles,
       password,
     };
     setSaving(true);
@@ -108,7 +106,8 @@ export const UserCreateDialog: FC<IUserCreateDialogProps> = ({ onClose, onCreate
         error={errors.login}
       />
       <TextField label="Имя для отображения" required autoComplete="off" value={displayName} onValueChange={setDisplayName} error={errors.displayName} />
-      <CheckboxGroup legend="Роли" required options={ROLE_OPTIONS} selected={roles} onChange={setRoles} error={errors.roles} />
+      <CheckboxGroup legend="Роли" required options={roleCatalog.options} selected={roles} onChange={setRoles} error={errors.roles} />
+      {roleCatalog.error ? <Notice tone="danger">Не удалось загрузить роли. Закройте окно и повторите.</Notice> : <Notice tone="info">Права выбранных ролей объединяются. Настройка доступна в разделе «Роли и права».</Notice>}
       <TextField
         label="Начальный пароль"
         type="password"

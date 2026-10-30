@@ -3,6 +3,7 @@
 // обхода нет. Каждый шаг — строка PASS/FAIL с фактом (команда без секретов, хэши, числа).
 import { randomBytes } from 'node:crypto';
 import pg from 'pg';
+import { recordVerifiedBackup, withBackupOperation } from '../../packages/storage/src/backupRetention.ts';
 import { blobReferences, checkSchema, createPool, dropDatabase, restoreUnsafeFunctions, setupDatabase, type IRolePasswords, type Pool } from '../../packages/db/src/index.ts';
 import {
   BackupError,
@@ -15,7 +16,7 @@ import {
   restoreBackupFiles,
   type IBackupManifest,
 } from '../../packages/storage/src/index.ts';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { CLUSTER_ID_SQL, clusterIdentityProblem, runPgRestore, runPsql, type IPgTool } from './pgTools.ts';
 
 export const RESTORE_DB_RE = /^kontur_restore_[a-z0-9_]{1,40}$/u;
@@ -127,6 +128,19 @@ const sameDatabaseProblem = async (o: Pick<IRestoreOptions, 'tool' | 'adminUrl' 
 };
 
 export const runRestoreCheck = async (o: IRestoreOptions): Promise<IRestoreResult> => {
+  // Preserve the rule that failed safety guards cause no writes, including lock creation.
+  if ((await restoreGuards(o)).length) return runRestoreCheckUnlocked(o);
+  return withBackupOperation(dirname(o.backupDir), 'restore', async () => {
+    const r = await runRestoreCheckUnlocked(o);
+    if (r.ok && r.manifest && o.env?.BACKUP_RETENTION_CONFIG) {
+      try { await recordVerifiedBackup(o.env.BACKUP_RETENTION_CONFIG, o.backupDir, r.manifest); }
+      catch (err) { await r.pool?.end().catch(() => undefined); throw err; }
+    }
+    return r;
+  });
+};
+
+const runRestoreCheckUnlocked = async (o: IRestoreOptions): Promise<IRestoreResult> => {
   const steps: IRestoreStep[] = [];
   const step = (name: string, ok: boolean, detail: string): boolean => {
     steps.push({ name, ok, detail });

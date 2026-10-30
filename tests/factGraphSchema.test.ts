@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { FACT_RULES_VERSION } from '../packages/core/src/index.ts';
 import { createPool, dropDatabase, migrate, MIGRATIONS_DIR, setupDatabase } from '../packages/db/src/index.ts';
 import { createContract, grantCreator, uploadMain } from './contractFixtures.ts';
 import { ADMIN_URL, buildScenario, createTestDb, drain, makeApp, makeWorker, testConfig, type IScenario, type ITestDb } from './helpers.ts';
@@ -129,7 +130,7 @@ describe('инвариант 3: факт — только в транзакци�
     const a = att.rows[0];
     expect(await tx((c) => c.query(XRUN_INSERT, [a.id, a.document_revision_id, a.document_id, s.tenderA, null, 'rules/att']))).toBe('23514');
     expect((await db.pool.query('SELECT 1 FROM fact_extraction_run WHERE recognition_run_id = $1', [m.attRun])).rowCount).toBe(0);
-    expect(await tx((c) => c.query(XRUN_INSERT, [ids.run, ids.revision, ids.document, s.tenderA, null, 'rules/1-kontur']))).toBe('23505');
+    expect(await tx((c) => c.query(XRUN_INSERT, [ids.run, ids.revision, ids.document, s.tenderA, null, FACT_RULES_VERSION]))).toBe('23505');
   });
 });
 

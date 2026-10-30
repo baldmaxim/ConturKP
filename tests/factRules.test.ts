@@ -108,7 +108,7 @@ describe('перечень и классификатор (D-028, перенос 
   });
 });
 
-describe('извлечение (перенос Locus fact-extractor, rules/1)', () => {
+describe('извлечение (Locus fact-extractor, уточнения rules/2)', () => {
   it('факты договора — с нормализованным значением и условием', () => {
     const b = fixture('pv2-stromynka');
     const value = (type: string, status = '') => factsOf(b, type, status).map((f) => f.normalized);
@@ -117,7 +117,7 @@ describe('извлечение (перенос Locus fact-extractor, rules/1)', 
     expect(value('vat_rate')).toEqual([{ percent: 20 }]);
     expect(value('retention_percent')).toEqual([{ percent: 3 }]);
     expect(value('warranty_period')).toEqual([{ months: 60 }]);
-    expect(value('penalty_rate')).toEqual([{ percent: 0.1, capPercent: 10 }]);
+    expect(value('penalty_rate')).toEqual([expect.objectContaining({ percent: 0.1, capPercent: 10 })]);
     const retentionReturn = factsOf(b, 'retention_return_term')[0]!;
     expect(retentionReturn.normalized).toEqual({ days: 30, dayKind: 'календарных' });
     expect(retentionReturn.condition).toMatch(/после истечения гарантийного срока/u);
@@ -134,7 +134,9 @@ describe('извлечение (перенос Locus fact-extractor, rules/1)', 
       ['advance_percent', { percent: 3 }],
     ]);
     expect(facts('Договор подряда № 11 от 01.01.2026\n\nГарантийное удержание составляет 5%. Отчёт возвращается на доработку в течение 10 дней.').map((f) => f.factType)).toEqual(['retention_percent']);
-    expect(facts('Договор подряда № 12 от 01.01.2026\n\nНеустойка в размере 0,5% за каждый день. Общая ответственность Подрядчика не более 20% цены.').map((f) => f.normalized)).toEqual([{ percent: 0.5 }]);
+    const penalty = facts('Договор подряда № 12 от 01.01.2026\n\nНеустойка в размере 0,5% за каждый день. Общая ответственность Подрядчика не более 20% цены.')[0]!;
+    expect(penalty.normalized.percent).toBe(0.5);
+    expect(penalty.normalized.capPercent).toBeUndefined();
     expect(facts('Договор подряда № 13 от 01.01.2026\n\nАванс в размере 3% выплачивается в течение 30 календарных дней с даты подписания.').find((f) => f.factType === 'advance_term')!.normalized).toEqual({
       days: 30,
       dayKind: 'календарных',
@@ -161,13 +163,16 @@ describe('граф редакций (перенос Locus version-graph)', () =>
     expect(factsOf(b, 'work_start_date', 'active').map((f) => f.normalized.date)).toEqual(['2026-03-01']);
   });
 
-  it('цена договора и итог сметы различаются — конфликт и замечание, а не молчаливый выбор', () => {
-    const b = fixture('pv2-stromynka');
+  it('цена договора и итог явно связанной сметы различаются — конфликт и замечание', () => {
+    const source = fixture('pv2-stromynka');
+    const contract = source.documents.find(d => d.kind === 'contract')!;
+    const documents = source.documents.map(d => d.kind === 'estimate' ? { ...d, explicit: { role: 'appendix' as const, mainDocumentId: contract.documentId } } : d);
+    const b = { ...source, documents, graph: computeFactGraph({ documents, facts: source.facts }) };
     const price = factsOf(b, 'contract_price')[0]!;
     const total = factsOf(b, 'estimate_total')[0]!;
     expect(state(b, price).status).toBe('conflict');
     expect(state(b, total).status).toBe('conflict');
-    expect(total.normalized).toEqual({ amount: 244800000, currency: '' });
+    expect(total.normalized).toEqual({ amount: 244800000, currency: 'RUB', comparisonScope: 'document_total' });
     const conflicts = b.graph.remarks.filter((r) => r.kind === 'value_conflict');
     expect(conflicts.map((r) => r.factIds)).toEqual([[price.factId, total.factId].sort()]);
   });

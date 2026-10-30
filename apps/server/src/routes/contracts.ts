@@ -2,7 +2,7 @@
 // видимый без нужной возможности — 403. Создатель получает доступ к созданному договору (OD-2);
 // остальные выдачи ведёт администратор договоров (admin.contract), содержимого это право не открывает.
 import { ContractStatusRequest, CreateContractRequest, PatchContractRequest, PutContractAccessRequest } from '@kontur/contracts';
-import { CREATOR_CAPABILITIES, formatEtag, hasContentRole, type ContractCapability, type Role } from '@kontur/core';
+import { CREATOR_CAPABILITIES, formatEtag, hasContentRole, resolveAccessRoles, type ContractCapability, type Role } from '@kontur/core';
 import {
   activeGrantsOf,
   bumpContractVersion,
@@ -47,7 +47,7 @@ const requireContractAdmin = (ctx: IAccessContext, entityId: string | null = nul
 const requireGrantee = async (db: Queryable, userId: string, target: { entityType: string; entityId: string | null }) => {
   const user = await getUser(db, userId);
   if (!user) throw notFound({ entityType: 'app_user', entityId: userId });
-  if (user.status !== 'active' || !hasContentRole(new Set(user.roles as Role[]))) {
+  if (user.status !== 'active' || !hasContentRole(resolveAccessRoles(user.effective_roles, user.role_permissions))) {
     throw new HttpError(409, 'STATE_CONFLICT', 'выдача по договору действует только у активного инженера или руководителя', {}, { ...target, details: { userId } });
   }
   return user;

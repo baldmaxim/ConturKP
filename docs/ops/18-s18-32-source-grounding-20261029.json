@@ -1,0 +1,1753 @@
+{
+  "date": "2026-10-29",
+  "branch": "codex/s18-32-grounding-isolated-20261029",
+  "baseCommit": "3c846706f7b4cc727a170a32c718661e1638e3af",
+  "s1832": "OPEN",
+  "codeReviewState": "READY_FOR_INDEPENDENT_REVIEW",
+  "g7": "NOT_ACCEPTED",
+  "stage18": "INCOMPLETE",
+  "sourceFingerprint": "453853283703ed565c8a19a9fa3cbf98a880305d88bbb6f18f481a7056bad634",
+  "testedSourceFiles": [
+    {
+      "path": "apps/server/src/routes/dialogs.ts",
+      "sha256": "617454a45897dd7d1a4cfec3a22a4720ebb382787e4e5aff0e080734fa72533a"
+    },
+    {
+      "path": "apps/worker/src/handlers/answer.ts",
+      "sha256": "b6da59b5a8481d8171f065fd5ce6a953ba0039431edd2597d3d7e97c7cfab6e5"
+    },
+    {
+      "path": "packages/core/src/answers/claimChecks.ts",
+      "sha256": "0660f4267618342ac615e293a9d9fa177a7e78806573ea64d65b19e253c83bce"
+    },
+    {
+      "path": "packages/core/src/answers/draft.ts",
+      "sha256": "a69d9a2e3c54e886d7f76b50bc2d7b0f25a2c2bcb0d6f03f346b9b7c22dccfdb"
+    },
+    {
+      "path": "packages/core/src/answers/grounding.ts",
+      "sha256": "db3b3c7e596fa5a8d036291ad6ca16a88b65d4ee800b6b5c9f973061ecf427fa"
+    },
+    {
+      "path": "packages/core/src/answers/index.ts",
+      "sha256": "029ea4dc7ccfa66c5cdbb231610c56902043f0bc73d25554543608dc30205bed"
+    },
+    {
+      "path": "packages/core/src/answers/packet.ts",
+      "sha256": "088c253f11d837eea8a3c1c8f7ed4c386ac7cd95bcb495a3eae98bc5bfd604f9"
+    },
+    {
+      "path": "packages/core/src/answers/planner.ts",
+      "sha256": "665a3f9b58979a5dc6c09b236454be3406ace8856fba251dd7bf3fba73034428"
+    },
+    {
+      "path": "packages/core/src/answers/render.ts",
+      "sha256": "df24873ba7041e1e8d7770c428220c2871a9c7dbde1a0d0fac63f97f8bc6793e"
+    },
+    {
+      "path": "packages/db/src/answers.ts",
+      "sha256": "6f44d4f4219e05735ea90db906f7142c35b79a29393c055795baecf133a46ca9"
+    },
+    {
+      "path": "tests/answerContext.test.ts",
+      "sha256": "19bfea9d4f59604dbfd23ea4538d3ba4d047504ae19f488a52af63db6f7b78f4"
+    },
+    {
+      "path": "tests/answerGrounding.test.ts",
+      "sha256": "b8eff131665e5d75d9ea408ecbbc1268d85c5cd29b73035efe6eb69e8339c9fc"
+    },
+    {
+      "path": "tests/answerQuoteSelection.test.ts",
+      "sha256": "be5432100ca6fdbb1ccd034fe21c9a574359850b9e6c7aec95f467250e13a92f"
+    },
+    {
+      "path": "tests/answersGrounding.test.ts",
+      "sha256": "0fba93c09c8850bf325c751e5eee5aa4f6740f9f9cffa1ae9fb86f0197819c29"
+    },
+    {
+      "path": "tests/searchFixtures.ts",
+      "sha256": "6c35607a8aeaf479a53f1e35989f2dc5b49109c4ae2b1a4d975051989806e2cd"
+    }
+  ],
+  "tests": {
+    "files": 228,
+    "tests": 2064,
+    "skipped": 0,
+    "logSha256": "6caaccbe2317bbb4965fc6dff6537117312547bcb2884853596e45c975eddd8c"
+  },
+  "testExecutionSettings": {
+    "testTimeoutMs": 60000,
+    "maxWorkers": 1,
+    "fileParallelism": false,
+    "filters": [],
+    "reason": "A real-clock TenderHub deadline test exceeded default30s once; no application/test source changed. Entire calculationFailures file then passed17/17, deadlinecase11145ms.",
+    "failedPartialLogSha256": "e89459684706815e022b158f517d43d6bf54216775e49966223cfab7de9626ad",
+    "diagnosticLogSha256": "447969417001d0102c68e20f53e6ce9807285f2fca959942079a11de3dda0a91",
+    "diagnosticTests": 17,
+    "diagnosticDeadlineMs": 11145
+  },
+  "preReplayValidation": {
+    "status": "PASS",
+    "validationKind": "targeted_before_replay",
+    "at": "2026-10-29T11:25:07.241Z",
+    "vitest": {
+      "files": 13,
+      "tests": 133,
+      "skipped": 0,
+      "logSha256": "71bb8c5fae899ff253e96a5520f10dc64c7557888f642b78799bb0a87ecfb402"
+    },
+    "extra": [
+      {
+        "name": "typecheck",
+        "startedAt": "2026-10-29T11:22:43.153Z",
+        "finishedAt": "2026-10-29T11:22:45.909Z",
+        "exitCode": 0,
+        "error": null
+      },
+      {
+        "name": "build",
+        "startedAt": "2026-10-29T11:22:45.911Z",
+        "finishedAt": "2026-10-29T11:22:49.850Z",
+        "exitCode": 0,
+        "error": null
+      },
+      {
+        "name": "node-tests",
+        "startedAt": "2026-10-29T11:22:49.851Z",
+        "finishedAt": "2026-10-29T11:22:51.876Z",
+        "exitCode": 0,
+        "error": null
+      }
+    ],
+    "sourceFiles": [
+      {
+        "path": "apps/server/src/routes/dialogs.ts",
+        "sha256": "617454a45897dd7d1a4cfec3a22a4720ebb382787e4e5aff0e080734fa72533a"
+      },
+      {
+        "path": "apps/worker/src/handlers/answer.ts",
+        "sha256": "b6da59b5a8481d8171f065fd5ce6a953ba0039431edd2597d3d7e97c7cfab6e5"
+      },
+      {
+        "path": "packages/core/src/answers/claimChecks.ts",
+        "sha256": "0660f4267618342ac615e293a9d9fa177a7e78806573ea64d65b19e253c83bce"
+      },
+      {
+        "path": "packages/core/src/answers/draft.ts",
+        "sha256": "a69d9a2e3c54e886d7f76b50bc2d7b0f25a2c2bcb0d6f03f346b9b7c22dccfdb"
+      },
+      {
+        "path": "packages/core/src/answers/grounding.ts",
+        "sha256": "db3b3c7e596fa5a8d036291ad6ca16a88b65d4ee800b6b5c9f973061ecf427fa"
+      },
+      {
+        "path": "packages/core/src/answers/index.ts",
+        "sha256": "029ea4dc7ccfa66c5cdbb231610c56902043f0bc73d25554543608dc30205bed"
+      },
+      {
+        "path": "packages/core/src/answers/packet.ts",
+        "sha256": "088c253f11d837eea8a3c1c8f7ed4c386ac7cd95bcb495a3eae98bc5bfd604f9"
+      },
+      {
+        "path": "packages/core/src/answers/planner.ts",
+        "sha256": "665a3f9b58979a5dc6c09b236454be3406ace8856fba251dd7bf3fba73034428"
+      },
+      {
+        "path": "packages/core/src/answers/render.ts",
+        "sha256": "df24873ba7041e1e8d7770c428220c2871a9c7dbde1a0d0fac63f97f8bc6793e"
+      },
+      {
+        "path": "packages/db/src/answers.ts",
+        "sha256": "6f44d4f4219e05735ea90db906f7142c35b79a29393c055795baecf133a46ca9"
+      },
+      {
+        "path": "tests/answerContext.test.ts",
+        "sha256": "19bfea9d4f59604dbfd23ea4538d3ba4d047504ae19f488a52af63db6f7b78f4"
+      },
+      {
+        "path": "tests/answerGrounding.test.ts",
+        "sha256": "b8eff131665e5d75d9ea408ecbbc1268d85c5cd29b73035efe6eb69e8339c9fc"
+      },
+      {
+        "path": "tests/answerQuoteSelection.test.ts",
+        "sha256": "be5432100ca6fdbb1ccd034fe21c9a574359850b9e6c7aec95f467250e13a92f"
+      },
+      {
+        "path": "tests/answersGrounding.test.ts",
+        "sha256": "0fba93c09c8850bf325c751e5eee5aa4f6740f9f9cffa1ae9fb86f0197819c29"
+      },
+      {
+        "path": "tests/searchFixtures.ts",
+        "sha256": "6c35607a8aeaf479a53f1e35989f2dc5b49109c4ae2b1a4d975051989806e2cd"
+      }
+    ],
+    "sourceFingerprint": "453853283703ed565c8a19a9fa3cbf98a880305d88bbb6f18f481a7056bad634",
+    "productionTouched": false
+  },
+  "extraChecks": [
+    {
+      "name": "typecheck",
+      "startedAt": "2026-10-29T11:22:43.153Z",
+      "finishedAt": "2026-10-29T11:22:45.909Z",
+      "exitCode": 0,
+      "error": null
+    },
+    {
+      "name": "build",
+      "startedAt": "2026-10-29T11:22:45.911Z",
+      "finishedAt": "2026-10-29T11:22:49.850Z",
+      "exitCode": 0,
+      "error": null
+    },
+    {
+      "name": "node-tests",
+      "startedAt": "2026-10-29T11:22:49.851Z",
+      "finishedAt": "2026-10-29T11:22:51.876Z",
+      "exitCode": 0,
+      "error": null
+    }
+  ],
+  "versions": {
+    "planner": "rules/2-answer-focus",
+    "packet": "evidence/4-source-context",
+    "prompt": "answer-draft/4-source-context"
+  },
+  "modelCalls": 4,
+  "totalNewModelCalls": 21,
+  "effectiveModels": [
+    {
+      "identifier": "qwen3-4b-instruct-2507",
+      "contextLength": 16384,
+      "quantization": "Q6_K"
+    },
+    {
+      "identifier": "text-embedding-bge-m3",
+      "contextLength": 8192,
+      "quantization": "Q8_0"
+    }
+  ],
+  "inferenceConfig": {
+    "temperature": 0,
+    "maxOutputTokens": 4096,
+    "jsonMode": "none",
+    "maxInputChars": 3000
+  },
+  "answerConfig": {
+    "verifierMode": "off",
+    "maxRepairs": 1,
+    "packetLimit": 12
+  },
+  "scopeHash": "d28f3ebedd2d675372a72905d4d5409cd758777c4b3855997686223ebddcbea2",
+  "protectedRunCount": 16,
+  "oldSnapshotBeforeSha256": "1dcbeb033b33615653cded8e7bf2827bef2f6a89f5dd39fd315fcda1861cd921",
+  "oldSnapshotAfterSha256": "1dcbeb033b33615653cded8e7bf2827bef2f6a89f5dd39fd315fcda1861cd921",
+  "oldResultsPreserved": true,
+  "revokedSessions": 1,
+  "productionTouched": false,
+  "humanPilot": false,
+  "attempts": [
+    {
+      "runtime": "s18-32-fix-20261029",
+      "validationKind": "full",
+      "tests": {
+        "files": 226,
+        "tests": 2045,
+        "skipped": 0,
+        "logSha256": "d28f5332cd82a35a0c4d0bd8d24e0f217f7ce88e4fa39c02861ccd3a2b6a4d2a"
+      },
+      "sourceFingerprint": "9bfc8075e9fd087ea660c8b4beb1dcbccc01ca6eaef918417d65c627d457a7e1",
+      "modelCalls": 8,
+      "oldResultsPreserved": true,
+      "runs": [
+        {
+          "topic": "advance",
+          "runId": "c98cabfa-dcf5-4184-bd1e-e5110dc41231",
+          "dialogId": "7c9c61ae-d637-44d4-8165-db0e2958b78e",
+          "answerStatus": "incomplete_processing",
+          "shownClaims": 0,
+          "droppedClaims": 14,
+          "repairs": 1,
+          "modelCalls": [
+            {
+              "ok": true,
+              "promptTokens": 3841,
+              "completionTokens": 967,
+              "userSha256": "d2c533ad01ebfca15d77d3e313658a4ecbed6899ce06d62590fc71716cf6f47f",
+              "systemSha256": "cbb338a53dcaad3af758433144f0b87250ea97e3f29188b8a95b9fc990c80d59",
+              "outputSha256": "751f0dc7a7c58d2ecc62ab575d0421af3c8a1721f5f374268567cc4de9ea8e28",
+              "finishReason": "stop",
+              "requestedBudget": 7937,
+              "reserve": 8447
+            },
+            {
+              "ok": true,
+              "promptTokens": 4894,
+              "completionTokens": 1123,
+              "userSha256": "8bed2686304293cd4f7c8266e210de807fa39ebf9593169e55fc15f074afc2b1",
+              "systemSha256": "cbb338a53dcaad3af758433144f0b87250ea97e3f29188b8a95b9fc990c80d59",
+              "outputSha256": "17e45d20553ee88f7942f5e42889c707e6e0ae3a20cce7d717fe5c3a055e818b",
+              "finishReason": "stop",
+              "requestedBudget": 8990,
+              "reserve": 7394
+            }
+          ],
+          "questionUnchanged": true,
+          "sourceQuotesVerified": true,
+          "allEvidenceInFrozenScope": true,
+          "inputSha256": "bfafdb33dccf8e1c37bd0d090bd301c444b83c35627e2281b489354b147b45b0",
+          "packetMatchesOld": false,
+          "partial": true,
+          "missingDates": [],
+          "missingDocuments": 12,
+          "evidence": [
+            {
+              "label": "E1",
+              "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+            },
+            {
+              "label": "E2",
+              "sourceUnitId": "ce1ed2a5-38f7-4886-a5e9-b48dee6e784f"
+            },
+            {
+              "label": "E3",
+              "sourceUnitId": "83a6db65-2606-4288-85cb-1f8ba2e58ed7"
+            },
+            {
+              "label": "E4",
+              "sourceUnitId": "e4d119c2-864d-4d2c-b063-755d64821117"
+            },
+            {
+              "label": "E5",
+              "sourceUnitId": "a5247776-b791-4245-9ddf-818540620f8c"
+            },
+            {
+              "label": "E6",
+              "sourceUnitId": "3477c4d5-8c09-4cee-a898-c649ef0977de"
+            },
+            {
+              "label": "E7",
+              "sourceUnitId": "599b4120-a1f2-4d98-827b-67177b589c73"
+            },
+            {
+              "label": "E8",
+              "sourceUnitId": "6e33b022-1efe-475d-bb8a-7441f8950bdf"
+            },
+            {
+              "label": "E9",
+              "sourceUnitId": "c649ecea-52f2-44c1-9309-8527a32822a9"
+            },
+            {
+              "label": "E10",
+              "sourceUnitId": "ad2a6447-4559-46d5-95cc-4d1e545898e0"
+            },
+            {
+              "label": "E11",
+              "sourceUnitId": "b0224092-eb9e-4446-8b60-ba500f332519"
+            },
+            {
+              "label": "E12",
+              "sourceUnitId": "9d8041e8-0e0b-4981-bf35-b4e9d406d260"
+            }
+          ],
+          "resultSha256": "6c3b35aafb72cb6766786665958974b1716e3e354427f08a3072a8120d064e3b",
+          "manualReview": {
+            "assessment": "FAIL",
+            "notes": "Нужные лимиты, возобновляемость и условия БГ есть в пакете; Qwen добавил собственные формулировки и необоснованное отсутствие условий. Все 14 утверждений отклонены, полезного ответа нет."
+          }
+        },
+        {
+          "topic": "retention",
+          "runId": "767d8c5b-284f-4473-a4c8-69f47ac1d260",
+          "dialogId": "fce65857-e45c-4c8b-b0d3-8108c8a32f4d",
+          "answerStatus": "incomplete_processing",
+          "shownClaims": 0,
+          "droppedClaims": 8,
+          "repairs": 1,
+          "modelCalls": [
+            {
+              "ok": true,
+              "promptTokens": 3086,
+              "completionTokens": 516,
+              "userSha256": "5e4b9a085a0cf161020c558e07a608c6ea472ea949ee90c5016badd8b89eee33",
+              "systemSha256": "077a7c35844346c46fc45bd177d666f3c4f852ad538e89aac8df317fc2afd36e",
+              "outputSha256": "80fed0febb03d176d6f30d7332de3cdfd98dfd3b4ce37c0b02dd06dc81453437",
+              "finishReason": "stop",
+              "requestedBudget": 7182,
+              "reserve": 9202
+            },
+            {
+              "ok": true,
+              "promptTokens": 3617,
+              "completionTokens": 1065,
+              "userSha256": "88e5221950f61268bbdf0be7d0e69e1ac633c8aa89ecb4fb3d2e37b65be6b1b3",
+              "systemSha256": "077a7c35844346c46fc45bd177d666f3c4f852ad538e89aac8df317fc2afd36e",
+              "outputSha256": "ced37844c379b286531ac836b3ad503e5b5f5eedbc8b4c8ff3d2e49278101d8d",
+              "finishReason": "stop",
+              "requestedBudget": 7713,
+              "reserve": 8671
+            }
+          ],
+          "questionUnchanged": true,
+          "sourceQuotesVerified": true,
+          "allEvidenceInFrozenScope": true,
+          "inputSha256": "2d1e67dc6f4f099f5ec5220ed7ace7a1159f31cdc0bc35f0fbafd529a7300940",
+          "packetMatchesOld": false,
+          "partial": true,
+          "missingDates": [],
+          "missingDocuments": 8,
+          "evidence": [
+            {
+              "label": "E1",
+              "sourceUnitId": "ce1ed2a5-38f7-4886-a5e9-b48dee6e784f"
+            },
+            {
+              "label": "E2",
+              "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+            },
+            {
+              "label": "E3",
+              "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+            },
+            {
+              "label": "E4",
+              "sourceUnitId": "b0224092-eb9e-4446-8b60-ba500f332519"
+            },
+            {
+              "label": "E5",
+              "sourceUnitId": "cf55c16b-2623-40a6-b8ed-d608d26da619"
+            },
+            {
+              "label": "E6",
+              "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+            },
+            {
+              "label": "E7",
+              "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+            },
+            {
+              "label": "E8",
+              "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+            },
+            {
+              "label": "E9",
+              "sourceUnitId": "83a6db65-2606-4288-85cb-1f8ba2e58ed7"
+            },
+            {
+              "label": "E10",
+              "sourceUnitId": "e4d119c2-864d-4d2c-b063-755d64821117"
+            },
+            {
+              "label": "E11",
+              "sourceUnitId": "a5247776-b791-4245-9ddf-818540620f8c"
+            },
+            {
+              "label": "E12",
+              "sourceUnitId": "3477c4d5-8c09-4cee-a898-c649ef0977de"
+            }
+          ],
+          "resultSha256": "b4f57496eb0c8dc30aed0c58dddbfc439bb415d92f85f1d13f5a540660dc6944",
+          "manualReview": {
+            "assessment": "FAIL",
+            "notes": "Основные ставки, база удержания и определения МОП/квартир теперь найдены; все 8 пересказов Qwen не являются прямыми цитатами и не показаны."
+          }
+        },
+        {
+          "topic": "award",
+          "runId": "960b40ea-e131-4056-be2f-f7ea323fd487",
+          "dialogId": "cb7e2689-cdf7-4d3a-bb51-2ca31ade2a70",
+          "answerStatus": "incomplete_processing",
+          "shownClaims": 2,
+          "droppedClaims": 4,
+          "repairs": 1,
+          "modelCalls": [
+            {
+              "ok": true,
+              "promptTokens": 2419,
+              "completionTokens": 328,
+              "userSha256": "fdf7b7cfba7627982c5d9fc4ad840576bd1ddd291a3d3d2dfae314416e95e6ab",
+              "systemSha256": "077a7c35844346c46fc45bd177d666f3c4f852ad538e89aac8df317fc2afd36e",
+              "outputSha256": "12b3df4e2a9046161209bbba83ca4ab4a102e43141f6bed4994a6b4db9cd2dab",
+              "finishReason": "stop",
+              "requestedBudget": 6515,
+              "reserve": 9869
+            },
+            {
+              "ok": true,
+              "promptTokens": 2762,
+              "completionTokens": 451,
+              "userSha256": "0e1c630d03487b7691691611bf6f189ebdc49bd9d0335da7d8770ee41aaca851",
+              "systemSha256": "077a7c35844346c46fc45bd177d666f3c4f852ad538e89aac8df317fc2afd36e",
+              "outputSha256": "23604568d85690ac4a5e441c54f302444e546abb8b593a868350793f61a19e6e",
+              "finishReason": "stop",
+              "requestedBudget": 6858,
+              "reserve": 9526
+            }
+          ],
+          "questionUnchanged": true,
+          "sourceQuotesVerified": true,
+          "allEvidenceInFrozenScope": true,
+          "inputSha256": "affe190a940f8c358d0ea06344d45ae387af7e61cd922ecc4ec17545c794ca75",
+          "packetMatchesOld": false,
+          "partial": true,
+          "missingDates": [],
+          "missingDocuments": 0,
+          "evidence": [
+            {
+              "label": "E1",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E2",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E3",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E4",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E5",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E6",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E7",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E8",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E9",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E10",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E11",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E12",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            }
+          ],
+          "resultSha256": "49bb2d649206245cfd36f959641e120f9ad28383da6b0adf067be71da02ee687",
+          "manualReview": {
+            "assessment": "PARTIAL",
+            "notes": "Использован реальный протокол, акт исключён. Показаны только две выдержки о внутренних системах; победитель, общая цена и дата протокола не прошли проверку. Полного ответа нет."
+          }
+        },
+        {
+          "topic": "price-history",
+          "runId": "38929be7-4145-4969-abd4-7eb9bd1037fa",
+          "dialogId": "cad6db26-e13f-49fd-bad1-df121954ff8e",
+          "answerStatus": "incomplete_processing",
+          "shownClaims": 10,
+          "droppedClaims": 0,
+          "repairs": 1,
+          "modelCalls": [
+            {
+              "ok": true,
+              "promptTokens": 3791,
+              "completionTokens": 811,
+              "userSha256": "2d154366d006369e267e7f938747fe8dfb4959b78d52a737ff2c19f27de8857e",
+              "systemSha256": "cbb338a53dcaad3af758433144f0b87250ea97e3f29188b8a95b9fc990c80d59",
+              "outputSha256": "0af857354ba9e6e41b0b0b4f03fe8e6aa3991f7136b0ae54e0ed1ce5c4f1b3d5",
+              "finishReason": "stop",
+              "requestedBudget": 7887,
+              "reserve": 8497
+            },
+            {
+              "ok": true,
+              "promptTokens": 4852,
+              "completionTokens": 1182,
+              "userSha256": "6b5ebf851f7472d7a7dc89d339925f6afb0a79cd89af023681561008799a2055",
+              "systemSha256": "cbb338a53dcaad3af758433144f0b87250ea97e3f29188b8a95b9fc990c80d59",
+              "outputSha256": "99074cdb16a1d6a29e88f19becaf5ed3ab1bf0e3507079ba35524e2ff16b37e3",
+              "finishReason": "stop",
+              "requestedBudget": 8948,
+              "reserve": 7436
+            }
+          ],
+          "questionUnchanged": true,
+          "sourceQuotesVerified": true,
+          "allEvidenceInFrozenScope": true,
+          "inputSha256": "aab9b98098c48882baf7f9bcd4db3fd2f307f456f337eae8941d9bb06b447ba4",
+          "packetMatchesOld": false,
+          "partial": true,
+          "missingDates": [
+            "04.06.2026",
+            "15.06.2026",
+            "23.06.2026"
+          ],
+          "missingDocuments": 2,
+          "evidence": [
+            {
+              "label": "E1",
+              "sourceUnitId": "4c24a459-fbff-4358-916c-6a5da70afdaa"
+            },
+            {
+              "label": "E2",
+              "sourceUnitId": "663952dc-a3b1-43d2-8ea9-1fd6e63f3cd7"
+            },
+            {
+              "label": "E3",
+              "sourceUnitId": "92681b79-81ee-4d1c-9e02-87e04937e39c"
+            },
+            {
+              "label": "E4",
+              "sourceUnitId": "3477c4d5-8c09-4cee-a898-c649ef0977de"
+            },
+            {
+              "label": "E5",
+              "sourceUnitId": "9d8041e8-0e0b-4981-bf35-b4e9d406d260"
+            },
+            {
+              "label": "E6",
+              "sourceUnitId": "e4d119c2-864d-4d2c-b063-755d64821117"
+            },
+            {
+              "label": "E7",
+              "sourceUnitId": "6e33b022-1efe-475d-bb8a-7441f8950bdf"
+            },
+            {
+              "label": "E8",
+              "sourceUnitId": "ad2a6447-4559-46d5-95cc-4d1e545898e0"
+            },
+            {
+              "label": "E9",
+              "sourceUnitId": "b0224092-eb9e-4446-8b60-ba500f332519"
+            },
+            {
+              "label": "E10",
+              "sourceUnitId": "ce1ed2a5-38f7-4886-a5e9-b48dee6e784f"
+            },
+            {
+              "label": "E11",
+              "sourceUnitId": "b46134ee-5de2-480f-89b7-208fb8b9361f"
+            },
+            {
+              "label": "E12",
+              "sourceUnitId": "ceff6d54-a142-4d56-8d4c-4c048965da93"
+            }
+          ],
+          "resultSha256": "8d316c6f3141484f857e57a7039cc3da27666e25737ca9535899963fc3eeb45e",
+          "manualReview": {
+            "assessment": "PARTIAL",
+            "notes": "Показаны десять прямых выдержек, включая позднюю строку ВСЕГО; честный частичный статус. Нет полного покрытия подач и разделённых частей, расчётные приложения РСР остаются вне пакета. Встречаются непрошенные даты/шаблоны; строка нескольких колонок не является доказанным итогом всей оферты. Дата имени не доказательство отправки."
+          }
+        }
+      ]
+    },
+    {
+      "runtime": "s18-32-quotes-20261029",
+      "validationKind": "full",
+      "tests": {
+        "files": 227,
+        "tests": 2052,
+        "skipped": 0,
+        "logSha256": "ad903fbb16f47f427781728e9f42d19913bd618e6cc44d95a394e6b8d6142c3c"
+      },
+      "sourceFingerprint": "2d2cd807389a1e39be04ba31ec2b51511bb4af11ee9018cb76a03e24f853da99",
+      "modelCalls": 5,
+      "oldResultsPreserved": true,
+      "runs": [
+        {
+          "topic": "advance",
+          "runId": "ff6a4881-165e-40be-b361-90cebbb9d1dc",
+          "dialogId": "8442c809-0359-4878-8620-0ee4bcbdfe23",
+          "answerStatus": "incomplete_processing",
+          "shownClaims": 11,
+          "droppedClaims": 5,
+          "repairs": 0,
+          "modelCalls": [
+            {
+              "ok": true,
+              "promptTokens": 4535,
+              "completionTokens": 553,
+              "userSha256": "d09b637961228da1a0fc0e91642d46e9c5f8256bba92521c4ab701c16740131d",
+              "systemSha256": "9cd7debcb5a03cecd9d1aa4ffc8c6acafc97162ca6e0bfdce499fb4f8260720d",
+              "outputSha256": "68616dcd329e1a85f082d33d2deeee7f7f5b3238e7bbbf2003bc0d19a66cf222",
+              "finishReason": "stop",
+              "requestedBudget": 8631,
+              "reserve": 7753
+            }
+          ],
+          "questionUnchanged": true,
+          "sourceQuotesVerified": true,
+          "allEvidenceInFrozenScope": true,
+          "inputSha256": "bfafdb33dccf8e1c37bd0d090bd301c444b83c35627e2281b489354b147b45b0",
+          "packetMatchesOld": false,
+          "searchStatus": "degraded",
+          "semanticStatus": "unavailable",
+          "scopeIncomplete": true,
+          "partial": true,
+          "missingDates": [],
+          "missingDocuments": 1,
+          "evidence": [
+            {
+              "label": "E1",
+              "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+            },
+            {
+              "label": "E2",
+              "sourceUnitId": "ce1ed2a5-38f7-4886-a5e9-b48dee6e784f"
+            },
+            {
+              "label": "E3",
+              "sourceUnitId": "83a6db65-2606-4288-85cb-1f8ba2e58ed7"
+            },
+            {
+              "label": "E4",
+              "sourceUnitId": "e4d119c2-864d-4d2c-b063-755d64821117"
+            },
+            {
+              "label": "E5",
+              "sourceUnitId": "a5247776-b791-4245-9ddf-818540620f8c"
+            },
+            {
+              "label": "E6",
+              "sourceUnitId": "3477c4d5-8c09-4cee-a898-c649ef0977de"
+            },
+            {
+              "label": "E7",
+              "sourceUnitId": "599b4120-a1f2-4d98-827b-67177b589c73"
+            },
+            {
+              "label": "E8",
+              "sourceUnitId": "6e33b022-1efe-475d-bb8a-7441f8950bdf"
+            },
+            {
+              "label": "E9",
+              "sourceUnitId": "c649ecea-52f2-44c1-9309-8527a32822a9"
+            },
+            {
+              "label": "E10",
+              "sourceUnitId": "ad2a6447-4559-46d5-95cc-4d1e545898e0"
+            },
+            {
+              "label": "E11",
+              "sourceUnitId": "b0224092-eb9e-4446-8b60-ba500f332519"
+            },
+            {
+              "label": "E12",
+              "sourceUnitId": "9d8041e8-0e0b-4981-bf35-b4e9d406d260"
+            }
+          ],
+          "resultSha256": "e7e1f363ebb7a2ef44633a17efcf2c765185e8a3160321937ba1012963cdc08f",
+          "manualReview": {
+            "assessment": "PARTIAL",
+            "notes": "Лимиты и возобновляемость каждой редакции, право заказчика и условия БГ видны в прямых цитатах; нет утверждения о фактической выплате и необоснованного отсутствия условий. Остались шум, обрезанные выдержки и непокрытое основание."
+          }
+        },
+        {
+          "topic": "retention",
+          "runId": "79688127-b0fb-41ae-9116-b75024796f38",
+          "dialogId": "b6505e2a-f60c-4e90-9a87-378a7cebb865",
+          "answerStatus": "incomplete_processing",
+          "shownClaims": 0,
+          "droppedClaims": 0,
+          "repairs": 0,
+          "modelCalls": [
+            {
+              "ok": true,
+              "promptTokens": 3679,
+              "completionTokens": 462,
+              "userSha256": "6dcc7d87f5fbf15fe91254199b797d60f3e2611898d025d57850360302d27572",
+              "systemSha256": "9cd7debcb5a03cecd9d1aa4ffc8c6acafc97162ca6e0bfdce499fb4f8260720d",
+              "outputSha256": "82fb52868c7112bc2f6f4877011f65109ac9a0abacc24b20b1712da1d2ef91fb",
+              "finishReason": "stop",
+              "requestedBudget": 7775,
+              "reserve": 8609
+            },
+            {
+              "ok": true,
+              "promptTokens": 3679,
+              "completionTokens": 393,
+              "userSha256": "6dcc7d87f5fbf15fe91254199b797d60f3e2611898d025d57850360302d27572",
+              "systemSha256": "9cd7debcb5a03cecd9d1aa4ffc8c6acafc97162ca6e0bfdce499fb4f8260720d",
+              "outputSha256": "8117376e3fe2294245bede50fb306eeabf7e250f4233d5ad99f5de220983d1ff",
+              "finishReason": "stop",
+              "requestedBudget": 7775,
+              "reserve": 8609
+            }
+          ],
+          "questionUnchanged": true,
+          "sourceQuotesVerified": true,
+          "allEvidenceInFrozenScope": true,
+          "inputSha256": "2d1e67dc6f4f099f5ec5220ed7ace7a1159f31cdc0bc35f0fbafd529a7300940",
+          "packetMatchesOld": false,
+          "searchStatus": "degraded",
+          "semanticStatus": "unavailable",
+          "scopeIncomplete": true,
+          "partial": null,
+          "missingDates": [],
+          "missingDocuments": [],
+          "evidence": [
+            {
+              "label": "E1",
+              "sourceUnitId": "ce1ed2a5-38f7-4886-a5e9-b48dee6e784f"
+            },
+            {
+              "label": "E2",
+              "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+            },
+            {
+              "label": "E3",
+              "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+            },
+            {
+              "label": "E4",
+              "sourceUnitId": "b0224092-eb9e-4446-8b60-ba500f332519"
+            },
+            {
+              "label": "E5",
+              "sourceUnitId": "cf55c16b-2623-40a6-b8ed-d608d26da619"
+            },
+            {
+              "label": "E6",
+              "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+            },
+            {
+              "label": "E7",
+              "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+            },
+            {
+              "label": "E8",
+              "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+            },
+            {
+              "label": "E9",
+              "sourceUnitId": "83a6db65-2606-4288-85cb-1f8ba2e58ed7"
+            },
+            {
+              "label": "E10",
+              "sourceUnitId": "e4d119c2-864d-4d2c-b063-755d64821117"
+            },
+            {
+              "label": "E11",
+              "sourceUnitId": "a5247776-b791-4245-9ddf-818540620f8c"
+            },
+            {
+              "label": "E12",
+              "sourceUnitId": "3477c4d5-8c09-4cee-a898-c649ef0977de"
+            }
+          ],
+          "resultSha256": "497959c846caa822274de348fba1f11e8b0e37df00f6614e5c535499eb1f34da",
+          "manualReview": {
+            "assessment": "FAIL",
+            "notes": "Два неизвестных ID привели к draft_invalid всего черновика, несмотря на остальные правильные ID ставок, базы и определений."
+          }
+        },
+        {
+          "topic": "award",
+          "runId": "d84cf948-d24a-4fe3-9c73-aa4c37c3f3bc",
+          "dialogId": "01c42269-6897-4ac9-b164-83743ec710ff",
+          "answerStatus": "incomplete_processing",
+          "shownClaims": 4,
+          "droppedClaims": 1,
+          "repairs": 0,
+          "modelCalls": [
+            {
+              "ok": true,
+              "promptTokens": 2751,
+              "completionTokens": 259,
+              "userSha256": "0a57fa6d631e032035f1f4e20b3809d0a5f4fc644918779fc0e8f0e25e943ee9",
+              "systemSha256": "9cd7debcb5a03cecd9d1aa4ffc8c6acafc97162ca6e0bfdce499fb4f8260720d",
+              "outputSha256": "9451c63e89d1c2e54d614462d74ad4a2ac21617772c340e251fde173bf022d0d",
+              "finishReason": "stop",
+              "requestedBudget": 6847,
+              "reserve": 9537
+            }
+          ],
+          "questionUnchanged": true,
+          "sourceQuotesVerified": true,
+          "allEvidenceInFrozenScope": true,
+          "inputSha256": "affe190a940f8c358d0ea06344d45ae387af7e61cd922ecc4ec17545c794ca75",
+          "packetMatchesOld": false,
+          "searchStatus": "degraded",
+          "semanticStatus": "unavailable",
+          "scopeIncomplete": true,
+          "partial": true,
+          "missingDates": [],
+          "missingDocuments": 0,
+          "evidence": [
+            {
+              "label": "E1",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E2",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E3",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E4",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E5",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E6",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E7",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E8",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E9",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E10",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E11",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E12",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            }
+          ],
+          "resultSha256": "2b9f0722093368fe790fdd57674471aabaf01f41d41ebd73142a040de7687176",
+          "manualReview": {
+            "assessment": "PARTIAL",
+            "notes": "Победитель, общая стоимость, ВИС и дата по телу протокола найдены. Условия вознаграждения и твердой цены представлены обрывками фрагментов; нужны соседние продолжения. Заголовок решения правильно отклонён как не отвечающий вопросу."
+          }
+        },
+        {
+          "topic": "price-history",
+          "runId": "afc7cdcb-0054-4449-8c98-73e055e92e0f",
+          "dialogId": "80843446-6147-44aa-913d-9390acec4e1a",
+          "answerStatus": "incomplete_processing",
+          "shownClaims": 12,
+          "droppedClaims": 0,
+          "repairs": 0,
+          "modelCalls": [
+            {
+              "ok": true,
+              "promptTokens": 4629,
+              "completionTokens": 420,
+              "userSha256": "8522c2d5dc635002e1c075014ca2399e07008537bf66185f63973273af994299",
+              "systemSha256": "9cd7debcb5a03cecd9d1aa4ffc8c6acafc97162ca6e0bfdce499fb4f8260720d",
+              "outputSha256": "123b52b09bbd0d2c0ce3c699109043c1516bf73e9607f616d8ef04f9a14cd3d7",
+              "finishReason": "stop",
+              "requestedBudget": 8725,
+              "reserve": 7659
+            }
+          ],
+          "questionUnchanged": true,
+          "sourceQuotesVerified": true,
+          "allEvidenceInFrozenScope": true,
+          "inputSha256": "aab9b98098c48882baf7f9bcd4db3fd2f307f456f337eae8941d9bb06b447ba4",
+          "packetMatchesOld": false,
+          "searchStatus": "degraded",
+          "semanticStatus": "unavailable",
+          "scopeIncomplete": true,
+          "partial": true,
+          "missingDates": [
+            "04.06.2026",
+            "15.06.2026",
+            "23.06.2026"
+          ],
+          "missingDocuments": 0,
+          "evidence": [
+            {
+              "label": "E1",
+              "sourceUnitId": "4c24a459-fbff-4358-916c-6a5da70afdaa"
+            },
+            {
+              "label": "E2",
+              "sourceUnitId": "663952dc-a3b1-43d2-8ea9-1fd6e63f3cd7"
+            },
+            {
+              "label": "E3",
+              "sourceUnitId": "92681b79-81ee-4d1c-9e02-87e04937e39c"
+            },
+            {
+              "label": "E4",
+              "sourceUnitId": "3477c4d5-8c09-4cee-a898-c649ef0977de"
+            },
+            {
+              "label": "E5",
+              "sourceUnitId": "9d8041e8-0e0b-4981-bf35-b4e9d406d260"
+            },
+            {
+              "label": "E6",
+              "sourceUnitId": "e4d119c2-864d-4d2c-b063-755d64821117"
+            },
+            {
+              "label": "E7",
+              "sourceUnitId": "6e33b022-1efe-475d-bb8a-7441f8950bdf"
+            },
+            {
+              "label": "E8",
+              "sourceUnitId": "ad2a6447-4559-46d5-95cc-4d1e545898e0"
+            },
+            {
+              "label": "E9",
+              "sourceUnitId": "b0224092-eb9e-4446-8b60-ba500f332519"
+            },
+            {
+              "label": "E10",
+              "sourceUnitId": "ce1ed2a5-38f7-4886-a5e9-b48dee6e784f"
+            },
+            {
+              "label": "E11",
+              "sourceUnitId": "b46134ee-5de2-480f-89b7-208fb8b9361f"
+            },
+            {
+              "label": "E12",
+              "sourceUnitId": "ceff6d54-a142-4d56-8d4c-4c048965da93"
+            }
+          ],
+          "resultSha256": "ff204bc8af6eaeabee41501de4f8fbafdbb3aea30e343c3d3829283abcf645bf",
+          "manualReview": {
+            "assessment": "PARTIAL",
+            "notes": "Двенадцать прямых выдержек, честная неполнота. Нет покрытия всех подач и разделённых частей; расчётные приложения РСР не попали в пакет. Несколько денежных колонок не интерпретированы как доказанный общий итог, дата имени не названа отправкой."
+          }
+        }
+      ]
+    },
+    {
+      "runtime": "s18-32-final-20261029",
+      "validationKind": "targeted_before_replay",
+      "tests": {
+        "files": 12,
+        "tests": 122,
+        "skipped": 0,
+        "logSha256": "69eb9e6e224ecffb1d71568849b6a034b847640d81689df35e6fb1e6c4d6b913"
+      },
+      "sourceFingerprint": "4f1290c8f8cc35d6b6d237a92f543e48c63c544b4058f533cd325f257063f6b3",
+      "modelCalls": 4,
+      "oldResultsPreserved": true,
+      "runs": [
+        {
+          "topic": "advance",
+          "runId": "3175d16d-5248-4bb8-9ded-62da9c46aabe",
+          "dialogId": "97478664-3c96-4357-82c1-1aa68082b795",
+          "answerStatus": "incomplete_processing",
+          "shownClaims": 11,
+          "droppedClaims": 5,
+          "repairs": 0,
+          "modelCalls": [
+            {
+              "ok": true,
+              "promptTokens": 4535,
+              "completionTokens": 565,
+              "userSha256": "d09b637961228da1a0fc0e91642d46e9c5f8256bba92521c4ab701c16740131d",
+              "systemSha256": "9cd7debcb5a03cecd9d1aa4ffc8c6acafc97162ca6e0bfdce499fb4f8260720d",
+              "outputSha256": "6fcb44c94953d53c9cc7991e525fc5fcab047316796c84c9f29418fe83a2528c",
+              "finishReason": "stop",
+              "requestedBudget": 8631,
+              "reserve": 7753
+            }
+          ],
+          "questionUnchanged": true,
+          "sourceQuotesVerified": true,
+          "allEvidenceInFrozenScope": true,
+          "inputSha256": "bfafdb33dccf8e1c37bd0d090bd301c444b83c35627e2281b489354b147b45b0",
+          "packetMatchesOld": false,
+          "searchStatus": "degraded",
+          "semanticStatus": "unavailable",
+          "scopeIncomplete": true,
+          "partial": true,
+          "missingDates": [],
+          "missingDocuments": 1,
+          "evidence": [
+            {
+              "label": "E1",
+              "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+            },
+            {
+              "label": "E2",
+              "sourceUnitId": "ce1ed2a5-38f7-4886-a5e9-b48dee6e784f"
+            },
+            {
+              "label": "E3",
+              "sourceUnitId": "83a6db65-2606-4288-85cb-1f8ba2e58ed7"
+            },
+            {
+              "label": "E4",
+              "sourceUnitId": "e4d119c2-864d-4d2c-b063-755d64821117"
+            },
+            {
+              "label": "E5",
+              "sourceUnitId": "a5247776-b791-4245-9ddf-818540620f8c"
+            },
+            {
+              "label": "E6",
+              "sourceUnitId": "3477c4d5-8c09-4cee-a898-c649ef0977de"
+            },
+            {
+              "label": "E7",
+              "sourceUnitId": "599b4120-a1f2-4d98-827b-67177b589c73"
+            },
+            {
+              "label": "E8",
+              "sourceUnitId": "6e33b022-1efe-475d-bb8a-7441f8950bdf"
+            },
+            {
+              "label": "E9",
+              "sourceUnitId": "c649ecea-52f2-44c1-9309-8527a32822a9"
+            },
+            {
+              "label": "E10",
+              "sourceUnitId": "ad2a6447-4559-46d5-95cc-4d1e545898e0"
+            },
+            {
+              "label": "E11",
+              "sourceUnitId": "b0224092-eb9e-4446-8b60-ba500f332519"
+            },
+            {
+              "label": "E12",
+              "sourceUnitId": "9d8041e8-0e0b-4981-bf35-b4e9d406d260"
+            }
+          ],
+          "resultSha256": "56135920ce737c7b58790f1182ba3fc690d95dcb4b84dec1d17a1e6b86ca8fb2",
+          "manualReview": {
+            "assessment": "PARTIAL",
+            "notes": "Права, лимиты и возобновляемость подтверждены; остаются шум и обрезки."
+          }
+        },
+        {
+          "topic": "retention",
+          "runId": "c90e9656-d4ef-4dd4-be38-c48de3295f6b",
+          "dialogId": "d0bf260e-9277-4b97-9794-adf812e24bee",
+          "answerStatus": "incomplete_processing",
+          "shownClaims": 10,
+          "droppedClaims": 2,
+          "repairs": 0,
+          "modelCalls": [
+            {
+              "ok": true,
+              "promptTokens": 3679,
+              "completionTokens": 393,
+              "userSha256": "6dcc7d87f5fbf15fe91254199b797d60f3e2611898d025d57850360302d27572",
+              "systemSha256": "9cd7debcb5a03cecd9d1aa4ffc8c6acafc97162ca6e0bfdce499fb4f8260720d",
+              "outputSha256": "8117376e3fe2294245bede50fb306eeabf7e250f4233d5ad99f5de220983d1ff",
+              "finishReason": "stop",
+              "requestedBudget": 7775,
+              "reserve": 8609
+            }
+          ],
+          "questionUnchanged": true,
+          "sourceQuotesVerified": true,
+          "allEvidenceInFrozenScope": true,
+          "inputSha256": "2d1e67dc6f4f099f5ec5220ed7ace7a1159f31cdc0bc35f0fbafd529a7300940",
+          "packetMatchesOld": false,
+          "searchStatus": "degraded",
+          "semanticStatus": "unavailable",
+          "scopeIncomplete": true,
+          "partial": true,
+          "missingDates": [],
+          "missingDocuments": 2,
+          "evidence": [
+            {
+              "label": "E1",
+              "sourceUnitId": "ce1ed2a5-38f7-4886-a5e9-b48dee6e784f"
+            },
+            {
+              "label": "E2",
+              "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+            },
+            {
+              "label": "E3",
+              "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+            },
+            {
+              "label": "E4",
+              "sourceUnitId": "b0224092-eb9e-4446-8b60-ba500f332519"
+            },
+            {
+              "label": "E5",
+              "sourceUnitId": "cf55c16b-2623-40a6-b8ed-d608d26da619"
+            },
+            {
+              "label": "E6",
+              "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+            },
+            {
+              "label": "E7",
+              "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+            },
+            {
+              "label": "E8",
+              "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+            },
+            {
+              "label": "E9",
+              "sourceUnitId": "83a6db65-2606-4288-85cb-1f8ba2e58ed7"
+            },
+            {
+              "label": "E10",
+              "sourceUnitId": "e4d119c2-864d-4d2c-b063-755d64821117"
+            },
+            {
+              "label": "E11",
+              "sourceUnitId": "a5247776-b791-4245-9ddf-818540620f8c"
+            },
+            {
+              "label": "E12",
+              "sourceUnitId": "3477c4d5-8c09-4cee-a898-c649ef0977de"
+            }
+          ],
+          "resultSha256": "12bba33bb9fa34480c7ca4a6ca7730fbba783be1d8b9631877b85f0263bfb2a5",
+          "manualReview": {
+            "assessment": "PARTIAL",
+            "notes": "Две неверные ссылки отклонены отдельно; десять цитат ставок, базы и МОП/квартир сохранены."
+          }
+        },
+        {
+          "topic": "award",
+          "runId": "a91a5b59-1757-4028-81a7-9b98205ae594",
+          "dialogId": "a423efc1-6b2d-4746-9b22-391d80d33e2d",
+          "answerStatus": "incomplete_processing",
+          "shownClaims": 4,
+          "droppedClaims": 1,
+          "repairs": 0,
+          "modelCalls": [
+            {
+              "ok": true,
+              "promptTokens": 2751,
+              "completionTokens": 257,
+              "userSha256": "0a57fa6d631e032035f1f4e20b3809d0a5f4fc644918779fc0e8f0e25e943ee9",
+              "systemSha256": "9cd7debcb5a03cecd9d1aa4ffc8c6acafc97162ca6e0bfdce499fb4f8260720d",
+              "outputSha256": "9978ace06fd6ac8696b57a3c7963af290cabeb96c4db6558c03b3b4b74b5815d",
+              "finishReason": "stop",
+              "requestedBudget": 6847,
+              "reserve": 9537
+            }
+          ],
+          "questionUnchanged": true,
+          "sourceQuotesVerified": true,
+          "allEvidenceInFrozenScope": true,
+          "inputSha256": "affe190a940f8c358d0ea06344d45ae387af7e61cd922ecc4ec17545c794ca75",
+          "packetMatchesOld": false,
+          "searchStatus": "degraded",
+          "semanticStatus": "unavailable",
+          "scopeIncomplete": true,
+          "partial": true,
+          "missingDates": [],
+          "missingDocuments": 0,
+          "evidence": [
+            {
+              "label": "E1",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E2",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E3",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E4",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E5",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E6",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E7",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E8",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E9",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E10",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E11",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            },
+            {
+              "label": "E12",
+              "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+            }
+          ],
+          "resultSha256": "78f4cf70ccdc389bd48e17b5cb0197feca3077a420844201e328e261aa681951",
+          "manualReview": {
+            "assessment": "PARTIAL",
+            "notes": "Дата и победитель верны по телу документа, продолжения условий остаются в соседних фрагментах."
+          }
+        },
+        {
+          "topic": "price-history",
+          "runId": "241a4936-836d-49a7-b794-13cfca21ef55",
+          "dialogId": "e9b38e01-cd91-45d5-b86a-3cb47677b3e1",
+          "answerStatus": "incomplete_processing",
+          "shownClaims": 12,
+          "droppedClaims": 0,
+          "repairs": 0,
+          "modelCalls": [
+            {
+              "ok": true,
+              "promptTokens": 4629,
+              "completionTokens": 446,
+              "userSha256": "8522c2d5dc635002e1c075014ca2399e07008537bf66185f63973273af994299",
+              "systemSha256": "9cd7debcb5a03cecd9d1aa4ffc8c6acafc97162ca6e0bfdce499fb4f8260720d",
+              "outputSha256": "a8ec6983d1e0ae73261ea9311d29ca717c098ea53a8506ce07e845b773d78c2e",
+              "finishReason": "stop",
+              "requestedBudget": 8725,
+              "reserve": 7659
+            }
+          ],
+          "questionUnchanged": true,
+          "sourceQuotesVerified": true,
+          "allEvidenceInFrozenScope": true,
+          "inputSha256": "aab9b98098c48882baf7f9bcd4db3fd2f307f456f337eae8941d9bb06b447ba4",
+          "packetMatchesOld": false,
+          "searchStatus": "degraded",
+          "semanticStatus": "unavailable",
+          "scopeIncomplete": true,
+          "partial": true,
+          "missingDates": [
+            "04.06.2026",
+            "15.06.2026",
+            "23.06.2026"
+          ],
+          "missingDocuments": 0,
+          "evidence": [
+            {
+              "label": "E1",
+              "sourceUnitId": "4c24a459-fbff-4358-916c-6a5da70afdaa"
+            },
+            {
+              "label": "E2",
+              "sourceUnitId": "663952dc-a3b1-43d2-8ea9-1fd6e63f3cd7"
+            },
+            {
+              "label": "E3",
+              "sourceUnitId": "92681b79-81ee-4d1c-9e02-87e04937e39c"
+            },
+            {
+              "label": "E4",
+              "sourceUnitId": "3477c4d5-8c09-4cee-a898-c649ef0977de"
+            },
+            {
+              "label": "E5",
+              "sourceUnitId": "9d8041e8-0e0b-4981-bf35-b4e9d406d260"
+            },
+            {
+              "label": "E6",
+              "sourceUnitId": "e4d119c2-864d-4d2c-b063-755d64821117"
+            },
+            {
+              "label": "E7",
+              "sourceUnitId": "6e33b022-1efe-475d-bb8a-7441f8950bdf"
+            },
+            {
+              "label": "E8",
+              "sourceUnitId": "ad2a6447-4559-46d5-95cc-4d1e545898e0"
+            },
+            {
+              "label": "E9",
+              "sourceUnitId": "b0224092-eb9e-4446-8b60-ba500f332519"
+            },
+            {
+              "label": "E10",
+              "sourceUnitId": "ce1ed2a5-38f7-4886-a5e9-b48dee6e784f"
+            },
+            {
+              "label": "E11",
+              "sourceUnitId": "b46134ee-5de2-480f-89b7-208fb8b9361f"
+            },
+            {
+              "label": "E12",
+              "sourceUnitId": "ceff6d54-a142-4d56-8d4c-4c048965da93"
+            }
+          ],
+          "resultSha256": "7f95074e67c716f9addc1651f96260751342a9656541a0e014f128b503d18a85",
+          "manualReview": {
+            "assessment": "PARTIAL",
+            "notes": "Нужные РСР и листы частей есть в снимке, но не в пакете; общий итог и причина не доказаны."
+          }
+        }
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "topic": "advance",
+      "runId": "a1fd0a11-5d42-403a-b759-7ff702f13abf",
+      "dialogId": "51d6ca75-6bd2-46e8-8445-16a6607cad12",
+      "answerStatus": "incomplete_processing",
+      "shownClaims": 11,
+      "droppedClaims": 5,
+      "repairs": 0,
+      "modelCalls": [
+        {
+          "ok": true,
+          "promptTokens": 4571,
+          "completionTokens": 544,
+          "userSha256": "d09b637961228da1a0fc0e91642d46e9c5f8256bba92521c4ab701c16740131d",
+          "systemSha256": "076a40b21162bb067e0465631d5816303795b8a49354fc1000d52563b01021ac",
+          "outputSha256": "0e79b0201bc43b2dfc5df782f3516fea50a251097087300f348d86401e76e48b",
+          "finishReason": "stop",
+          "requestedBudget": 8667,
+          "reserve": 7717
+        }
+      ],
+      "questionUnchanged": true,
+      "sourceQuotesVerified": true,
+      "allEvidenceInFrozenScope": true,
+      "inputSha256": "78ca042d61117076727aff0d947ae9d7d8e75089fef508de0b7a6d3ae5935e19",
+      "packetMatchesOld": false,
+      "searchStatus": "degraded",
+      "semanticStatus": "unavailable",
+      "scopeIncomplete": true,
+      "partial": true,
+      "missingDates": [],
+      "missingDocuments": 1,
+      "evidence": [
+        {
+          "label": "E1",
+          "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+        },
+        {
+          "label": "E2",
+          "sourceUnitId": "ce1ed2a5-38f7-4886-a5e9-b48dee6e784f"
+        },
+        {
+          "label": "E3",
+          "sourceUnitId": "83a6db65-2606-4288-85cb-1f8ba2e58ed7"
+        },
+        {
+          "label": "E4",
+          "sourceUnitId": "e4d119c2-864d-4d2c-b063-755d64821117"
+        },
+        {
+          "label": "E5",
+          "sourceUnitId": "a5247776-b791-4245-9ddf-818540620f8c"
+        },
+        {
+          "label": "E6",
+          "sourceUnitId": "3477c4d5-8c09-4cee-a898-c649ef0977de"
+        },
+        {
+          "label": "E7",
+          "sourceUnitId": "599b4120-a1f2-4d98-827b-67177b589c73"
+        },
+        {
+          "label": "E8",
+          "sourceUnitId": "6e33b022-1efe-475d-bb8a-7441f8950bdf"
+        },
+        {
+          "label": "E9",
+          "sourceUnitId": "c649ecea-52f2-44c1-9309-8527a32822a9"
+        },
+        {
+          "label": "E10",
+          "sourceUnitId": "ad2a6447-4559-46d5-95cc-4d1e545898e0"
+        },
+        {
+          "label": "E11",
+          "sourceUnitId": "b0224092-eb9e-4446-8b60-ba500f332519"
+        },
+        {
+          "label": "E12",
+          "sourceUnitId": "9d8041e8-0e0b-4981-bf35-b4e9d406d260"
+        }
+      ],
+      "resultSha256": "64cc0aa655f486b560a55cd756c30cdf97285a7a9d64c7e3b118d223f49406e0",
+      "manualReview": {
+        "assessment": "PARTIAL",
+        "notes": "Размеры и пределы, возобновляемость, БГ и право заказчика показаны собственными цитатами каждой редакции; лимит не выдан за выплату, право не стало обязанностью. Полнота сравнения не объявлена; часть шума и непокрытое основание остаются."
+      }
+    },
+    {
+      "topic": "retention",
+      "runId": "70727932-ca93-492f-a804-0f4e4e225cfc",
+      "dialogId": "d79422fe-3f7b-4595-823c-d3729de08b98",
+      "answerStatus": "incomplete_processing",
+      "shownClaims": 10,
+      "droppedClaims": 2,
+      "repairs": 0,
+      "modelCalls": [
+        {
+          "ok": true,
+          "promptTokens": 3723,
+          "completionTokens": 490,
+          "userSha256": "77ece92156117450fbbcaa804129e8385e8052872e448f093d8e5bf7a9018f82",
+          "systemSha256": "076a40b21162bb067e0465631d5816303795b8a49354fc1000d52563b01021ac",
+          "outputSha256": "91b3617ed723c6b6959f0cb0713e67b8eacd752a77edd642afa94d3a6bf9e9e7",
+          "finishReason": "stop",
+          "requestedBudget": 7819,
+          "reserve": 8565
+        }
+      ],
+      "questionUnchanged": true,
+      "sourceQuotesVerified": true,
+      "allEvidenceInFrozenScope": true,
+      "inputSha256": "2ca720da1b45bfd9d4929f45c29c1d21b03a692a8af46dd7b8e9b1e403b26535",
+      "packetMatchesOld": false,
+      "searchStatus": "degraded",
+      "semanticStatus": "unavailable",
+      "scopeIncomplete": true,
+      "partial": true,
+      "missingDates": [],
+      "missingDocuments": 2,
+      "evidence": [
+        {
+          "label": "E1",
+          "sourceUnitId": "ce1ed2a5-38f7-4886-a5e9-b48dee6e784f"
+        },
+        {
+          "label": "E2",
+          "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+        },
+        {
+          "label": "E3",
+          "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+        },
+        {
+          "label": "E4",
+          "sourceUnitId": "b0224092-eb9e-4446-8b60-ba500f332519"
+        },
+        {
+          "label": "E5",
+          "sourceUnitId": "cf55c16b-2623-40a6-b8ed-d608d26da619"
+        },
+        {
+          "label": "E6",
+          "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+        },
+        {
+          "label": "E7",
+          "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+        },
+        {
+          "label": "E8",
+          "sourceUnitId": "20eaba14-54c7-4805-844d-2732a11e7707"
+        },
+        {
+          "label": "E9",
+          "sourceUnitId": "83a6db65-2606-4288-85cb-1f8ba2e58ed7"
+        },
+        {
+          "label": "E10",
+          "sourceUnitId": "e4d119c2-864d-4d2c-b063-755d64821117"
+        },
+        {
+          "label": "E11",
+          "sourceUnitId": "a5247776-b791-4245-9ddf-818540620f8c"
+        },
+        {
+          "label": "E12",
+          "sourceUnitId": "3477c4d5-8c09-4cee-a898-c649ef0977de"
+        }
+      ],
+      "resultSha256": "dc3598b9787ef90756d46cc9172a1131e6e9991484a92fe9644aa20c75a8a4e1",
+      "manualReview": {
+        "assessment": "PARTIAL",
+        "notes": "Десять цитат подтверждают ставки, базу и различие областей МОП/квартир. Две выдуманные ссылки отклонены отдельно; отсутствуют ложное равенство условий и неподтверждённый рост общей суммы. Это проверяемые выдержки, не завершённый аналитический вывод."
+      }
+    },
+    {
+      "topic": "award",
+      "runId": "b139932e-0186-4b02-b16d-e2d940e27ec9",
+      "dialogId": "76cf9af8-a9cb-40bc-8c34-2da9006d11ff",
+      "answerStatus": "incomplete_processing",
+      "shownClaims": 7,
+      "droppedClaims": 0,
+      "repairs": 0,
+      "modelCalls": [
+        {
+          "ok": true,
+          "promptTokens": 2306,
+          "completionTokens": 237,
+          "userSha256": "4cacf1bba733c859a7bc94bbd039d3dbe6cf352db1376abb345d7dcab42937e5",
+          "systemSha256": "076a40b21162bb067e0465631d5816303795b8a49354fc1000d52563b01021ac",
+          "outputSha256": "29dd4fa5a443ce073733f9e8d6b3ff7251d6aca630c23fa3eea7a11de1ffca92",
+          "finishReason": "stop",
+          "requestedBudget": 6402,
+          "reserve": 9982
+        }
+      ],
+      "questionUnchanged": true,
+      "sourceQuotesVerified": true,
+      "allEvidenceInFrozenScope": true,
+      "inputSha256": "e1a16fe1826a285c28e7fce45b97442b226f3016ea4fd4f70fef5f8e2071be04",
+      "packetMatchesOld": false,
+      "searchStatus": "degraded",
+      "semanticStatus": "unavailable",
+      "scopeIncomplete": true,
+      "partial": true,
+      "missingDates": [],
+      "missingDocuments": 0,
+      "evidence": [
+        {
+          "label": "E1",
+          "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+        },
+        {
+          "label": "E2",
+          "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+        },
+        {
+          "label": "E3",
+          "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+        },
+        {
+          "label": "E4",
+          "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+        },
+        {
+          "label": "E5",
+          "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+        },
+        {
+          "label": "E6",
+          "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+        },
+        {
+          "label": "E7",
+          "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+        },
+        {
+          "label": "E8",
+          "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+        },
+        {
+          "label": "E9",
+          "sourceUnitId": "6e2b3b29-c3c5-42d1-87cb-7c2e49a2e5dd"
+        }
+      ],
+      "resultSha256": "ab819aec7308de4f87de143eb5bb21924ad9fef42288449c29e23a03c49de642",
+      "manualReview": {
+        "assessment": "PASS_FACTS_PARTIAL_STATUS",
+        "notes": "Все запрошенные первичные факты подтверждены реальным протоколом: победитель, общая стоимость, условия внутренних систем и вознаграждения, ответственность за субподрядчика и исключение по материалам. Продолжения сохранены отдельно в исходном порядке. Дата взята из тела; расхождение года в имени видно, акт не используется. API остаётся частичным из-за вопросов модели и неполноты снимка."
+      }
+    },
+    {
+      "topic": "price-history",
+      "runId": "9b21b39f-9eec-4d5c-981a-207f092ea9da",
+      "dialogId": "47384b10-f2f9-424f-bc8f-451258a7170b",
+      "answerStatus": "incomplete_processing",
+      "shownClaims": 12,
+      "droppedClaims": 0,
+      "repairs": 0,
+      "modelCalls": [
+        {
+          "ok": true,
+          "promptTokens": 3600,
+          "completionTokens": 720,
+          "userSha256": "29d100a71b0ad62c94286b4a3ae20fa5ec3050d6fa3cf402c1993d26335549b4",
+          "systemSha256": "076a40b21162bb067e0465631d5816303795b8a49354fc1000d52563b01021ac",
+          "outputSha256": "789fda63a6559b077b2dcd734f51e375d702987e7403a2a10f51671ca1d431a3",
+          "finishReason": "stop",
+          "requestedBudget": 7696,
+          "reserve": 8688
+        }
+      ],
+      "questionUnchanged": true,
+      "sourceQuotesVerified": true,
+      "allEvidenceInFrozenScope": true,
+      "inputSha256": "85ca7129fa0af4ce64c4d699037c5845a5513c09cf734eed9d74ec0c0d0ebdd5",
+      "packetMatchesOld": false,
+      "searchStatus": "degraded",
+      "semanticStatus": "unavailable",
+      "scopeIncomplete": true,
+      "partial": true,
+      "missingDates": [
+        "18.05.2026",
+        "04.06.2026",
+        "15.06.2026",
+        "23.06.2026"
+      ],
+      "missingDocuments": 0,
+      "evidence": [
+        {
+          "label": "E1",
+          "sourceUnitId": "663952dc-a3b1-43d2-8ea9-1fd6e63f3cd7"
+        },
+        {
+          "label": "E2",
+          "sourceUnitId": "4c24a459-fbff-4358-916c-6a5da70afdaa"
+        },
+        {
+          "label": "E3",
+          "sourceUnitId": "8b544a82-3a8e-49a7-b8a5-3eb8223afd8b"
+        },
+        {
+          "label": "E4",
+          "sourceUnitId": "ce602333-ffdf-4ee8-83d9-48da8d07e470"
+        },
+        {
+          "label": "E5",
+          "sourceUnitId": "af5095f9-c487-4dd9-a17c-97989c0e87bf"
+        },
+        {
+          "label": "E6",
+          "sourceUnitId": "92681b79-81ee-4d1c-9e02-87e04937e39c"
+        },
+        {
+          "label": "E7",
+          "sourceUnitId": "92681b79-81ee-4d1c-9e02-87e04937e39c"
+        },
+        {
+          "label": "E8",
+          "sourceUnitId": "af5095f9-c487-4dd9-a17c-97989c0e87bf"
+        },
+        {
+          "label": "E9",
+          "sourceUnitId": "ce602333-ffdf-4ee8-83d9-48da8d07e470"
+        },
+        {
+          "label": "E10",
+          "sourceUnitId": "8b544a82-3a8e-49a7-b8a5-3eb8223afd8b"
+        },
+        {
+          "label": "E11",
+          "sourceUnitId": "3477c4d5-8c09-4cee-a898-c649ef0977de"
+        },
+        {
+          "label": "E12",
+          "sourceUnitId": "9d8041e8-0e0b-4981-bf35-b4e9d406d260"
+        }
+      ],
+      "resultSha256": "8e9eafbac0c341b5898a5c9480b530da283522afbb4d71311cec0e83e45c7e7d",
+      "manualReview": {
+        "assessment": "PARTIAL",
+        "notes": "В пакете и ответе есть обе части расчётных приложений и формы поздней подачи с метками листов, по всем запрошенным файловым группам. Пропуски РСР устранены, посторонние мартовские итоги вытеснены. Колонки и части не суммируются без проверяемого основания, даты имени не названы отправкой; причина изменения явно не установлена. Свободная сводка Qwen придумывала причинность и неверно объявляла часть данных отсутствующей, поэтому она не показывается и не считается анализом."
+      }
+    }
+  ]
+}

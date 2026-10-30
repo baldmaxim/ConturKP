@@ -81,6 +81,7 @@ export const localRecognitionHandler: IJobHandlerSpec = {
         ocrDpi: settings.ocrDpi,
         ocrPageTimeoutMs: settings.ocrPageTimeoutMs,
         throwIfStopped: ctx.throwIfStopped,
+        onProgress: async (completed, total, unit) => { await ctx.reportProgress?.({ phase: 'processing', completed, total, unit }); },
       });
     } catch (err) {
       if (err instanceof LocalRecognitionError) throw new PermanentJobError(err.code, err.message);

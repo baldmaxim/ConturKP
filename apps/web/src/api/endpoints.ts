@@ -15,6 +15,7 @@ import type {
   IUserPatch,
   TMemberRole,
 } from './types';
+import type { IOfficeView } from './operationsTypes';
 
 const enc = encodeURIComponent;
 
@@ -93,6 +94,18 @@ export const listTenderAudit = (
 
 export const listAdminAudit = (cursor: string | null, limit: number, signal?: AbortSignal): Promise<IAuditPage> =>
   apiGet<IAuditPage>(`/admin/audit-events?${pageQuery(cursor, limit)}`, { signal });
+
+// «Офис»: фоновые задания worker'а
+export const getAdminOffice = (signal?: AbortSignal): Promise<IOfficeView> => apiGet<IOfficeView>('/admin/office', { signal });
+export const getOfficeDiagnostics = (kinds: string[] | null, signal?: AbortSignal): Promise<import('../pages/admin/office/officeDiagnostics').IOfficeDiagnostics> =>
+  apiGet(`/admin/office/diagnostics${kinds ? `?kinds=${encodeURIComponent(kinds.join(','))}` : ''}`, { signal });
+
+export const getOfficeTasks = (query: { kinds: string[]; tender?: string; status: import('../pages/admin/office/officeJobs').TOfficeJobFilter; offset: number }, signal?: AbortSignal): Promise<import('../pages/admin/office/officeJobs').IOfficeJobPage> => {
+  const params = new URLSearchParams({ kinds: query.kinds.join(','), tender: query.tender ?? 'all', status: query.status, offset: String(query.offset) });
+  return apiGet(`/admin/office/tasks?${params}`, { signal });
+};
+export const getOfficeTask = (id: string, signal?: AbortSignal): Promise<{ at: string; task: import('../pages/admin/office/officeJobs').IOfficeJob }> =>
+  apiGet(`/admin/office/tasks/${encodeURIComponent(id)}`, { signal });
 
 // Пользователи
 export const listUsers = (signal?: AbortSignal): Promise<IListResponse<IUser>> =>

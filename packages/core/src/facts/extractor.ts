@@ -1,5 +1,6 @@
 // Детерминированное извлечение фактов (D-018, D-028): перенос Locus `fact-extractor.js` (HEAD 33c6bcf), правила
-// `rules/1` — дословно. Каждый факт привязан к фрагменту, из которого прочитан; значение, которое правило не читает
+// `rules/2` уточняет область денежных итогов и неустоек, типографику организаций. Каждый факт привязан к фрагменту;
+// значение, которое правило не читает
 // однозначно, не извлекается (без догадок). Отличие Контура — вход: фрагменты прогона распознавания вместо
 // markdown-спанов; строка таблицы — фрагмент с якорем строки листа, CSV или таблицы DOCX.
 import type { FactNormalized, FactType, IExtractedFact, IFactSpan } from './types.ts';
@@ -8,7 +9,14 @@ const DECIMAL = '(\\d+(?:[.,]\\d+)?)';
 // Срок аванса читается только из пункта о размере аванса: «зачёт аванса … в течение 30 дней» — не второй срок.
 const ADVANCE_SIZE = /аванс\p{L}*[^.%]{0,40}?(?:в\s+размере|составляет)\s+\d/iu;
 const AMOUNT = '(\\d{1,3}(?:[ \\u00a0]\\d{3})+(?:[.,]\\d{1,2})?|\\d+(?:[.,]\\d{1,2})?)';
+const TOTAL_WORD = /(?<![\p{L}\p{N}])итого(?![\p{L}\p{N}])/iu;
 const ORGANIZATION = '((?:ООО|АО|ПАО|ЗАО|ТОО|ИП)\\s*«[^»]+»)';
+
+// Только типографика. Цифры, буквы и правовая форма сохраняются (К3 ≠ КЗ).
+export const normalizeOrganization = (name: string): string => name.normalize('NFKC').toLowerCase()
+  .replace(/[‐‑‒–—−]/gu, '-').replace(/[«»„“”"']/gu, '').replace(/\s*[-]\s*/gu, '-').replace(/\s+/gu, ' ').trim();
+const contextKey = (text: string): string => text.normalize('NFKC').toLowerCase().replace(/[‐‑‒–—]/gu, '-')
+  .replace(/\s+/gu, ' ').replace(/^[\d.]+\s*/u, '').trim().replace(/[.;:]$/u, '');
 
 const toNumber = (value: string | undefined): number => Number(String(value || '').replace(/[  ]/gu, '').replace(',', '.'));
 
@@ -134,7 +142,12 @@ const PARAGRAPH_RULES: { type: FactType; read: (text: string) => IFound | null }
       const match = sentence?.match(penalty);
       if (!sentence || !match) return null;
       const cap = sentence.slice(match.index).match(new RegExp(`не\\s+более\\s+${DECIMAL}\\s*%`, 'iu'));
-      return { raw: match[0], normalized: { percent: toNumber(match[1]), ...(cap ? { capPercent: toNumber(cap[1]) } : {}) }, unit: '%' };
+      const before = sentence.slice(0, match.index);
+      const after = sentence.slice(match.index! + match[0].length).replace(/^\s*\([^)]*\)\s*/u, '');
+      // Дословное событие и база/периодичность: правило не приравнивает разные обязательства.
+      const event = contextKey(before);
+      const condition = [event, contextKey(after.replace(/[,;]?\s*но\s+не\s+более[\s\S]*$/iu, ''))].join('|');
+      return { raw: match[0], normalized: { percent: toNumber(match[1]), ...(cap ? { capPercent: toNumber(cap[1]) } : {}), comparisonScope: event ? condition : '' }, unit: '%', condition: sentence };
     },
   },
 ];
@@ -149,15 +162,23 @@ const clauseContext = (text: string): { clauseRef: string; amends: boolean; text
   return { clauseRef: clause?.[1] ?? '', amends: false, text };
 };
 
-const tableRowFact = (text: string): (IFound & { type: FactType }) | null => {
-  if (!/итого/iu.test(text)) return null;
-  const cells = text
-    .split('|')
-    .map((cell) => cell.trim())
-    .filter(Boolean);
-  const amountCell = [...cells].reverse().find((cell) => new RegExp(`^${AMOUNT}$`, 'u').test(cell));
+const cellsOf = (text: string): string[] => text.trim().replace(/^\|/u, '').replace(/\|$/u, '').split('|').map((cell) => cell.trim());
+const tableRowFact = (span: IFactSpan, tableScope: string, moneyColumn: number | null, tableCurrency: string): (IFound & { type: FactType }) | null => {
+  const { text } = span;
+  if (!TOTAL_WORD.test(text)) return null;
+  const cells = cellsOf(text);
+  const label = cells.find((c) => TOTAL_WORD.test(c))!;
+  const grandTotal = /^итого\s+по\s+смет[еа]\s*[:.]?$/iu.test(label);
+  // «Итого на РП», мощности и физические объёмы не являются стоимостью.
+  const money = currencyOf(text);
+  if (!money && moneyColumn === null && !grandTotal) return null;
+  const candidates = moneyColumn === null ? [...cells].reverse() : [cells[moneyColumn] ?? ''];
+  const amountCell = candidates.find((cell) => new RegExp(`^${AMOUNT}$`, 'u').test(cell));
   if (!amountCell) return null;
-  return { type: 'estimate_total', raw: text.trim(), normalized: { amount: toNumber(amountCell), currency: currencyOf(text) }, unit: '' };
+  const comparisonScope = grandTotal ? (tableScope ? `table_total:${tableScope}` : 'document_total')
+    : /^итого(?:\s*[,.:]?\s*(?:руб\.?|RUB|тенге|KZT|₽|₸))?\s*[:.]?$/iu.test(label) ? `unknown:${span.fragmentId}` : `${tableScope}|${contextKey(label)}`;
+  const currency = money || tableCurrency;
+  return { type: 'estimate_total', raw: text.trim(), normalized: { amount: toNumber(amountCell), currency, comparisonScope }, unit: currency };
 };
 
 export const normalizedKey = (normalized: FactNormalized = {}): string =>
@@ -172,7 +193,12 @@ export const extractDocumentFacts = (spans: readonly IFactSpan[]): IExtractedFac
   const byKey = new Map<string, IExtractedFact>();
   const add = (span: IFactSpan, context: { clauseRef: string; amends: boolean }, found: (IFound & { type: FactType }) | null) => {
     if (!found) return;
-    const key = `${found.type}|${normalizedKey(found.normalized)}`;
+    const comparison = found.type === 'party_customer' || found.type === 'party_contractor'
+      ? { ...found.normalized, name: normalizeOrganization(String(found.normalized.name)) } : found.normalized;
+    // Не объединяем неустойки с неустановленным событием и базой в разных фрагментах.
+    if (found.type === 'penalty_rate' && !comparison.comparisonScope) comparison.comparisonScope = `unknown:${span.fragmentId}`;
+    const valueKey = normalizedKey(comparison);
+    const key = `${found.type}|${valueKey}`;
     const existing = byKey.get(key);
     if (existing) {
       if (!existing.fragmentIds.includes(span.fragmentId)) existing.fragmentIds.push(span.fragmentId);
@@ -182,7 +208,7 @@ export const extractDocumentFacts = (spans: readonly IFactSpan[]): IExtractedFac
       factType: found.type,
       rawValue: String(found.raw || '').slice(0, 500),
       normalized: found.normalized,
-      normalizedKey: normalizedKey(found.normalized),
+      normalizedKey: valueKey,
       unit: found.unit ?? '',
       condition: (found.condition ?? '').slice(0, 500),
       clauseRef: context.clauseRef,
@@ -190,9 +216,17 @@ export const extractDocumentFacts = (spans: readonly IFactSpan[]): IExtractedFac
       fragmentIds: [span.fragmentId],
     });
   };
+  let moneyColumn: number | null = null;
+  let tableCurrency = '';
+  let currentTable = '';
   for (const span of spans) {
+    const tableScope = span.tableScope ?? '';
+    if (tableScope !== currentTable || !span.tableRow) { moneyColumn = null; tableCurrency = ''; currentTable = tableScope; }
     if (span.tableRow) {
-      add(span, { clauseRef: '', amends: false }, tableRowFact(span.text));
+      const cells = cellsOf(span.text);
+      const column = cells.findIndex((c) => /(?:стоимост|сумма|итого)[\s\S]*(?:руб|₽|тенге|₸|RUB|KZT)/iu.test(c));
+      if (column >= 0) { moneyColumn = column; tableCurrency = currencyOf(cells[column]!); }
+      add(span, { clauseRef: '', amends: false }, tableRowFact(span, tableScope, moneyColumn, tableCurrency));
       continue;
     }
     const context = clauseContext(span.text);

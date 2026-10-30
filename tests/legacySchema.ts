@@ -6,6 +6,8 @@
 // (миграция 0044; этап 18, D-044): на схеме до 0044 добавляются пустые таблицы решений и отзывов — без проверок, с правом
 // чтения роли приложения — и функции предиката; всё убирается перед миграцией, которая создаёт их сама.
 import pg from 'pg';
+import { defaultRolePermissions } from '../packages/core/src/index.ts';
+
 
 const run = async (migratorUrl: string, statements: string[]): Promise<void> => {
   const client = new pg.Client({ connectionString: migratorUrl });
@@ -17,11 +19,13 @@ const run = async (migratorUrl: string, statements: string[]): Promise<void> => 
   }
 };
 
-export const addQuestionOrigin = (migratorUrl: string, proposalTable = true): Promise<void> =>
-  run(migratorUrl, [
+export const addQuestionOrigin = async (migratorUrl: string, proposalTable = true): Promise<void> => {
+  await addRoleCatalog(migratorUrl);
+  await run(migratorUrl, [
     "ALTER TABLE customer_question ADD COLUMN source_proposal_id uuid, ADD COLUMN basis_requirement_ids uuid[] NOT NULL DEFAULT '{}'::uuid[]",
     ...(proposalTable ? ['CREATE TABLE mcp_proposal_fragment (proposal_id uuid, fragment_id uuid)', 'GRANT SELECT ON mcp_proposal_fragment TO kontur_app'] : []),
   ]);
+};
 
 export const dropQuestionOrigin = (migratorUrl: string, proposalTable = true): Promise<void> =>
   run(migratorUrl, [...(proposalTable ? ['DROP TABLE mcp_proposal_fragment'] : []), 'ALTER TABLE customer_question DROP COLUMN source_proposal_id, DROP COLUMN basis_requirement_ids']);
@@ -47,10 +51,89 @@ export const addClosureTables = (migratorUrl: string): Promise<void> =>
      $$`,
   ]);
 
-export const dropClosureTables = (migratorUrl: string): Promise<void> =>
-  run(migratorUrl, [
+export const dropClosureTables = async (migratorUrl: string): Promise<void> => {
+  await dropRoleCatalog(migratorUrl);
+  await run(migratorUrl, [
     'DROP FUNCTION calculation_closed_by_decision(uuid)',
     'DROP FUNCTION revision_economics_reconciled(uuid)',
     'DROP TABLE calculation_closure_revocation',
     'DROP TABLE calculation_closure_decision',
   ]);
+};
+
+// Только чтение каталога, нужное HEAD для подготовки данных старой схемы. Это не миграция
+// и не fallback продукта. Охранники старой схемы не заменяются; перед настоящей 0054
+// временная модель удаляется без CASCADE. Маркер не позволяет удалить реальный каталог.
+const ROLE_FIXTURE_MARKER = 'kontur-test-legacy-role-read-model';
+const OUTCOME_FIXTURE_MARKER = 'kontur-test-legacy-outcome-read-model';
+const PROGRESS_FIXTURE_MARKER = 'kontur-test-legacy-job-progress';
+export const addRoleCatalog = async (migratorUrl: string): Promise<void> => {
+  const url = new URL(migratorUrl);
+  if (!url.pathname.startsWith('/kontur_kp_test_')) throw new Error('Каталог совместимости — только тестовая БД');
+  const db = new pg.Client({ connectionString: migratorUrl });
+  await db.connect();
+  try {
+    // HEAD очереди пишет временные счётчики с 0052. На старой схеме они нужны
+    // только для подготовки синтетических данных; реальная 0052 остаётся неизменной.
+    const progress = await db.query("SELECT 1 FROM pg_attribute WHERE attrelid='job'::regclass AND attname='progress' AND NOT attisdropped");
+    if (progress.rowCount === 0) {
+      if ((await db.query('SELECT 1 FROM schema_migration WHERE version=52')).rowCount) throw new Error('Нельзя подменять применённую миграцию 0052');
+      await db.query('ALTER TABLE job ADD COLUMN progress jsonb');
+      await db.query("COMMENT ON COLUMN job.progress IS 'kontur-test-legacy-job-progress'");
+    }
+    // HEAD читает outcome при подготовке исторических данных. Это только временная
+    // колонка тестовой БД: настоящая 0055 и её CHECK применяются после её удаления.
+    const outcome = await db.query("SELECT 1 FROM pg_attribute WHERE attrelid='tender'::regclass AND attname='outcome' AND NOT attisdropped");
+    if (outcome.rowCount === 0) {
+      await db.query('ALTER TABLE tender ADD COLUMN outcome text');
+      await db.query("COMMENT ON COLUMN tender.outcome IS 'kontur-test-legacy-outcome-read-model'");
+    }
+    if ((await db.query("SELECT to_regclass('portal_role') AS role")).rows[0]!.role) return;
+    await db.query("CREATE TABLE portal_role(code text PRIMARY KEY,name text NOT NULL,base_role text NOT NULL,status text NOT NULL DEFAULT 'active',permissions text[] NOT NULL)");
+    await db.query("COMMENT ON TABLE portal_role IS 'kontur-test-legacy-role-read-model'");
+    for (const role of ['admin', 'manager', 'engineer'] as const) await db.query('INSERT INTO portal_role(code,name,base_role,permissions) VALUES($1,$1,$1,$2)', [role, defaultRolePermissions(role)]);
+    await db.query("CREATE VIEW effective_user_role AS SELECT DISTINCT ur.user_id,pr.base_role AS role FROM user_role ur JOIN portal_role pr ON pr.code=ur.role WHERE pr.status='active'");
+    await db.query(`CREATE FUNCTION user_role_permissions(p_user uuid) RETURNS text[] LANGUAGE sql STABLE AS $$
+      SELECT coalesce(array_agg(DISTINCT cap ORDER BY cap),'{}'::text[]) FROM app_user u JOIN user_role ur ON ur.user_id=u.id JOIN portal_role pr ON pr.code=ur.role
+      CROSS JOIN LATERAL unnest(pr.permissions) p(cap) WHERE u.id=p_user AND u.kind='human' AND u.status='active' AND pr.status='active' $$`);
+    await db.query('CREATE FUNCTION has_role_permission(p_user uuid,p_permission text) RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT p_permission=ANY(user_role_permissions(p_user)) $$');
+    await db.query('GRANT SELECT ON portal_role,effective_user_role TO kontur_app');
+  } finally { await db.end(); }
+};
+export const dropRoleCatalog = async (migratorUrl: string): Promise<void> => {
+  await dropLegacyJobProgress(migratorUrl);
+  const url = new URL(migratorUrl);
+  if (!url.pathname.startsWith('/kontur_kp_test_')) throw new Error('Каталог совместимости — только тестовая БД');
+  const db = new pg.Client({ connectionString: migratorUrl });
+  await db.connect();
+  try {
+    const outcomeMarker = (await db.query("SELECT col_description(attrelid,attnum) AS marker FROM pg_attribute WHERE attrelid='tender'::regclass AND attname='outcome' AND NOT attisdropped")).rows[0]?.marker;
+    if (outcomeMarker === OUTCOME_FIXTURE_MARKER) {
+      if ((await db.query('SELECT 1 FROM tender WHERE outcome IS NOT NULL LIMIT 1')).rowCount) throw new Error('Временный outcome содержит данные: удаление запрещено');
+      await db.query('ALTER TABLE tender DROP COLUMN outcome');
+    }
+    const marker = (await db.query("SELECT obj_description(to_regclass('portal_role')) AS marker")).rows[0]!.marker;
+    if (marker !== ROLE_FIXTURE_MARKER) return;
+    await db.query('DROP FUNCTION has_role_permission(uuid,text)');
+    await db.query('DROP FUNCTION user_role_permissions(uuid)');
+    await db.query('DROP VIEW effective_user_role');
+    await db.query('DROP TABLE portal_role');
+  } finally { await db.end(); }
+};
+
+// Только искусственная колонка старой тестовой схемы; реальная 0052 не имеет этого маркера.
+// Счётчики завершённых синтетических попыток не существовали в исходной схеме.
+// Прогресс активной/повторяемой попытки терять нельзя даже в фикстуре.
+export const dropLegacyJobProgress = async (migratorUrl: string): Promise<void> => {
+  const url = new URL(migratorUrl);
+  if (!url.pathname.startsWith('/kontur_kp_test_')) throw new Error('Прогресс совместимости — только тестовая БД');
+  const db = new pg.Client({ connectionString: migratorUrl });
+  await db.connect();
+  try {
+    const marker = (await db.query("SELECT col_description(attrelid,attnum) AS marker FROM pg_attribute WHERE attrelid='job'::regclass AND attname='progress' AND NOT attisdropped")).rows[0]?.marker;
+    if (marker !== PROGRESS_FIXTURE_MARKER) return;
+    if ((await db.query('SELECT 1 FROM schema_migration WHERE version=52')).rowCount) throw new Error('Реальная миграция 0052 уже применена: удаление запрещено');
+    if ((await db.query("SELECT 1 FROM job WHERE progress IS NOT NULL AND status IN ('queued','running') LIMIT 1")).rowCount) throw new Error('Прогресс активного задания: удаление запрещено');
+    await db.query('ALTER TABLE job DROP COLUMN progress');
+  } finally { await db.end(); }
+};

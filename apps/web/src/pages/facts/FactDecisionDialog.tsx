@@ -8,6 +8,7 @@ import { Notice } from '../../components/Notice';
 import { TextAreaField } from '../../components/TextAreaField';
 import { useIdempotencyKey } from '../../hooks/useIdempotencyKey';
 import { REMARK_KIND_LABELS } from '../../utils/factLabels';
+import { factValue } from '../../utils/factPresentation';
 import styles from './Facts.module.css';
 
 interface IFactDecisionDialogProps {
@@ -79,7 +80,7 @@ export const FactDecisionDialog: FC<IFactDecisionDialogProps> = ({ remark, facts
         {facts.map((f) => (
           <label key={f.id} className={styles.choice}>
             <input type="radio" name="fact-decision" value={f.id} checked={choice === f.id} onChange={() => setChoice(f.id)} />
-            <span>{`Действует «${f.display}» — ${documentTitle(f.documentId)}${f.clauseRef ? `, п. ${f.clauseRef}` : ''}`}</span>
+            <span>{`Действует «${factValue(f)}» — ${documentTitle(f.documentId)}${f.clauseRef ? `, п. ${f.clauseRef}` : ''}`}</span>
           </label>
         ))}
         <label className={styles.choice}>

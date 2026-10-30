@@ -1,0 +1,24 @@
+.stack{display:flex;flex-direction:column;gap:var(--space-4)}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--space-3)}
+.summary>div{display:flex;flex-direction:column;padding:var(--space-3);border:1px solid var(--border-subtle);border-radius:var(--radius-md);background:var(--surface-2)}
+.summary strong{font-size:1.7rem}.summary span,.muted{color:var(--muted);font-size:0.875rem}
+.sources{padding:var(--space-3);border:1px solid var(--border-subtle);border-radius:var(--radius-md)}
+.sources p{margin-top:var(--space-3);overflow-wrap:anywhere}
+.actions{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap}
+.filters{display:flex;align-items:end;gap:var(--space-3);flex-wrap:wrap}
+.filters label{display:flex;flex-direction:column;gap:var(--space-1);font-size:0.875rem}
+.filters label:first-child{flex:1;min-width:230px}
+.filters input[type=search],.filters select{border:1px solid var(--border-subtle);border-radius:var(--radius-sm);padding:var(--space-2);background:var(--surface);color:var(--text)}
+.filters .check{flex-direction:row;align-items:center;padding-bottom:var(--space-2)}
+.list{padding:0;margin:0;list-style:none;display:flex;flex-direction:column;gap:var(--space-3)}
+.entry{border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:var(--space-4);overflow-wrap:anywhere}
+.entryHead{display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap;margin-bottom:var(--space-2);font-size:0.875rem;color:var(--muted)}
+.role{font-weight:600;color:var(--text)}
+.name{display:block}.path{font-size:0.875rem;color:var(--muted);margin:var(--space-2) 0}
+.tags{display:flex;gap:var(--space-2);flex-wrap:wrap;margin:var(--space-2) 0}.tags span{font-size:0.75rem;padding:3px 7px;border:1px solid var(--border-subtle);border-radius:var(--radius-sm)}
+.tags .linked{color:#237044;background:#e8f6ed}.tags .review{color:#85520d;background:#fff3dc}
+.relation{margin:var(--space-2) 0;font-size:0.875rem}
+.entry details{margin:var(--space-2) 0;font-size:0.875rem}.entry summary,.sources summary{cursor:pointer}
+.details{display:grid;grid-template-columns:170px minmax(0,1fr);gap:var(--space-2)}.details dt{color:var(--muted)}.details dd{margin:0}
+.open{display:inline-block;margin-top:var(--space-2);font-size:0.875rem;color:var(--accent)}
+@media(max-width:600px){.details{grid-template-columns:1fr}.entry{padding:var(--space-3)}}

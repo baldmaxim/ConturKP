@@ -1,3 +1,4 @@
+import { restrictManagerPermissions } from './roleFixtures.ts';
 // Этап 08a: закрытый ящик (D-027 AD-08a-4, D-025). Письмо — основание ответа только для того, кто читает ящик
 // (`mail.read`) и тендер контекста. Без права письмо не входит в область поиска хода, и его текст не попадает ни в
 // пакет, ни в ответ; отзыв права после ответа скрывает текст ответа и цитаты, а не только цитату письма.
@@ -30,6 +31,8 @@ beforeAll(async () => {
   db = await createTestDb();
   const app = makeApp(db, undefined, config);
   s = await buildScenario(db, app);
+  // Ограниченный профиль проверяет выдачи; общий просмотр manager проверяется отдельно.
+  await restrictManagerPermissions(s.admin, s.ids.manager, ['mail.read.all']);
   const worker = workerWithChat(db, config, chat);
   m = await buildMailScope(
     s,

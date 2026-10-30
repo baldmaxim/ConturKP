@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "review": "Review19-2",
+  "verdict": "PASS",
+  "reviewedCodeCommit": "ab545e3456e0b49c27635d42d8da3f716d08b91a",
+  "reviewedTree": "23d691a7a406d5c94e3fcc6474645eaae935a7b2",
+  "reviewedParent": "5b5346d8e0585270895d91a5ad10203909d977c1",
+  "closedDefects": {
+    "R19-01": "CLOSED_BY_REVIEW",
+    "R19-02": "CLOSED_BY_REVIEW",
+    "R19-03": "CLOSED_BY_REVIEW",
+    "R19-04": "CLOSED_BY_REVIEW"
+  },
+  "independentReviewerChecks": {
+    "zipChecksums": 43,
+    "treeChecksums": 18,
+    "bundleVerified": true,
+    "nodePassed": 117,
+    "nodeSkipped": 0,
+    "typecheckExit": 0,
+    "privateCorpusReplay": false
+  },
+  "knownLimits": [
+    "archived_contract_not_separately_marked",
+    "no_explicit_working_portal_data_root_staging_guard",
+    "full_real_copy_created_by_prior_ad_hoc_code",
+    "versioned_copy_tested_on_temp_files_real_readback459",
+    "reviewer_no_private_inputs"
+  ],
+  "ownerDecision": "D-047",
+  "activeLocusDataRootOwnerConfirmed": "D:/LOCAL_RAG/data",
+  "activeLocusDataRootProcessVerified": false,
+  "stage18BlocksStage19Acceptance": false,
+  "stage18": "INCOMPLETE",
+  "s18_32": "OPEN",
+  "g7": "NOT_ACCEPTED",
+  "stage19": "IN_PROGRESS",
+  "deliveryPlan": [
+    "19-A corpus",
+    "19-B parity_and_shutdown"
+  ],
+  "ownerCrosswalkSigned": false,
+  "newTestRuns": false,
+  "newModelRuns": false,
+  "workingInstallationChanged": false,
+  "locusChanged": false,
+  "retirementAllowed": false,
+  "protectedArtifactSha256": {
+    "docs/ops/19-corpus-comparison-20261030.json": "71d4f6b0a231119fe1448575cc893ec444df75067c8c105252916362c8a1c262",
+    "docs/ops/19-review1-reproducibility-20261030.json": "e021b9799fde7fc6dddeab171794985090d738efbdac8f093a55d9842fd812cc",
+    "D:/Projects/009 ContrurKP/handoffs/ConturKP-Stage19-review1-fixes-ab545e3-20261030.zip": "f0222f67182782b1ba1173d0ab126d8284886ffe63e6377b63278349dd34b165"
+  }
+}

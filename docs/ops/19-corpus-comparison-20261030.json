@@ -128,21 +128,29 @@
     "typecheck": "PASS; application TypeScript unchanged",
     "applicationBuild": "PASS on identical application tree in publishedmain",
     "vitest": "NOT_RERUN; prior independent2073/2073 belongs9f69d21",
-    "newModelDialogs": "NOT_RUN"
+    "newModelDialogs": "NOT_RUN",
+    "gitBlobNodeTests": {
+      "exitCode": 0,
+      "passed": 89,
+      "failed": 0,
+      "skipped": 0,
+      "log": "node-tests-git-blobs-89.log",
+      "sourceBytesMatchGitBlobs": true
+    }
   },
   "verifiedSourceSha256": {
-    "scripts/lib/locus-corpus-audit.mjs": "f4638d6494d20f799c2fd0e6beb5b7439c733032d89b995cc8ce2a609a8b3c96",
-    "scripts/ops/locus-preflight.mjs": "4d098aa29d42aceaf4aa62d7d1788ec50a6cde66ae505a21edb0dae8031781b4",
-    "scripts/lib/locus-registry-export.mjs": "0ccb6cfa78d163ac0c6657dd403614b2791f95251f3ddf9e52cab33690da4dd6",
-    "scripts/ops/locus-export-registry.mjs": "a37e8e0f389855a83de49a43994b9fa50dbac97290466f2960338b68de5d0d40",
-    "tests/locusPreflight.node-test.mjs": "53ffaef9afcb217d8906ed124fce47c6ac249f0431b7441f1c019449c85b5391",
-    "tests/locusRegistryExport.node-test.mjs": "cc1a9c2590283adbf624f44645a43b45aa2fef9dc0aafd67dae7adf9e194a9e2"
+    "scripts/lib/locus-corpus-audit.mjs": "d714266bc3197c6aa40382ff30adb37752064e23fce2dd5a0e4d066fb51fd714",
+    "scripts/ops/locus-preflight.mjs": "c3213f497bdfe6ec015a5ee05ab68aee03a2f755d3a4771beef9cc187c65e3bd",
+    "scripts/lib/locus-registry-export.mjs": "f0066bf8eff52adb433f49e694fe8d55c88bc2259a7d274553f4ea634b3d75b5",
+    "scripts/ops/locus-export-registry.mjs": "1bfa01a2ecbf88ab7f931addff0dca068d5360bab322b47da9130fddb5d13b2b",
+    "tests/locusPreflight.node-test.mjs": "45c1ef8187029ef4f16fa4c319a9c56772249871b7a2a951a8f7358ea5e0fd95",
+    "tests/locusRegistryExport.node-test.mjs": "03d76a66ab4b6064b34e6bca867e776c8e22b25cc10878625a52bcf3b2e8a44e"
   },
   "originalExportExecutionCodeSha256": {
     "scripts/lib/locus-registry-export.mjs": "0ccb6cfa78d163ac0c6657dd403614b2791f95251f3ddf9e52cab33690da4dd6",
     "scripts/ops/locus-export-registry.mjs": "dfeabdc4f2f1d55559af54c8b740c9c3f7d1a4be76132f8fde26b8f34b05523c"
   },
-  "originalExportExecutionNote": "Final CLI adds physical output-alias rejection; original-reading module is unchanged. Actual export outputs were under the verified isolated runtime root.",
+  "originalExportExecutionNote": "Original export used recorded CRLF worktree bytes. Reading-module content is identical after LF normalization. Final CLI also rejects physical output aliases; actual outputs were under the verified isolated runtime root.",
   "logSha256": {
     "export-test-before.log": "8634f9b8869ef9250c2b5a5d96c78bc5bef4cd42a04bb5cc008bd9fcbcfb4032",
     "export-test-after-15.log": "f799d7964daf002e59abc5b1e91d9d994aa35687bae13894fa0d09cd99e9b3f4",
@@ -155,7 +163,8 @@
     "portal-original-export.log": "62e7d12bcf8057dc93cf3ff3d281de9f0ff52b9f5ffca0c644cad4c955f20ade",
     "corpus-comparison.log": "97d4ecd6a5f5a9441db3360c2482a0a71300e6730f7008f7381a24bdd71e63c6",
     "staging.log": "e4fd05035550b9742f45efeba6c1733a541f5f2b57e7c89625def370b12ae775",
-    "staging-readback.log": "004bf8ad1420bb348b9d5f8c01994bdaa97dbb5d01e67fb6421a25566fac782d"
+    "staging-readback.log": "004bf8ad1420bb348b9d5f8c01994bdaa97dbb5d01e67fb6421a25566fac782d",
+    "node-tests-git-blobs-89.log": "afd34a8b8de39033498cdccd18b37bbe54af951b8efa0ca9a6205b0ddce66031"
   },
   "privateArtifactSha256": {
     "registry-originals.private.json": "84b266b4a4a963271714f95359ccb4665fdab8cd2bc407a70baf0ed23d861b3b",
@@ -193,5 +202,15 @@
       "originalProtectedBytesRestored": true,
       "protectedSha256ChecksPass": 3
     }
-  }
+  },
+  "previousTestedWorktreeCrlfSha256": {
+    "scripts/lib/locus-corpus-audit.mjs": "f4638d6494d20f799c2fd0e6beb5b7439c733032d89b995cc8ce2a609a8b3c96",
+    "scripts/ops/locus-preflight.mjs": "4d098aa29d42aceaf4aa62d7d1788ec50a6cde66ae505a21edb0dae8031781b4",
+    "scripts/lib/locus-registry-export.mjs": "0ccb6cfa78d163ac0c6657dd403614b2791f95251f3ddf9e52cab33690da4dd6",
+    "scripts/ops/locus-export-registry.mjs": "a37e8e0f389855a83de49a43994b9fa50dbac97290466f2960338b68de5d0d40",
+    "tests/locusPreflight.node-test.mjs": "53ffaef9afcb217d8906ed124fce47c6ac249f0431b7441f1c019449c85b5391",
+    "tests/locusRegistryExport.node-test.mjs": "cc1a9c2590283adbf624f44645a43b45aa2fef9dc0aafd67dae7adf9e194a9e2"
+  },
+  "sourceLineEndings": "LF, enforced for Locus tools/tests by.gitattributes; originals/export outputs not normalized",
+  "originalReadingModuleLfNormalizedSha256": "f0066bf8eff52adb433f49e694fe8d55c88bc2259a7d274553f4ea634b3d75b5"
 }

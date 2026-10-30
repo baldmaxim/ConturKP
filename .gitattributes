@@ -3,3 +3,9 @@ docs/migrations/*.sql text eol=lf
 *.png binary
 # PDF-фикстуры (этап 05a): их SHA-256 записаны в отчёте, преобразование окончаний строк их испортит.
 *.pdf binary
+
+# Stage19: reproducible script hashes and preserved S18-32 receipt bytes.
+docs/ops/18-s18-32-source-grounding-20261029.json text eol=lf
+scripts/lib/locus*.mjs text eol=lf
+scripts/ops/locus*.mjs text eol=lf
+tests/locus*.node-test.mjs text eol=lf

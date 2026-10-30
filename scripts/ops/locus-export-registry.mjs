@@ -3,7 +3,7 @@ import { readFile, open, mkdir, realpath } from 'node:fs/promises';
 import { dirname, resolve, basename, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { createHash } from 'node:crypto';
-import { exportLocusRegistry, withinRoot } from '../lib/locus-registry-export.mjs';
+import { exportLocusRegistry, validateLocusRegistryExport, withinRoot } from '../lib/locus-registry-export.mjs';
 
 async function physicalOutputPath(file) {
   const suffix = [];
@@ -24,6 +24,12 @@ try {
   const registryBytes = await readFile(values.registry), sourceBytes = await readFile(values.sources);
   const registry = JSON.parse(registryBytes.toString('utf8').replace(/^\uFEFF/u, ''));
   const sourceCatalog = JSON.parse(sourceBytes.toString('utf8').replace(/^\uFEFF/u, ''));
+  const sha = bytes => createHash('sha256').update(bytes).digest('hex');
+  const exportOptions = { registry, sourceCatalog, snapshotId: 'indexed-' + sha(registryBytes) + '-' + Date.now(),
+    maxBytes: values['max-bytes'] === undefined ? undefined : Number(values['max-bytes']),
+    maxDurationMs: values['max-ms'] === undefined ? undefined : Number(values['max-ms']),
+    concurrency: values.concurrency === undefined ? undefined : Number(values.concurrency) };
+  validateLocusRegistryExport(exportOptions); // никаких выходных файлов до полной проверки входа
   const output = resolve(values.out), progressOutput = output + '.progress.jsonl';
   const physicalOutput = await physicalOutputPath(output), physicalProgress = await physicalOutputPath(progressOutput);
   for (const source of sourceCatalog.sources ?? []) {
@@ -36,13 +42,9 @@ try {
   // wx запрещает перезапись оригинала, входа или прежнего результата.
   resultHandle = await open(output, 'wx');
   progressHandle = await open(progressOutput, 'wx');
-  const sha = bytes => createHash('sha256').update(bytes).digest('hex');
   let progressWrites = Promise.resolve();
   const report = await exportLocusRegistry({
-    registry, sourceCatalog, snapshotId: 'indexed-' + sha(registryBytes) + '-' + Date.now(),
-    maxBytes: values['max-bytes'] === undefined ? undefined : Number(values['max-bytes']),
-    maxDurationMs: values['max-ms'] === undefined ? undefined : Number(values['max-ms']),
-    concurrency: values.concurrency === undefined ? undefined : Number(values.concurrency),
+    ...exportOptions,
     onProgress: progress => {
       progressWrites = progressWrites.then(() => progressHandle.write(JSON.stringify(progress) + '\n'));
       if (progress.processed % 50 === 0 || progress.processed === progress.total) console.log(JSON.stringify(progress));

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, realpathSync, rmSync, symlinkSync, existsSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
@@ -81,6 +81,7 @@ test('identical files retain separate logical identities', async t => {
   const f = fixture(t); f.input.registry.files.f2 = { ...f.input.registry.files.f1, fileId: 'f2' };
   const r = await exportLocusRegistry(f.input); assert.equal(r.documents.length, 2); assert.equal(r.statistics.hashed, 2);
   assert.equal(r.documents[0].sha256, r.documents[1].sha256); assert.notEqual(r.documents[0].entryId, r.documents[1].entryId);
+  assert.equal(r.statistics.hashedBytes, 28); assert.equal(r.statistics.byteAccounting, 'SUM_PER_REGISTRY_ENTRY_NOT_UNIQUE_FILES');
 });
 
 test('duplicate logical IDs are rejected before traversal', async t => {
@@ -154,4 +155,16 @@ test('elapsed time budget leaves later entries unverified rather than silently d
   const r = await exportLocusRegistry(f.input); assert.equal(r.documents.length, 2);
   assert.equal(r.observations[1].status, 'TIME_BUDGET'); assert.equal(r.documents[1].sha256, null);
   assert(r.errors.includes('TIME_BUDGET')); assert.equal(r.complete, false);
+});
+
+
+test('invalid relative source root leaves no output files and a corrected retry succeeds', t => {
+  const f = fixture(t), registry = join(f.dir, 'registry.json'), sources = join(f.dir, 'sources.json'), output = join(f.dir, 'retry.json');
+  writeFileSync(registry, JSON.stringify(f.input.registry));
+  writeFileSync(sources, JSON.stringify({ sources: [{ sourceId: 's1', roots: ['relative/root'] }] }));
+  const args = ['scripts/ops/locus-export-registry.mjs', '--registry', registry, '--sources', sources, '--out', output];
+  const invalid = spawnSync(process.execPath, args, { encoding: 'utf8' });
+  assert.equal(invalid.status, 1); assert.equal(existsSync(output), false); assert.equal(existsSync(output + '.progress.jsonl'), false);
+  writeFileSync(sources, JSON.stringify(f.input.sourceCatalog));
+  assert.equal(spawnSync(process.execPath, args, { encoding: 'utf8' }).status, 2);
 });

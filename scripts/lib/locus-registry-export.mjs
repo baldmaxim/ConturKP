@@ -11,8 +11,8 @@ export function withinRoot(root, file) {
   return rel === '' || (!isAbsolute(rel) && rel !== '..' && !rel.startsWith('..\\') && !rel.startsWith('../'));
 }
 
-export async function exportLocusRegistry(options) {
-  const { registry, sourceCatalog, snapshotId, onProgress } = options;
+export function validateLocusRegistryExport(options) {
+  const { registry, sourceCatalog, snapshotId } = options;
   const maxBytes = options.maxBytes ?? 2 * 1024 ** 3;
   const maxDurationMs = options.maxDurationMs ?? 600000;
   const concurrency = options.concurrency ?? 2;
@@ -33,6 +33,12 @@ export async function exportLocusRegistry(options) {
     identities.add(identity);
     return entry;
   });
+  return { roots, entries, snapshotId, maxBytes, maxDurationMs, concurrency };
+}
+
+export async function exportLocusRegistry(options) {
+  const { onProgress } = options;
+  const { roots, entries, snapshotId, maxBytes, maxDurationMs, concurrency } = validateLocusRegistryExport(options);
   const startedAt = Date.now(), deadline = startedAt + maxDurationMs;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), maxDurationMs);
@@ -108,7 +114,7 @@ export async function exportLocusRegistry(options) {
   return {
     schemaVersion: 1, system: 'locus', snapshotId, capturedAt: new Date(startedAt).toISOString(),
     complete: false, errors, documents, observations,
-    statistics: { entries: entries.length, hashed, hashedBytes, statuses, elapsedMs: Date.now() - startedAt },
+    statistics: { byteAccounting: 'SUM_PER_REGISTRY_ENTRY_NOT_UNIQUE_FILES', entries: entries.length, hashed, hashedBytes, statuses, elapsedMs: Date.now() - startedAt },
     exportMode: 'INDEXED_ENTRIES_ONLY', corpusFrozen: false, activeDataRootVerified: false,
   };
 }

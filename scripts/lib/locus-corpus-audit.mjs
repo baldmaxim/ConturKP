@@ -52,6 +52,7 @@ function mapping(input) {
     if (documents.has(key)) fail('DUPLICATE_MAPPING');
     documents.set(key, value);
   }
+  if (input.schemaVersion === 2 && input.scopes.length) fail('V2_SCOPES_MUST_BE_EMPTY');
   return { version: input.schemaVersion, locusSnapshotId: id(input.locusSnapshotId), portalSnapshotId: id(input.portalSnapshotId), scopes, documents };
 }
 

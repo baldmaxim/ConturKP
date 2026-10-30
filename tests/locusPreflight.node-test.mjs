@@ -107,12 +107,12 @@ test('v2 requires each original scope even if a source-wide mapping exists', () 
 });
 
 test('v2 rejects bytes that match only inside another contract', () => {
-  const f = sample(); f.crosswalk.schemaVersion = 2; f.crosswalk.documents[0].scopeId = 'other-contract';
+  const f = sample(); f.crosswalk.schemaVersion = 2; f.crosswalk.scopes = []; f.crosswalk.documents[0].scopeId = 'other-contract';
   const r = run(f); assert.equal(r.summary.matched, 0); assert(has(r, 'TARGET_SCOPE_MISMATCH'));
 });
 
 test('v2 still rejects one target revision reused for multiple source identities', () => {
-  const f = sample(); f.crosswalk.schemaVersion = 2; f.crosswalk.documents[0].scopeId = 'contract-P';
+  const f = sample(); f.crosswalk.schemaVersion = 2; f.crosswalk.scopes = []; f.crosswalk.documents[0].scopeId = 'contract-P';
   f.locus.documents.push({ ...f.locus.documents[0], entryId: 'file-2' });
   f.crosswalk.documents.push({ ...f.crosswalk.documents[0], entryId: 'file-2' });
   const r = run(f); assert.equal(r.summary.matched, 0); assert(has(r, 'TARGET_REUSED'));
@@ -121,4 +121,16 @@ test('v2 still rejects one target revision reused for multiple source identities
 test('v2 rejects invalid scope identifiers', () => {
   const f = sample(); f.crosswalk.schemaVersion = 2; f.crosswalk.documents[0].scopeId = 'bad\nscope';
   assert.throws(() => run(f), /INVALID_ID/);
+});
+
+
+test('v2 rejects a contradictory source-wide scopes array instead of ignoring it', () => {
+  const f = sample(); f.crosswalk.schemaVersion = 2;
+  f.crosswalk.documents[0].scopeId = 'contract-P'; f.crosswalk.scopes[0].scopeId = 'other-contract';
+  assert.throws(() => run(f), /V2_SCOPES_MUST_BE_EMPTY/);
+});
+
+test('v2 rejects even a consistent legacy scopes array so it cannot imply unverified coverage', () => {
+  const f = sample(); f.crosswalk.schemaVersion = 2; f.crosswalk.documents[0].scopeId = 'contract-P';
+  assert.throws(() => run(f), /V2_SCOPES_MUST_BE_EMPTY/);
 });

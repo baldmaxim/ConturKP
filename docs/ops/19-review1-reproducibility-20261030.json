@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "review": "Review19-1 REQUEST_CHANGES",
+  "baseCommit": "5b5346d8e0585270895d91a5ad10203909d977c1",
+  "branch": "codex/stage19-review1-fixes-20261030",
+  "fixStatus": {
+    "R19-01": "FIXED_PENDING_REVIEW",
+    "R19-02": "FIXED_PENDING_REVIEW",
+    "R19-03": "FIXED_PENDING_REVIEW",
+    "R19-04": "FIXED_PENDING_REVIEW"
+  },
+  "replayedSummary": {
+    "classification": {
+      "SCOPED_HASH_CANDIDATE": 1158,
+      "NO_EQUAL_BLOB_IN_BACKUP_CONTRACTS": 500,
+      "SOURCE_NOT_HASHED": 225,
+      "BLOB_ONLY_IN_OTHER_SCOPE": 4
+    },
+    "anchoredBindings": 60,
+    "crosswalkCandidateCount": 1158,
+    "comparison": "INCOMPLETE",
+    "comparisonSummary": {
+      "locusEntries": 1887,
+      "portalEntries": 1038,
+      "sourceHashesUnverified": 225,
+      "matched": 899,
+      "notMatched": 988,
+      "issueCount": 845
+    },
+    "comparisonIssueCodes": {
+      "SOURCE_INCOMPLETE": 1,
+      "TARGET_INCOMPLETE": 1,
+      "TARGET_REUSED": 114,
+      "SOURCE_UNMAPPED": 729
+    },
+    "staging": {
+      "uniqueBlobs": 459,
+      "logicalEntries": 500,
+      "bytes": 9546189056
+    },
+    "sourceByteAccounting": "SUM_PER_REGISTRY_ENTRY_NOT_UNIQUE_FILES",
+    "humanReviewed": false,
+    "retirementAllowed": false
+  },
+  "readback": {
+    "mode": "INDEPENDENT_READBACK_OF_ISOLATED_STAGING",
+    "plannedBlobs": 459,
+    "verified": 459,
+    "bytes": 9546189056,
+    "failures": 0,
+    "retirementAllowed": false,
+    "inputSha256": {
+      "plan": "51b48f38a381dfe87bf9ff86d8dc13bf59eea969b48d228c3637a5f2d0900d3c"
+    },
+    "implementationSha256": "b6c67a3cb6253f11c76eb38b8ffef3a969c1f37c62baf2a56b087eede648f872",
+    "cliSha256": "1dee2d06badbc288fc38139753190209f3142fea58e141443985a9e7c8cfd79c"
+  },
+  "copyExecution": "VERSIONED_COPY_TESTED_ON_TEMP_FILES; original459objects not copied again",
+  "tests": {
+    "nodePassed": 117,
+    "nodeFailed": 0,
+    "nodeSkipped": 0,
+    "typecheckExit": 0,
+    "r19_02_03Before": {
+      "passed": 50,
+      "failed": 3
+    },
+    "r19_04Before": {
+      "passed": 17,
+      "failed": 1
+    },
+    "newWorkflowCases": 17,
+    "newStagingCases": 8
+  },
+  "sourceByteAccounting": "23_913_873_379 is SUM_PER_REGISTRY_ENTRY_NOT_UNIQUE_FILES, not unique file bytes",
+  "verifiedSourceSha256": {
+    "scripts/lib/locus-corpus-audit.mjs": "701500a4e92e3348d343ef271599c9f0838933f103ee83a1ebe1ab5189322a83",
+    "scripts/lib/locus-registry-export.mjs": "ed90168800e4dcfa8bb0a7381e2c6d3b31aebd67ac1077da011c77b757b39547",
+    "scripts/ops/locus-export-registry.mjs": "98954089469cf31c32f33ac7be628ed2f3731b391e7e18a65f6ad368ab87c107",
+    "scripts/lib/locus-corpus-workflow.mjs": "c4e23f9d811fc98c35722bc30080c1685b4f12c580ff87a82264bed0990d9269",
+    "scripts/lib/locus-staging.mjs": "b6c67a3cb6253f11c76eb38b8ffef3a969c1f37c62baf2a56b087eede648f872",
+    "scripts/ops/locus-corpus-workflow.mjs": "5cd687606f754f841ecf3c2e5f00dda96cce160b8dbbd3adfa0fd2b4c4855df1",
+    "scripts/ops/locus-stage.mjs": "1dee2d06badbc288fc38139753190209f3142fea58e141443985a9e7c8cfd79c",
+    "tests/locusPreflight.node-test.mjs": "e15ca79362224f1f14193bb45eb076ab69ba2486f0eead7d2aba830eb3b938c6",
+    "tests/locusRegistryExport.node-test.mjs": "b290418c0ccede18d78b8dc14b4799484e4e4914a2b25693d2469ea4248c6028",
+    "tests/locusCorpusWorkflow.node-test.mjs": "6151520a99601f2dc2ba78c10fd8add575d0ff356646f99cdba74cc7ac700be0",
+    "tests/locusStaging.node-test.mjs": "5dcda21dacf1a072bd5c9d6a9cbb6af809323b98ba878e7466f5f204076f6f61"
+  },
+  "logSha256": {
+    "r19-02-03-before.log": "19139558db35e27e8e1256f33ade0c8477bfc43b3f01396e902aa3bca96b2fff",
+    "r19-02-03-after.log": "899345df01d853ed8e32215193e4cb41bb97629c6b0cfbb449d39583aa6898e4",
+    "r19-01-generators-before.log": "1c03cd31a7b4f7f4c8bce5ab1e088966e61d0ba62a58c3396f68e0caf9e5c1df",
+    "r19-01-generators-after.log": "4bef9f26549c909914ca5d6f1c479e50a64e25f679e39b708850d80729efc35c",
+    "r19-01-staging-before.log": "35ec627a727e47202e1cd8be6552566b9baed56ed21cae4b9a26159957cbea70",
+    "r19-01-staging-after.log": "dc9edc2474f92ca3763ce78d29f2ea067a3f53091125c1df30e79ea98038abdf",
+    "r19-04-before.log": "e38c2a6168107dd2dca5a17b704633da3caccc29fd373ca5613552583948f379",
+    "targeted-after.log": "420d91745dab84eb537afc52298a2d3812520a47f31c8c06bed087e5d00fd01a",
+    "node-all.log": "af254a0cf9c6627e66cdee039a30d57aee265c1612b386b1aa3ec4a734c674ee",
+    "typecheck.log": "4bf168ec872fe489326c6f09c38e017101722ee3af0c72459b9bd666e0f3f9be",
+    "extract-final.log": "bdecf06fa7a7a4e92fb325b55717ebccaf560d985749ce47f89a8e3a41be05e1",
+    "prepare-final.log": "312aa851a220a2c3535d2ea93baa233c95d795bca07eb0c6b58953a0a1c25354",
+    "analyze-final.log": "eee411b9f5f1c8b320701d059f056ec35ac08f86572790c54b4e1f4a3a7b1c8d",
+    "readback-final.log": "015083bb6b9787c8c1944683db1a8452aee7043c757a20e1a8d54e5ea33a0bc7",
+    "node-final.log": "49ba660474c033f4d82e0842d224ab5f7e439187f08af71ef5203ad2f5a9330f"
+  },
+  "workflowReceipts": {
+    "extracted-final/receipt.json": {
+      "action": "extract",
+      "inputSha256": {
+        "manifest": "87bc451a4835c98cdb2e0dd1d8c5d51edb4c22e7c8227976b6eebf8ca5f13fa6",
+        "dump": "fcd242db727c2d54d13e34abc8eeca8ed5645246f253eac48dd266813c48f55a"
+      },
+      "outputSha256": {
+        "copy.private.sql": "a795b3fe48ee6f15feaef7f02ab57774a6b02f8a04a3ab91d34ed083b1a07d06",
+        "tables.private.json": "b761ab15315d6e1a9d358db6ef2ac67dd3a27125cb6c208fe6fbbfeec154e34e"
+      },
+      "implementationSha256": {
+        "locus-corpus-workflow.mjs": "c4e23f9d811fc98c35722bc30080c1685b4f12c580ff87a82264bed0990d9269",
+        "locus-corpus-audit.mjs": "701500a4e92e3348d343ef271599c9f0838933f103ee83a1ebe1ab5189322a83"
+      },
+      "cliSha256": "5cd687606f754f841ecf3c2e5f00dda96cce160b8dbbd3adfa0fd2b4c4855df1",
+      "retirementAllowed": false
+    },
+    "portal-read-plan-final/receipt.json": {
+      "action": "prepare-portal",
+      "inputSha256": {
+        "tables": "b761ab15315d6e1a9d358db6ef2ac67dd3a27125cb6c208fe6fbbfeec154e34e"
+      },
+      "outputSha256": {
+        "registry.private.json": "57e2b7399613b4f51c7026d232b2097a4d7228fe7d351f8c42bf4b6160e6a8e3",
+        "sources.private.json": "d6417ac2a8acb2723ef72d9b1ebec93803e45add736f00a6e8749786adc8deef"
+      },
+      "implementationSha256": {
+        "locus-corpus-workflow.mjs": "c4e23f9d811fc98c35722bc30080c1685b4f12c580ff87a82264bed0990d9269",
+        "locus-corpus-audit.mjs": "701500a4e92e3348d343ef271599c9f0838933f103ee83a1ebe1ab5189322a83"
+      },
+      "cliSha256": "5cd687606f754f841ecf3c2e5f00dda96cce160b8dbbd3adfa0fd2b4c4855df1",
+      "retirementAllowed": false
+    },
+    "analyzed-final/receipt.json": {
+      "action": "analyze",
+      "inputSha256": {
+        "tables": "b761ab15315d6e1a9d358db6ef2ac67dd3a27125cb6c208fe6fbbfeec154e34e",
+        "manifest": "87bc451a4835c98cdb2e0dd1d8c5d51edb4c22e7c8227976b6eebf8ca5f13fa6",
+        "portal-physical": "39844db705453b4175ee0372401345c1c847187515580e8756c33b05db2d7612",
+        "locus": "84b266b4a4a963271714f95359ccb4665fdab8cd2bc407a70baf0ed23d861b3b",
+        "registry": "e3871062ce16c60dbfb2e32a90db5189af50610263fbd7f77e28ce92c7259ab4",
+        "sources": "73a00ffc76e7b625b273754209457134b7e6140ce1a02e85ccb2ae25d6e3452b"
+      },
+      "outputSha256": {
+        "portal.private.json": "e1f760b01c6379548df73d6c81b329fb351f90233169211904ad496e6969b39f",
+        "classification.private.json": "9fe44857771b5f022a53e3f42f041db0535b70c9db1279f6d028ef297c47c468",
+        "crosswalk.private.json": "8f863037dfd554624b51372983a62188903e8a929ec6d7e4f4d25f7855403d89",
+        "staging-plan.private.json": "51b48f38a381dfe87bf9ff86d8dc13bf59eea969b48d228c3637a5f2d0900d3c",
+        "comparison.private.json": "59b76116a2e9e49c485d221dd9a8c3f3f86c152a92ed52bf9bf1d303fd1c8e8c",
+        "summary.json": "efb871aabb882892429ca68a182324450fe565dedbde03c05f0a1a9a6725cbbc"
+      },
+      "implementationSha256": {
+        "locus-corpus-workflow.mjs": "c4e23f9d811fc98c35722bc30080c1685b4f12c580ff87a82264bed0990d9269",
+        "locus-corpus-audit.mjs": "701500a4e92e3348d343ef271599c9f0838933f103ee83a1ebe1ab5189322a83"
+      },
+      "cliSha256": "5cd687606f754f841ecf3c2e5f00dda96cce160b8dbbd3adfa0fd2b4c4855df1",
+      "retirementAllowed": false
+    }
+  },
+  "previousArtifactsPreserved": 62,
+  "constraints": {
+    "workingDatabaseOpened": false,
+    "locusChanged": false,
+    "workingInstallationChanged": false,
+    "mainChanged": false,
+    "releaseChanged": false,
+    "oldResultsChanged": false,
+    "retirementAllowed": false
+  },
+  "stage18": "INCOMPLETE",
+  "s18_32": "OPEN",
+  "g7": "NOT_ACCEPTED",
+  "stage19": "IN_PROGRESS"
+}

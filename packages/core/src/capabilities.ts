@@ -75,7 +75,10 @@ export type TenderCapability =
   // Этап 16 (D-037; ADR-006, ADR-010): предложение через чат-клиент (MCP) — участник тендера, инженер и руководитель.
   // Нужна и область `propose` у токена. Принятие предложения — возможностью соответствующей записи, только human (I12).
   // БД — tender_capabilities (миграция 0040).
-  | 'mcp.propose';
+  | 'mcp.propose'
+  // Этап 18 (D-044, Q-01): решение руководителя тендера о закрытом расчёте и его отзыв — только руководитель, только human.
+  // БД — tender_capabilities (миграция 0044).
+  | 'calculation.close';
 
 export const ROLES: readonly Role[] = ['admin', 'manager', 'engineer'];
 export const MEMBER_ROLES: readonly MemberRole[] = ['engineer', 'manager'];
@@ -142,6 +145,7 @@ export const tenderCapabilities = (
   if (role === 'manager') caps.push('template.manage');
   if (role === 'manager') caps.push('candidate.approve', 'risk.accept');
   if (role === 'manager') caps.push('send.accept_extras');
+  if (role === 'manager') caps.push('calculation.close');
   if (role === 'engineer') caps.push('candidate.release');
   if (role === 'engineer') caps.push('send.register');
   if (role === 'manager' || roles.has('admin')) caps.push('audit.read');

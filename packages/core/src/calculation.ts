@@ -246,11 +246,36 @@ export const KP_TOTAL_RULE_NOT_SET = {
   unavailableComponents: ['insurance', 'reduction', 'redistribution'],
 } as const;
 
+// Правило итога КП по ответу владельца (D-044, Q-05): итог КП — итог расчёта TenderHub как есть, НДС включён.
+export const KP_TOTAL_RULE_TH_GRAND_TOTAL = 'th_grand_total_vat_included';
+export const KP_TOTAL_RULE_TH_GRAND_TOTAL_SEMANTICS = {
+  status: 'rule_set',
+  rule: KP_TOTAL_RULE_TH_GRAND_TOTAL,
+  decision: 'D-044',
+  vat: 'included',
+  note: 'итог расчёта TenderHub, в т.ч. НДС (D-044)',
+} as const;
+
+// Заголовок содержимого при захвате: итог источника есть — правило D-044 ставит итог КП; нет — правило не ставится.
+export const kpTotalHeaderFor = (sourceGrandTotal: string | null): Pick<ICalcContentHeader, 'kpTotal' | 'kpTotalCurrency' | 'kpTotalRule'> =>
+  sourceGrandTotal === null
+    ? { kpTotal: null, kpTotalCurrency: null, kpTotalRule: null }
+    : { kpTotal: sourceGrandTotal, kpTotalCurrency: 'RUB', kpTotalRule: KP_TOTAL_RULE_TH_GRAND_TOTAL };
+
+// Описание итога КП для записи содержимого: по правилу заголовка (в хэш содержимого входит правило, не описание).
+export const kpTotalSemanticsFor = (header: ICalcContentHeader): Record<string, unknown> =>
+  header.kpTotalRule === KP_TOTAL_RULE_TH_GRAND_TOTAL ? { ...KP_TOTAL_RULE_TH_GRAND_TOTAL_SEMANTICS } : { ...KP_TOTAL_RULE_NOT_SET };
+
 // ---------------------------------------------------------------- Production gate (state-machines §11.1)
 
 export type CalculationRevisionKind = 'provisional' | 'verified';
 
 // Боевой выпуск с ревизией provisional блокируется CALCULATION_PROVISIONAL независимо от назначений
-// доставки (ADR-007 §5). Блокер неотключаемый: снимается только решением владельца по Q-01, которого нет.
+// доставки (ADR-007 §5). Блокер неотключаемый настройкой: снимается только решением руководителя тендера о закрытом расчёте (D-044, Q-01).
 export const calculationProductionBlockers = (kind: CalculationRevisionKind): 'CALCULATION_PROVISIONAL'[] =>
   kind === 'provisional' ? ['CALCULATION_PROVISIONAL'] : [];
+
+// Единое правило блокера кандидата (D-044, Q-01): ревизия provisional и нет действующего решения руководителя, закреплённого
+// во входе кандидата. Повторяет SQL-функция calculation_closed_by_decision (миграция 0044) — менять вместе.
+export const isCalculationProvisional = (kind: CalculationRevisionKind, closedByDecision: boolean): boolean =>
+  calculationProductionBlockers(kind).length > 0 && !closedByDecision;

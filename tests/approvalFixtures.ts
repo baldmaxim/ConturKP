@@ -6,11 +6,12 @@
 import { chmodSync, readFileSync, writeFileSync } from 'node:fs';
 import { expect } from 'vitest';
 import { runPortalCapture, TenderHubApiSource, TenderHubHttpClient } from '../packages/adapters/src/index.ts';
-import { calculationContentHash, compareWithCalculation, type ICalcContent } from '../packages/core/src/index.ts';
+import { calculationContentHash, compareWithCalculation, dec, round2HalfAway, str, type ICalcContent } from '../packages/core/src/index.ts';
 import { primaryCalculationSource, recordSourceRevision, withTransaction } from '../packages/db/src/index.ts';
 import { BlobStore } from '../packages/storage/src/index.ts';
-import { TH_KEY } from './calculationFixtures.ts';
-import { buildEcon, closeEcon, E, type IEcon } from './economicsFixtures.ts';
+import { n } from '../scripts/tenderhub-fake.ts';
+import { captureNow, TH_KEY } from './calculationFixtures.ts';
+import { buildEcon, closeEcon, E, v2Tender, type IEcon } from './economicsFixtures.ts';
 import { createDraft, demoSchema, fillAll, KEY_FILLED, KP_FILLED } from './formsFixtures.ts';
 import { createTestDb, drain, idem, testConfig, type ITestDb, type TestClient } from './helpers.ts';
 import { completeDraft, requireConverter, SAMPLES, templateWithMarkedSample } from './releaseFixtures.ts';
@@ -102,6 +103,10 @@ export interface IStage13Options {
   // Этап 15: данные, с которыми боевой комплект проходит матрицу блокеров (поддельные: в установке их нет) — ревизия
   // расчёта verified по контрактной фикстуре X-01 с правилом итога КП фикстуры и шаблоны без отметки «демо».
   production?: boolean;
+  // Этап 18 (D-044): ревизия расчёта остаётся provisional (портальная выгрузка с правилом итога КП), но сверка её экономики
+  // «сведена» (итог источника = Σ коммерческих строк); шаблоны без отметки «демо». Единственное, что мешает боевому
+  // выпуску такого комплекта, — CALCULATION_PROVISIONAL: его снимает только решение руководителя о закрытом расчёте.
+  reconciledProvisional?: boolean;
   // Этап 15: готовые ревизии шаблонов (второй этап того же тендера заполняет те же формы) и тексты ТЗ этапа.
   templates?: { letterRevision: string; conditionsRevision: string };
   tz?: { plaster: string; paint: string };
@@ -113,7 +118,11 @@ export const addVerifiedRevision = async (e: IEcon, ref = 'TH-REV-FIXTURE-1'): P
   const http = new TenderHubHttpClient({ baseUrl: e.hub.url, apiKey: TH_KEY, timeoutMs: 2000, rateLimitPerMinute: 1000, maxResponseBytes: 8 << 20, rateLimitWaits: 0 });
   const captured = await runPortalCapture(new TenderHubApiSource(http), E.v2);
   const base = captured.content!;
-  const content: ICalcContent = { ...base, header: { ...base.header, kpTotal: base.header.sourceGrandTotal, kpTotalCurrency: 'RUB', kpTotalRule: 'fixture-source-grand-total' } };
+  // D-044 (Q-05): для боевого выпуска сверка экономики ревизии должна быть «сведена» — итог источника верифицированной
+  // ревизии фикстуры равен Σ коммерческих стоимостей строк, округлённой до копеек.
+  const commercial = base.lines.reduce((acc, l) => acc.plus(dec(l.totalCommercialMaterial ?? '0')).plus(dec(l.totalCommercialWork ?? '0')), dec('0'));
+  const grand = str(round2HalfAway(commercial));
+  const content: ICalcContent = { ...base, header: { ...base.header, sourceGrandTotal: grand, kpTotal: grand, kpTotalCurrency: 'RUB', kpTotalRule: 'fixture-source-grand-total' } };
   const src = (await primaryCalculationSource(e.db.pool, e.s.stageA))!;
   const bundle = (await e.db.pool.query<{ sha: string }>('SELECT raw_bundle_sha256 AS sha FROM calculation_capture WHERE revision_id = $1', [e.rev2])).rows[0]!.sha;
   const cap = await e.db.pool.query<{ id: string }>(
@@ -153,7 +162,20 @@ export const buildStage13 = async (o: IStage13Options = {}): Promise<IStage13> =
   requireConverter();
   const db = o.db ?? (await createTestDb());
   const e = await buildEcon(db, testConfig(o.config ?? {}), { chat: quietModel(o.modelError) });
+  if (o.reconciledProvisional) e.rev2 = await recaptureReconciled(e);
   return buildStageContent(db, e, o);
+};
+
+// Новая портальная выгрузка той же версии тендера, у которой итог источника равен Σ коммерческих строк (остаток 20 убран):
+// ревизия provisional с правилом итога КП и сверкой экономики «сведена» (D-044).
+export const recaptureReconciled = async (e: IEcon): Promise<string> => {
+  const t = v2Tender();
+  t.cached_grand_total = n(str(dec(t.cached_grand_total.__num).minus(dec('20'))));
+  e.hub.tenders.set(E.v2, t);
+  const cap = await captureNow(e.db, e.worker, e.s.eng1, e.s.stageA);
+  expect(cap.status, JSON.stringify(cap.failure)).toBe('complete');
+  expect(cap.revisionId).not.toBe(e.rev2);
+  return cap.revisionId as string;
 };
 
 // Содержимое этапа `e.s.stageA` поверх готовой экономики: ТЗ, снимок, реестр, покрытие, прогон проверок, шаблоны и
@@ -192,7 +214,7 @@ export const buildStageContent = async (db: ITestDb, e: IEcon, o: IStage13Option
   const grand = (await db.pool.query<{ g: string }>('SELECT cc.source_grand_total AS g FROM calculation_revision r JOIN calculation_content cc ON cc.id = r.content_id WHERE r.id = $1', [calcRevision])).rows[0]!.g;
   const m = compareWithCalculation({ unit: 'млн руб.', currency: 'RUB', scale: 2 }, '0', 'source_grand_total', grand);
   const kpPrice = m.outcome === 'unverified' ? '0' : m.expected;
-  const isDemo = !o.production;
+  const isDemo = !o.production && !o.reconciledProvisional;
   const letterRevision =
     o.templates?.letterRevision ??
     (await templateWithMarkedSample(e.s.manager, { name: isDemo ? 'Письмо КП (демо)' : 'Письмо КП (фикстура)', schema: demoSchema('demo-kp-letter'), marked: SAMPLES.letterMarked, original: SAMPLES.letterOriginal, isDemo })).revision.id;

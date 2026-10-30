@@ -7,6 +7,7 @@
 // кандидата — удержания по каждому касающемуся непокрытому событию; завершение сборки — под блокировкой этапа (S13-02),
 // новый готовый заменяет невыпущенные кандидаты того же режима (В-13-6), их согласования — «заменено».
 import { canonicalJson, sha256Hex, type Audience, type IManifest } from '@kontur/core';
+import { activeClosureDecision, listClosureDecisions } from './calculationClosure.ts';
 import { draftFields, getDraft, type IDraftRow } from './forms.ts';
 import { enqueueJob } from './jobs.ts';
 import type { Queryable } from './pool.ts';
@@ -69,7 +70,7 @@ export interface ICandidateCheckRow {
 }
 
 export interface ICandidateInputRow {
-  kind: 'review_run' | 'decision' | 'application_draft' | 'field_version' | 'template_revision' | 'attachment_revision';
+  kind: 'review_run' | 'decision' | 'application_draft' | 'field_version' | 'template_revision' | 'attachment_revision' | 'calculation_closure';
   ref_id: string;
   ordinal: number;
 }
@@ -180,6 +181,8 @@ export const createCandidate = async (db: Queryable, i: ICreateCandidateInput): 
   const decisions = (
     await db.query<{ id: string }>('SELECT d.id FROM decision d WHERE d.stage_id = $1 AND NOT EXISTS (SELECT 1 FROM decision n WHERE n.supersedes_decision_id = d.id) ORDER BY d.created_at, d.id', [i.stageId])
   ).rows.map((r) => r.id);
+  // Действующее решение руководителя о закрытом расчёте (D-044, Q-01) по ревизии кандидата — закрепляется входом.
+  const closure = activeClosureDecision(await listClosureDecisions(db, calc.id));
   const fieldVersions = await plannedFieldVersionIds(db, drafts);
   // «Заполнено» в статусе не значит «актуально сейчас»: основание могло быть заменено после отметки (R12-02).
   const stale = await staleFieldVersions(db, i.stageId, fieldVersions);
@@ -191,10 +194,12 @@ export const createCandidate = async (db: Queryable, i: ICreateCandidateInput): 
     { kind: 'template_revision', ids: [...new Set(drafts.map((d) => d.template_revision_id))] },
     { kind: 'field_version', ids: fieldVersions },
     { kind: 'attachment_revision', ids: attachments },
+    { kind: 'calculation_closure', ids: closure ? [closure.id] : [] },
   ];
-  // Хэш закреплённых входов: ID по видам, ревизия расчёта, снимок, базы (повтор при тех же входах — тот же хэш).
+  // Хэш закреплённых входов: ID по видам, ревизия расчёта, снимок, базы (повтор при тех же входах — тот же хэш). Решение о
+  // закрытом расчёте входит id решения, когда оно закреплено; без решения хэш прежний (D-044).
   const hash = sha256Hex(
-    `kontur.candidate_inputs.v1\n${canonicalJson({ calculationRevisionId: calc.id, evidenceScopeId: scope.id, baseline: Number(stage.input_version), inputs: inputs.map((g) => ({ kind: g.kind, ids: g.ids })) })}`,
+    `kontur.candidate_inputs.v1\n${canonicalJson({ calculationRevisionId: calc.id, evidenceScopeId: scope.id, baseline: Number(stage.input_version), inputs: inputs.filter((g) => g.kind !== 'calculation_closure' || g.ids.length > 0).map((g) => ({ kind: g.kind, ids: g.ids })) })}`,
   );
   const id = (
     await db.query<{ id: string }>(

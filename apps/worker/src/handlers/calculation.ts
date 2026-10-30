@@ -13,7 +13,7 @@ import {
   type ITenderHubSource,
 } from '@kontur/adapters';
 import type { ITenderHubConfig } from '@kontur/config';
-import { calculationContentHash, KP_TOTAL_RULE_NOT_SET } from '@kontur/core';
+import { calculationContentHash, kpTotalSemanticsFor } from '@kontur/core';
 import {
   appendCaptureAttempt,
   CalculationDomainError,
@@ -186,7 +186,7 @@ const runCapture = async (ctx: IJobContext, captureId: string, startedAt: string
           content,
           contentHash: calculationContentHash(content),
           headerLexemes: result.headerLexemes,
-          kpTotalSemantics: { ...KP_TOTAL_RULE_NOT_SET },
+          kpTotalSemantics: kpTotalSemanticsFor(content.header),
           rawBundleSha256: bundle.sha256,
           consistency: { ...result.consistency, commercialComponents: result.commercialComponents },
           sourceObserved: { ...result.observed },

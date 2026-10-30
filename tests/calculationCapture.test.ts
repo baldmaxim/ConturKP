@@ -73,8 +73,12 @@ describe('выгрузка portal_capture → ревизия provisional (ADR-00
     expect(revs).toHaveLength(1);
     const rev = (await s.eng1.get(`/calculation-revisions/${cap.revisionId}`)).body;
     expect(rev).toMatchObject({ seq: 1, kind: 'provisional', externalTenderId: TH.tender, externalVersion: 3, externalRevisionRef: null, counts: { positions: 4, lines: 3 } });
-    // Итог КП не выводится (Q-05); cached_grand_total — значение источника.
-    expect(rev.kpTotal).toMatchObject({ value: null, rule: null, semantics: { status: 'rule_not_set', question: 'Q-05' } });
+    // Итог КП — по правилу D-044 (Q-05): итог расчёта TenderHub как есть, НДС включён; cached_grand_total остаётся значением источника.
+    expect(rev.kpTotal).toMatchObject({
+      value: { amount: '1860.9', currency: 'RUB', vat: 'included' },
+      rule: 'th_grand_total_vat_included',
+      semantics: { status: 'rule_set', decision: 'D-044', vat: 'included' },
+    });
     // D-030: cached_grand_total — RUB как вывод из принятой формулы, НДС неизвестен.
     expect(rev.source.grandTotal).toMatchObject({ amount: '1860.9', currency: 'RUB', vat: 'unknown', priceKind: 'commercial', source: { derivation: 'derived_from_formula' } });
     expect(rev.source.fxRates).toEqual({ USD: '90.5', EUR: '99.25', CNY: '12.75' });

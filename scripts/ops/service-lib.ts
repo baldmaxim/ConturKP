@@ -37,7 +37,8 @@ export const renderServiceXml = (kind: ServiceKind, o: IServiceOptions): string 
     `  <arguments>${xml(`--env-file="${o.envFile}" ${script}`)}</arguments>`,
     `  <workingdirectory>${xml(o.installDir)}</workingdirectory>`,
     '  <startmode>Automatic</startmode>',
-    '  <delayedAutoStart>true</delayedAutoStart>',
+    // Без отложенного старта: с ним службы поднимались только со входом пользователя в Windows (S17-27).
+    '  <delayedAutoStart>false</delayedAutoStart>',
     ...(o.pgService ? [`  <depend>${xml(o.pgService)}</depend>`] : []),
     `  <stoptimeout>${o.graceSeconds + 10}sec</stoptimeout>`,
     '  <onfailure action="restart" delay="10 sec"/>',

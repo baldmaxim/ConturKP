@@ -1,6 +1,6 @@
 // Вызовы расчёта TenderHub (этап 06, portal-api §2.5). TenderHub читает worker, клиент только
 // назначает связь, запрашивает выгрузку и читает неизменяемые ревизии.
-import type { ICalculationCapture, ICalculationLine, ICalculationPosition, ICalculationRevision, ICalculationSources, IPage } from './calculationTypes';
+import type { IClosureState, ICalculationCapture, ICalculationLine, ICalculationPosition, ICalculationRevision, ICalculationSources, IPage } from './calculationTypes';
 import { apiGet, apiPost, apiPut } from './client';
 import type { IListResponse } from './types';
 
@@ -30,3 +30,13 @@ export const getCalculationPositions = (revisionId: string, cursor: string | nul
 
 export const getCalculationLines = (revisionId: string, positionId: string, cursor: string | null, signal?: AbortSignal): Promise<IPage<ICalculationLine>> =>
   apiGet<IPage<ICalculationLine>>(`/calculation-revisions/${enc(revisionId)}/lines?positionId=${enc(positionId)}&limit=500${cursor ? `&cursor=${enc(cursor)}` : ''}`, { signal });
+
+export const getCalculationClosure = (revisionId: string, signal?: AbortSignal): Promise<IClosureState> =>
+  apiGet<IClosureState>(`/calculation-revisions/${enc(revisionId)}/closure`, { signal });
+
+/** Решение руководителя о закрытом расчёте (D-044, Q-01): причина обязательна. */
+export const closeCalculation = (revisionId: string, reason: string, idempotencyKey: string): Promise<IClosureState> =>
+  apiPost<IClosureState>(`/calculation-revisions/${enc(revisionId)}/closure`, { body: { reason }, idempotencyKey });
+
+export const revokeCalculationClosure = (revisionId: string, reason: string, idempotencyKey: string): Promise<IClosureState> =>
+  apiPost<IClosureState>(`/calculation-revisions/${enc(revisionId)}/closure/revoke`, { body: { reason }, idempotencyKey });

@@ -7,7 +7,7 @@ import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { placementBytes, placementSha256, type IPlacementManifest } from '../packages/core/src/index.ts';
 import { createPool, dropDatabase, MIGRATIONS_DIR, migrate, setupDatabase } from '../packages/db/src/index.ts';
-import { addQuestionOrigin, dropQuestionOrigin } from './legacySchema.ts';
+import { addClosureTables, addQuestionOrigin, dropClosureTables, dropQuestionOrigin } from './legacySchema.ts';
 import { acceptAll, approve, assembled, buildStage13, closeStage13, notApplicable, release, view, type IStage13 } from './approvalFixtures.ts';
 import { ADMIN_URL, auditRows, idem, type ITestDb } from './helpers.ts';
 import {
@@ -387,6 +387,7 @@ describe('обновление схемы 0037 → 0038', () => {
     try {
       expect(await migrateTo(37)).toBe(37);
       await addQuestionOrigin(db.migratorUrl);
+      await addClosureTables(db.migratorUrl);
       up = await buildStage13({ db });
       let c = await assembled(up);
       await notApplicable(up, c.id).catch(() => 0);
@@ -397,6 +398,7 @@ describe('обновление схемы 0037 → 0038', () => {
       expect(a.status, a.text).toBe(200);
       // Остальные миграции — 0038 и более поздние этапы.
       await dropQuestionOrigin(db.migratorUrl);
+      await dropClosureTables(db.migratorUrl);
       expect(await migrateTo(99)).toBe(readdirSync(MIGRATIONS_DIR).filter((f) => /^\d{4}_.*\.sql$/u.test(f)).length - 37);
       expect((await db.pool.query('SELECT tender_capabilities($1, $2) AS caps', [up.e.s.ids.eng1, up.e.s.tenderA])).rows[0].caps).toContain('delivery.manage');
       expect((await db.pool.query("SELECT system, status FROM integration_status WHERE component = 'FsDeliveryTarget' ORDER BY system")).rows).toEqual([

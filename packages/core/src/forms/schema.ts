@@ -60,7 +60,7 @@ export interface ITextField extends IFieldBase {
 }
 
 // Величины расчёта, с которыми число приложения сверяется при сборке комплекта (этап 12; D-032 В-12-6; release/calc.ts).
-export const CALC_QUANTITY_KEYS = ['source_grand_total', 'commercial_total'] as const;
+export const CALC_QUANTITY_KEYS = ['source_grand_total', 'commercial_total', 'kp_total'] as const;
 export type CalcQuantity = (typeof CALC_QUANTITY_KEYS)[number];
 
 export interface INumberField extends IFieldBase {

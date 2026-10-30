@@ -3,9 +3,11 @@
 // и выпуска, оценку матрицы блокеров для согласования и выпуска (подсказка; разрешение даёт только команда под
 // блокировкой этапа), удержания и готовность выпуска к отправке. Чтение кандидата его не пересобирает. Причины решений —
 // по закрытости их предметов для читателя (R13-02); манифест выпуска — тому, кто видит предметы всех решений в нём.
-import { formatEtag, type IGateResult, type IManifest, type IReleaseManifest } from '@kontur/core';
+import { formatEtag, isCalculationProvisional, type CalculationRevisionKind, type IGateResult, type IManifest, type IReleaseManifest } from '@kontur/core';
 import {
+  calculationClosedByDecision,
   candidateChecks,
+  candidateClosureDecision,
   candidateEventsAfter,
   candidateEventsAfterCount,
   candidateFieldVersionIds,
@@ -223,7 +225,10 @@ export const candidateView = async (db: Queryable, store: BlobStore, ctx: IAcces
   const files = await candidateFiles(db, c.id);
   const previews = new Map(files.filter((f) => f.role === 'preview').map((f) => [f.source_file_id, f.id]));
   const events = await candidateEventsAfter(db, c);
-  const calc = (await db.query<{ seq: number; kind: string }>('SELECT seq, kind FROM calculation_revision WHERE id = $1', [c.calculation_revision_id])).rows[0]!;
+  const calc = (await db.query<{ seq: number; kind: CalculationRevisionKind }>('SELECT seq, kind FROM calculation_revision WHERE id = $1', [c.calculation_revision_id])).rows[0]!;
+  // Решение руководителя о закрытом расчёте (D-044, Q-01): закреплено во входе кандидата; действует — не отозвано или выпущено.
+  const closure = await candidateClosureDecision(db, c.id);
+  const closed = await calculationClosedByDecision(db, c.id);
   const drafts = (
     await db.query<{ id: string; title: string; is_demo: boolean; template_name: string; revision_seq: number }>(
       `SELECT a.id, a.title, t.is_demo, t.name AS template_name, r.seq AS revision_seq FROM application_draft a JOIN template_revision r ON r.id = a.template_revision_id
@@ -238,7 +243,7 @@ export const candidateView = async (db: Queryable, store: BlobStore, ctx: IAcces
   if (c.manifest_blob_sha256) manifest = JSON.parse((await readStoredBlob(store, c.manifest_blob_sha256)).toString('utf8')) as IManifest;
   const demo = drafts.some((d) => d.is_demo);
   const blockers = [
-    ...(c.mode === 'production' && calc.kind === 'provisional' ? ['CALCULATION_PROVISIONAL'] : []),
+    ...(c.mode === 'production' && isCalculationProvisional(calc.kind, closed) ? ['CALCULATION_PROVISIONAL'] : []),
     ...(c.mode === 'production' && demo ? ['TEMPLATE_DEMO'] : []),
   ];
   return {
@@ -246,6 +251,15 @@ export const candidateView = async (db: Queryable, store: BlobStore, ctx: IAcces
     restricted: false,
     inputs: {
       calculationRevision: { id: c.calculation_revision_id, seq: Number(calc.seq), kind: calc.kind },
+      calculationClosure: closure
+        ? {
+            decisionId: closure.id,
+            decidedBy: closure.decided_by_name,
+            decidedAt: iso(closure.decided_at),
+            revokedAt: closure.revoked_at ? iso(closure.revoked_at) : null,
+            active: closed,
+          }
+        : null,
       evidenceScopeId: c.evidence_scope_id,
       reviewRun: run ? { id: run.id, status: run.status } : null,
       decisions: ids('decision').length,

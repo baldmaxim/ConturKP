@@ -359,6 +359,9 @@ export const PutCalculationSourceRequest = z
 
 export const CreateCalculationCaptureRequest = z.object({}).strict();
 
+// Решение руководителя о закрытом расчёте и его отзыв (D-044, Q-01): причина обязательна.
+export const CalculationClosureRequest = z.object({ reason: z.string().trim().min(10).max(2000) }).strict();
+
 const UUID_TEXT = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 
 // Курсоры выдаёт сервер; проверка строгая, чтобы похожая, но недопустимая строка не дошла до SQL (R04-16).

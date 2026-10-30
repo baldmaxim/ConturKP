@@ -39,7 +39,8 @@
     "ops:integration-verify": "node --env-file-if-exists=.env scripts/ops/integration-verify.ts",
     "ops:service": "node scripts/ops/service.ts",
     "ops:measure": "node scripts/ops/measure.ts",
-    "ops:acceptance-matrix": "node scripts/ops/acceptance-matrix.ts"
+    "ops:acceptance-matrix": "node scripts/ops/acceptance-matrix.ts",
+    "ops:pilot": "node --env-file-if-exists=.env scripts/ops/pilot.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.3.1",

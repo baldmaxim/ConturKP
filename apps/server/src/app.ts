@@ -24,6 +24,7 @@ import { recognitionRouter } from './routes/recognition.ts';
 import { searchRouter } from './routes/search.ts';
 import { dialogsRouter } from './routes/dialogs.ts';
 import { factsRouter } from './routes/facts.ts';
+import { calculationClosureRouter } from './routes/calculationClosure.ts';
 import { calculationsRouter } from './routes/calculations.ts';
 import { economicsRouter } from './routes/economics.ts';
 import { formDraftsRouter } from './routes/formDrafts.ts';
@@ -99,6 +100,7 @@ export const createApp = (deps: IAppDeps): express.Express => {
   api.use(reviewsRouter(pool, config));
   api.use(discrepanciesRouter(pool));
   api.use(calculationsRouter(pool, config));
+  api.use(calculationClosureRouter(pool));
   api.use(economicsRouter(pool, config));
   api.use(formTemplatesRouter(pool, store, config));
   api.use(formDraftsRouter(pool));

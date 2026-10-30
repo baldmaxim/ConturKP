@@ -25,6 +25,7 @@ export type BlockerCode =
   | 'CALCULATION_PROVISIONAL'
   | 'TEMPLATE_DEMO'
   | 'KP_TOTAL_NOT_APPROVED'
+  | 'KP_TOTAL_UNRECONCILED'
   | 'REVIEW_UNCERTAIN'
   | 'CRITICAL_FINDINGS_OPEN'
   | 'QUESTIONS_UNANSWERED'
@@ -58,6 +59,8 @@ export const BLOCKERS: Readonly<Record<BlockerCode, IBlockerMeta>> = {
   CALCULATION_PROVISIONAL: { class: 'integrity', acceptable: false, productionOnly: true, subjectType: null },
   TEMPLATE_DEMO: { class: 'integrity', acceptable: false, productionOnly: true, subjectType: null },
   KP_TOTAL_NOT_APPROVED: { class: 'integrity', acceptable: false, productionOnly: true, subjectType: null },
+  // D-044, Q-05: итог источника отстаёт от строк расчёта (D-030) — боевой выпуск требует сверки экономики ревизии «сведена».
+  KP_TOTAL_UNRECONCILED: { class: 'integrity', acceptable: false, productionOnly: true, subjectType: null },
   REVIEW_UNCERTAIN: { class: 'business', acceptable: true, productionOnly: false, subjectType: 'review_check_result' },
   CRITICAL_FINDINGS_OPEN: { class: 'business', acceptable: true, productionOnly: false, subjectType: 'finding' },
   QUESTIONS_UNANSWERED: { class: 'business', acceptable: true, productionOnly: false, subjectType: 'customer_question' },
@@ -108,9 +111,11 @@ export interface IGateFacts {
   uncoveredEvents: readonly IGateItem[];
   staleChannels: readonly IGateItem[];
   fieldsStale: readonly IGateItem[];
+  // Ревизия provisional и нет действующего решения руководителя, закреплённого во входе кандидата (isCalculationProvisional).
   calculationProvisional: boolean;
   templateDemo: boolean;
   kpTotalMissing: boolean;
+  kpTotalUnreconciled: boolean;
   reviewUncertain: readonly IGateItem[];
   criticalFindings: readonly IGateItem[];
   questions: readonly IGateItem[];
@@ -169,6 +174,7 @@ export const evaluateGate = (f: IGateFacts, action: GateAction): IGateResult => 
     ['CALCULATION_PROVISIONAL', flag(f.calculationProvisional, 'ревизия расчёта предварительная')],
     ['TEMPLATE_DEMO', flag(f.templateDemo, 'в комплекте демонстрационные формы')],
     ['KP_TOTAL_NOT_APPROVED', flag(f.kpTotalMissing, 'правило итога КП не утверждено')],
+    ['KP_TOTAL_UNRECONCILED', flag(f.kpTotalUnreconciled, 'сверка экономики ревизии не сведена: итог КП может отставать от строк расчёта')],
     ['REVIEW_UNCERTAIN', f.reviewUncertain],
     ['CRITICAL_FINDINGS_OPEN', f.criticalFindings],
     ['QUESTIONS_UNANSWERED', f.questions],

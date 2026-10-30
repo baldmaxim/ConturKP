@@ -125,7 +125,8 @@ describe('сборка комплекта (проверки задания)', ()
     expect(first.previews).toHaveLength(2);
     expect(first.checks.filter((c) => c.outcome === 'failed')).toEqual([]);
     expect(first.checks.find((c) => c.code === 'numbers_match_calculation')).toMatchObject({ outcome: 'passed' });
-    expect(first.notes.join('\n')).toMatch(/KP_TOTAL_NOT_APPROVED/u);
+    // Правило итога КП теперь ставит захват (D-044); сверка экономики захваченной ревизии не сведена.
+    expect(first.notes.join('\n')).toMatch(/KP_TOTAL_UNRECONCILED/u);
     expect(first.knownProductionBlockers).toEqual([]);
     const docx = await getBytes(e.s.eng1, `/candidate-files/${first.files[0]!.id}/content`);
     expect(docx.status).toBe(200);

@@ -33,6 +33,7 @@ const base = (o: Partial<IGateFacts> = {}): IGateFacts => ({
   calculationProvisional: true,
   templateDemo: true,
   kpTotalMissing: true,
+  kpTotalUnreconciled: false,
   reviewUncertain: [],
   criticalFindings: [],
   questions: [],

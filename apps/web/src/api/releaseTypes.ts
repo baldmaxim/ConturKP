@@ -147,6 +147,7 @@ export interface ICandidateView {
   restricted: boolean;
   inputs?: {
     calculationRevision: { id: string; seq: number; kind: string };
+    calculationClosure: { decisionId: string; decidedBy: string; decidedAt: string | null; revokedAt: string | null; active: boolean } | null;
     evidenceScopeId: string;
     reviewRun: { id: string; status: string } | null;
     decisions: number;

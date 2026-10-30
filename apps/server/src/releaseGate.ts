@@ -167,6 +167,7 @@ export const candidateGate = async (db: Queryable, ctx: IAccessContext, c: IRele
     calculationProvisional: facts.calculationProvisional,
     templateDemo: facts.templateDemo,
     kpTotalMissing: facts.kpTotalMissing,
+    kpTotalUnreconciled: facts.kpTotalUnreconciled,
     reviewUncertain: facts.reviewUncertain,
     criticalFindings: facts.criticalFindings,
     questions: facts.questions,

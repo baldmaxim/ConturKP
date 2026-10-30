@@ -8,7 +8,7 @@ import pg from 'pg';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { sendKitSha256 } from '../packages/core/src/index.ts';
 import { createPool, dropDatabase, MIGRATIONS_DIR, migrate, setupDatabase } from '../packages/db/src/index.ts';
-import { addQuestionOrigin } from './legacySchema.ts';
+import { addClosureTables, addQuestionOrigin } from './legacySchema.ts';
 import { acceptAll, approve, assembled, buildStage13, closeStage13, notApplicable, openHolds, release, view, type IStage13 } from './approvalFixtures.ts';
 import { ADMIN_URL, auditRows, createUser, drain, idem, type ITestDb } from './helpers.ts';
 import { setMailAccess } from './mailFixtures.ts';
@@ -261,6 +261,7 @@ describe('обновление схемы 0038 → 0039', () => {
     try {
       expect(await migrateTo(38)).toBe(38);
       await addQuestionOrigin(db.migratorUrl);
+      await addClosureTables(db.migratorUrl);
       up = await buildStage13({ db });
       const stage = up;
       // Комплект согласован на прежней схеме; новое событие после согласования — открытое удержание.

@@ -1,0 +1,38 @@
+{
+  "sourceReviewed": "2dea39c0e2879991a3973f59a85883d9869d1fe0",
+  "sourceTree": "d0724449057de0d455333d8d2a0bd264f4b8de8c",
+  "integrationCommit": "df3e94a0e8a87e3d859fe4ba895d8706c888dc03",
+  "priorRemoteMain": "47a8ad658b99d100380a0c0afd7c56dc0d244908",
+  "priorRemoteStage18": "08c91927bd4355adbdf4ad232b451010fbf2f4f2",
+  "releaseExpectedUnchanged": "cdf1272db940a24c43b4900578a25666b641ef87",
+  "checks": {
+    "nodeTests": 0,
+    "typecheck": 0,
+    "build": 0
+  },
+  "applicationTreeIdenticalToReviewed": true,
+  "stage18": "INCOMPLETE",
+  "s18_32": "OPEN",
+  "g7": "NOT_ACCEPTED",
+  "testsFullSuite": "Previously independently verified on9f69d21; not rerun",
+  "logs": {
+    "build.log": "c6f4042a448bc09485a2f9a81bcb866d9370063958cb7909ae789507869f7580",
+    "node-tests.log": "19e5cd089e51812b0480051d88950906362e8072d05d11053fc6cfbab4e223c1",
+    "typecheck.log": "4bf168ec872fe489326c6f09c38e017101722ee3af0c72459b9bd666e0f3f9be"
+  },
+  "pushedAt": "2026-10-30T11:32:26.333429+00:00",
+  "remoteRefsVerified": {
+    "refs/heads/main": "df3e94a0e8a87e3d859fe4ba895d8706c888dc03",
+    "refs/heads/release": "cdf1272db940a24c43b4900578a25666b641ef87",
+    "refs/heads/stage-18": "08c91927bd4355adbdf4ad232b451010fbf2f4f2"
+  },
+  "push": "PASS",
+  "forcePush": false,
+  "rootLocalMain": {
+    "before": "47a8ad658b99d100380a0c0afd7c56dc0d244908",
+    "after": "df3e94a0e8a87e3d859fe4ba895d8706c888dc03",
+    "workingTreeStatusSha256": "490a8eabc35ed3eb34c0d6650a5a9a4a31bc97366b16ab400c2e3543cd4aeb46",
+    "workingTreeStatusUnchanged": true,
+    "checkoutChanged": false
+  }
+}

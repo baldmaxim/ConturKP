@@ -36,7 +36,7 @@ function inventory(input, system) {
   return { snapshotId: id(input.snapshotId), capturedAt: input.capturedAt, complete: input.complete, errorCount: input.errors.length, documents };
 }
 function mapping(input) {
-  if (!record(input) || input.schemaVersion !== 1 || !Array.isArray(input.scopes) || !Array.isArray(input.documents)) fail('INVALID_CROSSWALK');
+  if (!record(input) || ![1, 2].includes(input.schemaVersion) || !Array.isArray(input.scopes) || !Array.isArray(input.documents)) fail('INVALID_CROSSWALK');
   const scopes = new Map(), documents = new Map();
   for (const raw of input.scopes) {
     if (!record(raw)) fail('INVALID_SCOPE_MAPPING');
@@ -46,12 +46,13 @@ function mapping(input) {
   }
   for (const raw of input.documents) {
     if (!record(raw)) fail('INVALID_DOCUMENT_MAPPING');
-    const value = { sourceId: id(raw.sourceId), entryId: id(raw.entryId), documentId: id(raw.documentId), revisionId: id(raw.revisionId) };
+    if (input.schemaVersion === 2 && raw.scopeId === undefined) fail('INVALID_DOCUMENT_SCOPE_MAPPING');
+    const value = { sourceId: id(raw.sourceId), entryId: id(raw.entryId), documentId: id(raw.documentId), revisionId: id(raw.revisionId), ...(input.schemaVersion === 2 ? { scopeId: id(raw.scopeId) } : {}) };
     const key = tuple(value.sourceId, value.entryId);
     if (documents.has(key)) fail('DUPLICATE_MAPPING');
     documents.set(key, value);
   }
-  return { locusSnapshotId: id(input.locusSnapshotId), portalSnapshotId: id(input.portalSnapshotId), scopes, documents };
+  return { version: input.schemaVersion, locusSnapshotId: id(input.locusSnapshotId), portalSnapshotId: id(input.portalSnapshotId), scopes, documents };
 }
 
 export function auditLocusCorpus(input) {
@@ -95,7 +96,7 @@ export function auditLocusCorpus(input) {
     const identity = { sourceId: source.sourceId, entryId: source.entryId };
     const link = crosswalk.documents.get(key);
     if (!link) { issue('SOURCE_UNMAPPED', { source: identity }); continue; }
-    const scope = crosswalk.scopes.get(source.sourceId);
+    const scope = crosswalk.version === 2 ? link.scopeId : crosswalk.scopes.get(source.sourceId);
     if (!scope) { issue('SOURCE_SCOPE_UNMAPPED', { source: identity }); continue; }
     const targetKey = tuple(link.documentId, link.revisionId), target = targets.get(targetKey);
     if (!target) { issue('TARGET_REVISION_NOT_FOUND', { source: identity }); continue; }

@@ -1,0 +1,197 @@
+{
+  "schemaVersion": 1,
+  "purpose": "STAGE19_ISOLATED_CORPUS_PREPARATION_AND_REVIEW",
+  "publishedMain": "df3e94a0e8a87e3d859fe4ba895d8706c888dc03",
+  "branch": "codex/stage19-corpus-20261030",
+  "previousPreparation": "3270cdb231b93492302f6888c4e342944eb1a1d4",
+  "ownerDecision": "D-046",
+  "intakeCutover": "2026-10-30T14:44:35+03:00",
+  "stage18": "INCOMPLETE",
+  "s18_32": "OPEN_WORK_POSTPONED_BY_OWNER",
+  "g7": "NOT_ACCEPTED",
+  "stage19": "IN_PROGRESS",
+  "comparison": {
+    "locus": {
+      "entries": 1887,
+      "hashed": 1662,
+      "hashedBytes": 23913873379,
+      "statuses": {
+        "HASHED": 1662,
+        "ORIGINAL_UNAVAILABLE": 145,
+        "SOURCE_NOT_CONFIGURED": 80
+      },
+      "elapsedMs": 436451
+    },
+    "portal": {
+      "entries": 1038,
+      "hashed": 1038,
+      "hashedBytes": 13415367628,
+      "statuses": {
+        "HASHED": 1038
+      },
+      "elapsedMs": 320555
+    },
+    "portalBlobExpectedHashMismatches": 0,
+    "backupCreatedAt": "2026-10-29T23:00:05.969Z",
+    "backupFinishedAt": "2026-10-29T23:32:05.811Z",
+    "backupDumpSha256": "fcd242db727c2d54d13e34abc8eeca8ed5645246f253eac48dd266813c48f55a",
+    "historyBindings": 60,
+    "classification": {
+      "SCOPED_HASH_CANDIDATE": 1158,
+      "NO_EQUAL_BLOB_IN_BACKUP_CONTRACTS": 500,
+      "SOURCE_NOT_HASHED": 225,
+      "BLOB_ONLY_IN_OTHER_SCOPE": 4
+    },
+    "sourcesByMappedContractCount": {
+      "1": 14,
+      "2": 1
+    },
+    "crosswalkCandidateCount": 1158,
+    "comparison": "INCOMPLETE",
+    "comparisonSummary": {
+      "locusEntries": 1887,
+      "portalEntries": 1038,
+      "sourceHashesUnverified": 225,
+      "matched": 899,
+      "notMatched": 988,
+      "issueCount": 845
+    },
+    "comparisonIssueCodes": {
+      "SOURCE_INCOMPLETE": 1,
+      "TARGET_INCOMPLETE": 1,
+      "TARGET_REUSED": 114,
+      "SOURCE_UNMAPPED": 729
+    },
+    "crosswalkHumanReviewed": false,
+    "realAnswerParity": "NOT_RUN",
+    "retirementAllowed": false,
+    "intakeCutover": "2026-10-30T14:44:35+03:00",
+    "intakeCutoverBasis": "Explicit owner reply; recorded at UTC11:44:35",
+    "unmatchedContractBlobBreakdown": {
+      "NOT_IN_BACKUP_BLOB_METADATA": 484,
+      "EQUAL_BLOB_IN_OTHER_DOCUMENT_REVISION": 13,
+      "BLOB_WITHOUT_EQUAL_DOCUMENT_REVISION": 3
+    },
+    "unmatchedContractUniqueBlobs": 459,
+    "unmatchedContractUniqueBytes": 9546189056,
+    "unhashedByExtension": {
+      ".pdf": 51,
+      ".docx": 13,
+      ".xlsx": 15,
+      ".md": 146
+    },
+    "registrySizeChanges": 2,
+    "unhashedOnNetwork": 79
+  },
+  "staging": {
+    "mode": "ISOLATED_BLOB_STAGING_ONLY",
+    "startedAt": "2026-10-30T11:46:56.264Z",
+    "finishedAt": "2026-10-30T11:49:46.984Z",
+    "plannedBlobs": 459,
+    "plannedLogicalEntries": 500,
+    "copiedBlobs": 459,
+    "failedBlobs": 0,
+    "bytes": 9546189056,
+    "portalDatabaseChanged": false,
+    "workingInstallationChanged": false,
+    "documentsRegistered": false,
+    "recognitionRun": false,
+    "retirementAllowed": false
+  },
+  "independentStagingReadback": {
+    "mode": "INDEPENDENT_READBACK_OF_ISOLATED_STAGING",
+    "verified": 459,
+    "bytes": 9546189056,
+    "failures": 0,
+    "finishedAt": "2026-10-30T11:52:19.863Z",
+    "productionChanged": false
+  },
+  "verification": {
+    "nodeVersion": "v24.13.0",
+    "newComparisonTests": 33,
+    "registryExportTests": 17,
+    "allNodeTests": {
+      "exitCode": 0,
+      "passed": 89,
+      "failed": 0,
+      "skipped": 0
+    },
+    "crosswalkV2Before": {
+      "passed": 28,
+      "failed": 5
+    },
+    "outputAliasBefore": {
+      "passed": 15,
+      "failed": 1
+    },
+    "newExporterBeforeImplementation": "ERR_MODULE_NOT_FOUND; not17semanticfailures",
+    "typecheck": "PASS; application TypeScript unchanged",
+    "applicationBuild": "PASS on identical application tree in publishedmain",
+    "vitest": "NOT_RERUN; prior independent2073/2073 belongs9f69d21",
+    "newModelDialogs": "NOT_RUN"
+  },
+  "verifiedSourceSha256": {
+    "scripts/lib/locus-corpus-audit.mjs": "f4638d6494d20f799c2fd0e6beb5b7439c733032d89b995cc8ce2a609a8b3c96",
+    "scripts/ops/locus-preflight.mjs": "4d098aa29d42aceaf4aa62d7d1788ec50a6cde66ae505a21edb0dae8031781b4",
+    "scripts/lib/locus-registry-export.mjs": "0ccb6cfa78d163ac0c6657dd403614b2791f95251f3ddf9e52cab33690da4dd6",
+    "scripts/ops/locus-export-registry.mjs": "a37e8e0f389855a83de49a43994b9fa50dbac97290466f2960338b68de5d0d40",
+    "tests/locusPreflight.node-test.mjs": "53ffaef9afcb217d8906ed124fce47c6ac249f0431b7441f1c019449c85b5391",
+    "tests/locusRegistryExport.node-test.mjs": "cc1a9c2590283adbf624f44645a43b45aa2fef9dc0aafd67dae7adf9e194a9e2"
+  },
+  "originalExportExecutionCodeSha256": {
+    "scripts/lib/locus-registry-export.mjs": "0ccb6cfa78d163ac0c6657dd403614b2791f95251f3ddf9e52cab33690da4dd6",
+    "scripts/ops/locus-export-registry.mjs": "dfeabdc4f2f1d55559af54c8b740c9c3f7d1a4be76132f8fde26b8f34b05523c"
+  },
+  "originalExportExecutionNote": "Final CLI adds physical output-alias rejection; original-reading module is unchanged. Actual export outputs were under the verified isolated runtime root.",
+  "logSha256": {
+    "export-test-before.log": "8634f9b8869ef9250c2b5a5d96c78bc5bef4cd42a04bb5cc008bd9fcbcfb4032",
+    "export-test-after-15.log": "f799d7964daf002e59abc5b1e91d9d994aa35687bae13894fa0d09cd99e9b3f4",
+    "crosswalk-v2-before.log": "18a6c782d8a81d28bbfe5e8cda351fa9f27d152774f8238a6864771c8f47f28e",
+    "output-alias-before.log": "e81bb35e659437bf722077bbc347b4ca82eead332e1a95ce23032f4a2f3759fc",
+    "targeted-final.log": "cb03fafa756ab8585ffe0b7cead8ed1fa9e434c6e47771da7c12f8380bf48d06",
+    "node-tests-final-89.log": "555984aaffdaf7a34477b210c5f1f214c74bd66064ba6a6d8b9f00aafc90871e",
+    "typecheck.log": "4bf168ec872fe489326c6f09c38e017101722ee3af0c72459b9bd666e0f3f9be",
+    "original-export.log": "e6d227fac581078fb67fca3471b3ecee2d9a70c26e73c876bdda885c40a5970c",
+    "portal-original-export.log": "62e7d12bcf8057dc93cf3ff3d281de9f0ff52b9f5ffca0c644cad4c955f20ade",
+    "corpus-comparison.log": "97d4ecd6a5f5a9441db3360c2482a0a71300e6730f7008f7381a24bdd71e63c6",
+    "staging.log": "e4fd05035550b9742f45efeba6c1733a541f5f2b57e7c89625def370b12ae775",
+    "staging-readback.log": "004bf8ad1420bb348b9d5f8c01994bdaa97dbb5d01e67fb6421a25566fac782d"
+  },
+  "privateArtifactSha256": {
+    "registry-originals.private.json": "84b266b4a4a963271714f95359ccb4665fdab8cd2bc407a70baf0ed23d861b3b",
+    "portal-originals-read.private.json": "39844db705453b4175ee0372401345c1c847187515580e8756c33b05db2d7612",
+    "portal-inventory.private.json": "c1dca571eee63c192795e471523cb6eabdb03c807ae50b1837eaba11f763a11a",
+    "candidate-crosswalk.private.json": "3647fab32c2eabf006f289c8396109e2444272c5a4c39b645a2e3f5130435da6",
+    "corpus-comparison.private.json": "415b02eeec9ea767479cce48347ef644a9feaef9b9a46cc14c5065500e94adf0",
+    "staging-plan.private.json": "bc24cd10951223d60216185290012561e88cfb129c6cf09b8ef6e2c35f8f1965",
+    "staging-receipt.private.json": "0e5abc938648e3832a612351625c64c4a0889be4512c14997235cbf58d18a7b8"
+  },
+  "constraints": {
+    "locusModified": false,
+    "productionDatabaseOpened": false,
+    "productionDatabaseChanged": false,
+    "workingInstallationChanged": false,
+    "protectedStage18WorktreeChanged": false,
+    "releaseChanged": false,
+    "previousResultsChanged": false,
+    "retirementAllowed": false,
+    "blobStagingIsPortalRegistration": false,
+    "cutoverAutoEnforcementVerified": false,
+    "privateCorpusIncludedInReviewPackage": false
+  },
+  "preservationChecks": {
+    "oldArtifactsSha256Verified": 3,
+    "locusStaticFilesSha256Verified": 8,
+    "locusRegistryFilesSha256Verified": 2,
+    "locusTrackedClean": true,
+    "applicationDiffFromPublishedMain": 0,
+    "defectRowsIntact": 34,
+    "lineEndingIncident": {
+      "gitCheckoutConvertedLineEndingsOnly": [
+        "docs/ops/18-s18-32-source-grounding-20261029.json"
+      ],
+      "originalProtectedBytesRestored": true,
+      "protectedSha256ChecksPass": 3
+    }
+  }
+}

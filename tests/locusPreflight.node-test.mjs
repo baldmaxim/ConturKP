@@ -90,3 +90,35 @@ test('CLI compares files without modifying inputs and never authorizes retiremen
 test('CLI source-only inspection returns2 with a NOT_RUN report', t => { const { dir, paths } = files(t), output = join(dir, 'report.json'); const r = spawnSync(process.execPath, [cli, '--locus', paths.locus, '--out', output], { encoding: 'utf8' }); assert.equal(r.status, 2, r.stderr); assert.equal(JSON.parse(readFileSync(output, 'utf8')).comparison, 'NOT_RUN'); });
 test('CLI refuses to overwrite an existing output or an input file', t => { const { paths } = files(t), before = readFileSync(paths.locus, 'utf8'); const r = spawnSync(process.execPath, [cli, '--locus', paths.locus, '--out', paths.locus], { encoding: 'utf8' }); assert.equal(r.status, 1); assert.equal(readFileSync(paths.locus, 'utf8'), before); });
 test('CLI validation errors disclose no supplied values and do not produce a success report', t => { const { dir, paths, f } = files(t); f.locus.documents[0].sha256 = 'private-token-value'; writeFileSync(paths.locus, JSON.stringify(f.locus)); const output = join(dir, 'report.json'); const r = spawnSync(process.execPath, [cli, '--locus', paths.locus, '--out', output], { encoding: 'utf8' }); assert.equal(r.status, 1); assert(!r.stderr.includes('private-token-value')); assert(!existsSync(output)); });
+
+
+test('v2 maps two originals of one Locus source into different contract scopes', () => {
+  const f = sample(); f.locus.documents.push({ ...f.locus.documents[0], entryId: 'file-2' });
+  f.portal.documents.push({ ...f.portal.documents[0], scopeId: 'contract-Q', documentId: 'doc-2', revisionId: 'rev-2' });
+  f.crosswalk.schemaVersion = 2; f.crosswalk.scopes = [];
+  f.crosswalk.documents[0].scopeId = 'contract-P';
+  f.crosswalk.documents.push({ sourceId: 'contract-A', entryId: 'file-2', scopeId: 'contract-Q', documentId: 'doc-2', revisionId: 'rev-2' });
+  const r = run(f); assert.equal(r.comparison, 'MATCH'); assert.equal(r.summary.matched, 2);
+});
+
+test('v2 requires each original scope even if a source-wide mapping exists', () => {
+  const f = sample(); f.crosswalk.schemaVersion = 2;
+  assert.throws(() => run(f), /INVALID_DOCUMENT_SCOPE_MAPPING/);
+});
+
+test('v2 rejects bytes that match only inside another contract', () => {
+  const f = sample(); f.crosswalk.schemaVersion = 2; f.crosswalk.documents[0].scopeId = 'other-contract';
+  const r = run(f); assert.equal(r.summary.matched, 0); assert(has(r, 'TARGET_SCOPE_MISMATCH'));
+});
+
+test('v2 still rejects one target revision reused for multiple source identities', () => {
+  const f = sample(); f.crosswalk.schemaVersion = 2; f.crosswalk.documents[0].scopeId = 'contract-P';
+  f.locus.documents.push({ ...f.locus.documents[0], entryId: 'file-2' });
+  f.crosswalk.documents.push({ ...f.crosswalk.documents[0], entryId: 'file-2' });
+  const r = run(f); assert.equal(r.summary.matched, 0); assert(has(r, 'TARGET_REUSED'));
+});
+
+test('v2 rejects invalid scope identifiers', () => {
+  const f = sample(); f.crosswalk.schemaVersion = 2; f.crosswalk.documents[0].scopeId = 'bad\nscope';
+  assert.throws(() => run(f), /INVALID_ID/);
+});

@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "purpose": "STAGE19_PREPARATION_ONLY",
+  "baseCommit": "2dea39c0e2879991a3973f59a85883d9869d1fe0",
+  "ownerDecision": "D-045",
+  "stage18": "INCOMPLETE",
+  "s18_32": "OPEN_WORK_POSTPONED_BY_OWNER",
+  "g7": "NOT_ACCEPTED",
+  "stage19": "IN_PROGRESS",
+  "inventory": {
+    "capturedAt": "2026-10-30T11:20:10+00:00",
+    "sourceHead": "33c6bcf4becafae968b1c388ffda1ba307282dfd",
+    "configuredSources": 16,
+    "configuredRoots": 16,
+    "sourceTypes": {
+      "unspecified": 15,
+      "tender": 1
+    },
+    "registries": [
+      {
+        "candidate": 0,
+        "manifestSha256": "8b4d6393ef4197c5cc584dbb9be5ad56a12d10e5231b4f9eed0a48c034967b4c",
+        "entries": 338,
+        "sourceCount": 3,
+        "verifiedContentHashes": 0,
+        "comparison": "NOT_RUN",
+        "matched": null,
+        "exitCode": 2,
+        "configuredSourceOverlap": 3,
+        "registrySourcesAbsentFromConfig": 0,
+        "normalizedRegistrySnapshotId": "registry-8b4d6393ef4197c5cc584dbb9be5ad56a12d10e5231b4f9eed0a48c034967b4c",
+        "normalizationInputSha256": "8b4d6393ef4197c5cc584dbb9be5ad56a12d10e5231b4f9eed0a48c034967b4c"
+      },
+      {
+        "candidate": 1,
+        "manifestSha256": "e3871062ce16c60dbfb2e32a90db5189af50610263fbd7f77e28ce92c7259ab4",
+        "entries": 1887,
+        "sourceCount": 32,
+        "verifiedContentHashes": 0,
+        "comparison": "NOT_RUN",
+        "matched": null,
+        "exitCode": 2,
+        "configuredSourceOverlap": 16,
+        "registrySourcesAbsentFromConfig": 16,
+        "normalizedRegistrySnapshotId": "registry-e3871062ce16c60dbfb2e32a90db5189af50610263fbd7f77e28ce92c7259ab4",
+        "normalizationInputSha256": "e3871062ce16c60dbfb2e32a90db5189af50610263fbd7f77e28ce92c7259ab4"
+      }
+    ],
+    "activeDataRootVerified": false,
+    "liveDatabaseOpened": false,
+    "originalFilesHashed": 0,
+    "environmentRead": false,
+    "migrationRun": false,
+    "retirementAllowed": false
+  },
+  "verification": {
+    "nodeVersion": "v24.13.0",
+    "newTestsBeforeImplementation": {
+      "exitCode": 1,
+      "reason": "ERR_MODULE_NOT_FOUND",
+      "semanticFailureCount": null
+    },
+    "newTestsAfterImplementation": {
+      "exitCode": 0,
+      "passed": 28
+    },
+    "allNodeTests": {
+      "exitCode": 0,
+      "passed": 67,
+      "skipped": 0
+    },
+    "typecheck": {
+      "exitCode": 0
+    },
+    "vitest": "NOT_RERUN",
+    "webBuild": "NOT_RERUN",
+    "newModelDialogs": "NOT_RUN"
+  },
+  "verifiedSourceSha256": {
+    "scripts/lib/locus-corpus-audit.mjs": "4e1d5485f6a6cfb0511957862d21833ace4dee8dc4ac2f7745771deab0458cf4",
+    "scripts/ops/locus-preflight.mjs": "c3213f497bdfe6ec015a5ee05ab68aee03a2f755d3a4771beef9cc187c65e3bd",
+    "tests/locusPreflight.node-test.mjs": "74c3f8c0a589681b52d87a18bfccee427e1d84c53c1263a08a13863435d3a79c"
+  },
+  "logSha256": {
+    "test-before.log": "caa0f37be4d5187522d6425c2533941198fbd4b7dcda3cc152de94aa2bb3807f",
+    "test-after.log": "167dcb3c540ccdf1da7686fa9864edabef50e8333173448327b284ea907f49e9",
+    "node-tests.log": "b7d35bd2bc2d5329c30bd3333a96c8402764442dba708540c63f9871963ad8d5",
+    "typecheck.log": "4bf168ec872fe489326c6f09c38e017101722ee3af0c72459b9bd666e0f3f9be",
+    "audit-registry-0.log": "c9d8f3bff44c7034c6bade81e9eb271d04e25275a8a8b0e8a185597e92d330d2",
+    "audit-registry-1.log": "38bf6baa4efa797e76e473fbf0dfff69e14344807f220d91e70793b5da712a41"
+  },
+  "constraints": {
+    "locusModified": false,
+    "sourceDatabaseOpened": false,
+    "productionDatabaseOpened": false,
+    "installationChanged": false,
+    "protectedBranchesUpdated": false,
+    "retirementAllowed": false,
+    "intakeCutoverDate": null,
+    "realCorpusComparison": "NOT_RUN",
+    "liveAnswerParity": "NOT_RUN"
+  },
+  "preservationChecks": {
+    "locusTrackedStatus": "CLEAN",
+    "locusStaticFilesSha256Verified": 8,
+    "locusRegistryFilesSha256Verified": 2,
+    "previousArtifactsSha256Verified": 3,
+    "sourceHeadUnchanged": true
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "schema": "kontur.release-v1-preparation.v1",
+  "date": "2026-11-02",
+  "timezone": "Europe/Moscow",
+  "decision": "D-050",
+  "branch": "codex/release-v1-20261102",
+  "baseCommit": "df3e94a0e8a87e3d859fe4ba895d8706c888dc03",
+  "baseTree": "d0724449057de0d455333d8d2a0bd264f4b8de8c",
+  "status": "PREPARING",
+  "accepted": false,
+  "installed": false,
+  "checks": {
+    "V1-01": "PREPARING",
+    "V1-02": "TARGET_NOT_RUN",
+    "V1-03": "TARGET_NOT_RUN",
+    "V1-04": "TARGET_NOT_RUN",
+    "V1-05": "TARGET_NOT_RUN",
+    "V1-06": "PENDING"
+  },
+  "priorEvidence": {
+    "reviewedCode": "9f69d21be151de4f6ef3be22a863dbfe3b2301d9",
+    "vitestPassed": 2073,
+    "nodePassed": 39,
+    "newFullSuiteRun": false
+  },
+  "dependencies": {
+    "cleanOfflineInstall": "NOT_COMPLETED_CACHE_MISS",
+    "missingCachedPackage": "zod@4.6.5",
+    "preparationMethod": "reuse_installed_dependencies_after_equal_lock_and_local_workspace_verification"
+  },
+  "historicalAcceptance": {
+    "stage18": "INCOMPLETE",
+    "S18-32": "OPEN",
+    "stage19": "IN_PROGRESS",
+    "locusRetirementAllowed": false
+  }
+}

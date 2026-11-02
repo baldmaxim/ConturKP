@@ -9,6 +9,7 @@ import { useToast } from '../../hooks/useToast';
 import { formatDateTime } from '../../utils/datetime';
 import { EVENT_LABELS, HOLD_STATUS } from '../../utils/releaseLabels';
 import { ReasonDialog } from './ReasonDialog';
+import { MAX_HOLDS_PER_RESOLUTION, selectedHolds, toggleHold, toggleHoldBatch } from './holdSelection';
 import styles from './Approval.module.css';
 
 interface IHoldsPanelProps {
@@ -37,7 +38,9 @@ export const HoldsPanel: FC<IHoldsPanelProps> = ({ stageId, candidateId, version
   const open = items.filter((h) => h.status === 'open' && !h.covered);
   const decidable = open.filter((h) => !h.restricted);
   const canResolve = res.data?.canResolve ?? false;
-  const selected = chosen.filter((id) => decidable.some((h) => h.id === id));
+  const decidableIds = decidable.map((h) => h.id);
+  const selected = selectedHolds(chosen, decidableIds);
+  const nextBatch = toggleHoldBatch(selected, decidableIds);
   const submit = (reason: string): void => {
     if (!dialog) return;
     const body = { holdIds: selected, resolution: dialog, reason };
@@ -72,8 +75,9 @@ export const HoldsPanel: FC<IHoldsPanelProps> = ({ stageId, candidateId, version
                   type="checkbox"
                   className={styles.check}
                   aria-label={`Выбрать событие № ${h.event.seq}`}
-                  checked={chosen.includes(h.id)}
-                  onChange={() => setChosen((x) => (x.includes(h.id) ? x.filter((y) => y !== h.id) : [...x, h.id]))}
+                  checked={selected.includes(h.id)}
+                  disabled={!selected.includes(h.id) && selected.length >= MAX_HOLDS_PER_RESOLUTION}
+                  onChange={() => setChosen((x) => toggleHold(selectedHolds(x, decidableIds), h.id))}
                 />
               ) : null}
               <div className={styles.holdText}>
@@ -94,17 +98,22 @@ export const HoldsPanel: FC<IHoldsPanelProps> = ({ stageId, candidateId, version
         })}
       </ul>
       {canResolve && decidable.length > 0 ? (
-        <div className={styles.holdActions}>
-          <Button variant="secondary" onClick={() => setChosen(selected.length === decidable.length ? [] : decidable.map((h) => h.id))}>
-            {selected.length === decidable.length ? 'Снять выбор' : 'Выбрать все'}
-          </Button>
-          <Button variant="secondary" icon="check" disabled={selected.length === 0} onClick={() => setDialog('not_applicable')}>
-            Не влияет…
-          </Button>
-          <Button variant="secondary" icon="undo-2" disabled={selected.length === 0} onClick={() => setDialog('requires_new_candidate')}>
-            Влияет…
-          </Button>
-        </div>
+        <>
+          {decidable.length > MAX_HOLDS_PER_RESOLUTION ? (
+            <p className={styles.muted}>{`За одно решение можно записать до ${MAX_HOLDS_PER_RESOLUTION} событий. Выбрано: ${selected.length} из ${decidable.length}. После сохранения выберите следующую порцию.`}</p>
+          ) : null}
+          <div className={styles.holdActions}>
+            <Button variant="secondary" onClick={() => setChosen(nextBatch)}>
+              {nextBatch.length === 0 ? 'Снять выбор' : decidable.length > MAX_HOLDS_PER_RESOLUTION ? `Выбрать первые ${MAX_HOLDS_PER_RESOLUTION}` : 'Выбрать все'}
+            </Button>
+            <Button variant="secondary" icon="check" disabled={selected.length === 0} onClick={() => setDialog('not_applicable')}>
+              Не влияет…
+            </Button>
+            <Button variant="secondary" icon="undo-2" disabled={selected.length === 0} onClick={() => setDialog('requires_new_candidate')}>
+              Влияет…
+            </Button>
+          </div>
+        </>
       ) : open.length > 0 && !canResolve ? (
         <p className={styles.muted}>Решение о применимости принимает руководитель тендера.</p>
       ) : null}

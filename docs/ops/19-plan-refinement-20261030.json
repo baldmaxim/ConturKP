@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "purpose": "DOCS_ONLY_PLAN_REFINEMENT",
+  "baseCommit": "bceb2f9d4136ba6b58cc9ce5f32b1671d99fdb54",
+  "codeRemains": "ab545e3456e0b49c27635d42d8da3f716d08b91a",
+  "branch": "codex/stage19-plan-refinement-20261030",
+  "changes": {
+    "importSet": "OWNER_DECISIONS_PLUS_ALL_NO_ACCEPTED_OWN_SCOPE_MATCHES_NOT_FIXED500",
+    "networkFreeze": "BASELINE_SHA_AND_TWO_CONSECUTIVE_STABLE_FULL_CHECKS_AROUND_BACKUP",
+    "d046Gap": "BLOCKS_GATE_A; no_owner_waiver",
+    "generation": "COMMON_FROZEN_PROFILE_TEMPERATURE0_ONE_PRIMARY_PAIR",
+    "disputes": "SECOND_BLIND_GRADER_SAME_PRIMARY; AT_MOST_ONE_PAIRED_REPEAT; WORST_VALID_GRADE",
+    "expectedAuthorDifferentFromBlindGrader": true,
+    "requiredContext19A": [
+      "docs/decisions.md:D-047",
+      "docs/ops/19-open-checks-20261030.md:O19-08,O19-09,O19-10"
+    ],
+    "maxRepeatedPairsPerQuestionTotal": 1
+  },
+  "newTestRuns": false,
+  "newModelRuns": false,
+  "newCorpusRuns": false,
+  "stage19": "IN_PROGRESS",
+  "stage18": "INCOMPLETE",
+  "s18_32": "OPEN",
+  "g7": "NOT_ACCEPTED",
+  "stage18Independent": true,
+  "retirementAllowed": false,
+  "protectedArtifactSha256": {
+    "docs/ops/19-review2-closure-20261030.json": "b9b3dae15598d19347e891c0dd462ce4cdd365d670c09e6800861f94d2d7e97d",
+    "docs/ops/19-review1-reproducibility-20261030.json": "e021b9799fde7fc6dddeab171794985090d738efbdac8f093a55d9842fd812cc",
+    "D:/Projects/009 ContrurKP/handoffs/ConturKP-Stage19-review2-closure-bceb2f9-20261030-v2.zip": "5cd257228817d3d6155d2249ae38347458bc8f184e57592ab96dbcc0384b5535"
+  }
+}

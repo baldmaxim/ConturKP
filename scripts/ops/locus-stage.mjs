@@ -7,7 +7,8 @@ import { withinRoot } from '../lib/locus-registry-export.mjs';
 import { validateStagingPlan, stageCorpusBlobs, verifyCorpusStaging } from '../lib/locus-staging.mjs';
 
 try {
-  const { values } = parseArgs({ options: { plan: { type: 'string' }, sources: { type: 'string' }, store: { type: 'string' }, out: { type: 'string' }, concurrency: { type: 'string' }, 'verify-only': { type: 'boolean' } }, strict: true });
+  const { values } = parseArgs({ options: { plan: { type: 'string' }, sources: { type: 'string' }, store: { type: 'string' }, out: { type: 'string' }, concurrency: { type: 'string' }, 'verify-only': { type: 'boolean' }, 'portal-root': { type: 'string', multiple: true } }, strict: true });
+  if (!values['verify-only'] && !values['portal-root']?.length) throw new Error('PORTAL_ROOTS_REQUIRED');
   if (!values.plan || !values.store || !values.out || (!values['verify-only'] && !values.sources)) throw new Error('STAGING_USAGE');
   const raw = await readFile(values.plan), plan = JSON.parse(raw.toString('utf8').replace(/^\uFEFF/u, '')); validateStagingPlan(plan);
   const sourceRaw = values.sources ? await readFile(values.sources) : null;
@@ -18,7 +19,7 @@ try {
   try { await lstat(output); throw new Error('OUTPUT_EXISTS'); } catch (e) { if (e?.code !== 'ENOENT') throw e; }
   const implementationBytes = await readFile(new URL('../lib/locus-staging.mjs', import.meta.url));
   const implementationSha256 = createHash('sha256').update(implementationBytes).digest('hex');
-  const options = { plan, sourceCatalog, storeRoot, concurrency: values.concurrency === undefined ? 3 : Number(values.concurrency) };
+  const options = { plan, sourceCatalog, storeRoot, portalRoots: values['portal-root'], concurrency: values.concurrency === undefined ? 3 : Number(values.concurrency) };
   const report = values['verify-only'] ? await verifyCorpusStaging(options) : await stageCorpusBlobs(options);
   const digest = value => createHash('sha256').update(value).digest('hex');
   report.inputSha256 = { plan: digest(raw), ...(sourceRaw ? { sources: digest(sourceRaw) } : {}) };

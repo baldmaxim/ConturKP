@@ -13,7 +13,7 @@ function sample(t) {
   const sourceRoot = join(dir, 'source'); mkdirSync(sourceRoot); const sourcePath = join(sourceRoot, 'source.pdf');
   const content = Buffer.from('real fixture original'); writeFileSync(sourcePath, content);
   const sha256 = createHash('sha256').update(content).digest('hex'), storeRoot = join(dir, 'staging');
-  return { dir, sourcePath, content, storeRoot, spacePolicy: { warnFreeBytes: 0, stopFreeBytes: 0 }, sourceCatalog: { sources: [{ sourceId: 's', roots: [sourceRoot] }] },
+  return { dir, sourcePath, content, storeRoot, portalRoots: [join(dir, 'portal-data')], spacePolicy: { warnFreeBytes: 0, stopFreeBytes: 0 }, sourceCatalog: { sources: [{ sourceId: 's', roots: [sourceRoot] }] },
     plan: { schemaVersion: 1, target: 'ISOLATED_BLOB_STAGING_ONLY', files: [{ sha256, bytes: content.length, sourceId: 's', sourcePath, logicalEntries: [{ sourceId: 's', entryId: 'f', candidateScopeId: 'A' }] }] } };
 }
 
@@ -61,4 +61,17 @@ test('committed staging CLI independently verifies files, refuses to overwrite a
   const report = JSON.parse(readFileSync(output, 'utf8')); assert.equal(report.verified, 1); assert.equal(report.failures, 0);
   const before = readFileSync(output); assert.equal(spawnSync(process.execPath, args, { encoding: 'utf8' }).status, 1);
   assert.deepEqual(readFileSync(output), before); assert.equal((await verifyCorpusStaging(f)).verified, 1);
+});
+
+test('copy requires explicit portal roots before creating any destination', async t => {
+  const f = sample(t); delete f.portalRoots;
+  await assert.rejects(stageCorpusBlobs(f), /PORTAL_ROOTS_REQUIRED/); assert.equal(existsSync(f.storeRoot), false);
+});
+test('new staging under portal data or a junction to it is refused before writes', async t => {
+  const f = sample(t); const portal = join(f.dir, 'portal'); mkdirSync(portal);
+  f.portalRoots = [portal]; f.storeRoot = join(portal, 'new-stage');
+  await assert.rejects(stageCorpusBlobs(f), /STAGING_INSIDE_PORTAL/); assert.equal(existsSync(f.storeRoot), false);
+  const alias = join(f.dir, 'portal-alias'); symlinkSync(portal, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  f.storeRoot = join(alias, 'another-stage');
+  await assert.rejects(stageCorpusBlobs(f), /STAGING_INSIDE_PORTAL/); assert.equal(existsSync(f.storeRoot), false);
 });

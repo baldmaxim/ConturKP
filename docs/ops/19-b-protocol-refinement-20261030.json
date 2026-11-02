@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "purpose": "DOCS_ONLY_19B_PROTOCOL_RULES_NOT_EXECUTED_PROTOCOL",
+  "baseCommit": "b4160107c141223d9579aa27565a2b482b7beb35",
+  "codeRemains": "ab545e3456e0b49c27635d42d8da3f716d08b91a",
+  "branch": "codex/stage19-b-protocol-20261030",
+  "section19A": {
+    "unchangedFrom": "b4160107c141223d9579aa27565a2b482b7beb35",
+    "sha256": "bce9b1ab36c964a2556995cd9a50fcdc2576eaa3edbf9885a73339e51e396795"
+  },
+  "rules": {
+    "allValidFullRunsSameConfiguration": "COUNT_ALL_WORST_PER_QUESTION_INCLUDING_UNCHANGED_FULL_RERUNS",
+    "configurationIdentity": "EXECUTED_CODE_CORPUS_ALLOWED_DOCS_QUESTIONS_EXPECTATIONS_ROLES_MODEL_BACKEND_PARAMETERS_LIMITS_PROMPTS_RETRIEVAL",
+    "runIdTimestampLabelsDocsOnlyChangesResetConfiguration": false,
+    "gradingDisputes": "WORST_OF_ALL_PREASSIGNED_GRADERS_NO_THIRD_ARBITER",
+    "maxTargetedRepeatedPairsPerQuestionPerConfiguration": 1,
+    "locusWithoutRbac": "SEPARATE_ISOLATED_AUTHORIZED_SUBCORPUS_PER_CONTRACT_ROLE",
+    "portalCorpus": "FULL_FROZEN_CORPUS_WITH_REAL_ACCOUNTS_ACL",
+    "zeroLeakGate": "PORTAL_ONLY",
+    "locusLeaks": "RECORD_ONLY_NO_STANDALONE_GATE_NO_ADVANTAGE_OVER_VALID_PORTAL_DENIAL",
+    "seal": "EXACT_PROTOCOL_FILE_SHA256_DELIVERED_TO_REVIEWER_BEFORE_FIRST_REQUEST_WITH_DELIVERY_EVIDENCE"
+  },
+  "newTestRuns": false,
+  "newModelRuns": false,
+  "newCorpusRuns": false,
+  "protocolSealed": false,
+  "protocolDelivered": false,
+  "gateA": "NOT_PASSED",
+  "gateB": "NOT_PASSED",
+  "stage19": "IN_PROGRESS",
+  "stage18": "INCOMPLETE",
+  "s18_32": "OPEN",
+  "g7": "NOT_ACCEPTED",
+  "stage18Independent": true,
+  "retirementAllowed": false,
+  "protectedArtifactSha256": {
+    "D:\\Projects\\009 ContrurKP\\work\\s18-32-grounding-20261029\\docs\\ops\\19-plan-refinement-20261030.json": "eae3a300f01b8ba80be5a2a41626645eb5bd8af9baaee29b4dabd0ea184484f4",
+    "D:\\Projects\\009 ContrurKP\\work\\s18-32-grounding-20261029\\docs\\ops\\19-review2-closure-20261030.json": "b9b3dae15598d19347e891c0dd462ce4cdd365d670c09e6800861f94d2d7e97d",
+    "D:\\Projects\\009 ContrurKP\\work\\s18-32-grounding-20261029\\docs\\ops\\18-s18-32-source-grounding-20261029.json": "6b2aa44fbdbb306090b9c5fc56552aba7fe895850dfab83a70e5f1f36e24e3f7",
+    "D:\\Projects\\009 ContrurKP\\handoffs\\ConturKP-Stage19-plan-v2-b416010-20261030.zip": "39f0f47243115f1a85c96b175a007517f57f26dc6509147328571bef64fc4e33"
+  }
+}

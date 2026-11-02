@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "purpose": "R19A_REVIEW_FIXES_NOT_GATE_A",
+  "reviewedCommit": "5774cacd9e0073f786e694ef5b551c43c04a2ee9",
+  "reviewVerdict": "REQUEST_CHANGES",
+  "codeCommit": "0459f243646c4504e6c31ba4cdd123a90e6104b8",
+  "branch": "codex/stage19-a-review-fixes-20261102",
+  "fixes": {
+    "R19A-01": "FIXED_PENDING_REVIEW",
+    "R19A-02": "FIXED_PENDING_REVIEW",
+    "R19A-03": "FIXED_PENDING_REVIEW",
+    "R19A-04": "FIXED_PENDING_REVIEW",
+    "R19A-05": "FIXED_PENDING_REVIEW",
+    "R19A-06": "FIXED_PENDING_REVIEW"
+  },
+  "activeData": {
+    "files": 21006,
+    "categoryCounts": {
+      "DERIVED_MD_CACHE_CANDIDATE": 2058,
+      "INDEX_STATE_CANDIDATE": 327,
+      "OCR_CACHE_CANDIDATE": 18606,
+      "RUNTIME_STATE_CANDIDATE": 15
+    },
+    "unhashedPotentialOriginals": 0,
+    "exclusionsAutomaticallyApproved": false
+  },
+  "coverage": {
+    "registry": 1887,
+    "fileUnits": 41993,
+    "groups": 231,
+    "unindexedSourceFiles": 20971,
+    "walkErrors": 16,
+    "missingEmptyTemplate": 43880,
+    "humanReviewed": false,
+    "realOwnerDecisionsCollected": false,
+    "approvalReceiptCreated": false
+  },
+  "reviewPackageId": "ad86d507cd847723b8eb14b2869d1f8db21709e48154b5e5a9905cac30a0c031",
+  "snapshotPolicy": "SOURCE_CORPUS_REPLAY_20261030_ACTIVE_DATA_READ_20261102_NOT_FROZEN",
+  "registrySizeChangedRows": 2,
+  "freezeWindow": {
+    "defaultMaxMs": 7200000,
+    "absoluteMaxMs": 14400000,
+    "firstStartAfterCutoverRequired": true,
+    "chronologyRequired": true,
+    "quietWindowAgreed": false,
+    "servicesPaused": false
+  },
+  "capacity": {
+    "measuredAt": "2026-11-02T06:11:44.389Z",
+    "databaseBytes": 12239566527,
+    "backupFilesBytes": 71002107381,
+    "plannedImportBytes": 9546189056,
+    "ocrReserveBytes": 0,
+    "minimumFreeBytes": 20000000000,
+    "requiredBytes": 112787862964,
+    "freeBytes": 112507908096,
+    "capacityFits": false
+  },
+  "conditionalTargetApproved": true,
+  "storageLocationQuestionPending": false,
+  "clusterMustBeInsideTarget": true,
+  "restoreStarted": false,
+  "publication": {
+    "pushed": false,
+    "publicAddedLinesSanitized": true,
+    "reviewHistoryStillContainsPrivatePredecessors": true,
+    "sanitizedPublicationCandidateParent": "ab545e3456e0b49c27635d42d8da3f716d08b91a"
+  },
+  "tests": {
+    "nodePassed": 171,
+    "nodeSkipped": 0,
+    "nodeExit": 0,
+    "typecheckExit": 0,
+    "htmlDomExportSmoke": "PASS",
+    "nativeBrowserVisualCheck": "NOT_RUN",
+    "applicationVitestOrBuildRerun": false
+  },
+  "protectedOriginalArtifactsVerified": 3,
+  "stage19": "IN_PROGRESS",
+  "stage18": "INCOMPLETE",
+  "s18_32": "OPEN",
+  "g7": "NOT_ACCEPTED",
+  "retirementAllowed": false,
+  "frozenPairAccepted": false,
+  "privateArtifactSha256": {
+    "runtime\\s19a-review-fixes-20261102\\active-data-current\\inventory.private.json": "14bae846c2d79cb1d61c1bd7cad5669e768aee608d04766992ecd2907617cd24",
+    "runtime\\s19a-review-fixes-20261102\\file-review-final\\file-review.private.json": "eacf8d6293b6290419e382ca0a7bb5a5375d427967df69fd67b1d25ca50b35e1",
+    "runtime\\s19a-review-fixes-20261102\\owner-proposals\\owner-review.private.json": "72d5abd26b5f1066edbbe9f5504fc7c3ba626f99b9a55898efec48e070c22174",
+    "runtime\\s19a-review-fixes-20261102\\decision-review\\review-package.private.json": "194f41e1065bf90ef109eee0daf438f50fb173f10552080df093a8b3a2b50894",
+    "runtime\\s19a-review-fixes-20261102\\decision-review\\decisions-template.private.json": "5edd93a74e3d38f8cf9bc3c359ae477ba658e9ced49a84a27578c582e10960ea",
+    "runtime\\s19a-review-fixes-20261102\\decision-review\\approval-template.private.json": "ab4419c829848aeb51c0538a76bc20eb5e3d42e5d48375642b58c0542d53f869",
+    "runtime\\s19a-review-fixes-20261102\\decision-review\\decision-form.private.html": "f436b207ceb56902ea7a46ff5376ba483959e161050b64cfedb15ff6ade7ce71",
+    "runtime\\s19a-review-fixes-20261102\\empty-template-validation.private.json": "ba276a014f945aec2427284939fdd01ca45120284c89b061c8d30c7b34dd93d4",
+    "runtime\\s19a-review-fixes-20261102\\isolation-capacity.private.json": "c44497c1968dfb8d6a9d38e81846333a143cffa73f6ddf057f39faa9fe7b12ca"
+  }
+}

@@ -43,11 +43,11 @@ crosswalk2 требует пустого массива scopes; область �
 ## 3. Копирование и независимое перечитывание
 
 ```powershell
-node scripts/ops/locus-stage.mjs --plan "$Stage19Work/analyzed/staging-plan.private.json" --sources '<source-catalog.json>' --store '<new-isolated-blobstore>' --out "$Stage19Work/copy.private.json"
+node scripts/ops/locus-stage.mjs --plan "$Stage19Work/analyzed/staging-plan.private.json" --sources '<source-catalog.json>' --store '<new-isolated-blobstore>' --portal-root '<portal-data-root>' --portal-root '<portal-storage-root>' --portal-root '<portal-config-root>' --out "$Stage19Work/copy.private.json"
 node scripts/ops/locus-stage.mjs --verify-only --plan "$Stage19Work/analyzed/staging-plan.private.json" --store '<existing-isolated-blobstore>' --out "$Stage19Work/readback.private.json"
 ```
 
-Копировщик проверяет структуру плана, уникальность SHA/исходных идентичностей, разрешённые корни и физические алиасы. Хранилище должно быть новым, вне корней оригиналов; существующее не очищается/не переиспользуется. Используется штатный BlobStore с проверкой SHA/размера. При изменении оригинала результат не объявляется успешным. Нет регистрации document_revision, OCR, миграций или изменения рабочей установки.
+Копировщик проверяет структуру плана, уникальность SHA/исходных идентичностей, разрешённые корни и физические алиасы. Для копирования обязательны явные `--portal-root`: data/storage/config портала (либо их общий корень установки). Проверяются физические пути, в том числе junction; совпадение/вложенность назначения в любой из этих корней отклоняется до создания каталога. Эти проверенные границы попадают в квитанцию. Проверка существующего staging через `--verify-only` не требует новых portal-root, поскольку не пишет в store. Хранилище должно быть новым, вне корней оригиналов; существующее не очищается/не переиспользуется. Используется штатный BlobStore с проверкой SHA/размера. При изменении оригинала результат не объявляется успешным. Нет регистрации document_revision, OCR, миграций или изменения рабочей установки.
 
 `--verify-only` не читает исходные сетевые файлы и не пишет в store. Он заново читает запланированные SHA-объекты, проверяет размер, SHA, границы пути и стабильность файла. Не доверяет старой copy-квитанции. Новая квитанция создаётся wx вне store. Exit0 — операция выполнена без ошибок, exit2 — ошибки копирования/чтения, exit1 — вход/IO; ни один код не разрешает отключение Locus.
 

@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "purpose": "PARTIAL_19A_EVIDENCE_NOT_GATE_A",
+  "baseAcceptedPlan": "e1a43e8f58d7fe791c4ed17a910417a043a17a29",
+  "codeCommit": "bf2af7e1c476f45a99649ddb428571cfb94e3129",
+  "branch": "codex/stage19-a-evidence-20261030",
+  "executedCode": {
+    "fullWalks": "fc726341b3c795c27f09694870577b8073bdf153",
+    "backupWrapper": "d3f6c7653cd68e5744bfa63c2718a78f200584fe",
+    "currentDerivationAndOwnerReview": "bf2af7e1c476f45a99649ddb428571cfb94e3129"
+  },
+  "fullWalk": {
+    "initialRoots": 33,
+    "metadataOnlyActiveDataFiles": 21006,
+    "configuredNetworkFilesHashed": 3111,
+    "configuredNetworkBytesHashed": 51975364620,
+    "initialErrors": 17,
+    "ownerRelocatedRootFilesHashed": 19588,
+    "ownerRelocatedRootBytesHashed": 6244902928,
+    "remainingCompositeErrors": 16,
+    "sourceFootprint": {
+      "uniqueSourcePaths": 22699,
+      "verifiedPathBytes": 58220267548,
+      "verifiedUniqueBlobs": 16333,
+      "verifiedUniqueBlobBytes": 49288576342,
+      "authenticity": "CANDIDATES_NOT_APPROVED_ORIGINALS"
+    },
+    "unindexedSourceCandidates": 20971,
+    "unindexedAuthenticity": "UNREVIEWED_NOT_ALL_FILES_ARE_CONTRACTS",
+    "contentSnapshotPreserved": false
+  },
+  "backup": {
+    "createdAt": "2026-10-30T14:31:26.742Z",
+    "finishedAt": "2026-10-30T14:47:58.967Z",
+    "manifestSha256": "b999da99a9a829fc02d71f7e5afa39955c71f9c658ad0022d6106c4fac5d4d5a",
+    "dump": {
+      "file": "db.dump",
+      "sizeBytes": 1154260900,
+      "sha256": "0fe8e9db1ee62fbf92814a59caad414c440b24b674553a66483e7df077d15f70",
+      "tool": "pg_dump (PostgreSQL) 18.6",
+      "excludedTableData": [
+        "public.search_chunk_vector",
+        "public.embedding_cache",
+        "public.process_heartbeat"
+      ]
+    },
+    "files": {
+      "count": 41778,
+      "totalBytes": 71002107381,
+      "listSha256": "ce873c658844a06d12bb88867e91878d559556815106d7626ff3ba6df67633ef",
+      "copied": 65,
+      "linked": 41713
+    },
+    "role": "kontur_backup",
+    "retentionRun": false
+  },
+  "portalPhysical": {
+    "checked": 1038,
+    "mismatches": 0,
+    "unknown": 0
+  },
+  "classification": {
+    "total": 1887,
+    "reusedTargetRevisions": 114,
+    "logicalRowsReusingRevision": 259,
+    "archivedScopeRows": 0,
+    "SCOPED_HASH_CANDIDATE": 1158,
+    "NO_EQUAL_BLOB_IN_BACKUP_CONTRACTS": 500,
+    "SOURCE_NOT_HASHED": 225,
+    "BLOB_ONLY_IN_OTHER_SCOPE": 4
+  },
+  "derivedMd": {
+    "rows": 66,
+    "headerVerified": 66,
+    "withPdfDocxCandidates": 66,
+    "withSingleCandidateSha": 66,
+    "originalCandidatePaths": 132,
+    "relationsApproved": 0
+  },
+  "missingNetworkProposals": {
+    "rows": 79,
+    "withCandidates": 55,
+    "withSingleCandidateSha": 49,
+    "withDeclaredSizeMatch": 54,
+    "candidatePaths": 67,
+    "relationsApproved": 0
+  },
+  "logicalDenominator": 1887,
+  "unknownSourceRecordsRemain": 225,
+  "allOwnerDecisionsPending": true,
+  "humanReviewed": false,
+  "d046": "NOT_PROVEN_BLOCKS_GATE_A",
+  "frozenPairAccepted": false,
+  "isolatedPortalRestore": "NOT_RUN_STORAGE_LOCATION_PENDING",
+  "fullIsolatedCopyMinimumFileBytes": 71002107381,
+  "storageLocationQuestionPending": true,
+  "stagingPortalGuard": "IMPLEMENTED_AND_FIXTURE_VERIFIED_PENDING_REVIEW",
+  "newStagingCopyRun": false,
+  "documentsRegistered": false,
+  "recognitionOrIndexRun": false,
+  "tests": {
+    "nodePassed": 149,
+    "nodeSkipped": 0,
+    "nodeExit": 0,
+    "typecheckExit": 0,
+    "applicationVitestOrBuildRerun": false
+  },
+  "oldProtectedArtifactHashesVerified": 4,
+  "acceptedPlanFileByteIdenticalToE1a43e8": true,
+  "stage19": "IN_PROGRESS",
+  "stage18": "INCOMPLETE",
+  "s18_32": "OPEN",
+  "g7": "NOT_ACCEPTED",
+  "stage18Independent": true,
+  "retirementAllowed": false,
+  "privateArtifactSha256": {
+    "runtime\\s19-a-execution-20261030\\full-walk-1\\inventory.private.json": "d5498fdce7c738641c58e07bcfdb86716f82ea0fb64d79208aee1f323eb1b496",
+    "runtime\\s19-a-execution-20261030\\relocated-walk-1\\inventory.private.json": "4b0a0ee868d80be208a1f583e68c4c120c4c754f6f47ae2f4950e9e0831ba5ed",
+    "runtime\\s19-a-execution-20261030\\owner-root-relocation.private.json": "15c0e796b571c9823555093a417187ecefd22eecc63596df519fd4570b448fc0",
+    "runtime\\s19-a-execution-20261030\\owner-md-provenance.private.json": "b430f574de3053d1d3bdc7a00c738b9cd7e42b838ff855a955d6c8383697d2a8",
+    "runtime\\s19-a-execution-20261030\\fresh-backup.private.json": "09b71ffd71056569bb0dc4a8bccffc4b5ef6113206d195aab636888e8048c0b6",
+    "runtime\\s19-a-execution-20261030\\derived-recovery\\inventory.private.json": "9719c39b3e225cc67021c7e39c75674c7ccf4d24e51470b1d19b030d74062617",
+    "runtime\\s19-a-execution-20261030\\derived-recovery\\receipt.private.json": "320e4b75494e6aded1adc35739de7595ca0eef2c55aeece4ebc1ca29bf5923a4",
+    "runtime\\s19-a-execution-20261030\\fresh-portal-physical.private.json": "6c9f1be7712e48a57d2d0e77e9537882008d043b5c248e1164e80723f43a3dda",
+    "runtime\\s19-a-execution-20261030\\analyzed-recovery\\receipt.json": "f2dd6385b125a424234296c766df00f7a46c03b9db269191789993a776727d4e",
+    "runtime\\s19-a-execution-20261030\\owner-review-ready\\owner-review.private.json": "9d997a1b76106d8dfbe5f01519ed8cc6685b7627b4b21b1899fe6cc66a0cd9b3",
+    "runtime\\s19-a-execution-20261030\\owner-review-ready\\owner-review.private.html": "1b9962e9cc164a9ff357c263552e21a3768d19d20fb812e978590436b79c16fe"
+  }
+}

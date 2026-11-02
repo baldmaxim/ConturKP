@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "purpose": "R19A03_SECOND_REVIEW_FIXES_NOT_GATE_A",
+  "reviewedCommit": "1043943190d497526f550b1bfbbcb70fba6317df",
+  "codeCommit": "b5cad9527fdac03cc9e6560aaf21ec4a9c35c367",
+  "branch": "codex/stage19-a-decisions-review2-20261102",
+  "closedByIndependentReview": [
+    "R19A-01",
+    "R19A-02",
+    "R19A-04",
+    "R19A-05",
+    "R19A-06"
+  ],
+  "r19a06ClosureScope": "REVIEWED_TREE_ONLY_NOT_PUBLISHED_MAIN_HISTORY",
+  "r19a03": "FIXED_PENDING_REVIEW",
+  "tests": {
+    "red": {
+      "tests": 22,
+      "passed": 11,
+      "failed": 11
+    },
+    "targeted": {
+      "tests": 23,
+      "passed": 23
+    },
+    "node": {
+      "passed": 183,
+      "failed": 0,
+      "skipped": 0
+    },
+    "typecheckExit": 0
+  },
+  "form": {
+    "packageId": "ad86d507cd847723b8eb14b2869d1f8db21709e48154b5e5a9905cac30a0c031",
+    "registry": 1887,
+    "groups": 231,
+    "bulkEligible": 885,
+    "scopes": 15,
+    "missing": 43880,
+    "humanReviewed": false,
+    "imports": 0,
+    "importPlanExecutable": false,
+    "ownerVisualCheck": {
+      "result": "READABLE_FIELDS_PRESENT",
+      "evidence": "DIRECT_USER_REPLY_CURRENT_CHAT_20261102",
+      "scope": "SYNTHETIC_FIXTURE_ONLY_NOT_OWNER_CORPUS_DECISIONS"
+    },
+    "browserToolCheck": "BLOCKED_FILE_PROTOCOL_NO_WORKAROUND"
+  },
+  "realOwnerDecisionsCollected": false,
+  "importPlanExecutable": false,
+  "aliasGateEvaluation": "OPEN_O19_12_EXISTING_AUDIT_UNCHANGED",
+  "compactRehearsal": {
+    "purpose": "COMPACT_CONTRACT_REHEARSAL_FEASIBILITY_NOT_APPROVED_EXECUTION",
+    "measuredAt": "2026-11-02T06:52:41.870662+00:00",
+    "originalInventorySha256": "6c9f1be7712e48a57d2d0e77e9537882008d043b5c248e1164e80723f43a3dda",
+    "revisionCount": 1038,
+    "uniqueOriginalBlobs": 1028,
+    "uniqueOriginalBytes": 13403535229,
+    "databaseBytesPreviouslyMeasured": 12239566527,
+    "plannedImportKnownMinimumBytes": 9546189056,
+    "minimumFreeBytes": 20000000000,
+    "lowerBoundRequiredBeforeDerivedArtifactsAndOcr": 55189290812,
+    "freeCBytes": 112461565952,
+    "remainingBudgetForDerivedArtifactsOcrAndOverhead": 57272275140,
+    "copied": false,
+    "restored": false,
+    "fullRestoreEquivalent": false,
+    "derivedArtifactsClosureMeasured": false
+  },
+  "compactExecutionApproved": false,
+  "d049Changed": false,
+  "cleanup": {
+    "deletedInactiveDependencyFolders": 4,
+    "npmCacheCleared": true,
+    "measuredFreeIncreaseBytes": 1335857152,
+    "trackedStatusesUnchanged": true,
+    "lockfilesUnchanged": true,
+    "activeDependenciesRetained": true,
+    "oldRuntimeAndGitRetained": true
+  },
+  "stage19": "IN_PROGRESS",
+  "stage18": "INCOMPLETE",
+  "s18_32": "OPEN",
+  "g7": "NOT_ACCEPTED",
+  "retirementAllowed": false,
+  "frozenPairAccepted": false,
+  "restoreStarted": false,
+  "pushPerformed": false,
+  "applicationMigrationsDependenciesUnchanged": true,
+  "privateArtifactSha256": {
+    "decision-review/decisions-template.private.json": "f35c678a3facfcfed52d837e5478a70cb413bdcc2e1c731db7f5f537404a01c8",
+    "decision-review/decision-form.private.html": "24bb6fc7364f888e7abd616819267b9637c470cd732d87330220b8a450540f39",
+    "empty-validation.private.json": "aca9d91154be4ace983c3cb5419972915ac89971896a928124c5783c9e570937",
+    "validation-summary.private.json": "ed8746c65eb8f6a4baed4d3ad3802074bfeecd5b3af21e2c2b98da1262282e4d",
+    "compact-feasibility.private.json": "79d93672db06723828c3c150bd7936f69c8a633c658deca2d4080ac67162f7cb",
+    "cleanup.private.json": "09c5560d4fc32a9108c26488a341558d85a18e5dd47f06f1fef09090556b2880",
+    "fixture.html": "6b689b186abfdaaab6ebca07bee643bdc94a995b196f6232536882ef8eb1d12f"
+  }
+}

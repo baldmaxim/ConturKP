@@ -43,13 +43,16 @@ async function workers(files, concurrency, operation) {
   }));
   return results;
 }
-export async function stageCorpusBlobs({ plan, sourceCatalog, storeRoot, concurrency = 3, onProgress, spacePolicy = { warnFreeBytes: 10 * 1024 ** 3, stopFreeBytes: 5 * 1024 ** 3 } }) {
+export async function stageCorpusBlobs({ plan, sourceCatalog, storeRoot, concurrency = 3, onProgress, portalRoots, spacePolicy = { warnFreeBytes: 10 * 1024 ** 3, stopFreeBytes: 5 * 1024 ** 3 } }) {
   if (!Number.isSafeInteger(concurrency) || concurrency < 1 || concurrency > 4) fail('INVALID_STAGING_CONCURRENCY');
   const totals = validateStagingPlan(plan), roots = rootsFor(sourceCatalog);
   if (typeof storeRoot !== 'string' || !isAbsolute(storeRoot)) fail('ABSOLUTE_STAGING_ROOT_REQUIRED');
   for (const file of plan.files) if (!(roots.get(file.sourceId) ?? []).some(root => withinRoot(root, file.sourcePath))) fail('INVALID_STAGING_SOURCE');
   const target = await physicalPath(storeRoot);
   for (const list of roots.values()) for (const root of list) if (withinRoot(await physicalPath(root), target)) fail('STAGING_INSIDE_SOURCE');
+  if (!Array.isArray(portalRoots) || !portalRoots.length || !portalRoots.every(p => typeof p === 'string' && isAbsolute(p))) fail('PORTAL_ROOTS_REQUIRED');
+  const canonicalPortalRoots = await Promise.all(portalRoots.map(physicalPath));
+  for (const root of canonicalPortalRoots) if (withinRoot(root, target) || withinRoot(target, root)) fail('STAGING_INSIDE_PORTAL');
   await mkdir(target); // refuse an existing destination; no cleanup/pruning of previous stores
   const store = new BlobStore(target, spacePolicy);
   await store.ensureDirs();
@@ -70,7 +73,7 @@ export async function stageCorpusBlobs({ plan, sourceCatalog, storeRoot, concurr
     return row;
   });
   return { schemaVersion: 1, mode: 'ISOLATED_BLOB_STAGING_ONLY', plannedBlobs: plan.files.length, plannedLogicalEntries: totals.logicalEntries,
-    copiedBlobs, failedBlobs, bytes, files, documentsRegistered: false, recognitionRun: false, workingInstallationChanged: false, retirementAllowed: false };
+    copiedBlobs, failedBlobs, bytes, files, isolation: { portalRoots: canonicalPortalRoots, storeRoot: target }, documentsRegistered: false, recognitionRun: false, workingInstallationChanged: false, retirementAllowed: false };
 }
 export async function verifyCorpusStaging({ plan, storeRoot, concurrency = 3 }) {
   validateStagingPlan(plan);

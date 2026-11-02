@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>19-A — черновик решений</title>
+<style>
+body{font:15px/1.45 system-ui;margin:24px;color:#17232d;background:#f7f9fb}h1{font-size:26px}
+header,table{background:#fff}header{position:sticky;top:0;padding:12px;border:1px solid #c7d2dc;z-index:1}
+input,select,textarea,button{font:inherit;padding:7px;box-sizing:border-box;max-width:100%}select,textarea{width:100%}textarea{min-height:80px}button{cursor:pointer}button:disabled{cursor:default}
+table{border-collapse:collapse;width:100%;table-layout:fixed;margin-top:16px}th,td{border:1px solid #c7d2dc;padding:12px;vertical-align:top;overflow-wrap:anywhere}
+th:nth-child(1){width:44%}th:nth-child(2){width:31%}th:nth-child(3){width:25%}td small{white-space:pre-wrap}
+label{display:inline-block;margin:4px 8px 4px 0}small{display:block;color:#53636e}td label{display:block}pre{white-space:pre-wrap;font:12px/1.5 monospace;max-height:360px;overflow:auto}
+.notice{background:#fff3c4;padding:12px}.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.toolbar label{margin:0}
+#kind{width:220px}#filter{flex:1;min-width:220px}#bulk{border-top:1px solid #dde3e9;margin-top:10px;padding-top:10px}#bulk-reason{flex:1;min-width:220px}
+#coverage{margin:8px 0}#bulk-count{margin-top:4px}#bulk-status{color:#12643c}
+@media(max-width:800px){body{margin:10px}header{position:static}table,tbody,tr,td{display:block;width:auto}thead{display:none}td{border-top:0}tr{border-top:1px solid #c7d2dc;margin-bottom:16px}}
+</style>
+<h1>19-A — черновик решений владельца</h1>
+<p class="notice">До принятия R19A-03 — только техническая проверка. Реальные решения не собираются. Экспорт не является подписью или импортом; humanReviewed требует полного покрытия и отдельной квитанции. Гейт A открыт.</p>
+<header>
+ <div class="toolbar"><label>Владелец <input id="owner"></label><label>Дата решения <input id="at" type="datetime-local" step="0.001"></label><button id="save">Скачать черновик JSON</button><label>Загрузить черновик <input id="load" type="file" accept=".json"></label></div>
+ <p id="coverage"></p>
+ <div class="toolbar"><select id="kind" aria-label="Раздел"><option value="registry">Записи индекса</option><option value="groups">Группы файлов</option><option value="files">Отдельные файлы</option></select><input id="filter" aria-label="Фильтр" placeholder="Путь, договор, роль, SHA, класс или идентичность"><button id="prev">Назад</button><button id="next">Далее</button></div>
+ <small id="page"></small>
+ <div id="bulk"><label><input id="eligible-only" type="checkbox"> Только подходящие для массового принятия</label><div class="toolbar"><input id="bulk-reason" aria-label="Общее основание" placeholder="Одно основание для массового принятия"><button id="bulk-apply">Принять подходящие по фильтру</button></div><small id="bulk-count"></small><small id="bulk-status" role="status"></small></div>
+</header>
+<table><thead><tr><th>Источник и сведения для решения</th><th>Действие и договор</th><th>Основание</th></tr></thead><tbody id="rows"></tbody></table>
+<script type="application/json" id="data">__DATA__</script>
+<script>
+'use strict';
+const data = JSON.parse(document.getElementById('data').textContent);
+let doc = data.template, offset = 0;
+const el = id => document.getElementById(id);
+const decisions = kind => new Map(doc[kind].map(d => [d.itemId, d]));
+function choice(options, value, change) {
+ const select = document.createElement('select');
+ for (const o of options) { const option = document.createElement('option'); option.value = o.value; option.textContent = o.label; option.disabled = !!o.disabled; select.append(option); }
+ select.value = value || ''; select.onchange = () => { change(select.value || null); coverage(); }; return select;
+}
+function field(value, change, placeholder) {
+ const input = document.createElement('input'); input.value = value || ''; input.placeholder = placeholder; input.oninput = () => change(input.value || null); return input;
+}
+function visibleRows() {
+ const kind = el('kind').value, q = el('filter').value.toLocaleLowerCase();
+ return data[kind].filter(r => r.search.toLocaleLowerCase().includes(q) && (kind !== 'registry' || !el('eligible-only').checked || r.bulkEligible));
+}
+function bulkRows() {
+ if (el('kind').value !== 'registry') return [];
+ const map = decisions('registry'); return visibleRows().filter(r => r.bulkEligible && !map.get(r.itemId).action);
+}
+function coverage() {
+ let n = 0;
+ for (const kind of ['registry', 'groups', 'files']) { const selected = decisions(kind); for (const r of data[kind]) { const d = selected.get(r.itemId); if (d && d.action && d.action !== 'DEFER') n += r.weight; } }
+ el('coverage').textContent = 'Назначены решения: ' + n + ' из ' + data.total + '. Это не валидация; humanReviewed=false.';
+ el('bulk').hidden = el('kind').value !== 'registry';
+ el('bulk-count').textContent = 'Будет принято: ' + bulkRows().length + ' строк по текущему фильтру, включая другие страницы. Только одна своя редакция, без алиасов, архива, изменения размера и прежнего решения.';
+ el('bulk-apply').disabled = !el('bulk-reason').value.trim() || !bulkRows().length;
+}
+function render() {
+ const kind = el('kind').value, map = decisions(kind), all = visibleRows();
+ offset = Math.max(0, Math.min(offset, Math.max(0, Math.floor((all.length - 1) / 100) * 100)));
+ el('rows').replaceChildren();
+ for (const r of all.slice(offset, offset + 100)) {
+  const d = map.get(r.itemId), tr = document.createElement('tr'), info = document.createElement('td'), controls = document.createElement('td'), reason = document.createElement('td');
+  info.textContent = r.label; const small = document.createElement('small'); small.textContent = r.info; info.append(small);
+  if (r.membersText) {
+   const details = document.createElement('details'), summary = document.createElement('summary'); summary.textContent = 'Показать все файлы группы с SHA и размером'; details.append(summary);
+   details.ontoggle = () => { if (details.open && details.children.length === 1) { const pre = document.createElement('pre'); pre.textContent = r.membersText; details.append(pre); } }; info.append(details);
+  }
+  const actions = kind === 'registry' ? ['ACCEPT_MATCH', 'IMPORT_REQUIRED', 'WITHDRAW', 'DEFER'] : ['INCLUDE_ORIGINAL', 'EXCLUDE_NON_CORPUS', 'DEFER'];
+  const names = { ACCEPT_MATCH: 'Принять соответствие', IMPORT_REQUIRED: 'Требуется регистрация', WITHDRAW: 'Запись выбыла', DEFER: 'Отложить', INCLUDE_ORIGINAL: 'Включить как оригинал', EXCLUDE_NON_CORPUS: 'Исключить из корпуса' };
+  controls.append(choice([{ value: '', label: 'Нет решения' }].concat(actions.map(a => ({ value: a, label: names[a] }))), d.action, value => {
+   d.action = value;
+   if (kind === 'registry') {
+    if (value === 'ACCEPT_MATCH' && !d.targetFingerprint && r.singleOwnTarget) d.targetFingerprint = r.singleOwnTarget;
+    if (value !== 'ACCEPT_MATCH') d.targetFingerprint = null;
+   }
+   render();
+  }));
+  if (kind === 'registry') {
+   controls.append(choice([{ value: '', label: 'Редакция для соответствия' }].concat(r.targets), d.targetFingerprint, value => d.targetFingerprint = value));
+   controls.append(choice([{ value: '', label: 'Исходник записи / кандидат оригинала' }].concat(r.originals), d.originalFingerprint, value => d.originalFingerprint = value));
+  } else {
+   const note = document.createElement('small'); note.textContent = 'Для включения обязательны один договор и основание его выбора. Разные договоры — отдельные решения.'; controls.append(note);
+  }
+  controls.append(choice([{ value: '', label: 'Выберите договор' }].concat(data.scopes), d.scopeId, value => d.scopeId = value));
+  controls.append(field(d.scopeEvidenceRef, value => d.scopeEvidenceRef = value, 'Основание выбора договора'));
+  const input = document.createElement('textarea'); input.value = d.reason || ''; input.placeholder = 'Обязательное основание решения'; input.oninput = () => d.reason = input.value || null; reason.append(input);
+  tr.append(info, controls, reason); el('rows').append(tr);
+ }
+ el('page').textContent = 'Строки ' + (all.length ? offset + 1 : 0) + '–' + Math.min(offset + 100, all.length) + ' из ' + all.length + '; всего в разделе ' + data[kind].length + '. Фильтр не удаляет записи из экспорта.';
+ el('prev').disabled = offset === 0; el('next').disabled = offset + 100 >= all.length; coverage();
+}
+el('kind').onchange = () => { offset = 0; render(); }; el('filter').oninput = () => { offset = 0; render(); };
+el('eligible-only').onchange = () => { offset = 0; render(); }; el('bulk-reason').oninput = coverage;
+el('prev').onclick = () => { offset -= 100; render(); }; el('next').onclick = () => { offset += 100; render(); };
+el('bulk-apply').onclick = () => {
+ const reason = el('bulk-reason').value.trim(); if (!reason) { alert('Укажите общее основание'); return; }
+ const map = decisions('registry'), rows = bulkRows();
+ for (const r of rows) Object.assign(map.get(r.itemId), { action: 'ACCEPT_MATCH', targetFingerprint: r.singleOwnTarget, reason });
+ el('bulk-status').textContent = 'Принято в черновике: ' + rows.length + '. Экспорт и проверка CLI обязательны.'; render();
+};
+el('save').onclick = () => {
+ doc.owner = { name: el('owner').value.trim(), decidedAt: el('at').value ? new Date(el('at').value).toISOString() : null };
+ const blob = new Blob([JSON.stringify(doc, null, 2) + '\n'], { type: 'application/json' }), url = URL.createObjectURL(blob), a = document.createElement('a');
+ a.href = url; a.download = '19A-' + data.packageId.slice(0, 12) + '.decisions.private.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+function localDate(value) {
+ if (!value) return '';
+ const date = new Date(value); return Number.isFinite(date.getTime()) ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 23) : '';
+}
+el('load').onchange = async () => {
+ try {
+  const incoming = JSON.parse((await el('load').files[0].text()).replace(/^\uFEFF/u, ''));
+  if (incoming.reviewPackageId !== data.packageId) throw Error('Другой снимок: нужен CLI reconcile, старые решения не применены');
+  for (const kind of ['registry', 'groups', 'files']) {
+   const expected = decisions(kind), seen = new Set();
+   if (!Array.isArray(incoming[kind]) || incoming[kind].length !== expected.size) throw Error('Неполный или неизвестный набор решений');
+   for (const d of incoming[kind]) { if (seen.has(d.itemId) || !expected.has(d.itemId) || expected.get(d.itemId).fingerprint !== d.fingerprint) throw Error('Привязка записи изменилась'); seen.add(d.itemId); }
+  }
+  doc = incoming; el('owner').value = doc.owner?.name || ''; el('at').value = localDate(doc.owner?.decidedAt); offset = 0; render();
+ } catch (e) { alert(e.message); }
+};
+render();
+</script>
+</html>

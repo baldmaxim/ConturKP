@@ -31,6 +31,12 @@ Exit0 — проверка с квитанцией прошла; exit 2 — не
 
 ## Смена снимка
 
+Для повторных ссылок на одну редакцию есть отдельная read-only оценка `locus-reviewed-aliases.mjs`. Она принимает только соответствия из полного решения с пригодной квитанцией, проверяет точные source identities, одинаковые SHA/размеры и одну договорную область. Прежний `auditLocusCorpus` продолжает отклонять `TARGET_REUSED`; результат новой оценки сам не принимает корпус, заморозку или отключение.
+
+    node scripts/ops/locus-reviewed-aliases.mjs --package <review-package.json> --decisions <owner-decisions.json> --approval <owner-approval.json> --locus <locus-inventory.json> --portal <portal-inventory.json> --out <new-alias-evaluation.json> --portal-root <portal-root>
+
+SHA файла решений CLI вычисляет из фактически прочитанных байтов. Выход создаётся только новым файлом вне исходных и рабочих корней. Нет квитанции, изменился снимок, чужая область, SHA или размер — успешного результата нет.
+
     node scripts/ops/locus-review-decisions.mjs reconcile --previous-package <old-package.json> --package <new-package.json> --decisions <old-decisions.json> --out <new-reconciliation.json> --portal-root <portal-root>
 
 Результат содержит decisions, carried, invalidated и ID обоих пакетов. Переносятся только неизменные bindings как черновик; SHA/identity/target/размер/метаданные/состав группы изменились — решение очищается. approval всегда null; новая квитанция обязательна. Вложенный decisions сохранить новым файлом для формы, исходные файлы не переписывать.
